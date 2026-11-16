@@ -69,7 +69,7 @@ class SettingsPanesTest(unittest.TestCase):
     def open(self, address: str = "") -> None:
         self.m.navigate(self.base + "settings/settings.html" + address)
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 20)
         )
 
     def view(self) -> dict:

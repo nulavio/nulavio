@@ -102,7 +102,7 @@ class ProfilesTest(unittest.TestCase):
     def ready(self, m=None) -> bool:
         m = m or self.m
         try:
-            return m.execute("return document.documentElement && document.documentElement.dataset.ready === 'true';")
+            return m.execute("return document.documentElement && document.documentElement?.dataset.ready === 'true';")
         except MarionetteError:
             return False
 

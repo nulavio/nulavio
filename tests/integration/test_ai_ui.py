@@ -69,7 +69,7 @@ class AiUiTest(unittest.TestCase):
         self.m.switch_to(handle)
         self.m.navigate(self.base + page)
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=30)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=30)
         )
 
     def click(self, selector: str) -> None:

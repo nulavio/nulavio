@@ -168,7 +168,7 @@ class AssistantUiTest(unittest.TestCase):
     def open(self, page: str) -> None:
         self.m.navigate(self.base + page)
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 20)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 20)
         )
 
     def shoot(self, name: str, keep: str | None = None) -> None:
@@ -239,7 +239,7 @@ class AssistantUiTest(unittest.TestCase):
 
         def ready():
             try:
-                return self.panel("return document.documentElement.dataset.ready === 'true';", which)
+                return self.panel("return document.documentElement?.dataset.ready === 'true';", which)
             except AssertionError:
                 return False  # the panel's browser is still being created
 
@@ -1396,7 +1396,7 @@ class AssistantUiTest(unittest.TestCase):
 
     def focused_in_panel(self) -> str | None:
         try:
-            return self.panel("return document.documentElement.dataset.ready === 'true' ? document.activeElement.id : null;")
+            return self.panel("return document.documentElement?.dataset.ready === 'true' ? document.activeElement.id : null;")
         except AssertionError:
             return None  # the panel's page is still loading
 
