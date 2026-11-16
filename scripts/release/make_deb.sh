@@ -72,6 +72,10 @@ if [ "$1" = remove ] && [ -d /sys/kernel/security/apparmor ] && command -v appar
 fi
 POSTRM
 chmod 0755 "$pkg/DEBIAN/postinst" "$pkg/DEBIAN/postrm"
+# The system's codec library, which the engine loads at run time (AAC, and Opus and FLAC in MP4), so it is not among
+# the linked libraries below. Its package is named after its version, which differs between Debian and Ubuntu
+# releases: the first one the system has is installed, as Debian's own firefox-esr package asks for it (#377).
+codecs="libavcodec62 | libavcodec-extra62 | libavcodec61 | libavcodec-extra61 | libavcodec60 | libavcodec-extra60 | libavcodec59 | libavcodec-extra59 | libavcodec58 | libavcodec-extra58"
 cat > "$pkg/DEBIAN/control.in" <<CONTROL
 Package: nulavio
 Version: $version-$release
@@ -81,7 +85,7 @@ Section: web
 Priority: optional
 Homepage: https://nulavio.net
 Depends: @SHLIBS@, python3 (>= 3.12), util-linux
-Recommends: libsodium23, gocryptfs, fuse3
+Recommends: libsodium23, gocryptfs, fuse3, $codecs
 Provides: www-browser
 Description: Private, calm web browser built on the Gecko engine
  Nulavio keeps your data with you: strict tracking protection, uBlock Origin

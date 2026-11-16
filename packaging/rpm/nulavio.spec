@@ -33,6 +33,9 @@ Requires:       python3 >= 3.12
 Requires:       util-linux
 Requires:       hicolor-icon-theme
 # Protected profiles: encryption (libsodium) and storage (gocryptfs on FUSE).
+# The system's codec library: the engine loads it at run time for AAC, and for Opus and FLAC in MP4. Fedora's
+# own firefox recommends it too (through ffmpeg-free). A system with RPM Fusion's ffmpeg-libs has it already (#377).
+Recommends:     libavcodec-free
 Recommends:     libsodium
 Recommends:     gocryptfs
 Recommends:     fuse3
