@@ -71,6 +71,8 @@ const PREF_IMMERSIVE = "nulavio.layout.immersive";
 const BACKGROUND_TAB_MS = 1500;
 // The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
 const PREF_FIRSTRUN = "nulavio.firstrun.done";
+// #167: Immersive in the View menu, next to Full Screen, as the key and the switch in Settings turn it on and off.
+const VIEW_MENU_ITEM = "nulavio-menu-immersive";
 // #322 (D-UX17's option): the window's title without the page's, through the engine's own switches for it. They only
 // ever hide: the switch writes false, and turning it off clears the false it wrote.
 const PREF_HIDE_TITLE = "nulavio.window.hidePageTitle";
@@ -659,13 +661,54 @@ class WindowUI {
     if (identityBox) {
       identityObserver.observe(identityBox, { attributes: true, attributeFilter: ["class"] });
     }
+    const menuItem = this.#addViewMenuItem(win);
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
     this.#paint(win);
     this.#unifyStartPage(win);
+  }
+
+  /**
+   * #167: "Imersivo" in the View menu, a checkbox that reads the profile's switch each time the menu opens and turns
+   * it on or off as Ctrl+Alt+I does (NulavioLayout.setImmersive: the same pref, the same announcement). Locked by an
+   * administrator, it shows the state and cannot be changed. Returns what #detach needs to take it away.
+   */
+  #addViewMenuItem(win) {
+    const doc = win.document;
+    const popup = doc.getElementById("menu_viewPopup");
+    if (!popup || doc.getElementById(VIEW_MENU_ITEM)) {
+      return null;
+    }
+    const item = doc.createXULElement("menuitem");
+    item.id = VIEW_MENU_ITEM;
+    item.setAttribute("type", "checkbox");
+    item.setAttribute("label", t("menuImmersive"));
+    const say = key => win.A11yUtils?.announce({ raw: t(key) }).catch(() => {});
+    item.addEventListener("command", () => {
+      try {
+        lazy.NulavioLayout.setImmersive(!lazy.NulavioLayout.immersive().on, say);
+      } catch (e) {
+        if (e?.code !== "layout-locked") {
+          console.error(e); // locked: the reason was announced
+        }
+      }
+    });
+    const showing = event => {
+      if (event.target !== popup) {
+        return; // a submenu (Toolbars, Zoom, Page Style)
+      }
+      const { on, locked } = lazy.NulavioLayout.immersive();
+      item.setAttribute("checked", String(on));
+      item.toggleAttribute("disabled", locked);
+    };
+    popup.addEventListener("popupshowing", showing);
+    // Full Screen is "fullScreenItem" on Linux (the enter/exit pair is macOS's).
+    const fullScreen = [doc.getElementById("fullScreenItem"), doc.getElementById("enterFullScreenItem")].find(node => node?.parentNode === popup);
+    popup.insertBefore(item, fullScreen ?? null);
+    return { item, popup, showing };
   }
 
   // QA M-2 (UX3E; UX3F A3): the Shell's new tab is the browser's own, so the engine's "Your new tab has
@@ -1441,6 +1484,10 @@ class WindowUI {
     state.sizes.disconnect();
     win.windowRoot?.removeEventListener("mousedown", state.outside, true);
     win.document.documentElement.style.removeProperty("--nulavio-immersive-toolbar-size");
+    if (state.menuItem) {
+      state.menuItem.popup.removeEventListener("popupshowing", state.menuItem.showing);
+      state.menuItem.item.remove();
+    }
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();

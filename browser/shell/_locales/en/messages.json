@@ -1331,6 +1331,7 @@
   "commandToggleImmersive": {"message": "Turn Immersive on or off"},
   "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
   "layoutImmersiveOff": {"message": "Immersive off."},
+  "menuImmersive": {"message": "Immersive"},
   "layoutChoiceImmersiveHint": {"message": "Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. Ctrl+L brings the address bar back."},
   "hidePageTitleLabel": {"message": "Hide the page title in the window title"},
   "commandTogglePageEditing": {"message": "Edit or stop editing the text of the page"},
