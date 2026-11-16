@@ -249,7 +249,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(check, self.publish.index("upload_repo.sh"))
         step = self.publish[self.publish.rindex("- name:", 0, check) : check]
         self.assertIn("gh release list --limit 1000 --json tagName", step)  # drafts too: the job may write releases
-        self.assertIn('releases=$(gh release list', step)  # an assignment, so a failing gh fails the step
+        self.assertIn("releases=$(gh release list", step)  # an assignment, so a failing gh fails the step
         self.assertNotIn("${{", step.split("run: |", 1)[1])
 
     def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):
