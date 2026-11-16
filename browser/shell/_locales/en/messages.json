@@ -1331,6 +1331,7 @@
   "commandToggleImmersive": {"message": "Turn Immersive on or off"},
   "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
   "layoutImmersiveOff": {"message": "Immersive off."},
+  "hidePageTitleLabel": {"message": "Hide the page title in the window title"},
   "commandTogglePageEditing": {"message": "Edit or stop editing the text of the page"},
   "menuEditPage": {"message": "Edit Text on Page"},
   "pageEditBar": {"message": "The text of this page can be edited. Nothing is saved: reloading the page discards the changes."},

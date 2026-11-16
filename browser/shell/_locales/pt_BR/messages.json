@@ -1331,6 +1331,7 @@
   "commandToggleImmersive": {"message": "Ligar ou desligar o modo Imersivo"},
   "layoutImmersiveOn": {"message": "Imersivo ligado. A barra de endereço volta com Ctrl+L."},
   "layoutImmersiveOff": {"message": "Imersivo desligado."},
+  "hidePageTitleLabel": {"message": "Esconder o título da página na barra da janela"},
   "commandTogglePageEditing": {"message": "Editar ou parar de editar o texto da página"},
   "menuEditPage": {"message": "Editar o texto da página"},
   "pageEditBar": {"message": "O texto desta página pode ser editado. Nada é salvo: recarregar a página desfaz as mudanças."},
