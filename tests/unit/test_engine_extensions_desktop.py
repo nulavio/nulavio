@@ -69,6 +69,41 @@ class EngineCommandTest(unittest.TestCase):
         self.assertEqual(env["WAYLAND_DISPLAY"], "wayland-0")
         self.assertEqual(env["MOZ_APP_REMOTINGNAME"], engine.APP_ID)
 
+    def test_doctor_says_when_the_codec_library_is_missing_and_what_to_install(self):
+        # #377: without libavcodec the engine cannot play AAC, nor Opus and FLAC in MP4.
+        with mock.patch.object(doctor.ctypes.util, "find_library", return_value="libavcodec.so.62"):
+            (check,) = doctor.check_media()
+        self.assertEqual((check.area, check.name, check.status), ("media", "codec library", "ok"))
+        self.assertIn("libavcodec.so.62", check.detail)
+        cases = {
+            "ID=fedora\n": "sudo dnf install libavcodec-free",
+            "ID=ubuntu\nID_LIKE=debian\n": "sudo apt install libavcodec-extra",
+            'ID="linuxmint"\nID_LIKE="ubuntu debian"\n': "sudo apt install libavcodec-extra",
+            'ID=nobara\nID_LIKE="rhel centos fedora"\n': "sudo dnf install libavcodec-free",
+            "ID=arch\n": "your distribution's FFmpeg libraries (libavcodec)",
+        }
+        for release, said in cases.items():
+            with self.subTest(release=release), tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "os-release").write_text(release, encoding="utf-8")
+                with (
+                    mock.patch.object(doctor.ctypes.util, "find_library", return_value=None),
+                    mock.patch.object(doctor, "CODEC_DIRS", (tmp,)),
+                    mock.patch.object(doctor, "OS_RELEASE", Path(tmp) / "os-release"),
+                ):
+                    (check,) = doctor.check_media()
+                self.assertEqual(check.status, "warn")
+                self.assertIn(said, check.detail)
+                self.assertIn("does not play", check.detail)
+        # A library the linker's cache does not list is still found in the usual directories.
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "libavcodec.so.61").write_bytes(b"")
+            with (
+                mock.patch.object(doctor.ctypes.util, "find_library", return_value=None),
+                mock.patch.object(doctor, "CODEC_DIRS", (tmp,)),
+            ):
+                self.assertEqual(doctor.codec_library(), "libavcodec.so.61")
+        self.assertIn("media", {check.area for check in doctor.check_media()})
+
     def test_doctor_reports_a_variable_that_weakens_the_sandbox(self):
         # #312: removed before the engine starts, and said, since other programs started from here keep it.
         def environment():

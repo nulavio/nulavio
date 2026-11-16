@@ -15,6 +15,12 @@ image=${NULAVIO_CHECK_IMAGE:-$("$here/base_image.sh" fedora-build)}
 podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$rpm:/pkg/nulavio.rpm:ro" "$image" bash -euc '
     dnf -y -q install /pkg/nulavio.rpm >/dev/null
     echo "installed: $(rpm -q nulavio)"
+    # What the package recommends, as a desktop installs it with the package: each name is one Fedora has, and
+    # the codec library the engine loads at run time is among them (#377).
+    rpm -q --recommends nulavio | xargs dnf -y -q install --setopt=install_weak_deps=False >/dev/null 2>&1 \
+        || { echo "a package nulavio recommends could not be installed"; exit 1; }
+    codecs=$(ls /usr/lib64/libavcodec.so.* 2>/dev/null | head -1)
+    [ -n "$codecs" ] && echo "codec library: $(rpm -qf "$codecs")" || { echo "the recommended codec library was not installed"; exit 1; }
     rpm -V nulavio && echo "rpm -V: files as packaged"
     bad=$(find /usr/lib64/nulavio \( ! -user root -o -perm -o+w -o -perm -g+w \) -print | head -5)
     [ -z "$bad" ] || { echo "not root-owned or writable: $bad"; exit 1; }
