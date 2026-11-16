@@ -466,9 +466,15 @@ image.src = url;
             "Services.prefs.setIntPref('browser.theme.content-theme', 1);"  # pages light
             "Services.prefs.setIntPref('browser.theme.toolbar-theme', 0);" + announce  # toolbar dark
         )
-        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and d["dark"] and d["ink"] == dark, 10), drawn())
+
+        def is_ink(read, want):
+            # The glyph's most opaque pixel is not always fully opaque, and taking the transparency back out
+            # rounds: a release run read 189, 207, 213 for 191, 208, 214. The two inks are 100 apart or more.
+            return all(abs(a - b) <= 3 for a, b in zip(read, want, strict=True))
+
+        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and d["dark"] and is_ink(d["ink"], dark), 10), drawn())
         self.m.chrome("Services.prefs.setIntPref('browser.theme.toolbar-theme', 1);" + announce)
-        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and not d["dark"] and d["ink"] == light, 10), drawn())
+        self.assertTrue(harness.wait_until(lambda: (d := drawn()) and not d["dark"] and is_ink(d["ink"], light), 10), drawn())
 
 
 if __name__ == "__main__":
