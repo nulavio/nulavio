@@ -457,6 +457,23 @@ class PrefWriterInventoryTest(unittest.TestCase):
         self.assertIn("apply(false);", source)
         self.assertNotIn("Services.prefs.set", source.replace("Services.prefs.setBoolPref(pref, false);", ""))
 
+    def test_the_window_writes_only_false_to_the_engines_title_switches(self):
+        """#322 (review): the window title switch only ever hides; the engine's two switches and nothing else."""
+        source = (SHELL / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+        self.assertIn(
+            'const TITLE_PREFS = Object.freeze(["privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"]);',
+            source,
+        )
+        body = source[source.index("  #pageTitle(changed) {") : source.index("  #open(win, path) {")]
+        self.assertIn("for (const titlePref of TITLE_PREFS) {", body)
+        self.assertIn("Services.prefs.setBoolPref(titlePref, false);", body)  # never true
+        self.assertIn("} else if (changed && Services.prefs.prefHasUserValue(titlePref)", body)  # never cleared at a start
+        self.assertIn("if (Services.prefs.prefIsLocked(titlePref)) {", body)
+        rest = source.replace("Services.prefs.setBoolPref(titlePref, false);", "").replace(
+            "Services.prefs.clearUserPref(titlePref);", ""
+        )
+        self.assertEqual(WRITER.findall(rest), [])
+
     def test_the_appearance_module_writes_only_inside_set(self):
         source = (SHELL / "modules" / "NulavioPersonalise.sys.mjs").read_text(encoding="utf-8")
         body = source[source.index("  async set(id, value) {") : source.index("  /** Calls `listener` when")]
