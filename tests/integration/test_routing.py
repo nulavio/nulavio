@@ -729,16 +729,21 @@ class RoutingTest(unittest.TestCase):
         # #315: the engine's split view shows two tabs of this window side by side. A link in one side that a rule sends
         # to another profile opens there, as from any tab; the split keeps both of its tabs, in this profile.
         self.open_m5()
+        self.assertTrue(self.selected_url().endswith("/m5"), self.selected_url())
         side = self.local("/page/split-side")
-        self.m.chrome("gBrowser.addTrustedTab(arguments[0]);", [side])
+        made = self.m.chrome(
+            "const here = gBrowser.selectedTab; window.__splitSide = gBrowser.addTrustedTab(arguments[0]);"
+            "const view = gBrowser.addTabSplitView([here, window.__splitSide]); gBrowser.selectedTab = here;"
+            "return Boolean(view);",
+            [side],
+        )
         self.addCleanup(
             self.m.chrome,
-            "gBrowser.tabs[0].splitview?.unsplitTabs?.('test');"
-            "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs[gBrowser.tabs.length - 1], { animate: false });",
+            "const s = window.__splitSide; delete window.__splitSide;"
+            "s?.splitview?.unsplitTabs?.('test'); if (s && !s.closing) gBrowser.removeTab(s, { animate: false });",
         )
-        split = "const v = gBrowser.tabs[0].splitview; return v ? v.tabs.map(t => t.linkedBrowser.currentURI.spec) : [];"
-        self.assertTrue(self.m.chrome("return Boolean(gBrowser.addTabSplitView([gBrowser.tabs[0], gBrowser.tabs[1]]));"))
-        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
+        self.assertTrue(made)
+        split = "const v = window.__splitSide?.splitview;return v ? v.tabs.map(t => t.linkedBrowser.currentURI.spec) : [];"
         self.assertTrue(harness.wait_until(lambda: len(self.m.chrome(split)) == 2, timeout=10), self.m.chrome(split))
         self.m.execute("document.getElementById('link').href += '-split';")
         self.click("#link")

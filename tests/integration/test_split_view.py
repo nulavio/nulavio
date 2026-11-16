@@ -6,6 +6,7 @@ and connection; both sides are tabs of the same profile, in the side tab list an
 from __future__ import annotations
 
 import json
+import time
 import unittest
 
 import harness
@@ -132,22 +133,20 @@ class SplitViewTest(unittest.TestCase):
         self.check_sides()
 
     def menu_labels(self) -> list[str | None]:
-        """The split items' labels as the window's localization gives them, in the browser's language."""
-        self.m.set_context("chrome")
+        """Opens the tab's menu with a right click on the selected tab and reads the split items' labels as the window's
+        localization gives them (their words are only set once the menu opens), then closes it."""
+        self.m.chrome(
+            "const b = gBrowser.selectedTab.getBoundingClientRect();"
+            "window.synthesizeMouseEvent('contextmenu', b.left + b.width / 2, b.top + b.height / 2, { button: 2 }, {});"
+        )
+        state = "return document.getElementById('tabContextMenu').state;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(state) == "open", 10), self.m.chrome(state))
+        labels = "return arguments[0].map(id => document.getElementById(id)?.getAttribute('label') || null);"
         try:
-            return self.m.execute_async(
-                """
-                const [ids, done] = arguments;
-                const menu = document.getElementById('tabContextMenu');
-                const items = ids.map(id => menu.querySelector('#' + id));
-                if (items.some(i => !i)) { done(items.map(i => (i ? '' : null))); return; }
-                document.l10n.translateElements(items).then(
-                  () => done(items.map(i => i.getAttribute('label'))), e => done([String(e)]));
-                """,
-                [MENU_IDS],
-            )
+            harness.wait_until(lambda: all(self.m.chrome(labels, [MENU_IDS])), 10)
+            return self.m.chrome(labels, [MENU_IDS])
         finally:
-            self.m.set_context("content")
+            self.m.chrome("document.getElementById('tabContextMenu').hidePopup();")
 
     def test_04_the_tab_menu_offers_it_in_the_browsers_language(self):
         # No key: Nulavio gives the engine's split commands none (decision on #315); the tab menu is the way in.
@@ -175,6 +174,7 @@ class SplitViewTest(unittest.TestCase):
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
                 self.assertTrue(harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10))
+                time.sleep(1)  # the media query flips before the window is painted in the new colours
                 self.m.set_context("chrome")
                 try:
                     (folder / f"split-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())

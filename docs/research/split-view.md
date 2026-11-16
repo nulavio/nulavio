@@ -17,6 +17,10 @@ nothing to it and changes nothing in it. The checks are `tests/integration/test_
 | Tabs on top | The same, in the tab strip | `test_03` |
 | Light and dark themes | Nothing of Nulavio's draws over the split; the focused side has the engine's accent outline | `test_05` captures (`NULAVIO_TEST_ARTIFACTS/split-view/`) |
 
+Captures, 1400×900, Lateral, the right side focused: [light](../design/screenshots/split-view-315/split-light.png),
+[dark](../design/screenshots/split-view-315/split-dark.png) (from `test_05`). In the side tab list the two tabs of a
+split share one row, so a long title is cut sooner than in a row of its own; that is the engine's layout.
+
 ## Routing (ADR 0003)
 
 A link clicked in one side that a rule sends to another profile opens in that profile, as from any tab: it is requested
