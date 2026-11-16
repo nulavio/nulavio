@@ -34,7 +34,12 @@ class ReleaseManifestTest(unittest.TestCase):
         self.repo.mkdir()
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
-        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+        # The base commit says the pinned release passed the networking check (#430).
+        self.record = self.repo / release_manifest.NETWORKING_RECORD
+        self.record.parent.mkdir(parents=True)
+        self.record.write_text(json.dumps({"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}))
+        subprocess.run([*git, "add", "."], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "base"], check=True)
         self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
         subprocess.run([*git, "checkout", "-q", "-b", "side"], check=True)
         subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "unreviewed"], check=True)
@@ -114,6 +119,46 @@ class ReleaseManifestTest(unittest.TestCase):
         self.manifest["rehearsal"] = "failed"
         self.write()
         self.refused("did not finish")
+
+    def commit_record(self, record: dict | None, branch: str = "main") -> str:
+        """A new commit on the branch with this record (None: without the file); the manifest is built from it."""
+        git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run([*git, "checkout", "-q", branch], check=True)
+        if record is None:
+            subprocess.run([*git, "rm", "-q", release_manifest.NETWORKING_RECORD], check=True)
+        else:
+            self.record.parent.mkdir(parents=True, exist_ok=True)
+            self.record.write_text(json.dumps(record) if isinstance(record, dict) else record)
+            subprocess.run([*git, "add", "."], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "record"], check=True)
+        head = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        self.manifest["nulavio_base_commit"] = head
+        self.write()
+        return head
+
+    def test_a_release_nobody_checked_for_networking_in_rust_is_refused(self):
+        good = {"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}
+        for record, said in (
+            ({**good, "firefox": "159.0"}, "is about Firefox 159.0, not the 159.0.1"),  # the pin moved, the record did not
+            ({**good, "source_sha256": "1" * 64}, "nobody checked its Rust code"),
+            ({**good, "result": "failed"}, "says 'failed'"),
+            ({**good, "result": "accepted"}, "says 'accepted'"),  # accepted by nobody in particular
+            ({**good, "result": "accepted", "accepted_in": "the maintainer said so"}, "says 'accepted'"),
+            ("not json", "cannot be read at the base commit"),
+            (None, "cannot be read at the base commit"),
+        ):
+            with self.subTest(record=record):
+                self.commit_record(record)
+                self.refused(said)
+        self.commit_record({**good, "result": "accepted", "accepted_in": "#430"})
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+        self.commit_record(good)
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+
+    def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
+        self.commit_record({"firefox": "159.0", "source_sha256": SOURCE, "result": "passed"})
+        self.record.write_text(json.dumps({"firefox": "159.0.1", "source_sha256": SOURCE, "result": "passed"}))  # not committed
+        self.refused("is about Firefox 159.0")
 
     def test_a_package_changed_after_the_rehearsal_is_refused(self):
         (self.out / RPM).write_bytes(b"rpm, rebuilt by hand")

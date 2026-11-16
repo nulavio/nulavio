@@ -253,6 +253,10 @@ class RehearsalRepo:
         (self.repo / "site" / "keys").mkdir(parents=True)
         shutil.copy(ROOT / "site" / "keys" / "nulavio-packages.asc", self.repo / "site" / "keys")
         self.set_pairing("false")
+        # The base commit says the release these rehearsals build passed the networking check (#430).
+        record = self.repo / "browser" / "build" / "networking-check.json"
+        record.parent.mkdir(parents=True)
+        record.write_text(json.dumps({"firefox": VERSION.split("-")[0], "source_sha256": "b" * 64, "result": "passed"}))
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
         subprocess.run([*git, "add", "-A"], check=True)

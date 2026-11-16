@@ -42,6 +42,8 @@ ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
 DEB = re.compile(r"^nulavio_(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)_amd64\.deb$")
 RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
+# The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
+NETWORKING_RECORD = "browser/build/networking-check.json"
 
 
 class ManifestError(RuntimeError):
@@ -100,6 +102,32 @@ def check_base(commit: str, repo: Path, ref: str) -> None:
     at = [subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{sources}"], capture_output=True) for rev in (commit, ref)]
     if at[0].returncode == 0 and (at[1].returncode != 0 or at[0].stdout != at[1].stdout):
         raise ManifestError(f"{sources} changed on {ref} since the base commit {commit[:12]}: build the release again")
+
+
+def check_networking(manifest: dict, repo: Path) -> None:
+    """Publish only a Firefox release whose Rust code passed the engine's networking check (#430).
+
+    The release build is cross-language and cannot be read for that check, so it is made on another build of
+    the same source and recorded in the repository. The record is read at the manifest's base commit, which
+    check_base() has shown to be reviewed history: never from a working tree, where anyone could write it."""
+    commit = manifest["nulavio_base_commit"]
+    shown = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{NETWORKING_RECORD}"], capture_output=True)
+    try:
+        record = json.loads(shown.stdout) if shown.returncode == 0 else None
+    except ValueError:
+        record = None
+    how_to = f"run scripts/release/rehearse_release.sh --precheck {manifest['firefox']} and land its record by pull request"
+    if not isinstance(record, dict):
+        raise ManifestError(f"{NETWORKING_RECORD} cannot be read at the base commit {commit[:12]}: {how_to}")
+    if (record.get("firefox"), record.get("source_sha256")) != (manifest["firefox"], manifest["source_sha256"]):
+        raise ManifestError(
+            f"the networking check's record is about Firefox {record.get('firefox')}, not the {manifest['firefox']} "
+            f"this rehearsal built: nobody checked its Rust code; {how_to}"
+        )
+    result = record.get("result")
+    accepted = result == "accepted" and re.fullmatch(r"#\d+", str(record.get("accepted_in", "")))
+    if result != "passed" and not accepted:
+        raise ManifestError(f"the networking check's record says {result!r}: only a pass, or the maintainer's word, publishes")
 
 
 def tag(manifest: dict) -> tuple[str, list[str]]:
@@ -214,6 +242,7 @@ def verify(out: Path, repo: Path, ref: str) -> dict:
     check_tree(manifest)
     check_files(manifest, out)
     check_base(manifest["nulavio_base_commit"], repo, ref)
+    check_networking(manifest, repo)
     release_tag, rpms = tag(manifest)
     deb_files = debs(manifest, release_tag)
     check_newer(release_tag, repo)

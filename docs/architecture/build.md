@@ -145,6 +145,23 @@ Lessons from the first attempts: `MOZ_APP_VENDOR` cannot be set from a mozconfig
 | `--enable-release --enable-optimize --disable-debug --disable-tests` | Release-like build for realistic testing |
 | `mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"` | The release default runs a fat link-time optimisation pass over `gkrust` (all Rust code in one unit). It needed more than 17 GiB and stopped four guarded builds on the 32 GiB build laptop ([evidence](../research/evidence/release-rehearsal-2026-11-04.md)). Thin LTO still optimises across crates and fits in 13 GiB. The build system appends this value after its own `-Clto` and `rustc` keeps the last one, so no engine patch is needed; only `export` lines of the mozconfig reach the makefiles that run Cargo. Cost: somewhat less cross-crate optimisation in Rust code (style system, WebRender) than a fat pass; Mozilla's own builds go further in the other direction (cross-language LTO with profile-guided optimisation), which needs a larger builder and is a later item |
 
+## The networking check on Rust code
+
+The engine has a build-time check, `check_networking` (`python/mozbuild/mozbuild/action/check_binary.py`): its Rust library may import none of a list of networking functions (`recv`, `send`, the `gethostby…`, `getserv…` and `getproto…` families). It lowers the chance that Rust code talks to the network around the engine's own network stack, and so around a proxy the person set. The build system runs it only when Rust gets its own link-time optimisation; a cross-language build and a sanitised one skip it. So that a release never depends on which kind of build it was, Nulavio makes the check itself, on a build that can be read, and keeps the result in the repository (#430):
+
+| Piece | What it does |
+|---|---|
+| `browser/build/mozconfig.no-lto` | A variant (`NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto`): no cross-language LTO, thin Rust LTO. Its Rust library is one the check can read, and it fits the build laptop (16 GiB, 2 processors). A variant is never a release |
+| [`scripts/build/networking_check.py`](../../scripts/build/networking_check.py) | Reads `libgkrust.a` of such a build as the engine's check does (the symbols at address 0, against the list in the very source tree that was built). It refuses a tree that is not the pinned release, a build whose library says nothing (no Rust LTO, cross-language LTO, a sanitiser), a library older than the build's configuration, and a reading that looks empty. A pass is written to `browser/build/networking-check.json`; a finding names the functions and exits 1 |
+| `scripts/release/rehearse_release.sh --precheck <version>` | The pre-check of a new engine release: builds the variant, runs the script above right after the build, then the unit and the integration tests. No packages, no `manifest.json`, only `precheck.json`: nothing it leaves can be signed or published. `autobuild.py` runs it for every release Mozilla stages or publishes |
+| The pin test (`tests/unit/test_track_b.py`) | `networking-check.json` must name the release `engine.json` pins, with the same source digest: a pull request that moves the pin fails CI until the pre-check has been run for the new release. Only the maintainer may record a release as accepted without the check, naming where he said so |
+| `release_manifest.py verify` | Before anything is signed: the record **at the manifest's base commit** must name the Firefox release the rehearsal built, with a pass or the maintainer's word. A release nobody checked is not published |
+| The Rust guard (`tests/unit/test_track_b.py`) | No engine patch may touch a Rust file, a Cargo manifest, `third_party/rust/` or the build files that decide which Rust code is compiled and whether the check can run; nor rename, copy or carry a binary file. So the record is about Mozilla's Rust code at the pinned release, and that is all the Rust code Nulavio ships |
+
+What this does not do: it does not check the release build's own binary (that build's Rust library is LLVM bitcode until the final link, where the engine's own code imports those functions legitimately). It checks the same Rust source, with the same patches, in another build.
+
+The first record (Firefox 160.0, 2026-11-16) is the script's reading of a local build with patches 0001 to 0012: 267 052 symbols, 6 874 undefined names, none of the engine's 21 functions.
+
 ## Google Safe Browsing key
 
 Firefox 158 uses one key for the Safe Browsing v5 lists (preferred), the v4 lists and the download-reputation check. The key is a build input, never part of this repository:
