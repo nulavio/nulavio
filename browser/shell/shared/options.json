@@ -162,7 +162,8 @@
         "toggle-focus",
         "toggle-immersive",
         "lock-profile",
-        "copy-link-to-highlight"
+        "copy-link-to-highlight",
+    "toggle-keep-above"
       ],
       "default": "_execute_action",
       "writer": "engine",
