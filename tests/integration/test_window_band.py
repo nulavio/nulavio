@@ -662,7 +662,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - before, 10))
         self.m.switch_to((set(self.m.window_handles()) - before).pop())
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 10)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 10)
         )
         self.assertIn("/profiles/popup.html", self.m.current_url())
         self.assertFalse(self.m.execute("return document.getElementById('others-section').hidden;"))

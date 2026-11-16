@@ -74,7 +74,7 @@ class NewTabHereTest(unittest.TestCase):
     def open(self) -> dict:
         self.m.navigate(self.url)
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 15)
         )
         return self.m.execute(STATE)
 

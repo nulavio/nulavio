@@ -43,7 +43,7 @@ class MotionTest(unittest.TestCase):
         # run's whole suite failed here once on a 0.7 s sleep and passed three times alone).
         self.assertTrue(harness.wait_until(lambda: self.m.execute(hidden) == "visible", 8), "the new tab stayed invisible")
         # 2. A list still loading shows its placeholder rows after 400 ms.
-        self.open("settings/settings.html#integrations", "return document.documentElement.dataset.ready === 'true';")
+        self.open("settings/settings.html#integrations", "return document.documentElement?.dataset.ready === 'true';")
         probe = (
             "const ul = document.createElement('ul'); ul.className = 'list'; ul.id = 'probe';"
             "ul.setAttribute('aria-busy', 'true'); document.querySelector('#integrations .card').append(ul);"
@@ -139,7 +139,7 @@ class MotionTest(unittest.TestCase):
 
     def test_03_calm_surfaces_arrive_on_the_tokens_and_warnings_never_move(self):
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
-        self.open("settings/settings.html", "return document.documentElement.dataset.ready === 'true';")
+        self.open("settings/settings.html", "return document.documentElement?.dataset.ready === 'true';")
         dialog = (
             "{ const d = document.createElement('dialog'); d.className = arguments[1]; d.id = 'probe-dialog';"
             "d.innerHTML = '<form class=\"dialog__form\"><p>Teste</p></form>'; document.body.append(d); d.showModal(); }"
@@ -199,7 +199,7 @@ class MotionTest(unittest.TestCase):
 
     def test_05_the_create_sheet_enters_and_leaves_at_once(self):
         self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
-        self.open("profiles/popup.html", "return document.documentElement.dataset.ready === 'true';")
+        self.open("profiles/popup.html", "return document.documentElement?.dataset.ready === 'true';")
         # Opened and read in one script: under load a separate read can land after the 180 ms are over.
         entering = self.m.execute(
             "document.getElementById('new-profile').click();"
