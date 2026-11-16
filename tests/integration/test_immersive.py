@@ -416,9 +416,7 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(self.m.chrome(pref))
 
     def test_07b_the_view_menu_turns_it_on_and_off_and_shows_a_lock(self):
-        # #167: a menu item next to Full Screen, reading the switch each time the menu opens. Before the pointer
-        # journeys (20, 21): their unfinished tab drags leave the engine's movingtab on the toolbox, which takes the
-        # pointer off the toolbar until a real drag ends.
+        # #167: a menu item next to Full Screen, reading the switch each time the menu opens.
         item = (
             "const popup = document.getElementById('menu_viewPopup');"
             "const item = document.getElementById('nulavio-menu-immersive');"
@@ -1175,7 +1173,12 @@ class ImmersiveTest(unittest.TestCase):
         drag = (
             "gBrowser.selectedTab.dispatchEvent(new DragEvent(arguments[0], {bubbles: true, dataTransfer: new DataTransfer()}));"
         )
+        # The synthetic drag never had a drag session, so the engine's own end of a drag (dragend, and its check for
+        # a stale drag) does not leave moving-tab mode: the cleanup ends it the way a drop does, so the toolbar takes
+        # the pointer again for what runs next (#398, test 22).
+        end = "gBrowser.tabContainer.tabDragAndDrop.finishAnimateTabMove();for (const tab of gBrowser.tabs) delete tab._dragData;"
         self.m.chrome(drag, ["dragstart"])
+        self.addCleanup(self.m.chrome, end)
         self.addCleanup(self.m.chrome, drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: "tabs" in (self.window()["hold"] or ""), 5), self.window())
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
