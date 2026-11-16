@@ -32,8 +32,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **New protections and their limits**:
 
 - Fingerprinting: what a page renders as audio offline differs per site (engine patch 0012, [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md), #79). The usual audio probe then reads a different value on every site and the same value again on one site. It covers the buffer an offline rendering returns: a probe that reads through a node inside the rendering (an analyser, a script processor, a worklet) or from sound that plays is not changed, and a script written against the noise can average it out (R56). Distribution Firefox (Track A) does not have the patch.
-
-- Fingerprinting: the 1920×1080 screen is answered by the engine for each document, a frame, a pop-up and an image too (engine patch 0012, ADR 0016, #79). In 160.0-0.6 the size is kept per tab, which leaves the display's size readable in a few corners (below, under 160.0-0.6).
+- Fingerprinting: the 1920×1080 screen is answered by the engine for each document, a frame, a pop-up and an image too (engine patch 0012, ADR 0016, #79). In 160.0-0.6 the size is kept per tab, which leaves the display's size readable in two corners (below, under 160.0-0.6).
 - Fingerprinting: sites are not told that the system asks for less motion or more contrast ([ADR 0018](../adr/0018-sites-are-not-told-motion-and-contrast-preferences.md), #79). Sites then animate, and pages scroll smoothly, also for a person who asked the system for less motion, until they answer the bar that offers the setting once with "Deixar os sites verem", or turn on "Deixar os sites verem minhas preferências de movimento e contraste" in Settings; with it on, those answers (motion, contrast and reduced transparency) tell them apart again (R56).
 
 **Fixes**:
@@ -69,20 +68,21 @@ No release's files are known to have been replaced: on 2026-11-16 every asset of
 
 Also fixed, found by the project's own reviews:
 
-- Release chain: the upload runs in a job that cannot take the signing role, and signing in one that holds no upload token (#356); the signing role in AWS trusts the two signing workflows on `main`, not any job of the environment (#372, R60); the role's session leaves the job once it has signed (#332); `sign_repo.sh` and `sign_apt_repo.sh` verify the rehearsal before they sign (#298); the check after upload compares the served dnf repository file whole (#331); the Flatpak bundle is checked file by file against the attested archive before it is signed (#338, R75).
+- Release chain: the upload runs in a job that cannot take the signing role, and signing in one that holds no upload token (#356); the signing role in AWS trusts the two signing workflows on `main`, not any job of the environment (#372, R60); the role's session leaves the job once it has signed (#332); `sign_repo.sh` and `sign_apt_repo.sh` verify the rehearsal before they sign (#298); the check after upload compares the served dnf repository file whole (#331); the Flatpak bundle is checked file by file against the attested archive before it is signed (#338, R75). The Companion's build validates the Gradle wrapper before the job that signs, and refuses an app changed without a new version (#299).
 - Vault: a profile unlocked from the phone is locked again when its lock watcher cannot start (#330), and the watcher sees a browser that lived under half a second (#303, #314).
 - Sandbox: started with `--confined` where the engine could not sandbox its content inside it (Ubuntu by default), Nulavio refuses to start and says why, where it ran with less protection before (#295, R46); one more environment variable that weakens the engine's sandbox is removed before the browser starts, and `nulavio doctor` names it (#333).
 
 **New protections and their limits**:
 
 - Every profile can be behind a password: the last unprotected profile can be removed, and the profile chooser is then the only way in (#289).
-- Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size, and so do extensions' pages. In this version the size is kept per tab, which leaves the display's size readable in a few corners (a media query inside an SVG image, a frame of a page that is leaving, and a pop-up of an exempted site reads the constant); the engine's own answer per document comes with the next version (ADR 0016, "Known limits").
+- Fingerprinting: pages read a 1920×1080 screen and 4 processors on every computer ([ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md), #79). The window's own size still differs between people, and a window wider than that screen is a visible sign of the protection ([R56](residual-risks.md)). A site exempted with the shield reads the display's size, and so do extensions' pages. In this version the size is kept per tab, which leaves the display's size readable in two corners (a media query inside an SVG image, and a frame of a page that is leaving), and a pop-up of an exempted site reads the constant where the site would read the display's size, which fails on the safe side; the engine's own answer per document comes with the next version (ADR 0016, "Known limits").
 - Fingerprinting: pages read UTC as the time zone ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md), #79). Hours a page formats itself are in UTC until the person turns on "Usar meu fuso horário neste site" in the shield's panel; that site then reads the real time zone again (R56). Distribution Firefox (Track A) has no such switch, only the shield's own.
 - Clean links drop eleven more tracking parameters that the engine's lists miss (#309).
+- Accepted and written down: what Google still receives when a page of another site uses its services, and what is allowed there so that pages work (R73, #307); with DRM turned on, a closed module from Google runs inside Nulavio, in the engine's sandboxed plugin process (R74, #310).
 
 ## Nulavio 160.0-0.5 (Firefox 160.0), published 2026-11-14
 
-An update of the alpha with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5), [run 43633960941](https://github.com/nulavio/nulavio/actions/runs/43633960941)), approved by the maintainer, signed through KMS and installed by the job from the site's repository files in clean Fedora and Ubuntu containers. No advisory: what it fixes for security was already public, as residual risks of 160.0-0.4.
+An update of the alpha with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5), [run 43633960941](https://github.com/nulavio/nulavio/actions/runs/43633960941)), approved by the maintainer, signed through KMS and installed by the job from the site's repository files in clean Fedora and Ubuntu containers. No advisory: the AI Bridge and Vault fixes close what 160.0-0.4 had already published as residual risks (R29, R70), and the Guard and Assistant fixes came from public issues (#136, #138).
 
 **Upstream**: unchanged, Firefox 160.0.
 
@@ -92,6 +92,7 @@ An update of the alpha with the same engine ([release](https://github.com/nulavi
 - Vault: a protected profile can get a new key, so that a removed unlock method stops opening old copies of the key file (#275, [ADR 0015](../adr/0015-a-new-key-for-a-profile.md)): that is what ends the power of an old secret, which R70 describes. Replacing the recovery code keeps the old code until the new one is typed back (#252), and the browser says when a change to the unlock methods was saved but not recorded inside the profile (#253).
 - Guard: a replaced extension package is reported by its digest, whatever version the engine says (#264).
 - Assistant: the item for selected text does not show in a private window (#254).
+- Release chain: the APK signer refuses a data descriptor that only the local header announces (#291); the site's deploy job reads the Cloudflare token from the `site` environment (#233).
 
 **New protections and their limits**:
 
