@@ -18,6 +18,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
+  PENDING_FILE: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
+  validatePending: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
@@ -776,12 +778,14 @@ class NulavioProfilesClass {
    * Create a profile (not launched). `name` is the template's name in the
    * user's language, as shown in the UI.
    */
-  async create({ name, avatar, color, templateId = null } = {}) {
+  async create({ name, avatar, color, templateId = null, search = null } = {}) {
     this.#requireAvailable();
     const template = templateId === null ? null : TEMPLATES.find(t => t.id === templateId);
     if (templateId !== null && !template) {
       fail("unknown-template");
     }
+    // #151: the new profile's search, applied at its first start (NulavioSearch's PENDING_FILE); none keeps ADR 0002's.
+    const searchChoice = search === null ? null : lazy.validatePending(search);
     name = normalizeProfileName(name);
     avatar = checkAvatar(avatar ?? template?.avatar ?? AVATARS[0]);
     color = checkColor(color ?? template?.color ?? COLORS[0]);
@@ -802,10 +806,41 @@ class NulavioProfilesClass {
       // Before its first start, so the settings apply from the first page.
       await IOUtils.writeUTF8(PathUtils.join(profile.path, "user.js"), userJs(SENSITIVE_PREFS, "Nulavio: sensitive sites profile"));
     }
+    if (searchChoice) {
+      await IOUtils.writeJSON(PathUtils.join(profile.path, lazy.PENDING_FILE), searchChoice);
+    }
     await profile.setNameAsync(name);
     await profile.setAvatar(avatar);
     await this.#setColor(profile.id, color);
     return profile.id;
+  }
+
+  /**
+   * #151: this profile's search choice for other profiles of the group, applied by each at its next start. A locked
+   * profile's files cannot be written: it is answered "locked" and left as it is. Returns one result per id.
+   */
+  async carrySearch(ids, choice) {
+    choice = lazy.validatePending(choice);
+    if (!Array.isArray(ids) || !ids.length) {
+      fail("invalid-choice");
+    }
+    const results = [];
+    for (const id of ids) {
+      const profile = await this.#profile(id);
+      if (profile.id === this.#service.currentProfile?.id) {
+        results.push({ id: profile.id, result: "here" });
+        continue;
+      }
+      // Locked: its files are not there to write. Not known: never taken for unprotected (#142).
+      const lock = await this.#protection(profile);
+      if (lock === "locked" || lock === "unknown") {
+        results.push({ id: profile.id, result: lock });
+      } else {
+        await IOUtils.writeJSON(PathUtils.join(profile.path, lazy.PENDING_FILE), choice);
+        results.push({ id: profile.id, result: "next-start" });
+      }
+    }
+    return results;
   }
 
   async update(id, { name, avatar, color } = {}) {

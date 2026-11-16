@@ -94,6 +94,37 @@ export const ACCOUNTS = Object.freeze({
   kagi: Object.freeze({ host: "kagi.com", cookie: "kagi_session", signIn: "https://kagi.com/signin" }),
 });
 
+/* #151: a choice made in one profile for another. The Shell writes it into the other profile's folder, and that
+   profile's Shell reads it once at its next start, makes that engine its search, and deletes the file. It never
+   carries consent for suggestions: those are allowed in each profile itself. Only what every profile can resolve
+   travels: a curated provider, a SearXNG instance's address, or one of the engine's own (app-provided) engines. */
+export const PENDING_FILE = "nulavio-search-choice.json";
+
+/** The checked form of a carried choice, or the error "invalid-choice". */
+export function validatePending(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    fail("invalid-choice");
+  }
+  const privateToo = raw.privateToo !== false;
+  const kinds = ["provider", "searxng", "engine"].filter(kind => raw[kind] !== undefined);
+  if (kinds.length !== 1) {
+    fail("invalid-choice");
+  }
+  if (kinds[0] === "provider") {
+    if (typeof raw.provider !== "string" || !Object.hasOwn(PROVIDERS, raw.provider)) {
+      fail("unknown-provider");
+    }
+    return { provider: raw.provider, privateToo };
+  }
+  if (kinds[0] === "searxng") {
+    return { searxng: validateSearxngBase(raw.searxng), privateToo };
+  }
+  if (typeof raw.engine !== "string" || !/^[a-z0-9][a-z0-9_.@-]{0,63}$/i.test(raw.engine)) {
+    fail("invalid-choice");
+  }
+  return { engine: raw.engine, privateToo };
+}
+
 /** An error the settings page can translate: `code` is stable, `message` is for logs. */
 export class SearchSettingsError extends Error {
   constructor(code, message = code) {
@@ -310,6 +341,7 @@ class NulavioSearchClass {
         .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
       accounts: this.accounts(),
+      carry: await this.carryable().catch(e => (console.error("Nulavio Search: carryable", e), null)),
     };
   }
 
@@ -543,9 +575,75 @@ class NulavioSearchClass {
   startup() {
     this.#started ??= (async () => {
       this.#observe();
-      return this.migrate();
+      const result = await this.migrate();
+      await this.applyPending();
+      return result;
     })();
     return this.#started;
+  }
+
+  /**
+   * #151: what this profile's normal default would carry to another profile (`choice`, for validatePending), or
+   * null with the reason when it cannot travel (an engine the person built by hand exists only here).
+   */
+  async carryable() {
+    await lazy.SearchService.init();
+    const [engine, privateDefault] = await Promise.all([lazy.SearchService.getDefault(), lazy.SearchService.getDefaultPrivate()]);
+    const privateToo = engine.id === privateDefault.id;
+    const key = this.#providerKey(engine);
+    if (key && key !== "searxng") {
+      return { name: engine.name, choice: { provider: key, privateToo } };
+    }
+    if (key === "searxng") {
+      const spec = engine.getSubmission("nulavio").uri.spec;
+      const base = spec.endsWith("search?q=nulavio") ? spec.slice(0, -"search?q=nulavio".length) : null;
+      return base ? { name: engine.name, choice: { searxng: validateSearxngBase(base), privateToo } } : { name: engine.name, choice: null };
+    }
+    if (this.#kind(engine) === "builtin") {
+      return { name: engine.name, choice: { engine: engine.id, privateToo } };
+    }
+    return { name: engine.name, choice: null };
+  }
+
+  /**
+   * #151: a choice another profile left for this one (PENDING_FILE), applied once at start-up. The file is deleted
+   * before the choice is applied, so a choice that fails is not tried again at every start; the failure is logged.
+   */
+  async applyPending() {
+    let path;
+    try {
+      path = PathUtils.join(PathUtils.profileDir, PENDING_FILE);
+    } catch {
+      return null;
+    }
+    let raw;
+    try {
+      raw = await IOUtils.readJSON(path);
+    } catch (e) {
+      if (DOMException.isInstance(e) && e.name === "NotFoundError") {
+        return null;
+      }
+      console.error("Nulavio Search: the search choice left by another profile could not be read", e);
+      await IOUtils.remove(path, { ignoreAbsent: true }).catch(() => {});
+      return null;
+    }
+    await IOUtils.remove(path, { ignoreAbsent: true });
+    try {
+      const choice = validatePending(raw);
+      let target;
+      if (choice.provider) {
+        target = { provider: choice.provider };
+      } else if (choice.engine) {
+        target = { id: choice.engine };
+      } else {
+        const name = `SearXNG (${new URL(choice.searxng).host})`;
+        target = { id: lazy.SearchService.getEngineByName(name)?.id ?? (await this.addSearxng({ url: choice.searxng })) };
+      }
+      return await this.choose({ ...target, privateToo: choice.privateToo });
+    } catch (e) {
+      console.error("Nulavio Search: the search choice left by another profile was not applied", e);
+      return null;
+    }
   }
 
   #observe() {
