@@ -5,6 +5,7 @@ and connection; both sides are tabs of the same profile, in the side tab list an
 
 from __future__ import annotations
 
+import json
 import unittest
 
 import harness
@@ -29,6 +30,7 @@ return { selected: gBrowser.selectedBrowser.currentURI.hostPort, urlbar: gURLBar
 """
 
 
+MENU_IDS = ["context_moveTabToSplitView", "context_separateSplitView", "context_reverseSplitView"]
 DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 
 
@@ -129,22 +131,77 @@ class SplitViewTest(unittest.TestCase):
         self.assertFalse(self.state()["vertical"])
         self.check_sides()
 
-    def test_04_the_tab_menu_offers_it_in_the_browsers_language(self):
-        items = self.m.chrome(
-            "const menu = document.getElementById('tabContextMenu');"
-            "return ['context_moveTabToSplitView', 'context_separateSplitView', 'context_reverseSplitView']"
-            ".map(id => [id, Boolean(menu.querySelector('#' + id))]);"
+    def menu_labels(self) -> list[str | None]:
+        """Opens the tab's menu with a right click on the selected tab and reads the split items' labels as the window's
+        localization gives them (their words are only set once the menu opens), then closes it."""
+        self.m.chrome(
+            "const b = gBrowser.selectedTab.getBoundingClientRect();"
+            "window.synthesizeMouseEvent('contextmenu', b.left + b.width / 2, b.top + b.height / 2, { button: 2 }, {});"
         )
-        self.assertEqual([present for _, present in items], [True, True, True], items)
+        state = "return document.getElementById('tabContextMenu').state;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(state) == "open", 10), self.m.chrome(state))
+        labels = "return arguments[0].map(id => document.getElementById(id)?.getAttribute('label') || null);"
+        try:
+            harness.wait_until(lambda: all(self.m.chrome(labels, [MENU_IDS])), 10)
+            return self.m.chrome(labels, [MENU_IDS])
+        finally:
+            self.m.chrome("document.getElementById('tabContextMenu').hidePopup();")
+
+    def test_04_the_tab_menu_offers_it_in_the_browsers_language(self):
+        # No key: Nulavio gives the engine's split commands none (decision on #315); the tab menu is the way in.
+        portuguese = self.menu_labels()
+        self.assertEqual(len(portuguese), 3, portuguese)
+        self.assertTrue(all(portuguese), portuguese)
+        before = self.m.chrome("return Services.locale.requestedLocales;")
+        self.m.chrome('Services.locale.requestedLocales = ["en-US"];')
+        try:
+            type(self).m = self.m = self.session.restart()
+            english = self.menu_labels()
+        finally:
+            self.m.chrome("Services.locale.requestedLocales = arguments[0];", [before])
+            type(self).m = self.m = self.session.restart()
+        self.assertTrue(all(english), english)
+        self.assertNotEqual(portuguese, english)
+        self.assertIn("split", " ".join(english).lower())
+        print(json.dumps({"pt-BR": portuguese, "en-US": english}, ensure_ascii=False))
+
+    def painted_toolbar(self) -> str:
+        """The window's own colour (the first of the frame, the toolbox and the toolbar that is not transparent), read after
+        two animation frames, so the window has painted it."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "const colour = () => [document.documentElement, gNavToolbox, document.getElementById('nav-bar')]"
+                ".map(e => getComputedStyle(e).backgroundColor).find(c => c !== 'rgba(0, 0, 0, 0)') ?? null;"
+                "requestAnimationFrame(() => requestAnimationFrame(() => done(colour())));"
+            )
+        finally:
+            self.m.set_context("content")
+
+    def settled_toolbar(self, unlike: str | None) -> str:
+        """Waits until the toolbar's colour is not `unlike` (the other theme's) and holds over two painted frames."""
+        seen = []
+
+        def settled() -> bool:
+            seen.append(self.painted_toolbar())
+            return len(seen) > 1 and seen[-1] == seen[-2] and seen[-1] != unlike
+
+        self.assertTrue(harness.wait_until(settled, 10), seen[-3:])
+        return seen[-1]
 
     def test_05_captures_in_both_themes(self):
         self.split()
         folder = harness.artifacts_dir() / "split-view"
         folder.mkdir(parents=True, exist_ok=True)
+        light = None
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
                 self.assertTrue(harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10))
+                # The media query flips before the window is painted in the new colours: wait for the paint.
+                colour = self.settled_toolbar(light if dark else None)
+                light = light or colour
                 self.m.set_context("chrome")
                 try:
                     (folder / f"split-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
