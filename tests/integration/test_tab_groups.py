@@ -194,6 +194,7 @@ class TabGroupsTest(unittest.TestCase):
 
     def test_06_with_imersivo_a_group_stays_as_it_was(self):
         group = self.make_group()
+        want = [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]]
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0]; gBrowser.getAllTabGroups()[0].collapsed = true;")
         name = "return document.querySelector('#nulavio-band .nv-band-name')?.textContent.trim() ?? null;"
         before = self.m.chrome(name)
@@ -201,11 +202,12 @@ class TabGroupsTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
         on = "return document.documentElement.hasAttribute('nulavio-immersive');"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(on), 10))
-        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+        # Its tabs may still be on their way to their pages: wait for them, then nothing else may have changed.
+        self.assertTrue(harness.wait_until(lambda: self.groups() == want, 15), self.groups())
         self.assertEqual(self.m.chrome(name), before)
         self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', false);")
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(on), 10))
-        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+        self.assertEqual(self.groups(), want)
         self.m.chrome("gBrowser.getAllTabGroups()[0].collapsed = false;")
         self.assertTrue(harness.wait_until(lambda: self.group()["shownTabs"] == 2, 5), self.group())
 
