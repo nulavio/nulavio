@@ -48,6 +48,33 @@ return {
 };
 """
 )
+# #116 (ADR 0008): the panes the navigation shows, by button and by the page's own name for them.
+SHOWN_PANES = (
+    DOC
+    + """
+return [...d.querySelectorAll("#categories moz-page-nav-button[view]")]
+  .filter(b => !b.classList.contains("hidden-category") && !b.hidden && b.getBoundingClientRect().height > 0)
+  .map(b => [b.id, b.getAttribute("view")]);
+"""
+)
+# What a person can use in the pane on screen, after going to it the way a click on the navigation does: enabled
+# controls that are drawn, outside the search box and the navigation.
+USABLE = (
+    DOC
+    + """
+const [view] = arguments;
+if (w.gLastCategory?.category !== view) { w.gotoPref(view); return null; }
+const kinds = "button, input, select, textarea, menulist, checkbox, radio, richlistbox, moz-toggle, moz-checkbox, "
+  + "moz-radio, moz-select, moz-button, moz-box-button, moz-box-link, moz-visual-picker-item, moz-input-text, "
+  + "moz-input-search, a[href], label.text-link";
+const usable = [...d.getElementById("mainPrefPane").querySelectorAll(kinds)].filter(el => {
+  if (el.closest("#searchInput, #categories")) return false;
+  const box = el.getBoundingClientRect();
+  return box.width > 0 && box.height > 0 && !el.disabled && el.getAttribute("disabled") !== "true";
+});
+return usable.length ? usable.map(el => el.localName + (el.id ? "#" + el.id : "")) : null;
+"""
+)
 RELATED = DOC + 'return [...d.querySelectorAll("#relatedSettingsBoxGroup moz-box-link")].map(link => link.href);'
 ENGINE_APPEARANCE = ["appearance", "browserTheme", "windowDensity", "relatedSettings"]
 # The engine's stock navigation, as the alpha shows it (accounts and Labs are off there).
@@ -695,6 +722,26 @@ class NativeSettingsTest(unittest.TestCase):
         self.assertTrue(
             harness.wait_until(lambda: self.m.chrome(where) == "about:preferences#nulavioProfiles", 15), self.m.chrome(where)
         )
+
+    def test_08_every_pane_in_the_navigation_has_something_to_use_and_its_address_opens_it(self):
+        # #116: a pane belongs in the navigation only while it holds something a person can use. Today none is empty
+        # (accounts, the engine's AI controls and Labs were checked by hand on 2026-11-12). This fails when an engine
+        # update brings a pane with nothing to use: then it has to be hidden while it is empty (ADR 0008).
+        self.open("about:preferences")
+        panes = self.m.chrome(SHOWN_PANES)
+        self.assertGreaterEqual(len(panes), len(JOURNEY_NAV), panes)
+        for button, view in panes:
+            with self.subTest(pane=view):
+                usable = harness.wait_until(lambda view=view: self.m.chrome(USABLE, [view]), 15)
+                self.assertTrue(usable, f"{button} ({view}) is in the navigation with nothing to use")
+        # Its address, typed, still opens each one (the page's own name: paneNulavioProfiles is #nulavioProfiles).
+        where = "return gBrowser.selectedBrowser.contentWindow?.gLastCategory?.category ?? null;"
+        for button, view in panes:
+            with self.subTest(address=view):
+                address = "about:preferences#" + view[4].lower() + view[5:]
+                self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+                self.open(address)
+                self.assertTrue(harness.wait_until(lambda view=view: self.m.chrome(where) == view, 15), (address, button))
 
 
 if __name__ == "__main__":
