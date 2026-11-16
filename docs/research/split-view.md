@@ -17,12 +17,30 @@ nothing to it and changes nothing in it. The checks are `tests/integration/test_
 | Tabs on top | The same, in the tab strip | `test_03` |
 | Light and dark themes | Nothing of Nulavio's draws over the split; the focused side has the engine's accent outline | `test_05` captures (`NULAVIO_TEST_ARTIFACTS/split-view/`) |
 
-## What is not done yet
+Captures, 1400×900, Lateral, the right side focused: [light](../design/screenshots/split-view-315/split-light.png),
+[dark](../design/screenshots/split-view-315/split-dark.png) (from `test_05`). In the side tab list the two tabs of a
+split share one row, so a long title is cut sooner than in a row of its own; that is the engine's layout.
 
-- **Per-site routing (ADR 0003) inside a split** is not tested: a link in one side that a rule sends to another profile.
-  Routing decides per link and opens the link in the other profile's window, so it should leave the split alone, but
-  this needs the two-profile setup of `test_routing`, which this check does not have. Follow-up in the issue.
-- **Keys.** The engine's commands for a split (`key_addTabSplitView`, `key_separateTabSplitView`) have no key by
-  default, so there is nothing to list in Nulavio's keys yet. Giving them one is a choice for after this check.
-- **User docs and the site's feature list**: not changed here (the site's comparison changes in both languages, with
-  its own tests).
+## Routing (ADR 0003)
+
+A link clicked in one side that a rule sends to another profile opens in that profile, as from any tab: it is requested
+once, by the other profile, and both sides of the split stay as they were. A link the rules leave alone (same site)
+loads in the side it was clicked in, which stays split. Routing decides per link and never looks at the split.
+Checked by `test_routing.py` › `test_16b_a_link_clicked_in_a_split_view_side_is_routed_and_the_split_stays` (in-page
+routing on, the two-profile setup of that module).
+
+## Keys
+
+None. The engine's commands for a split (`key_addTabSplitView`, `key_separateTabSplitView`) have no key by default in
+Firefox 160, and Nulavio gives them none (the maintainer's decision on #315, 2026-11-16): the tab menu's items are the
+way in, so no new key competes with the engine's or KDE's. Nothing to add to Nulavio's list of keys.
+
+## Where people read about it
+
+`README.md` and `README.pt-BR.md` ("Also built in"), and the engineering pages (`site/engenharia`, `site/en/engineering`):
+5.2 says what the address bar and the band name in a split, 5.4 that routing works the same in either side.
+
+## Not checked
+
+- Dragging a tab onto the page to make a split (the tab menu and the engine's API were used).
+- An engine build: the checks ran on the 0.5 package with `main`'s Shell.

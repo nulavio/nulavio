@@ -561,7 +561,7 @@
 <div class="claim" id="s5-2">
 <div class="claim-text">
 <h3><span class="num">5.2</span> The band: which profile you are in</h3>
-<p>At the top of every window, above the address bar, a band drawn by the browser shows the profile, with a colour, an icon (or the name's initial) and a name, and its state in words and with a symbol, never by colour alone. Web pages cannot write in this band; only Nulavio's own pages are named in it. When Nulavio cannot read the state, the band says «Protection unknown» instead of guessing. In full screen it becomes a thin line at the top.</p>
+<p>At the top of every window, above the address bar, a band drawn by the browser shows the profile, with a colour, an icon (or the name's initial) and a name, and its state in words and with a symbol, never by colour alone. Web pages cannot write in this band; only Nulavio's own pages are named in it. When Nulavio cannot read the state, the band says «Protection unknown» instead of guessing. In full screen it becomes a thin line at the top. In a split view (two tabs side by side, from the tab's menu), the address bar and, in Immersive mode, the band name the focused side's site; the other side shows its own site in a footer the browser draws.</p>
 <p class="note">«No password» means that profile's files are not encrypted on disk. The protections in section 2 apply to every profile.</p>
 </div>
 <div class="receipt">
@@ -572,6 +572,7 @@
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_02_only_a_selected_top_level_shell_principal_names_the_header</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_07_page_fullscreen_keeps_a_flow_safety_line_and_native_exit_warning</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_window_band.py › test_real_unlocked_profile_is_named_protected_and_current_lock_is_not_invented</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_split_view.py › test_02_with_imersivo_the_band_names_the_focused_side</code></dd>
 <dt>File</dt>
 <dd><code class="ref" translate="no">docs/design/ux-principles.md</code></dd>
 </dl>
@@ -738,7 +739,7 @@
 <div class="claim" id="s5-4">
 <div class="claim-text">
 <h3><span class="num">5.4</span> Links clicked inside pages</h3>
-<p>They are off by default, because in that case the page chooses the address. If you turn on «Also for links clicked in pages», a plain click on a link to another site follows your rules, and the page you were on stays open. Even then it never moves pop-ups, forms, redirects, links inside embedded frames, links within the same site or private windows: those load in the profile you are in. For a link, you can always choose «Open link in profile» from its right-click menu.</p>
+<p>They are off by default, because in that case the page chooses the address. If you turn on «Also for links clicked in pages», a plain click on a link to another site follows your rules, and the page you were on stays open. Even then it never moves pop-ups, forms, redirects, links inside embedded frames, links within the same site or private windows: those load in the profile you are in. For a link, you can always choose «Open link in profile» from its right-click menu. In a split view, a link clicked in either side follows the same rules, and both sides stay open.</p>
 <p class="limit"><strong>Limit:</strong> With it on, a page can put an identifier of yours in the link the other profile opens, and link the two identities on that site.</p>
 </div>
 <div class="receipt">
@@ -747,6 +748,7 @@
 <dt>Tests</dt>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_15_in_page_routing_is_off_by_default</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_16_a_clicked_link_opens_in_the_rule_profile_and_the_page_stays</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_routing.py › test_16b_a_link_clicked_in_a_split_view_side_is_routed_and_the_split_stays</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_18_navigations_that_are_never_routed_load_here</code></dd>
 <dd><code class="ref" translate="no">tests/integration/test_routing.py › test_14_link_menu_opens_the_link_in_the_chosen_profile</code></dd>
 <dt>File</dt>
