@@ -1604,6 +1604,7 @@
       "trackingprotection-pb": { allow: "exceptionTrackingPrivate" },
       "https-only-load-insecure": { allow: "exceptionHttpsOnly", session: "exceptionHttpsOnlySession" },
       "nulavio-timezone": { allow: "exceptionTimeZone" },
+      "nulavio-allow-copy": { allow: "exceptionAllowCopy" },
       cookie: { allow: "exceptionCookieAllow", deny: "exceptionCookieDeny", session: "exceptionCookieSession" },
       install: { allow: "exceptionInstall" },
       popup: { allow: "exceptionPopup" },
