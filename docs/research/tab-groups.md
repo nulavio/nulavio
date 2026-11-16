@@ -15,7 +15,7 @@ AI "smart" grouping off (`browser.tabs.groups.smart.enabled=false` in `baseline.
 - **Profile.** The profile is told by the band (its name, its glyph and its colour), never by a group: a group's colour
   does not change the band, in either theme.
 
-Captures, Lateral, a group in each colour offered, the last one gray: [light](../design/screenshots/tab-groups-323/groups-light.png),
+Captures, Lateral, a group in the last of the six colours the test tries (gray): [light](../design/screenshots/tab-groups-323/groups-light.png),
 [dark](../design/screenshots/tab-groups-323/groups-dark.png) (from `test_04`).
 
 ## Per arrangement

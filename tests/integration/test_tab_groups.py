@@ -27,6 +27,8 @@ return { label: group.label, color: group.color, collapsed: group.collapsed, tab
          vertical: gBrowser.tabContainer.verticalMode };
 """
 
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
+
 
 @unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's Shell (NULAVIO_ENGINE)")
 class TabGroupsTest(unittest.TestCase):
@@ -101,6 +103,26 @@ class TabGroupsTest(unittest.TestCase):
     def test_03_with_the_tabs_on_top(self):
         self.journey("top")
 
+    def held(self, script: str) -> str:
+        """What `script` returns once it holds over three reads, each after two painted frames. The band takes the
+        theme's colours a moment after the media query flips."""
+        seen = []
+
+        def steady() -> bool:
+            self.m.set_context("chrome")
+            try:
+                self.m.execute_async(
+                    "const done = arguments[arguments.length - 1];"
+                    "requestAnimationFrame(() => requestAnimationFrame(() => done(true)));"
+                )
+            finally:
+                self.m.set_context("content")
+            seen.append(self.m.chrome(script))
+            return len(seen) > 2 and seen[-1] == seen[-2] == seen[-3]
+
+        self.assertTrue(harness.wait_until(steady, 10), seen[-3:])
+        return seen[-1]
+
     def test_04_a_group_colour_is_never_the_profiles_and_the_palette_leaves_out_the_colours_with_meaning(self):
         offered = self.m.chrome(
             "const editor = document.getElementById('tab-group-editor');"
@@ -113,8 +135,8 @@ class TabGroupsTest(unittest.TestCase):
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
-                harness.wait_until(lambda: False, 0.5)
-                profile = self.m.chrome(flag)
+                self.assertTrue(harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10))
+                profile = self.held(flag)
                 for color in ("green", "yellow", "blue", "cyan", "pink", "gray"):
                     self.m.chrome(
                         "for (const g of gBrowser.getAllTabGroups()) g.ungroupTabs();"
@@ -127,6 +149,11 @@ class TabGroupsTest(unittest.TestCase):
                     self.assertEqual(self.m.chrome(flag), profile, color)
                 self.m.set_context("chrome")
                 try:
+                    # Two animation frames: the window has painted the last group and the theme.
+                    self.m.execute_async(
+                        "const done = arguments[arguments.length - 1];"
+                        "requestAnimationFrame(() => requestAnimationFrame(() => done(true)));"
+                    )
                     (folder / f"groups-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
                 finally:
                     self.m.set_context("content")
