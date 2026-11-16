@@ -5,10 +5,23 @@ name: privacytests
 # this compares their repository with the pins (scripts/research/watch_privacytests.py) and fails when a copied
 # file or their scoring changed, so the copy is brought up to date by a person or an agent who reads the change.
 # It reads raw.githubusercontent.com only, runs nothing it downloads, and holds no secret.
+#
+# A second job answers their comparison between machines. A Device probe passes on their site when it reads the
+# same on their machines; here the test holds each such value to one written value (DEVICE_CONSTANTS). That test
+# needs the Nulavio build, which pull requests do not have: it runs on a developer's computer and on the release
+# build's machine. Each time a release is published (and by hand) this runs it on a third, GitHub's own runner,
+# with the published archive, checked against its SHA256SUMS signed with the release key before it runs.
 on:
   schedule:
     - cron: "23 6 * * 1"
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release whose Device probes to run here (empty: the latest published one)"
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -29,3 +42,43 @@ jobs:
           persist-credentials: false
       - name: Compare their repository with tests/fixtures/privacytests/pinned.json
         run: python3 -I scripts/research/watch_privacytests.py --summary "$GITHUB_STEP_SUMMARY"
+
+  device:
+    name: the Device probes on a second machine (a published release, on GitHub's runner)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # the release's assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The release's archive, checked against its SHA256SUMS signed with the release key
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          tags=$(python3 -I scripts/perf/fetch_releases.py "$TAG" "$RUNNER_TEMP/releases")
+          echo "tag=${tags%% *}" >> "$GITHUB_OUTPUT"
+      - name: The tests as they were at that release (they are written for its build)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          path: at-release
+          persist-credentials: false
+      - name: Build the test image (Mozilla's Firefox libraries, as the integration job's)
+        run: docker build -t nulavio-privacytests -f ci/containers/ubuntu-itest.Containerfile ci/containers
+      - name: PrivacyTests' probes in the release's build, on this machine
+        # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml).
+        run: |
+          set -o pipefail
+          docker run --rm --security-opt seccomp=unconfined \
+            -v "$GITHUB_WORKSPACE/at-release":/src:ro -v "$RUNNER_TEMP/releases":/releases:ro \
+            nulavio-privacytests sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" &&
+              NULAVIO_ENGINE=/releases/new/nulavio/nulavio python3 -I tests/run.py integration test_privacytests.py' 2>&1 | tee probes.log
+          # A run that skipped the module would pass with nothing checked.
+          passed=$(grep -c '^PrivacyTests, Device: .* \.\.\. ok$' probes.log || true)
+          echo "Device probes that passed on this machine: $passed" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$passed" -ge 10 ]

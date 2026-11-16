@@ -18,9 +18,10 @@ What this file does with one machine:
   really changed, so a stable protected value means something.
 * A Device probe cannot change machine here. It passes when it farbles, or when its value is one that
   DEVICE_CONSTANTS says is the same on every machine by construction (an API the engine does not have, the
-  engine's own math library). The values are written here, and this module runs on three kinds of machine: a
-  developer's computer, GitHub's runners (pull requests, 4 processors) and the release build's (16). A value
-  that followed the machine would fail on one of them, which is their comparison between machines.
+  engine's own math library). The values are written here, and this module runs on three machines: a
+  developer's computer, the release build's (every release, before it is signed) and GitHub's runner (every
+  published release: the privacytests workflow). A value that followed the machine would fail on one of
+  them, which is their comparison between machines. Pull requests do not run it: they have no Nulavio build.
 
 Not changed by anything here, so their tests show stability only: the panels around the screen (a headless
 run has none), the keyboard layout (the engine has no Keyboard Map API) and reduced transparency (the engine
@@ -186,7 +187,8 @@ class PrivacyTestsProbes(unittest.TestCase):
                 for probe, result in json.loads(m.execute(RESULTS)).items():
                     # A probe of something the engine does not have throws "Unsupported" (their pages since
                     # 2026-11-16); it has no value, on any site or in any run, which their rule takes as stable.
-                    if result.get("error") == UNSUPPORTED:
+                    # Only the probes named for it: any other probe that throws fails, whatever it throws.
+                    if probe in NOT_IN_THE_ENGINE and result.get("error") == UNSUPPORTED:
                         result = {"value": "unsupported"}
                     assert "error" not in result, f"{probe} on {site}: {result['error']}"
                     per_site.setdefault(probe, []).append(result["value"])
