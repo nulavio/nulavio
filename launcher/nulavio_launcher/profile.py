@@ -283,6 +283,14 @@ def _digest(value: prefs.PrefValue) -> str:
 KEPT = "kept:"
 
 
+# A seed pref the Nulavio build's Shell rewrites for a setting of the person's, with the pref where the Shell records
+# what it wrote (NulavioFingerprinting.sys.mjs: the set of protections without three entries, while "let sites see my
+# motion and contrast preferences" is on). Such a value is neither the launcher's nor a set the person wrote, and the
+# Shell brings it up to date itself at each start. Without this it could be taken for an earlier value the baseline
+# shipped, which it happens to equal (review of #400).
+SHELL_WRITTEN = {"privacy.fingerprintingProtection.overrides": "nulavio.fingerprinting.overridesWritten"}
+
+
 def seed_states(profile: Profile, settings: dict[str, Any]) -> dict[str, tuple[str, prefs.PrefValue]]:
     """Each seed pref of the baseline: (where the profile stands, the baseline's value for this profile).
 
@@ -291,6 +299,8 @@ def seed_states(profile: Profile, settings: dict[str, Any]) -> dict[str, tuple[s
     - "follows": the profile has a value the launcher wrote and nobody changed, and the baseline's value has
       changed since; the next launch writes the baseline's.
     - "kept": the profile has a value the person chose; it stays.
+    - "managed": the profile has a value the Nulavio build's Shell wrote for a setting of the person's
+      (SHELL_WRITTEN); the Shell keeps it up to date and the launcher leaves it.
     - "default": prefs.js has no value, so the engine's default applies. It stays that way, with one
       exception: a true/false pref whose baseline value changed since the launcher last looked is "follows".
       The engine does not save a value equal to its default, so for a true/false pref a missing value is
@@ -318,6 +328,8 @@ def seed_states(profile: Profile, settings: dict[str, Any]) -> dict[str, tuple[s
             state = "follows" if changed and isinstance(want, bool) else "default"
         elif _digest(have[pref.name]) == _digest(want):
             state = "current"
+        elif pref.name in SHELL_WRITTEN and have.get(SHELL_WRITTEN[pref.name]) == have[pref.name]:
+            state = "managed"
         elif pref.name in written:
             state = "follows" if written[pref.name] == _digest(have[pref.name]) else "kept"
         else:

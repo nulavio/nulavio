@@ -237,6 +237,36 @@ class ProfileTest(TempHome):
             self.set_pref(prof, self.OVERRIDES, newer)
             self.assertEqual(doctor.check_seeds(prof), [])
 
+    def test_a_value_the_shell_wrote_for_the_persons_setting_is_left_to_the_shell(self):
+        # Review of #400. In the Nulavio build, "let sites see my motion and contrast preferences" makes the Shell
+        # write the set without three entries, which is exactly a set the baseline shipped earlier. It is not an
+        # old seed: the launcher must not put the three entries back, in an old profile or a new one.
+        shell = (ROOT / "browser" / "shell" / "modules" / "NulavioFingerprinting.sys.mjs").read_text(encoding="utf-8")
+        marker = profile.SHELL_WRITTEN[self.OVERRIDES]
+        self.assertIn(f'const WRITTEN = "{marker}";', shell)
+        self.assertIn(f'const OVERRIDES = "{self.OVERRIDES}";', shell)
+        current = next(p.value for p in profile.baseline_prefs() if p.name == self.OVERRIDES)
+        accessibility = ("+CSSPrefersReducedMotion", "+CSSPrefersContrast", "+CSSPrefersReducedTransparency")
+        written = ",".join(item for item in current.split(",") if item not in accessibility)
+        self.assertIn(written, profile.seed_history()[self.OVERRIDES], "the collision this test is about is gone")
+        new = self.make("new")
+        profile.prepare_for_launch(new, {})
+        self.set_pref(new, self.OVERRIDES, written)
+        for prof in (self.seeded_before_384(written, "old"), new):
+            with self.subTest(profile=prof.name):
+                self.set_pref(prof, marker, written)
+                self.assertEqual(profile.seed_states(prof, prof.load_settings())[self.OVERRIDES][0], "managed")
+                for _launch in range(2):
+                    self.assertEqual(profile.prepare_for_launch(prof, {}), [])
+                    self.assertEqual(self.value(prof, self.OVERRIDES), written)
+                self.assertEqual(doctor.check_seeds(prof), [])
+        # Without the Shell's record the same value in a profile from before #384 is an earlier seed, and follows.
+        plain = self.seeded_before_384(written, "plain")
+        self.assertEqual(profile.prepare_for_launch(plain, {}), [self.OVERRIDES])
+        # The Shell's record of an older value does not cover a set the person wrote since.
+        self.set_pref(new, self.OVERRIDES, "+WebGLRendererConstant")
+        self.assertEqual(profile.seed_states(new, new.load_settings())[self.OVERRIDES][0], "kept")
+
     def test_doctor_says_when_the_next_start_brings_the_current_default(self):
         prof = self.seeded_before_384(profile.seed_history()[self.OVERRIDES][0])
         check = next(c for c in doctor.check_seeds(prof))
