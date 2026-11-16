@@ -117,6 +117,16 @@ class TextFragmentsTest(unittest.TestCase):
         return self.m.chrome(MENU)
 
     def copy_from_menu(self, item: str) -> str:
+        if item == "clean":
+            # The engine reads its clean-link lists a moment after start-up; a menu opened before that keeps the
+            # clean item disabled for as long as it is open (test_clean_links, in the 160.0-0.6 release runs).
+            can_clean = (
+                'const stripper = Cc["@mozilla.org/url-query-string-stripper;1"].getService(Ci.nsIURLQueryStringStripper);'
+                "try { return stripper.canStripForShare(gBrowser.selectedBrowser.currentURI); } catch (e) { return false; }"
+            )
+            self.assertTrue(
+                harness.wait_until(lambda: self.m.chrome(can_clean), 30), "the engine never read its clean-link lists"
+            )
         self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
         menu = self.open_menu_on_target(select=True)
         self.assertTrue(menu["copy"] and menu["copy"]["shown"], menu)
