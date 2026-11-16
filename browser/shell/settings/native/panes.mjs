@@ -412,7 +412,22 @@
       getControlConfig: config => (contrastBySystem() ? { ...config, l10nId: "nulavio-more-contrast-system" } : config),
     });
     lookSetting("nulavio-newtab-ambience", "newtabAmbience", Boolean);
-    lookSetting("nulavio-hide-page-title", "hidePageTitle", Boolean); // #322, D-UX17: NulavioWindow applies it
+    // #322, D-UX17: NulavioWindow applies it through the engine's two switches. One an administrator locked is what is
+    // in effect: the switch shows that state, disabled, never a state the window does not have (review of #390).
+    const TITLE_PREFS = ["privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"];
+    const titleLock = () => {
+      const locked = TITLE_PREFS.filter(pref => Services.prefs.prefIsLocked(pref));
+      if (!locked.length) {
+        return null;
+      }
+      // Hidden only when every switch hides it; one locked to show titles shows them somewhere.
+      const hidden = TITLE_PREFS.every(pref => !Services.prefs.getBoolPref(pref, true));
+      return { hidden };
+    };
+    lookSetting("nulavio-hide-page-title", "hidePageTitle", Boolean, {
+      get: () => (titleLock() ? titleLock().hidden : Boolean(lookNow()?.hidePageTitle)),
+      disabled: () => Boolean(titleLock()) || lookLocked("hidePageTitle"),
+    });
     lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
       get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
       disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),

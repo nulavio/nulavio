@@ -69,7 +69,7 @@ class WindowTitleTest(unittest.TestCase):
         self.assertEqual(self.m.chrome(ENGINE), [False, False])
         self.m.navigate(self.server.url("/page/Outra-pagina"))
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.title") == "Outra-pagina", 10))
-        self.assertNotIn("Outra-pagina", self.m.chrome(TITLE))
+        self.assertFalse(harness.wait_until(lambda: "Outra-pagina" in self.m.chrome(TITLE), 2), self.m.chrome(TITLE))
         # A page that changes its own title does not reach the window either.
         self.m.execute("document.title = 'Mudou-sozinha';")
         self.assertFalse(harness.wait_until(lambda: "Mudou-sozinha" in self.m.chrome(TITLE), 2))
@@ -90,10 +90,20 @@ class WindowTitleTest(unittest.TestCase):
         try:
             self.m.navigate(self.server.url("/page/Privada-secreta"))
             self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.title") == "Privada-secreta", 10))
-            self.assertNotIn("Privada-secreta", self.m.chrome(TITLE))
+            self.assertFalse(harness.wait_until(lambda: "Privada-secreta" in self.m.chrome(TITLE), 2), self.m.chrome(TITLE))
         finally:
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(main)
+
+    def test_05_a_locked_engine_switch_is_shown_as_it_is(self):
+        # Review of #390: an administrator who locks the engine's switch to show titles in private windows gets a
+        # switch that says off and cannot be changed, not one that says on while private windows show the page.
+        self.m.chrome("Services.prefs.lockPref('privacy.exposeContentTitleInWindow.pbm');")
+        self.addCleanup(self.m.chrome, "Services.prefs.unlockPref('privacy.exposeContentTitleInWindow.pbm');")
+        self.set(True)
+        settings_page.open_pane(self.m, "appearance")
+        locked = lambda now: now["shown"] and now["disabled"] and not now["pressed"]  # noqa: E731
+        self.assertTrue(settings_page.wait_control(self.m, "nulavio-hide-page-title", locked, timeout=15))
 
     def test_04_the_switch_is_in_aparencia_with_what_it_does_not_hide(self):
         settings_page.open_pane(self.m, "appearance")
