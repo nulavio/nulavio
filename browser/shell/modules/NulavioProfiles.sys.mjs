@@ -96,6 +96,18 @@ function userJs(prefs, title) {
   return `// ${title}\n// Written by Nulavio when this profile was created. Deleting this file turns these settings off.\n${lines.join("\n")}\n`;
 }
 
+/** #151: a carried search choice written into a profile's folder: owner-only, atomically, never through a link. */
+async function writeSearchChoice(folder, choice) {
+  const path = PathUtils.join(folder, lazy.PENDING_FILE);
+  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  file.initWithPath(path);
+  if (file.isSymlink()) {
+    fail("unsafe-file");
+  }
+  await IOUtils.writeJSON(path, choice, { tmpPath: `${path}.tmp` });
+  await IOUtils.setPermissions(path, 0o600);
+}
+
 export class ProfilesError extends Error {
   constructor(code, message = code) {
     super(message);
@@ -807,7 +819,7 @@ class NulavioProfilesClass {
       await IOUtils.writeUTF8(PathUtils.join(profile.path, "user.js"), userJs(SENSITIVE_PREFS, "Nulavio: sensitive sites profile"));
     }
     if (searchChoice) {
-      await IOUtils.writeJSON(PathUtils.join(profile.path, lazy.PENDING_FILE), searchChoice);
+      await writeSearchChoice(profile.path, searchChoice);
     }
     await profile.setNameAsync(name);
     await profile.setAvatar(avatar);
@@ -836,7 +848,7 @@ class NulavioProfilesClass {
       if (lock === "locked" || lock === "unknown") {
         results.push({ id: profile.id, result: lock });
       } else {
-        await IOUtils.writeJSON(PathUtils.join(profile.path, lazy.PENDING_FILE), choice);
+        await writeSearchChoice(profile.path, choice);
         results.push({ id: profile.id, result: "next-start" });
       }
     }

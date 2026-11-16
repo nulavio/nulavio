@@ -623,8 +623,8 @@ class SearchPrivacyTest(unittest.TestCase):
 
     def test_16_a_choice_left_by_another_profile_is_applied_once_at_start(self):
         """#151: another profile's Shell leaves a choice in this profile's folder; this profile applies it at its start
-        (here: called as the start-up does), deletes the file, and never takes suggestion consent from it. A file that
-        is not a valid choice is deleted and changes nothing."""
+        (here: called as the start-up does) and deletes the file. Only a provider Nulavio offers by name travels, never
+        with suggestion consent; any other file is deleted and changes nothing (R81)."""
         self.require_nulavio()
         before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
         normal = next(e[0] for e in before if e[1])
@@ -637,7 +637,7 @@ class SearchPrivacyTest(unittest.TestCase):
         )
         exists = "return IOUtils.exists(PathUtils.join(PathUtils.profileDir, 'nulavio-search-choice.json'));"
         mojeek = self.search("return (await S.list()).find(e => e.alias === '@mojeek').id;")
-        self.search(leave, '{"provider": "mojeek", "privateToo": false, "suggest": true}')
+        self.search(leave, '{"provider": "mojeek", "privateToo": false}')
         self.assertEqual(self.search("return S.applyPending();"), mojeek)
         self.assertFalse(self.search(exists), "the file was left to be applied again")
         now = self.search("return (await S.list()).find(e => e.id === args[0]);", mojeek)
@@ -645,9 +645,12 @@ class SearchPrivacyTest(unittest.TestCase):
         self.assertIsNone(self.search("return S.applyPending();"), "nothing left: nothing applied")
         for bad in (
             '{"provider": "nope"}',
-            '{"searxng": "http://searx.example.org/"}',
+            '{"searxng": "https://searx.example.org/"}',  # only a provider Nulavio offers by name travels (R81)
+            '{"engine": "google"}',
+            '{"provider": "brave", "privateToo": "yes"}',
             "not json",
             '{"provider": "brave", "engine": "x"}',
+            '{"provider": "brave", "suggest": true}',  # consent never travels: a file asking for it is refused whole
         ):
             with self.subTest(bad=bad):
                 self.search(leave, bad)

@@ -53,6 +53,12 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
   choose({provider | id, privateToo?, suggest?}) -> id   // #151: add if missing, make default (and private), consent only if asked
   accounts() -> {kagi: {signedIn, signIn, host}}          // #151: the session cookie's presence, never its value
+  carryable() -> {name, choice}                           // #151: what this profile's default would carry, or choice null
+  applyPending()                                          // #151: at start-up, the file another profile left, once
+browser.nulavioProfiles (NulavioProfiles.sys.mjs)
+  create({..., search?: {provider, privateToo?}}) ; carrySearch(ids, {provider, privateToo?})
+nulavio-search-choice.json (in a profile's folder; mode 0600, written atomically, never through a link; deleted when read):
+  {"provider": <a key of PROVIDERS>, "privateToo"?: boolean}   // nothing else: any other file is deleted unused
   onChanged
 Errors are stable codes (needs-https, missing-terms, alias-taken, ...), translated by the page.
 
@@ -73,6 +79,9 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
   is ticked (the consent of point 4).
 - A provider with accounts (Kagi) says whether the profile is signed in, from the presence of its session cookie,
   and offers its sign-in page.
+- A profile can be created with its provider, and a profile's provider can be taken to the others of its group: a
+  file in each one's folder, applied by its own Shell at its next start. Only a provider of the curated list travels,
+  so a file planted there cannot point a profile at an address (residual risk R81); suggestion consent never travels.
 
 ## Amendment, 2026-11-16 (#152): a provider that needs an account, outside a signed-in profile
 
