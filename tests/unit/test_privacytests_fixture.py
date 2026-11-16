@@ -1,37 +1,35 @@
-"""PrivacyTests.org's probe pages are the ones copied from their repository, unchanged (#79)."""
+"""PrivacyTests.org's probe pages are the ones copied from their repository, unchanged, and the watcher that
+compares the copy with their repository reads what it should (#79)."""
 
 from __future__ import annotations
 
 import hashlib
+import importlib.util
+import json
 import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "tests" / "fixtures" / "privacytests"
-COMMIT = "12e48c75ec5dbbd127478166b26009f95cbd8918"  # privacytests/privacytests
-SHA256 = {
-    "LICENSE": "55a79a94fc748ef8a3fe746a126345735f2df49e0a362adb777356001c320a1a",
-    "deviceFingerprinting.html": "ccb48c0b8fd245007c65cf4e1dc874bd8aea5ad2e8209ea9bc439bc24597f0cc",
-    "deviceFingerprinting.js": "b0fda0738133b9c58fe71cc7dc01b3d0252eeaea41d456d99870724fc697728d",
-    "post_data.js": "dddf8b3e1e3d15a500a6dc7f6e1495b0fbb215fe110130621e8df8dc91b1e5a4",
-    "screenFingerprinting.html": "9490ba8237d851870dda73b422134c8e23302d3287a014b4c36819d25c67f787",
-    "screenFingerprinting.js": "94f09d07201eb4aa88d7d8fe75bb9be634d40359dabd745b0b9b70cf754ee7a5",
-    "settingsFingerprinting.html": "17d32567328848ef5e4e26146fd66ab91bb31a365da04c03b6d4f86668b46e56",
-    "settingsFingerprinting.js": "3d793302d64d27875d2eb1e4474fc2053303018645b7959f4016732020c6382d",
-}
+PINNED = json.loads((FIXTURES / "pinned.json").read_text(encoding="utf-8"))
+SPEC = importlib.util.spec_from_file_location("watch_privacytests", ROOT / "scripts" / "research" / "watch_privacytests.py")
+watch = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(watch)
+OURS = {"README.md", "pinned.json"}  # written here; everything else in the folder is theirs
 
 
 class PrivacyTestsFixtureTest(unittest.TestCase):
     def test_the_files_are_the_pinned_ones_and_nothing_else(self):
-        found = {
-            path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in FIXTURES.iterdir() if path.name != "README.md"
-        }
-        self.assertEqual(found, SHA256)
+        found = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in FIXTURES.iterdir() if path.name not in OURS}
+        # Their files are pinned by their path in their repository; the copies here are flat.
+        copied = {Path(path).name: digest for path, digest in PINNED["files"].items() if not path.startswith("scripts/")}
+        self.assertEqual(found, copied)
+        self.assertRegex(PINNED["commit"], r"^[0-9a-f]{40}$")
 
     def test_the_readme_names_the_commit_and_the_license(self):
         readme = (FIXTURES / "README.md").read_text(encoding="utf-8")
-        self.assertIn(COMMIT, readme)
+        self.assertIn(PINNED["commit"], readme)
         self.assertIn("MIT", readme)
         self.assertIn("MIT license", (FIXTURES / "LICENSE").read_text(encoding="utf-8"))
 
@@ -51,6 +49,86 @@ class PrivacyTestsFixtureTest(unittest.TestCase):
         self.assertEqual({name.strip(' "') for name in local.split(",")}, hosts)
         self.assertIn('Services.prefs.setStringPref("network.dns.localDomains", arguments[0].join(","));', test)
         self.assertIn("m.chrome(PREPARE, [list(LOCAL_ONLY),", test)
+
+
+HARNESS = """const port = 1;
+const { runScreenFingerprintTests } = require('./screen-fingerprint-test');
+  if (categories.includes('screenFingerprint')) {
+"""
+
+
+class WatchTest(unittest.TestCase):
+    """scripts/research/watch_privacytests.py, with their repository stood in for by the files here."""
+
+    def setUp(self):
+        self.theirs = {
+            path: (FIXTURES / Path(path).name).read_bytes() for path in PINNED["files"] if not path.startswith("scripts/")
+        }
+
+    def read(self, path: str) -> bytes | None:
+        return self.theirs.get(path)
+
+    def pins(self) -> dict:
+        # Only what this test can stand in for: the copied files, and one function written here.
+        body = "const scoreIt = (results) => {\n  return results;\n};"
+        self.theirs["scripts/render.js"] = f"const other = 1;\n\n{body}\n\nconst more = 2;\n".encode()
+        self.theirs["scripts/test.js"] = HARNESS.encode()
+        return {
+            "commit": PINNED["commit"],
+            "files": {path: digest for path, digest in PINNED["files"].items() if path in self.theirs},
+            "functions": {"scripts/render.js": {"scoreIt": watch.digest(body.encode())}},
+            "mentions": {"scripts/test.js": watch.digest(watch.mentions(HARNESS).encode())},
+        }
+
+    def test_the_same_files_are_no_change(self):
+        self.assertEqual(watch.compare(self.pins(), self.read), [])
+
+    def test_a_changed_file_a_missing_file_and_a_changed_function_are_named(self):
+        pins = self.pins()
+        self.theirs["static/settingsFingerprinting.js"] += b"\n// a new probe\n"
+        del self.theirs["static/screenFingerprinting.js"]
+        self.theirs["scripts/render.js"] = self.theirs["scripts/render.js"].replace(b"return results;", b"return null;")
+        self.assertEqual(
+            watch.compare(pins, self.read),
+            [
+                "`static/screenFingerprinting.js` is gone",
+                "`static/settingsFingerprinting.js` changed",
+                "`scoreIt` in `scripts/render.js` changed",
+            ],
+        )
+        # A function that was renamed or removed is a change too; the rest of its file may change freely.
+        self.theirs["scripts/render.js"] = b"const somethingElse = () => {\n};\n"
+        self.assertIn("`scoreIt` is no longer in `scripts/render.js`", watch.compare(pins, self.read))
+
+    def test_a_new_group_of_probes_in_their_harness_is_a_change(self):
+        pins = self.pins()
+        # Their harness changes for other reasons all the time: that is no change here.
+        self.theirs["scripts/test.js"] = HARNESS.replace("const port = 1;", "const port = 2;").encode()
+        self.assertEqual(watch.compare(pins, self.read), [])
+        self.theirs["scripts/test.js"] = (HARNESS + "  if (categories.includes('fontFingerprint')) {\n").encode()
+        self.assertEqual(
+            watch.compare(pins, self.read),
+            ['the lines of `scripts/test.js` that say "fingerprint" changed (a new group of probes?)'],
+        )
+        del self.theirs["scripts/test.js"]
+        self.assertEqual(watch.compare(pins, self.read), ["`scripts/test.js` is gone"])
+
+    def test_the_pins_name_their_scoring_too(self):
+        self.assertEqual(
+            {path: sorted(names) for path, names in PINNED["functions"].items()},
+            {
+                "scripts/render.js": ["scoreDeviceFingerprintingConsistency"],
+                "scripts/test.js": ["mergeDeviceFingerprintDomainResults"],
+            },
+        )
+        for path in ("scripts/settings-fingerprint-test.js", "scripts/screen-fingerprint-test.js"):
+            self.assertIn(path, PINNED["files"])
+        self.assertEqual(sorted(PINNED["mentions"]), ["scripts/render.js", "scripts/test.js"])
+
+    def test_a_ref_is_a_plain_name(self):
+        for ref in ("../etc", "a b", "x" * 81, "main;rm"):
+            with self.subTest(ref=ref), self.assertRaises(SystemExit):
+                watch.main(["--ref", ref])
 
 
 if __name__ == "__main__":

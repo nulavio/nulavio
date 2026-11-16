@@ -1,0 +1,31 @@
+name: privacytests
+
+# #79: tests/fixtures/privacytests/ is a copy of PrivacyTests.org's fingerprinting probe pages at one commit, and
+# tests/integration/test_privacytests.py mirrors their pass rule. They add probes and change the rule. Once a week
+# this compares their repository with the pins (scripts/research/watch_privacytests.py) and fails when a copied
+# file or their scoring changed, so the copy is brought up to date by a person or an agent who reads the change.
+# It reads raw.githubusercontent.com only, runs nothing it downloads, and holds no secret.
+on:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: privacytests
+  cancel-in-progress: false
+
+jobs:
+  probes:
+    name: PrivacyTests' probes against the pinned copy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare their repository with tests/fixtures/privacytests/pinned.json
+        run: python3 -I scripts/research/watch_privacytests.py --summary "$GITHUB_STEP_SUMMARY"

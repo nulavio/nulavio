@@ -1,0 +1,29 @@
+{
+  "comment": "What PrivacyTests.org had at the commit this copy was made from: scripts/research/watch_privacytests.py compares it with their repository, and tests/unit/test_privacytests_fixture.py with the files here.",
+  "repository": "privacytests/privacytests",
+  "commit": "5e675fa8a73b876a924d2ec1be648db43ebaf050",
+  "files": {
+    "static/deviceFingerprinting.html": "ccb48c0b8fd245007c65cf4e1dc874bd8aea5ad2e8209ea9bc439bc24597f0cc",
+    "static/deviceFingerprinting.js": "b0fda0738133b9c58fe71cc7dc01b3d0252eeaea41d456d99870724fc697728d",
+    "static/post_data.js": "dddf8b3e1e3d15a500a6dc7f6e1495b0fbb215fe110130621e8df8dc91b1e5a4",
+    "static/screenFingerprinting.html": "9490ba8237d851870dda73b422134c8e23302d3287a014b4c36819d25c67f787",
+    "static/screenFingerprinting.js": "94f09d07201eb4aa88d7d8fe75bb9be634d40359dabd745b0b9b70cf754ee7a5",
+    "static/settingsFingerprinting.html": "17d32567328848ef5e4e26146fd66ab91bb31a365da04c03b6d4f86668b46e56",
+    "static/settingsFingerprinting.js": "8b046adbf1bf412201665999229bf0ecd9035a43808f42e3d6aeef1573d5c2c5",
+    "LICENSE": "55a79a94fc748ef8a3fe746a126345735f2df49e0a362adb777356001c320a1a",
+    "scripts/settings-fingerprint-test.js": "47a78bd10c339b272108dde4b736fbcdbac7dafff48ee1b4562cf6c84ba8509f",
+    "scripts/screen-fingerprint-test.js": "c5058d3f5702a5283e3cbf81cda9a1a49532ccd35dcc19dc8e44d2d99cdbba1b"
+  },
+  "functions": {
+    "scripts/test.js": {
+      "mergeDeviceFingerprintDomainResults": "8d5aea4dca573a8d0774ad2b2a09b22fccf81a8d74e0c17fdb260e0f66e5daa1"
+    },
+    "scripts/render.js": {
+      "scoreDeviceFingerprintingConsistency": "464d57f00be8e18da27033c39ef1f68486f62cd244342498df3dcfa2ceb62b72"
+    }
+  },
+  "mentions": {
+    "scripts/test.js": "aded8e5a9409ee5668be074167d082d990fc6c557618b881e45c4a00533f6ba1",
+    "scripts/render.js": "cf78aee3cb46f121cd7279add5c515533ae6c0502ea4183fdb0c999149b16d23"
+  }
+}

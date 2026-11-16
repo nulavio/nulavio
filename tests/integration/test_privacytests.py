@@ -18,11 +18,13 @@ What this file does with one machine:
   really changed, so a stable protected value means something.
 * A Device probe cannot change machine here. It passes when it farbles, or when its value is one that
   DEVICE_CONSTANTS says is the same on every machine by construction (an API the engine does not have, the
-  engine's own math library). Comparing two real machines is a CI job of its own (#79).
+  engine's own math library). The values are written here, and this module runs on three kinds of machine: a
+  developer's computer, GitHub's runners (pull requests, 4 processors) and the release build's (16). A value
+  that followed the machine would fail on one of them, which is their comparison between machines.
 
 Not changed by anything here, so their tests show stability only: the panels around the screen (a headless
 run has none), the keyboard layout (the engine has no Keyboard Map API) and reduced transparency (the engine
-keeps that media query off).
+keeps that media query off). Their pages record those two as "Unsupported", which test_00b holds.
 
 KNOWN_GAPS lists the probes that do not pass yet, each with its reason. A probe listed there is skipped with
 that reason while it fails, and fails the run once it passes, until its line is removed: the list only gets
@@ -105,6 +107,9 @@ RUNS = {  # what "the system" is in each session
     "other display": {"tz": "Europe/Paris", "screen": (1600, 900), "fonts": False, "motion": 1, "contrast": 1},
 }
 RESULTS = "return document.body.getAttribute('data-test-results');"
+UNSUPPORTED = "Error: Unsupported"  # what their page records for a probe that threw new Error('Unsupported')
+# What the engine does not have, and must go on saying so: a probe that starts to answer is a new reading.
+NOT_IN_THE_ENGINE = {"Keyboard layout", "Reduced transparency preference"}
 PREPARE = """
 Services.prefs.setStringPref("network.dns.localDomains", arguments[0].join(","));
 // crypto.subtle, which the canvas probe hashes with, exists only in a secure context: PrivacyTests serves HTTPS.
@@ -179,6 +184,10 @@ class PrivacyTestsProbes(unittest.TestCase):
                 m.navigate(f"http://{site}:{cls.port}/{page}.html")
                 assert harness.wait_until(lambda: m.execute(RESULTS), 30), f"{page} never finished on {site}"
                 for probe, result in json.loads(m.execute(RESULTS)).items():
+                    # A probe of something the engine does not have throws "Unsupported" (their pages since
+                    # 2026-11-16); it has no value, on any site or in any run, which their rule takes as stable.
+                    if result.get("error") == UNSUPPORTED:
+                        result = {"value": "unsupported"}
                     assert "error" not in result, f"{probe} on {site}: {result['error']}"
                     per_site.setdefault(probe, []).append(result["value"])
             assert set(per_site) == set(PROBES[group]), f"{page}: the probes are not the ones this file names"
@@ -241,6 +250,12 @@ class PrivacyTestsProbes(unittest.TestCase):
             for probe in probes:
                 with self.subTest(probe=probe):
                     self.assertFalse(any(farbled(value) for value in plain(group, probe)), plain(group, probe))
+
+    def test_00b_what_the_engine_does_not_have_reads_unsupported_with_and_without_the_protections(self):
+        for probe in sorted(NOT_IN_THE_ENGINE):
+            with self.subTest(probe=probe):
+                for mode in ("protected", "plain"):
+                    self.assertEqual(self.values("Settings", probe, mode), ["unsupported", "unsupported"])
 
     def test_01_every_known_gap_names_a_probe(self):
         every = {probe for probes in PROBES.values() for probe in probes}
