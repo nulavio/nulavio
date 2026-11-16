@@ -19,6 +19,11 @@ this.nulavioLayout = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio layout startup", e);
     }
+    try {
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLoadLine.sys.mjs").NulavioLoadLine.watch();
+    } catch (e) {
+      console.error("Nulavio load line", e); // the tab's own throbber still says a page is loading
+    }
   }
 
   getAPI(context) {
