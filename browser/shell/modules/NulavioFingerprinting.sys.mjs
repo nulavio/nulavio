@@ -40,6 +40,7 @@ const SHELL = "shell@nulavio.net";
 const ACTOR = "NulavioFingerprinting";
 const TOPICS = ["browser-delayed-startup-finished", "perm-changed"];
 const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];
+const FALLBACK_TOPIC = "browsing-context-attached"; // only if the actor cannot be registered
 const GRANULAR = "privacy.fingerprintingProtection.granularOverrides"; // the engine's per-site list (JSON)
 const SHOW_TIME_ZONE = "-JSDateTimeUTC";
 const ROW = "nulavio-trustpanel-timezone";
@@ -248,7 +249,18 @@ export const NulavioFingerprinting = {
         safeForUntrustedWebProcess: true,
       });
     } catch (e) {
-      console.error("Nulavio fingerprinting", e); // tabs keep the constant; an exempted site does not get the display's
+      // Without the actor no page would decide for itself, and new tabs would read the display's size. So every
+      // new top-level content context gets the constant when it is made, as the first version of this did: an
+      // exempted site and an extension's pages then read it too, which is the lesser failure.
+      console.error("Nulavio fingerprinting: pages cannot decide their screen size, every new context gets the constant", e);
+      watching.fallback = {
+        observe(subject) {
+          if (subject.top === subject && subject.isContent && !subject.isDiscarded) {
+            setScreen(subject, protectionOn(subject.usePrivateBrowsing));
+          }
+        },
+      };
+      Services.obs.addObserver(watching.fallback, FALLBACK_TOPIC);
     }
     sync();
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
@@ -276,6 +288,9 @@ export const NulavioFingerprinting = {
     }
     for (const pref of SWITCHES) {
       Services.prefs.removeObserver(pref, watching);
+    }
+    if (watching.fallback) {
+      Services.obs.removeObserver(watching.fallback, FALLBACK_TOPIC);
     }
     for (const win of watching.windows) {
       win.removeEventListener("popupshowing", watching.panelShowing, true);

@@ -45,7 +45,7 @@ Pages read `screen.width` 1920 and `screen.height` 1080 on every computer. The a
 
   The fix for a site that needs the real size is the shield's switch for that site.
 - **Fewer workers on large machines.** A page that starts one worker per processor starts 4, where the tiers gave it 8 on a machine with 8 or more. Work that page does in parallel (encoding, compression, some games) can take up to twice as long there. Machines with fewer than 8 processors already read 4.
-- **Nulavio's own pages read the same values.** The override is per tab, not per page. Nothing in the Shell uses the screen's size.
+- **Nulavio's own pages and extensions' pages read the display's size.** Only pages of the web are given the constant.
 - **Distribution Firefox (Track A)** gets the processor count, which is a preference, and not the screen, which needs the Shell.
 
 ## Known limits

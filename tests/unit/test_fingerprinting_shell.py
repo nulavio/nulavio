@@ -36,8 +36,12 @@ class ScreenTest(unittest.TestCase):
         self.assertIn("allFrames: false,", MODULE)
         self.assertIn('messageManagerGroups: ["browsers"],', MODULE)  # tabs only: no extension popup, no sidebar
         self.assertIn('if (event.type === "pageshow" && !event.persisted) {', CHILD)
-        # Nothing gives a tab the constant before it has a page: every context would get it, an extension's too.
-        self.assertNotIn("browsing-context-attached", MODULE)
+        # Nothing gives a context the constant when it is made (every context would get it, an extension's too),
+        # except as the fallback when the actor cannot be registered, where no page could decide for itself.
+        self.assertNotIn("browsing-context-attached", MODULE.replace('const FALLBACK_TOPIC = "browsing-context-attached";', ""))
+        failed = MODULE[MODULE.index("    } catch (e) {\n      // Without the actor") :]
+        self.assertIn("Services.obs.addObserver(watching.fallback, FALLBACK_TOPIC);", failed[: failed.index("    sync();")])
+        self.assertEqual(MODULE.count("FALLBACK_TOPIC"), 3)  # declared, added in the failure path, removed
         # Pages already open are decided again when the engine's protection is switched on or off.
         self.assertIn('const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];', MODULE)
         self.assertIn('} else if (topic === "nsPref:changed") {\n          decideOpenPages();', MODULE)
