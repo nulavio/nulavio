@@ -191,6 +191,8 @@ async function showLayoutChoice() {
   let dismissedInThisTab = false;
   let keyboard = null;
 
+  // The arrangements Imersivo works with: the side tab list (with the tabs on top it is not built, #118).
+  const IMMERSIVE_WITH = ["lateral", "focus"];
   const doneLabel = preset => (
     preset === "lateral" || preset === "top" || preset === "focus"
       ? t(`layoutChoiceKeep_${preset}`)
@@ -201,7 +203,9 @@ async function showLayoutChoice() {
     current.textContent = t("layoutUnavailable");
     error.textContent = errorText(err);
     for (const radio of radios) radio.disabled = true;
+    // Out of sight and out of reach: nothing in the card can be changed while the layout cannot be read.
     immersiveRow.hidden = true;
+    immersive.disabled = true;
     done.hidden = true;
     retry.hidden = false;
   };
@@ -238,9 +242,15 @@ async function showLayoutChoice() {
     }
     // #240: Imersivo, with the arrangements where it works (the side tab list: Lateral and Foco; with the tabs on
     // top it is not built, #118). It follows the arrangement chosen, and shows what is set in this profile.
-    immersiveRow.hidden = !state.available || !["lateral", "focus"].includes(state.preset);
+    const hide = !state.available || !IMMERSIVE_WITH.includes(state.preset);
+    // Never hidden with the focus inside: the focus goes on to the main action, the next stop in the card.
+    if (hide && !immersiveRow.hidden && immersiveRow.contains(document.activeElement)) {
+      done.focus();
+    }
+    immersiveRow.hidden = hide;
     immersive.checked = Boolean(state.immersive?.on);
-    immersive.disabled = busy || Boolean(state.immersive?.locked);
+    // As the arrangements above it and as Settings' own switch: not while the layout is locked or cannot be read.
+    immersive.disabled = busy || !state.available || state.locked || Boolean(state.immersive?.locked);
   };
   const refreshLayout = async () => {
     if (closed || busy || keyboard?.pending()) return;
@@ -314,6 +324,9 @@ async function showLayoutChoice() {
       revision++;
       // UX3E QA N-1: the action names the selected layout at once, not after it applies.
       done.textContent = doneLabel(event.target.value);
+      // The Imersivo row follows the choice at once too, as render() will leave it: Tab right after an arrow key
+      // then never lands on a switch that is about to go (the focus would go with it, #403).
+      immersiveRow.hidden = !IMMERSIVE_WITH.includes(event.target.value);
     }
   });
   keyboard = settleRadioChanges(group, async event => {
