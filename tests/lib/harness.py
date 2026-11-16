@@ -184,6 +184,27 @@ class FixtureServer:
                 with outer._lock:
                     outer.hits.append(self.path)
                     outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
+                if self.path.startswith("/slow-page"):
+                    # Load-line fixture (tests/integration/test_load_line.py): a page whose body comes in ten pieces
+                    # over `ms` milliseconds, with its length announced, so the engine reports real progress.
+                    query = dict(p.split("=", 1) for p in self.path.partition("?")[2].split("&") if "=" in p)
+                    total = min(int(query.get("ms", "3000")), 20000)
+                    piece = b"<p>" + b"x" * 4000 + b"</p>\n"
+                    head = b"<!doctype html><title>slow-page</title>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(head) + 10 * len(piece)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    try:
+                        self.wfile.write(head)
+                        for _ in range(10):
+                            self.wfile.flush()
+                            time.sleep(total / 10000)
+                            self.wfile.write(piece)
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass  # the browser stopped the load
+                    return
                 if self.path.startswith("/redirect?to=http://"):
                     # Routing fixture (test_routing.py): a redirect onto another site.
                     self.send_response(302)
