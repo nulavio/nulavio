@@ -73,6 +73,10 @@ const BACKGROUND_TAB_MS = 1500;
 const PREF_FIRSTRUN = "nulavio.firstrun.done";
 // #167: Immersive in the View menu, next to Full Screen, as the key and the switch in Settings turn it on and off.
 const VIEW_MENU_ITEM = "nulavio-menu-immersive";
+// #322 (D-UX17's option): the window's title without the page's, through the engine's own switches for it. They only
+// ever hide: the switch writes false, and turning it off clears the false it wrote.
+const PREF_HIDE_TITLE = "nulavio.window.hidePageTitle";
+const TITLE_PREFS = Object.freeze(["privacy.exposeContentTitleInWindow", "privacy.exposeContentTitleInWindow.pbm"]);
 
 function policy() {
   return WebExtensionPolicy.getByID(SHELL);
@@ -193,6 +197,8 @@ class WindowUI {
     }
     Services.prefs.addObserver(PREF_IMMERSIVE, this);
     Services.prefs.addObserver(PREF_FIRSTRUN, this);
+    Services.prefs.addObserver(PREF_HIDE_TITLE, this);
+    this.#pageTitle(false);
     this.#unsubscribe = lazy.NulavioProfiles.subscribe(() => this.refresh());
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       if (win.gBrowserInit?.delayedStartupFinished) {
@@ -205,7 +211,11 @@ class WindowUI {
     this.refresh();
   }
 
-  observe(win, topic) {
+  observe(win, topic, data) {
+    if (topic === "nsPref:changed" && data === PREF_HIDE_TITLE) {
+      this.#pageTitle(true);
+      return;
+    }
     if (topic === "nsPref:changed") {
       for (const window of this.#windows.keys()) {
         this.#header(window);
@@ -239,6 +249,31 @@ class WindowUI {
         return;
       }
       this.refresh();
+    }
+  }
+
+  /**
+   * #322: with "Esconder o título da página na barra da janela" on, the engine leaves the page's title out of the
+   * window's title in every window of this profile, private ones too (its exposeContentTitleInWindow switches): the
+   * title bar, the taskbar, Alt+Tab and screen-sharing pickers read the brand, and the profile's name when there is
+   * more than one profile. Turned off (`changed`), a false in either engine switch is cleared, so page titles come back
+   * (also when that false had been set by hand in about:config: the switch is the one place that says what is hidden);
+   * a value an administrator locked is never written. Every window's title is redrawn at once.
+   */
+  #pageTitle(changed) {
+    const hide = Services.prefs.getBoolPref(PREF_HIDE_TITLE, false);
+    for (const titlePref of TITLE_PREFS) {
+      if (Services.prefs.prefIsLocked(titlePref)) {
+        continue;
+      }
+      if (hide) {
+        Services.prefs.setBoolPref(titlePref, false);
+      } else if (changed && Services.prefs.prefHasUserValue(titlePref) && !Services.prefs.getBoolPref(titlePref, true)) {
+        Services.prefs.clearUserPref(titlePref);
+      }
+    }
+    for (const win of Services.wm.getEnumerator("navigator:browser")) {
+      win.gBrowser?.updateTitlebar?.();
     }
   }
 
@@ -1549,6 +1584,7 @@ class WindowUI {
     }
     Services.prefs.removeObserver(PREF_IMMERSIVE, this);
     Services.prefs.removeObserver(PREF_FIRSTRUN, this);
+    Services.prefs.removeObserver(PREF_HIDE_TITLE, this);
     lazy.CustomizableUI.removeListener(this);
     for (const action of QUICK_ACTIONS) {
       try {

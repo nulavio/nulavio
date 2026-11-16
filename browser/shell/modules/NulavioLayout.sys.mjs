@@ -626,7 +626,8 @@ export const NulavioLayout = {
     const choicePending = available && !locked && !nonInteractive
       && !Services.prefs.prefIsLocked(PREF_CHOICE_PENDING)
       && Services.prefs.getBoolPref(PREF_CHOICE_PENDING, false);
-    return { preset, available, locked, choicePending };
+    // #240: the first run's card shows Imersivo next to the arrangements, as it is in this profile.
+    return { preset, available, locked, choicePending, immersive: this.immersive() };
   },
 
   /** Immersive (ADR 0009): whether the person turned it on in this profile, and whether it can be changed. */
