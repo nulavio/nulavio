@@ -725,6 +725,35 @@ class RoutingTest(unittest.TestCase):
         self.routed_only("m5-link")
         self.assertTrue(self.selected_url().endswith("/m5"), "the page the user was on did not stay")
 
+    def test_16b_a_link_clicked_in_a_split_view_side_is_routed_and_the_split_stays(self):
+        # #315: the engine's split view shows two tabs of this window side by side. A link in one side that a rule sends
+        # to another profile opens there, as from any tab; the split keeps both of its tabs, in this profile.
+        self.open_m5()
+        side = self.local("/page/split-side")
+        self.m.chrome("gBrowser.addTrustedTab(arguments[0]);", [side])
+        self.addCleanup(
+            self.m.chrome,
+            "gBrowser.tabs[0].splitview?.unsplitTabs?.('test');"
+            "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs[gBrowser.tabs.length - 1], { animate: false });",
+        )
+        split = "const v = gBrowser.tabs[0].splitview; return v ? v.tabs.map(t => t.linkedBrowser.currentURI.spec) : [];"
+        self.assertTrue(self.m.chrome("return Boolean(gBrowser.addTabSplitView([gBrowser.tabs[0], gBrowser.tabs[1]]));"))
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
+        self.assertTrue(harness.wait_until(lambda: len(self.m.chrome(split)) == 2, timeout=10), self.m.chrome(split))
+        self.m.execute("document.getElementById('link').href += '-split';")
+        self.click("#link")
+        self.routed_only("m5-link-split")
+        sides = self.m.chrome(split)
+        self.assertEqual(len(sides), 2, sides)
+        self.assertTrue(sides[0].endswith("/m5"), sides)
+        self.assertEqual(sides[1], side)
+        # A link the rules leave alone loads in the side it was clicked in, still split.
+        self.m.execute("document.getElementById('same').href += '-split';")
+        self.click("#same")
+        self.stayed_here("m5-same-split")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(split)[0].endswith("/page/m5-same-split"), timeout=10))
+        self.assertEqual(self.m.chrome(split)[1], side)
+
     def test_17_a_new_tab_link_is_routed_and_its_empty_tab_closes(self):
         self.open_m5()
         tabs_before = len(self.own_tabs())

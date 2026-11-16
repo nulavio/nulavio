@@ -45,7 +45,7 @@ O Nulavio é um navegador de código aberto para Linux, compilado a partir do c�
 - **Perfis cifrados no disco, e a chave é sua.** Um perfil protegido abre com a senha dele, um código de recuperação ou o login do computador. Não existe chave mestra, nem para o Nulavio ([ADR 0006](docs/adr/0006-nulavio-vault.md)).
 - **Você fica sabendo do que mudou por fora.** O Nulavio Guard compara cada abertura com a anterior: extensões, autoridades certificadoras, módulos de segurança, configurações de proteção, `user.js`. Você desfaz ou mantém cada mudança.
 - **IA que vai só até onde você deixa.** Conecte Claude Code, Codex ou qualquer cliente MCP. Cada agente trabalha num perfil só dele, com as permissões que você der, registro de atividade e parada de emergência ([ADR 0007](docs/adr/0007-ai-bridge.md)).
-- **E mais:** o seu gerenciador de senhas (Proton Pass, Bitwarden, KeePassXC ou o do próprio navegador), sugestões de busca só dos buscadores que você permitir, DNS à sua escolha, downloads que nunca abrem um programa pelo navegador, links que abrem a página num trecho destacado (com uma versão limpa, sem parâmetros de rastreamento; não em PDFs), integração com o KDE Plasma e os portais do desktop, português e inglês.
+- **E mais:** o seu gerenciador de senhas (Proton Pass, Bitwarden, KeePassXC ou o do próprio navegador), sugestões de busca só dos buscadores que você permitir, DNS à sua escolha, downloads que nunca abrem um programa pelo navegador, links que abrem a página num trecho destacado (com uma versão limpa, sem parâmetros de rastreamento; não em PDFs), tela dividida (duas abas lado a lado, pelo menu da aba; a barra de endereço diz o site do lado em foco), integração com o KDE Plasma e os portais do desktop, português e inglês.
 
 ## Status
 

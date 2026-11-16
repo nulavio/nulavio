@@ -5,6 +5,7 @@ and connection; both sides are tabs of the same profile, in the side tab list an
 
 from __future__ import annotations
 
+import json
 import unittest
 
 import harness
@@ -29,6 +30,7 @@ return { selected: gBrowser.selectedBrowser.currentURI.hostPort, urlbar: gURLBar
 """
 
 
+MENU_IDS = ["context_moveTabToSplitView", "context_separateSplitView", "context_reverseSplitView"]
 DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 
 
@@ -129,13 +131,41 @@ class SplitViewTest(unittest.TestCase):
         self.assertFalse(self.state()["vertical"])
         self.check_sides()
 
+    def menu_labels(self) -> list[str | None]:
+        """The split items' labels as the window's localization gives them, in the browser's language."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(
+                """
+                const [ids, done] = arguments;
+                const menu = document.getElementById('tabContextMenu');
+                const items = ids.map(id => menu.querySelector('#' + id));
+                if (items.some(i => !i)) { done(items.map(i => (i ? '' : null))); return; }
+                document.l10n.translateElements(items).then(
+                  () => done(items.map(i => i.getAttribute('label'))), e => done([String(e)]));
+                """,
+                [MENU_IDS],
+            )
+        finally:
+            self.m.set_context("content")
+
     def test_04_the_tab_menu_offers_it_in_the_browsers_language(self):
-        items = self.m.chrome(
-            "const menu = document.getElementById('tabContextMenu');"
-            "return ['context_moveTabToSplitView', 'context_separateSplitView', 'context_reverseSplitView']"
-            ".map(id => [id, Boolean(menu.querySelector('#' + id))]);"
-        )
-        self.assertEqual([present for _, present in items], [True, True, True], items)
+        # No key: Nulavio gives the engine's split commands none (decision on #315); the tab menu is the way in.
+        portuguese = self.menu_labels()
+        self.assertEqual(len(portuguese), 3, portuguese)
+        self.assertTrue(all(portuguese), portuguese)
+        before = self.m.chrome("return Services.locale.requestedLocales;")
+        self.m.chrome('Services.locale.requestedLocales = ["en-US"];')
+        try:
+            type(self).m = self.m = self.session.restart()
+            english = self.menu_labels()
+        finally:
+            self.m.chrome("Services.locale.requestedLocales = arguments[0];", [before])
+            type(self).m = self.m = self.session.restart()
+        self.assertTrue(all(english), english)
+        self.assertNotEqual(portuguese, english)
+        self.assertIn("split", " ".join(english).lower())
+        print(json.dumps({"pt-BR": portuguese, "en-US": english}, ensure_ascii=False))
 
     def test_05_captures_in_both_themes(self):
         self.split()
