@@ -331,9 +331,15 @@ class Container:
                 os.close(volume_fd)
         generation = int(vault.meta.get("generation", 0))
         flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-        with contextlib.suppress(FileExistsError):
-            os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
-        state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
+        try:
+            state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
+        except FileNotFoundError:
+            # No directory, so no record. Refuse before anything is written: a mount that is about to
+            # be refused leaves the volume as it found it (#412).
+            self._refuse_missing(vault, new_volume=new_volume)
+            with contextlib.suppress(FileExistsError):
+                os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
+            state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
         try:
             self._refuse_older(vault, state_dir, new_volume=new_volume)
             # Its own name: the profile's mount and a maintenance mount are two views of one directory.
@@ -350,22 +356,28 @@ class Container:
             os.close(state_dir)
 
     @staticmethod
-    def _refuse_older(vault: Vault, state_dir: int, *, new_volume: bool = False) -> None:
-        """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
-        vault that is another profile's, or older than the record, or one whose record is missing.
+    def _refuse_missing(vault: Vault, *, new_volume: bool = False) -> None:
+        """The volume has no record: refuse a vault that says it had one.
 
-        Missing: every volume has its record from its first mount, and every key file saved since this
-        check exists says `recorded` (core.py), so a missing record is refused (threat model U-T21). Only
+        Every volume has its record from its first mount, and every key file saved since this check
+        exists says `recorded` (core.py), so a missing record is refused (threat model U-T21). Only
         the first mount of a volume this very object made (`new_volume`) has none yet: the volume's own
         content cannot say so, since gocryptfs leaves out of a listing the names it cannot decrypt, which
         anyone who can write the encrypted files can arrange. A key file saved before has no `recorded`
         and is still let in."""
+        if vault.meta.get("recorded") is True and not new_volume:
+            raise StorageError("record-missing", "the profile's record of its key file is missing")
+
+    @staticmethod
+    def _refuse_older(vault: Vault, state_dir: int, *, new_volume: bool = False) -> None:
+        """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
+        vault that is another profile's, or older than the record, or one whose record is missing
+        (`_refuse_missing`)."""
         flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
         try:
             fd = os.open("state.json", os.O_RDONLY | flags, dir_fd=state_dir)
         except FileNotFoundError:
-            if vault.meta.get("recorded") is True and not new_volume:
-                raise StorageError("record-missing", "the profile's record of its key file is missing") from None
+            Container._refuse_missing(vault, new_volume=new_volume)
             return
         with os.fdopen(fd, encoding="utf-8") as handle:
             state = json.load(handle)
