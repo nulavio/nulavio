@@ -639,15 +639,18 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
     it, nothing is on disk.
     """
     path = Path(path)
-    if not path.is_dir():
-        raise StorageError("missing", str(path))  # the caller checks that no engine is using it
     staging = path.with_name(path.name + ".plaintext-migrating")
-    if staging.exists():
-        raise StorageError("exists", str(staging))
-    if Container(path).vault_path.exists():
-        raise StorageError("exists", str(Container(path).vault_path))  # a key file here is not this vault's to replace
     fd = _migration_lock(path, wait=True)
     try:
+        # Under the lock: a second run that waited for it must see what the first one made. Checked
+        # before, both passed; the second then wrote its key file over the first's and, when making
+        # the volume failed, removed the folder that held the only copy of the profile's files.
+        if staging.exists():
+            raise StorageError("exists", str(staging))
+        if Container(path).vault_path.exists():
+            raise StorageError("exists", str(Container(path).vault_path))  # a key file here is not this vault's to replace
+        if not path.is_dir():
+            raise StorageError("missing", str(path))  # the caller checks that no engine is using it
         with _signals_as_exceptions():
             os.rename(path, staging)
             container = Container(path)

@@ -385,6 +385,12 @@ def init(self, vault):
         os.kill(os.getpid(), signal.SIGKILL)
     return real_init(self, vault)
 os.rename, storage.Container.init = rename, init
+if len(sys.argv) > 5:  # two runs at once: say "ready", then wait for the parent's word
+    import time
+    go = Path(sys.argv[5])
+    go.with_name(f"{go.name}.{os.getpid()}").write_text("")
+    while not go.exists():
+        time.sleep(0.01)
 def copy(*args, **kwargs):
     copied.append(args[0])
     if len(copied) == 3 and how in ("kill-mid-copy", "term-mid-copy"):
@@ -479,6 +485,39 @@ class InterruptedMigrationTest(StorageCase):
             storage.encrypt_existing(path, vault)
         self.assertIn("save", order)
         self.assertEqual(order[: order.index("save")], [f"fsync {path.parent.name}"])
+        vault.lock()
+
+    def test_two_runs_at_once_protect_the_profile_once(self):
+        # Both runs pass every check made before the lock. The one that waits for the lock must then
+        # find the other's key file and stop: it used to write its own key file over it and, when making
+        # the volume failed, remove the folder with the only copy of the profile's files.
+        path = self.plain_profile()
+        script = self.tmp / "migrate.py"
+        script.write_text(INTERRUPTED_MIGRATION)
+        go = self.tmp / "go"
+        args = [sys.executable, str(script), str(ROOT / "launcher"), str(path), "none", PASSWORD, str(go)]
+        runs = [subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        try:
+            wait_for(lambda: len(list(self.tmp.glob("go.*"))) == 2)  # both have their new vault in hand
+            go.write_text("")
+            errors = [run.communicate(timeout=120)[1] for run in runs]
+        finally:
+            for run in runs:
+                if run.poll() is None:
+                    run.kill()
+        codes = [run.returncode for run in runs]
+        self.assertEqual(sorted(code != 0 for code in codes), [False, True], errors)
+        self.assertIn("exists", errors[codes.index(next(code for code in codes if code != 0))])
+        box = storage.Container(path)
+        self.assertTrue(box.exists())
+        self.assertFalse(self.staging(path).exists())
+        vault = Vault.load(box.vault_path)
+        vault.unlock_password(PASSWORD)
+        box.mount(vault)  # the key file on disk is the one the volume was made with
+        self.assertEqual(
+            sorted(p.name for p in path.iterdir() if p.name != storage.STATE_DIR), [f"file{i}.txt" for i in range(10)]
+        )
+        box.unmount()
         vault.lock()
 
     def test_a_stop_before_the_files_are_moved_leaves_no_key_file(self):
