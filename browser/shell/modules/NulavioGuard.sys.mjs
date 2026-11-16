@@ -64,6 +64,7 @@ export const WATCHED_PREFS = Object.freeze([
   "privacy.fingerprintingProtection",
   "privacy.fingerprintingProtection.",
   "privacy.baselineFingerprintingProtection",
+  "nulavio.fingerprinting.shareAccessibility", // tells sites the system's motion and contrast preferences (ADR 0018)
   "network.cookie.cookieBehavior",
   "browser.startup.homepage",
   "browser.newtabpage.enabled",

@@ -18,6 +18,9 @@ engine, in a patch or in a default that weakens it fails a run:
 * a page reads UTC as its time zone; a site with "use my time zone on this
   site" on, in the shield's panel, reads the system's, with its subdomains
   and nothing else;
+* a page is not told that the system asks for less motion or more contrast;
+  Nulavio's own pages are; one setting tells sites again, and a bar offers it
+  once when the system has one of them on;
 * a site the person exempts from tracking protection gets the plain values,
   and only that site.
 
@@ -49,6 +52,51 @@ PROBE_FONT = "Nulavio Probe Font"  # made for the test, installed only in the th
 ALLOW_LIST = 'ChromeUtils.importESModule("resource://gre/modules/ContentBlockingAllowList.sys.mjs").ContentBlockingAllowList'
 OVERRIDES_PREF = "privacy.fingerprintingProtection.overrides"
 GRANULAR_PREF = "privacy.fingerprintingProtection.granularOverrides"
+SHARE_PREF = "nulavio.fingerprinting.shareAccessibility"
+OFFERED_PREF = "nulavio.fingerprinting.accessibilityOffered"
+ACCESSIBILITY = {"CSSPrefersReducedMotion", "CSSPrefersContrast", "CSSPrefersReducedTransparency"}
+FINGERPRINTING = (
+    "ChromeUtils.importESModule("
+    '"resource://builtin-addons/nulavio-shell/modules/NulavioFingerprinting.sys.mjs").NulavioFingerprinting'
+)
+ASKS = "return [matchMedia('(prefers-reduced-motion: reduce)').matches, matchMedia('(prefers-contrast: more)').matches];"
+# A new browser window, what its bar says, one of its buttons pressed (by its place), and the window closed.
+NEW_WINDOW_BAR = """
+const done = arguments[arguments.length - 1];
+(async () => {
+  const win = OpenBrowserWindow();
+  await new Promise(r => {
+    const seen = s => {
+      if (s === win) { Services.obs.removeObserver(seen, "browser-delayed-startup-finished"); r(); }
+    };
+    Services.obs.addObserver(seen, "browser-delayed-startup-finished");
+  });
+  let bar = null;
+  for (let i = 0; i < 40 && !bar; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    bar = win.gNotificationBox.getNotificationWithValue("nulavio-accessibility-offer");
+  }
+  const buttons = bar ? [...bar.buttonContainer.querySelectorAll("button")] : [];
+  const out = bar && { text: bar.messageText.textContent.trim(), buttons: buttons.map(b => b.label || b.textContent.trim()) };
+  if (bar && arguments[0] !== null) {
+    // A bar ignores clicks for a moment after it appears (the engine's guard against a click meant for a page).
+    for (let i = 0; i < 40 && bar._clickjackingDelayActive; i++) {
+      await new Promise(r => win.setTimeout(r, 100));
+    }
+    buttons[arguments[0]].click();
+    await new Promise(r => win.setTimeout(r, 100));
+  }
+  win.close();
+  return out;
+})().then(done, e => done({ error: String(e) }));
+"""
+SETTING = """
+const toggle = document.getElementById("nulavio-share-accessibility");
+return toggle
+  ? { shown: toggle.checkVisibility(), label: toggle.label, description: toggle.description, pressed: toggle.pressed }
+  : null;
+"""
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 SYSTEM_ZONE = ("America/Sao_Paulo", 180)  # the session's TZ: the name, and minutes behind UTC in January
 # Sites with a registrable domain, which the per-site switch needs (127.0.0.1 and localhost have none).
 ZONE_SITES = ("zone-one.example", "www.zone-one.example", "zone-two.example")
@@ -391,6 +439,105 @@ class FingerprintingTest(unittest.TestCase):
         # Nulavio's own pages keep the system's time zone.
         self.m.navigate(self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"))
         self.assertEqual(json.loads(self.m.execute(zone)), system)
+
+    def chrome_async(self, script: str, args: list) -> dict:
+        self.m.set_context("chrome")
+        try:
+            out = self.m.execute_async(script, args)
+        finally:
+            self.m.set_context("content")
+        self.assertNotIn("error", out or {}, out)
+        return out
+
+    def share(self, on: bool) -> None:
+        self.m.chrome(f"{FINGERPRINTING}.setShareAccessibility(arguments[0]);", [on])
+
+    def test_10_pages_are_not_told_the_systems_motion_and_contrast_until_one_setting_says_so(self):
+        user_set = (
+            f"return Services.prefs.prefHasUserValue('{OVERRIDES_PREF}')"
+            f" ? Services.prefs.getStringPref('{OVERRIDES_PREF}') : null;"
+        )
+        system = ("ui.prefersReducedMotion", "ui.useAccessibilityTheme")  # the engine's stand-ins for the desktop's settings
+        clear = "for (const pref of arguments) Services.prefs.clearUserPref(pref);"
+        flags = "return [Services.prefs.getBoolPref(arguments[0], false), Services.prefs.getBoolPref(arguments[1], false)];"
+        self.addCleanup(self.m.chrome, clear, [*system, SHARE_PREF, OFFERED_PREF])
+        # The system has neither preference on: no bar in a new window.
+        self.assertIsNone(self.chrome_async(NEW_WINDOW_BAR, [None]))
+        # The system asks for less motion and more contrast.
+        self.m.chrome("for (const pref of arguments) Services.prefs.setIntPref(pref, 1);", list(system))
+        with self.unprotected():
+            self.measure()
+            self.assertEqual(self.m.execute(ASKS), [True, True], "the system's settings did not take: nothing was tested")
+        # A page is told neither; Nulavio's own page follows the system.
+        self.measure()
+        self.assertEqual(self.m.execute(ASKS), [False, False])
+        self.m.navigate(self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"))
+        self.assertEqual(self.m.execute(ASKS), [True, True])
+        self.assertIsNone(self.m.chrome(user_set))
+        # A new window now offers the setting once, in words, with two answers. "Keep as it is": nothing changes
+        # and it is not offered again.
+        bar = self.chrome_async(NEW_WINDOW_BAR, [1])
+        self.record("accessibility-bar", bar)
+        self.assertTrue(bar["text"] and len(bar["buttons"]) == 2 and all(bar["buttons"]), bar)
+        self.assertEqual(self.m.chrome(flags, [SHARE_PREF, OFFERED_PREF]), [False, True])
+        self.assertIsNone(self.chrome_async(NEW_WINDOW_BAR, [None]))
+        # Offered again (as on a profile that never answered), "Let sites see them" turns the setting on.
+        self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [OFFERED_PREF])
+        self.assertIsNotNone(self.chrome_async(NEW_WINDOW_BAR, [0]))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return Services.prefs.getBoolPref(arguments[0], false);", [SHARE_PREF]), 5)
+        )
+        # On: the engine's set is the build's without the three entries, and only those; pages are told both.
+        added, removed = shipped_overrides()
+        self.assertLessEqual(ACCESSIBILITY, added)
+        want = {f"+{t}" for t in added - ACCESSIBILITY} | {f"-{t}" for t in removed}
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is not None, 5))
+        self.assertEqual(set(self.m.chrome(user_set).split(",")), want)
+        page = self.measure()
+        self.assertEqual(self.m.execute(ASKS), [True, True])
+        self.assertEqual((page["hw"], page["screen"]["size"]), (4, "1920x1080"), "the rest of the protection changed with it")
+        # Off again, from Settings' own writer: the engine's set is the build's default again.
+        self.share(False)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is None, 5), self.m.chrome(user_set))
+        self.measure()
+        self.assertEqual(self.m.execute(ASKS), [False, False])
+        # A set the person wrote themselves keeps what else is in it (review of #380): on, it loses the three
+        # entries and nothing more; off, it gets them back.
+        own = (
+            self.m.chrome(f"return Services.prefs.getDefaultBranch('').getStringPref('{OVERRIDES_PREF}');")
+            + ",+ScreenOrientation"
+        )
+        self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [own])
+        self.addCleanup(self.m.chrome, clear, [OVERRIDES_PREF, "nulavio.fingerprinting.overridesWritten"])
+        self.share(True)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) != own, 5))
+        self.assertEqual(set(self.m.chrome(user_set).split(",")), want | {"+ScreenOrientation"})
+        self.share(False)
+        self.assertTrue(
+            harness.wait_until(lambda: set((self.m.chrome(user_set) or "").split(",")) == set(own.split(",")), 5),
+            self.m.chrome(user_set),
+        )
+        self.m.chrome(clear, [OVERRIDES_PREF, "nulavio.fingerprinting.overridesWritten"])
+        # Settings has the switch, with the protections in Privacidade e Segurança, with its explanation; pressing
+        # it is the same setting. (The system's settings are put back first: the page is pictured as most see it.)
+        self.m.chrome(clear, list(system))
+        self.m.navigate("about:preferences#privacy")
+        self.assertTrue(harness.wait_until(lambda: (self.m.execute(SETTING) or {}).get("shown"), 15), self.m.execute(SETTING))
+        state = self.m.execute(SETTING)
+        self.record("accessibility-setting", state)
+        self.assertTrue(state["label"].strip() and state["description"].strip() and not state["pressed"], state)
+        self.m.execute("document.getElementById('nulavio-share-accessibility').scrollIntoView({block: 'center'});")
+        try:
+            for dark in (0, 1):
+                self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                harness.wait_until(lambda want=bool(dark): self.m.execute(DARK_NOW) == want, 10)
+                (self.shots / f"accessibility-setting-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        self.m.execute("document.getElementById('nulavio-share-accessibility').click();")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return Services.prefs.getBoolPref(arguments[0], false);", [SHARE_PREF]), 5)
+        )
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         constant = {"size": "1920x1080", "avail": "1920x1080", "availAt": "0,0", "device1920": True}

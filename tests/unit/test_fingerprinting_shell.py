@@ -44,7 +44,9 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(MODULE.count("FALLBACK_TOPIC"), 3)  # declared, added in the failure path, removed
         # Pages already open are decided again when the engine's protection is switched on or off.
         self.assertIn('const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];', MODULE)
-        self.assertIn('} else if (topic === "nsPref:changed") {\n          decideOpenPages();', MODULE)
+        # (One observer hears two kinds of preference: the person's setting, and the engine's switches.)
+        self.assertIn("          if (data === SHARE) {\n            applyAccessibility(true);", MODULE)
+        self.assertIn("          } else {\n            decideOpenPages();", MODULE)
 
     def test_it_follows_the_engines_switch_and_the_engines_own_word_for_an_exempted_site(self):
         wants = CHILD[CHILD.index("export function wantsConstant(") : CHILD.index("export class NulavioFingerprintingChild")]
@@ -65,11 +67,22 @@ class ScreenTest(unittest.TestCase):
 class TimeZoneTest(unittest.TestCase):
     def test_the_only_pref_written_is_the_engines_per_site_list_and_only_its_own_entries(self):
         self.assertIn('const GRANULAR = "privacy.fingerprintingProtection.granularOverrides";', MODULE)
-        # Every write, whatever its argument looks like: one set and one clear, both of the per-site list.
-        self.assertEqual(len(re.findall(r"Services\.prefs\.set\w+Pref\(", MODULE)), 1)
-        self.assertEqual(MODULE.count("Services.prefs.clearUserPref("), 1)
-        self.assertIn("Services.prefs.setStringPref(GRANULAR, text);", MODULE)
-        self.assertIn("Services.prefs.clearUserPref(GRANULAR);", MODULE)
+        # Every write, whatever its argument looks like, is one of these (test_personalisation pins the same counts).
+        writes = re.findall(r"Services\.prefs\.(set\w+Pref|clearUserPref)\(([^,)]*)", MODULE)
+        expected = [
+            ("setStringPref", "GRANULAR"),
+            ("clearUserPref", "GRANULAR"),
+            ("setStringPref", "OVERRIDES"),
+            ("clearUserPref", "OVERRIDES"),
+            ("setStringPref", "WRITTEN"),
+            ("clearUserPref", "WRITTEN"),
+            ("setBoolPref", "OFFERED"),
+            ("setBoolPref", "OFFERED"),
+            ("setBoolPref", "SHARE"),
+            ("setBoolPref", "SHARE"),
+            ("clearUserPref", "SHARE"),
+        ]
+        self.assertEqual(sorted(writes), sorted(expected))
         # An entry is this module's by its shape; a person's own entries in the list stay.
         self.assertIn('const ours = entry => entry?.thirdPartyDomain === "*" && entry?.overrides === SHOW_TIME_ZONE;', MODULE)
         self.assertIn("if (text === current || Services.prefs.prefIsLocked(GRANULAR)) {", MODULE)
@@ -101,6 +114,59 @@ class TimeZoneTest(unittest.TestCase):
                 if '"privacy.fingerprintingProtection.overrides"' in ln
             )
             self.assertIn("+JSDateTimeUTC", line, path)
+
+
+class MotionAndContrastTest(unittest.TestCase):
+    ENTRIES = ("CSSPrefersReducedMotion", "CSSPrefersContrast", "CSSPrefersReducedTransparency")
+
+    def test_the_three_entries_are_in_the_default_set_of_both_tracks(self):
+        for path in ("browser/branding/nulavio/pref/firefox-branding.js", "browser/config/prefs/baseline.js"):
+            text = (ROOT / path).read_text(encoding="utf-8")
+            line = next(ln for ln in text.splitlines() if '"privacy.fingerprintingProtection.overrides"' in ln)
+            for entry in self.ENTRIES:
+                self.assertIn(f"+{entry}", line, path)
+
+    def test_the_setting_rewrites_the_set_itself_and_only_those_three_entries(self):
+        self.assertIn(f"const ACCESSIBILITY = Object.freeze({json.dumps(list(self.ENTRIES))});", MODULE)
+        apply = MODULE[MODULE.index("function applyAccessibility(changed) {") : MODULE.index("/** What the system asks for")]
+        # On: from the build's default (so a new build's set is taken in), or from the person's own set, which
+        # keeps its other entries. Off: only when just turned off; a person's own set gets the entries back.
+        self.assertIn('const own = user !== null && user !== Services.prefs.getStringPref(WRITTEN, "");', apply)
+        self.assertIn(
+            'withoutAccessibility(own ? user : Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""))', apply
+        )
+        self.assertIn("} else if (!changed) {\n    return;", apply)
+        self.assertIn("next = own ? withAccessibility(user) : null;", apply)
+        self.assertIn("if (Services.prefs.prefIsLocked(OVERRIDES)) {", apply)
+        self.assertIn('export const SHARE = "nulavio.fingerprinting.shareAccessibility";', MODULE)
+        # It relaxes a protection: not one of the personalisation options, which may write none.
+        options = json.loads((SHELL / "shared" / "options.json").read_text(encoding="utf-8"))["options"]
+        self.assertFalse([o for o in options if "fingerprinting" in json.dumps(o)])
+        panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
+        protections = panes[panes.index("      nulavioProtections: {") : panes.index("      nulavioExceptions: {")]
+        self.assertIn(
+            '{ id: "nulavio-share-accessibility", l10nId: "nulavio-share-accessibility", control: "moz-toggle" },', protections
+        )
+        self.assertIn("shell.NulavioFingerprinting.setShareAccessibility(Boolean(value));", panes)
+
+    def test_the_guard_watches_the_setting(self):
+        # A change made to it outside the browser (user.js, a script) is reported at the next start, like a change
+        # to the engine's own fingerprinting prefs. (Review of #380.)
+        guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        watched = guard[guard.index("WATCHED_PREFS = Object.freeze([") : guard.index("]);", guard.index("WATCHED_PREFS"))]
+        self.assertIn('"nulavio.fingerprinting.shareAccessibility",', watched)
+        self.assertIn('"privacy.fingerprintingProtection.",', watched)  # the set it rewrites
+
+    def test_the_bar_is_offered_once_and_only_when_the_system_asks(self):
+        offer = MODULE[MODULE.index("async function offerAccessibility(win) {") : MODULE.index("let watching = null;")]
+        self.assertIn("if (Services.prefs.getBoolPref(OFFERED, false) || Services.prefs.getBoolPref(SHARE, false)) {", offer)
+        self.assertIn("if (!(asks.reducedMotion || asks.moreContrast) || !box || box.getNotificationWithValue(BAR)) {", offer)
+        self.assertIn('eventCallback: event => event === "dismissed" && Services.prefs.setBoolPref(OFFERED, true),', offer)
+        for locale in ("en", "pt_BR"):
+            words = json.loads((SHELL / "_locales" / locale / "messages.json").read_text(encoding="utf-8"))
+            for key in ("accessibilityOffer", "accessibilityOfferShare", "accessibilityOfferKeep"):
+                with self.subTest(locale=locale, key=key):
+                    self.assertTrue(words[key]["message"].strip())
 
 
 if __name__ == "__main__":
