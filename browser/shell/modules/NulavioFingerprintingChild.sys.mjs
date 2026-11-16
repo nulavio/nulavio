@@ -9,7 +9,10 @@
 
    It reads the engine's own answer for "this site is exempted with the shield" (the document's cookie jar
    settings, which the engine's other fingerprinting protections go by), so the screen is exempted exactly when
-   they are, in ordinary and in private windows. It sends no message and takes none. */
+   they are, in ordinary and in private windows. It sends no message and takes none.
+
+   Only tabs get it (the actor is for the "browsers" group): an extension's popup, its background page and a
+   sidebar are never given the constant. */
 
 export const SCREEN = Object.freeze({ width: 1920, height: 1080 });
 
@@ -34,6 +37,24 @@ export function setScreen(context, constant) {
   }
 }
 
+/** Whether a page is due the constant: the protection is on for its kind of window, the person did not exempt
+    its site with the shield (the engine's own record, in the page's cookie jar settings), and it is a page of
+    the web. The browser's own pages and an extension's are not: the engine keeps its fingerprinting protection
+    away from them too, and an extension may place its windows by the screen's size. */
+export function wantsConstant(principal, cookieJarSettings, isPrivate) {
+  if (!protectionOn(isPrivate)) {
+    return false;
+  }
+  if (principal?.isSystemPrincipal || principal?.addonPolicy || principal?.schemeIs?.("moz-extension")) {
+    return false;
+  }
+  try {
+    return !cookieJarSettings?.isOnContentBlockingAllowList;
+  } catch {
+    return true; // no answer from the engine: the page is treated as any other
+  }
+}
+
 export class NulavioFingerprintingChild extends JSWindowActorChild {
   handleEvent(event) {
     // A page shown again from the engine's cache (back, forward) creates no window: it passes here only.
@@ -44,12 +65,7 @@ export class NulavioFingerprintingChild extends JSWindowActorChild {
     if (!context || context.top !== context) {
       return;
     }
-    let exempted = false;
-    try {
-      exempted = Boolean(this.document.cookieJarSettings?.isOnContentBlockingAllowList);
-    } catch {
-      // No answer from the engine: the page is treated as any other.
-    }
-    setScreen(context, protectionOn(context.usePrivateBrowsing) && !exempted);
+    const doc = this.document;
+    setScreen(context, wantsConstant(doc.nodePrincipal, doc.cookieJarSettings, context.usePrivateBrowsing));
   }
 }

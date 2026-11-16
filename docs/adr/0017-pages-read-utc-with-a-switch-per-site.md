@@ -39,7 +39,7 @@ The new tab, Settings and the other pages of the browser keep the system's time 
 - **Nothing tells the person why an hour is wrong.** The switch's own text does ("Os sites veem o horário universal (UTC), igual para todos. Ligue se este site mostrar horas erradas."), but only once the panel is open. The notes of the release that ships this must say it first.
 - **Some sites ask to "update your time zone"** when the browser's differs from the account's (calendars do). The switch answers that.
 - **A site with the switch on can tell this person's time zone again**, and only that site.
-- **Distribution Firefox (Track A)** gets UTC from the preference and has no switch. There the way out for a site is the shield, which turns the other protections off for that site as well.
+- **Distribution Firefox (Track A)** gets UTC from the preference, in profiles made from now on (a profile the launcher made before keeps the set it was seeded with), and has no switch. There the way out for a site is the shield, which turns the other protections off for that site as well.
 
 ## Checked
 

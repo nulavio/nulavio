@@ -27,12 +27,22 @@ this.nulavioPrivacy = class extends ExtensionAPI {
     } catch (e) {
       console.error("Nulavio fingerprinting", e);
     }
+    try {
+      this.allowCopy().watch(); // copy, paste and the page menu on a site that blocks them (#160)
+    } catch (e) {
+      console.error("Nulavio allow copy", e);
+    }
   }
 
   onShutdown(isAppShutdown) {
     if (!isAppShutdown) {
       this.fingerprinting().unwatch();
+      this.allowCopy().unwatch();
     }
+  }
+
+  allowCopy() {
+    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAllowCopy.sys.mjs").NulavioAllowCopy;
   }
 
   fingerprinting() {
