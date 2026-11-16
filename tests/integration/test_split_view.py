@@ -29,6 +29,9 @@ return { selected: gBrowser.selectedBrowser.currentURI.hostPort, urlbar: gURLBar
 """
 
 
+DARK_NOW = "return matchMedia('(prefers-color-scheme: dark)').matches;"
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's Shell (NULAVIO_ENGINE)")
 class SplitViewTest(unittest.TestCase):
     @classmethod
@@ -92,7 +95,7 @@ class SplitViewTest(unittest.TestCase):
         )
         return self.state()
 
-    def check_sides(self) -> None:
+    def check_sides(self, immersive: bool = False) -> None:
         for index, host in ((0, "127.0.0.1"), (1, "localhost")):
             now = self.select(index)
             other = "localhost" if host == "127.0.0.1" else "127.0.0.1"
@@ -105,7 +108,8 @@ class SplitViewTest(unittest.TestCase):
             # The side that is not focused names its own site in the engine's footer; the focused one has none.
             self.assertIsNone(focused[0]["footer"], now)
             self.assertIn(other, unfocused[0]["footer"] or "", now)
-            if now["immersive"]:
+            self.assertEqual(now["immersive"], immersive, now)
+            if immersive:
                 self.assertEqual(now["host"], f"{host}:{self.server.port}", now)
             self.assertEqual(now["profile"], "Pessoal")
 
@@ -117,7 +121,7 @@ class SplitViewTest(unittest.TestCase):
         self.split()
         self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', true);")
         self.assertTrue(harness.wait_until(lambda: self.state()["immersive"], 10), self.state())
-        self.check_sides()
+        self.check_sides(immersive=True)
 
     def test_03_with_the_tabs_on_top(self):
         self.assertIs(self.apply("top"), True)
@@ -140,7 +144,7 @@ class SplitViewTest(unittest.TestCase):
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
-                harness.wait_until(lambda: False, 0.8)
+                self.assertTrue(harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10))
                 self.m.set_context("chrome")
                 try:
                     (folder / f"split-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
