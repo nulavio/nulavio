@@ -15,6 +15,9 @@ AI "smart" grouping off (`browser.tabs.groups.smart.enabled=false` in `baseline.
 - **Profile.** The profile is told by the band (its name, its glyph and its colour), never by a group: a group's colour
   does not change the band, in either theme.
 
+Captures, Lateral, a group in each colour offered, the last one gray: [light](../design/screenshots/tab-groups-323/groups-light.png),
+[dark](../design/screenshots/tab-groups-323/groups-dark.png) (from `test_04`).
+
 ## Per arrangement
 
 | Arrangement | Create, rename, colour | Collapse and expand |
@@ -31,7 +34,9 @@ AI "smart" grouping off (`browser.tabs.groups.smart.enabled=false` in `baseline.
 | A restart with "Abrir janelas e abas anteriores" on (`browser.startup.page` = 3) | The group comes back with its name, colour, tabs and collapsed state; the band names the profile | `test_07` |
 
 The earlier attempt asked the session store for the closed group before the close had finished:
-`gBrowser.removeTabGroup` returns a promise, and the group is in the closed list once it resolves. Nulavio keeps the
+`gBrowser.removeTabGroup` returns a promise, and the group is in the closed list once it resolves. After a restart the
+group's tabs wait unloaded until selected, and the session keeps what each tab had loaded: a tab restarted before its
+page arrived comes back blank (the test waits for the pages first). Nulavio keeps the
 engine's `browser.sessionstore.max_tabs_undo` (25); with 0 the engine would keep no closed group.
 
 ## Imersivo

@@ -185,13 +185,21 @@ class TabGroupsTest(unittest.TestCase):
     def test_07_a_restart_brings_the_group_back_when_the_session_is_restored(self):
         # "Open previous windows and tabs" (Settings > Home: browser.startup.page = 3), as a person turns it on.
         group = self.make_group()
+        want = [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]]
         self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0]; gBrowser.getAllTabGroups()[0].collapsed = true;")
+        # The session keeps what the tabs had loaded: a tab still on its way to its page would come back blank.
+        self.assertTrue(harness.wait_until(lambda: self.groups() == want, 15), self.groups())
         self.m.chrome("Services.prefs.setIntPref('browser.startup.page', 3);")
         try:
             type(self).m = self.m = self.session.restart()
-            self.assertTrue(harness.wait_until(lambda: self.groups(), 30))
-            self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", True, ["/page/dois", "/page/tres"]]])
+            # Back with its tabs, which wait unloaded (pending) until they are selected.
+            self.assertTrue(harness.wait_until(lambda: self.groups() == want, 30), self.groups())
+            self.assertTrue(self.m.chrome("return gBrowser.tabs[1].hasAttribute('pending');"))
             self.assertTrue(harness.wait_until(lambda: self.group()["shownTabs"] == 0, 5), self.group())
+            # Selected, a restored tab loads its page.
+            self.m.chrome("gBrowser.getAllTabGroups()[0].collapsed = false; gBrowser.selectedTab = gBrowser.tabs[1];")
+            loaded = "return gBrowser.selectedBrowser.currentURI.spec;"
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(loaded).endswith("/page/dois"), 15), self.m.chrome(loaded))
             # The band still says the profile after the restore.
             self.assertEqual(
                 self.m.chrome("return document.querySelector('#nulavio-band .nv-band-name')?.textContent.trim();"),
