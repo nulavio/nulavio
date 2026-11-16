@@ -229,6 +229,14 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/edit-page":
+            # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
+            # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
+            frame = f"http://localhost:{self.port}/page/frame"
+            page = (
+                f"<!doctype html><title>edit-page</title><p id=text>Texto original.</p><iframe id=frame src='{frame}'></iframe>"
+            )
+            return page.encode(), html, {}
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.
