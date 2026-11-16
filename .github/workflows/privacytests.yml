@@ -74,7 +74,9 @@ jobs:
         # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml).
         run: |
           set -o pipefail
-          docker run --rm --security-opt seccomp=unconfined \
+          # The archive is a build of the tree the tests come from: a test of what an engine patch adds fails
+          # here when the build does not have it, where it would skip on an older engine (NULAVIO_BUILT_FROM_TREE).
+          docker run --rm --security-opt seccomp=unconfined -e NULAVIO_BUILT_FROM_TREE=1 \
             -v "$GITHUB_WORKSPACE/at-release":/src:ro -v "$RUNNER_TEMP/releases":/releases:ro \
             nulavio-privacytests sh -c 'cp -r /src "$HOME/nulavio" && cd "$HOME/nulavio" &&
               NULAVIO_ENGINE=/releases/new/nulavio/nulavio python3 -I tests/run.py integration test_privacytests.py' 2>&1 | tee probes.log
