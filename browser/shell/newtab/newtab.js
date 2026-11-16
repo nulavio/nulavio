@@ -179,6 +179,8 @@ async function showLayoutChoice() {
   const error = document.getElementById("layout-choice-error");
   const done = document.getElementById("layout-choice-done");
   const retry = document.getElementById("layout-choice-retry");
+  const immersiveRow = document.getElementById("layout-choice-immersive-row");
+  const immersive = document.getElementById("layout-choice-immersive");
   let revision = 0;
   let busy = false;
   let closed = false;
@@ -199,6 +201,7 @@ async function showLayoutChoice() {
     current.textContent = t("layoutUnavailable");
     error.textContent = errorText(err);
     for (const radio of radios) radio.disabled = true;
+    immersiveRow.hidden = true;
     done.hidden = true;
     retry.hidden = false;
   };
@@ -233,6 +236,11 @@ async function showLayoutChoice() {
       radio.checked = radio.value === state.preset;
       radio.disabled = busy || !state.available || state.locked;
     }
+    // #240: Imersivo, with the arrangements where it works (the side tab list: Lateral and Foco; with the tabs on
+    // top it is not built, #118). It follows the arrangement chosen, and shows what is set in this profile.
+    immersiveRow.hidden = !state.available || !["lateral", "focus"].includes(state.preset);
+    immersive.checked = Boolean(state.immersive?.on);
+    immersive.disabled = busy || Boolean(state.immersive?.locked);
   };
   const refreshLayout = async () => {
     if (closed || busy || keyboard?.pending()) return;
@@ -334,6 +342,17 @@ async function showLayoutChoice() {
         }
       }
     }
+  });
+  immersive.addEventListener("change", async () => {
+    // The same switch as Settings' (NulavioLayout.setImmersive): one pref for this profile.
+    editingInThisTab = true;
+    error.textContent = "";
+    try {
+      await api.setImmersive(immersive.checked);
+    } catch (e) {
+      if (!closed) error.textContent = errorText(e);
+    }
+    if (!closed) await refreshLayout();
   });
   done.addEventListener("click", async () => {
     // A keyboard choice still waiting applies first, so "Manter …" keeps what is selected.
@@ -759,11 +778,13 @@ async function firstRun() {
       applies["default-browser"] ? connect.defaultBrowserState().catch(() => null) : null,
     ]);
     const presetKey = { lateral: "layoutLateral", top: "layoutTop", focus: "layoutFocus" }[layoutNow?.preset];
+    // #240: Imersivo, when it is on, after the arrangement it goes with.
+    const tabsValue = presetKey ? (layoutNow.immersive?.on ? `${t(presetKey)} · ${t("keyImmersive")}` : t(presetKey)) : null;
     const dnsKey = dnsNow ? { system: "dnsStatusSystem", default: "dnsStatusDefault", strict: "dnsStatusStrict" }[dnsNow.choice] ?? "dnsStatusFallback" : null;
     const hereNow = await browser.nulavioProfiles?.here?.().catch(() => null);
     const rows = [
       hereNow ? [t("firstrunSummaryProfile"), `${hereNow.name} · ${t(protectionWords(hereNow))}`] : null,
-      presetKey ? [t("firstrunSummaryTabs"), t(presetKey)] : null,
+      tabsValue ? [t("firstrunSummaryTabs"), tabsValue] : null,
       dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
       [t("statusPasswords"), fact("passwords").textContent],
       [t("statusFilter"), fact("filter").textContent],

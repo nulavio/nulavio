@@ -23,7 +23,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 const OPTIONS_URL = "resource://builtin-addons/nulavio-shell/shared/options.json";
 /** The options this module writes (the others in the list have their own writers). */
-export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast", "newtabAmbience", "reduceTransparency"]);
+export const APPEARANCE = Object.freeze(["density", "accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle"]);
 // What else this module writes for the settings page: one pref each, nothing about how things look (#221).
 const OTHER = Object.freeze(["meetingLinks"]);
 const SYSTEM_QUERIES = Object.freeze({

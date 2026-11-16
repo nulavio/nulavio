@@ -250,6 +250,12 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/edit-page":
+            # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
+            # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
+            frame = f"http://localhost:{self.port}/page/frame"
+            page = f"<!doctype html><title>edit-page</title><p id=text>Texto original.</p><iframe id=frame src='{frame}'>"
+            return page.encode(), html, {}
         if path == "/copy-blocked":
             # Allow-copy fixture (tests/integration/test_allow_copy.py): a page that cancels copy, cut, paste, the
             # page menu and selection, and turns selection off, as some banks do; it counts what its handlers saw.
@@ -713,7 +719,8 @@ class GeckoProfileSession:
     Nothing touches the real home or the real profiles.ini.
     """
 
-    def __init__(self, name: str = "Pessoal"):
+    def __init__(self, name: str = "Pessoal", desktop_bus: bool = False):
+        self.desktop_bus = desktop_bus  # the caller's own session bus instead of a private one (test_keep_above on Plasma)
         self.engine = nulavio_engine()
         if self.engine is None:
             raise RuntimeError("GeckoProfileSession needs the Nulavio build (NULAVIO_ENGINE)")
@@ -785,7 +792,12 @@ class GeckoProfileSession:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
     def start(self) -> Marionette:
-        self._start_private_bus()
+        if self.desktop_bus and os.environ.get("NULAVIO_TEST_PLASMA") == "1" and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+            # Only for a test that asks the real desktop for something (KWin's "keep above", #170), run by hand
+            # on a Plasma session with NULAVIO_TEST_HEADFUL=1: the engine's window and the window manager meet there.
+            self.env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+        else:
+            self._start_private_bus()
         self.profile_dir.parent.mkdir(parents=True)
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():
