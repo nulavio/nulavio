@@ -5,6 +5,7 @@ Read-only. Reports facts the user can act on; never phones home.
 
 from __future__ import annotations
 
+import ctypes.util
 import json
 import os
 import shutil
@@ -135,6 +136,53 @@ def check_platform() -> list[Check]:
     return checks
 
 
+CODEC_PACKAGES = {  # distribution (ID or ID_LIKE in /etc/os-release) -> how to install the codec library
+    "fedora": "sudo dnf install libavcodec-free",
+    "debian": "sudo apt install libavcodec-extra",
+    "ubuntu": "sudo apt install libavcodec-extra",
+}
+CODEC_DIRS = ("/usr/lib64", "/usr/lib/x86_64-linux-gnu", "/usr/lib", "/lib64", "/usr/local/lib64", "/usr/local/lib")
+
+
+def codec_library() -> str | None:
+    """The system's codec library (libavcodec), which the engine loads at run time: its file name, or None."""
+    name = ctypes.util.find_library("avcodec")
+    if name:
+        return name
+    for directory in CODEC_DIRS:
+        found = sorted(Path(directory).glob("libavcodec.so.*"))
+        if found:
+            return found[-1].name
+    return None
+
+
+OS_RELEASE = Path("/etc/os-release")
+
+
+def _distribution() -> set[str]:
+    try:
+        lines = OS_RELEASE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()
+    names: set[str] = set()
+    for line in lines:
+        key, _, value = line.partition("=")
+        if key in ("ID", "ID_LIKE"):
+            names.update(value.strip().strip('"').split())
+    return names
+
+
+def check_media() -> list[Check]:
+    """Without the system's codec library the engine says it cannot play AAC, nor Opus and FLAC in MP4 (#377)."""
+    name = codec_library()
+    if name:
+        return [Check("media", "codec library", "ok", f"{name} (the engine uses it for AAC and for audio in MP4)")]
+    install = next((how for distro, how in CODEC_PACKAGES.items() if distro in _distribution()), None)
+    how = f"Install it: {install}" if install else "Install your distribution's FFmpeg libraries (libavcodec)"
+    detail = f"not found: sound in MP4 (AAC, as most video sites send it) does not play. {how}, then start Nulavio again"
+    return [Check("media", "codec library", "warn", detail)]
+
+
 def check_secrets() -> list[Check]:
     checks = []
     owner = _dbus_name_owner("org.freedesktop.secrets")
@@ -252,7 +300,7 @@ def check_profiles() -> list[Check]:
 
 
 def run_all() -> list[Check]:
-    return check_engine() + check_platform() + check_secrets() + check_native_messaging() + check_profiles()
+    return check_engine() + check_platform() + check_media() + check_secrets() + check_native_messaging() + check_profiles()
 
 
 def to_json(checks: list[Check]) -> str:

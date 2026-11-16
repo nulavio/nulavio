@@ -603,6 +603,21 @@ class PackagingTest(unittest.TestCase):
         for packager in ("make_rpm.sh", "make_archive.sh"):
             self.assertIn('"$repo/LICENSES.md"', (ROOT / "scripts" / "release" / packager).read_text(encoding="utf-8"))
 
+    def test_both_packages_ask_for_the_systems_codec_library(self):
+        """#377: the engine loads libavcodec at run time for AAC and for audio in MP4, so no package tool finds it
+        among the linked libraries. Without it those streams do not play, with no message."""
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertIn("libavcodec-free", re.findall(r"(?m)^Recommends:\s+(\S+)$", spec))
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        codecs = re.search(r'(?m)^codecs="([^"]+)"$', deb).group(1)
+        self.assertIn("\nRecommends: libsodium23, gocryptfs, fuse3, $codecs\n", deb)
+        names = [name.strip() for name in codecs.split("|")]
+        # One alternative per version of the library the engine loads, newest first, each with Debian's fuller build.
+        self.assertEqual(names, [f"libavcodec{extra}{major}" for major in (62, 61, 60, 59, 58) for extra in ("", "-extra")])
+        # Recommended, not required: a person may have the library from elsewhere.
+        for field in re.findall(r"(?m)^(?:Requires|Depends):.*$", spec + deb):
+            self.assertNotIn("libavcodec", field)
+
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
         self.assertIn("%global nulavio_dir %{_libdir}/nulavio", spec)

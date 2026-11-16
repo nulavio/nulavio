@@ -14,8 +14,11 @@ image=${NULAVIO_CHECK_DEB_IMAGE:-$("$here/base_image.sh" ubuntu-itest)}
 
 podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$deb:/pkg/nulavio.deb:ro" "$image" bash -euc '
     export DEBIAN_FRONTEND=noninteractive
-    { apt-get -qq update && apt-get -qq install -y /pkg/nulavio.deb; } >/dev/null 2>&1 || { echo "apt install failed"; exit 1; }
+    { apt-get -qq update && apt-get -qq install -y -o APT::Install-Recommends=true /pkg/nulavio.deb; } >/dev/null 2>&1 || { echo "apt install failed"; exit 1; }
     echo "installed: $(dpkg-query -W -f="\${Package} \${Version}" nulavio)"
+    # What the package recommends is installed with it, as on a desktop: the codec library the engine loads (#377).
+    codecs=$(ls /usr/lib/x86_64-linux-gnu/libavcodec.so.* 2>/dev/null | head -1)
+    [ -n "$codecs" ] && echo "codec library: $(dpkg -S "$codecs" | cut -d: -f1)" || { echo "the recommended codec library was not installed"; exit 1; }
     dpkg --verify nulavio && echo "dpkg --verify: files as packaged"
     bad=$(find /usr/lib/nulavio \( ! -user root -o -perm -o+w -o -perm -g+w \) -print | head -5)
     [ -z "$bad" ] || { echo "not root-owned or writable: $bad"; exit 1; }
