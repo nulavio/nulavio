@@ -356,6 +356,8 @@ class ReviewApiTest(unittest.TestCase):
         self.assertEqual(first["fallbacks"], "default")
         self.assertNotIn("thinking", first)  # adaptive, the model's own default
         self.assertEqual(first["system"][0]["cache_control"], {"type": "ephemeral"})
+        self.assertEqual(first["system"][0]["text"], ai_review_api.system_prompt())  # the invariants, from REVIEW.md
+        self.assertIn("**I12-tests-ci.**", first["system"][0]["text"])
         diff = first["messages"][0]["content"][-1]
         self.assertTrue(diff["text"].startswith('<untrusted file="pr.diff.txt">'))
         self.assertEqual(diff["cache_control"], {"type": "ephemeral"})
@@ -499,7 +501,7 @@ class InstructionsTest(unittest.TestCase):
     def test_every_reviewer_reads_the_invariants_from_review_md(self):
         # REVIEW.md holds them once: the API review appends it to its instructions, the local review too, and
         # OpenCodeReview and CodeRabbit read it by name. The instructions keep only a pointer.
-        self.assertNotRegex(INSTRUCTIONS, r"^\*\*I\d+-")
+        self.assertNotRegex(INSTRUCTIONS, r"(?m)^\*\*I\d+-")
         self.assertIn("are in `REVIEW.md` at the root of the repository", INSTRUCTIONS)
         prompt = ai_review_api.system_prompt()
         self.assertTrue(prompt.startswith(INSTRUCTIONS.rstrip()))
