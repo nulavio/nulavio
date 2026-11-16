@@ -101,6 +101,17 @@ export const ACCOUNTS = Object.freeze({
    consent for suggestions: those are allowed in each profile itself. */
 export const PENDING_FILE = "nulavio-search-choice.json";
 
+/** Whether `path` is a symbolic link (never followed), false for another file, null when nothing is there. */
+export function isLink(path) {
+  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  file.initWithPath(path);
+  try {
+    return file.isSymlink(); // lstat: true for a link, dangling or not
+  } catch {
+    return null; // NS_ERROR_FILE_NOT_FOUND
+  }
+}
+
 /** The checked form of a carried choice, or the error "invalid-choice" / "unknown-provider". */
 export function validatePending(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -599,16 +610,15 @@ class NulavioSearchClass {
     } catch {
       return null;
     }
-    const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-    file.initWithPath(path);
-    if (!file.exists() && !file.isSymlink()) {
-      return null;
+    const link = isLink(path);
+    if (link === null) {
+      return null; // nothing there: the usual start
     }
     // Read once, then deleted whatever happens, so a bad file is not tried again at every start. A link is never
     // followed: it is removed unread.
     let raw = null;
     try {
-      if (!file.isSymlink()) {
+      if (!link) {
         raw = await IOUtils.readJSON(path);
       }
     } catch (e) {
