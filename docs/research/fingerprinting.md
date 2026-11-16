@@ -2,7 +2,7 @@
 
 A site can recognise a browser without cookies by what it reads from it: its name, the graphics card, the installed fonts, how a canvas is drawn. This page says what the Nulavio build gives out, measured on the real engine, what it changes against Firefox's own defaults, and what it leaves alone on purpose. Every row marked "tested" fails a test run if it stops being true (`tests/integration/test_fingerprinting.py`).
 
-Measured on 2026-11-10 with the release build of Firefox 159.0.1 and patches 0001–0010, on Fedora 44 (16 logical processors). The screen, processor and time zone rows, and the PrivacyTests section, were measured on 2026-11-15 with 160.0-0.5's engine. The first analysis (2026-10-26, Firefox 158.0.1) is at the end.
+Measured on 2026-11-10 with the release build of Firefox 159.0.1 and patches 0001–0010, on Fedora 44 (16 logical processors). The screen, processor, time zone and motion rows, and the PrivacyTests section, were measured on 2026-11-15 with 160.0-0.5's engine. The first analysis (2026-10-26, Firefox 158.0.1) is at the end.
 
 ## Two things the build does
 
@@ -31,10 +31,11 @@ Neither makes two people identical. The language, the window's size and the inte
 | Usable screen area | the screen minus panels | the whole screen | the same 1920×1080, at 0,0 | tested (08) |
 | Time zone (`Intl`, `Date`) | the system's | the system's | **UTC on every computer** (the engine names it `Atlantic/Reykjavik`). A site gets the system's from the switch "Usar meu fuso horário neste site" in the shield's panel ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md)) | tested (09) |
 | Touch points | real | 0, 1 or 5 | 0, 1 or 5 | in the set (02) |
+| Reduced motion, more contrast (`prefers-reduced-motion`, `prefers-contrast`) | the system's | the system's | **"no preference" on every computer**, until the person turns on "Deixar os sites verem minhas preferências de movimento e contraste" ([ADR 0018](../adr/0018-sites-are-not-told-motion-and-contrast-preferences.md)) | tested (10) |
 
 "Differs per site" means: two sites read different values, the same site reads the same value again during the day (so sites that read twice keep working), and the value changes with the next session or day. The engine does it by changing the lowest bit of a few colour values, chosen from a random key per site.
 
-The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `FontVisibilityLangPack`, `JSMathFdlibm`, `ScreenAvailToResolution`, `NavigatorHWConcurrencyTiered`, `MaxTouchPointsCollapse`, `IMEStyle`) plus Nulavio's (`privacy.fingerprintingProtection.overrides` in `firefox-branding.js`): `WebGLRendererConstant`, `WebGLVendorSanitize`, `WindowOuterSize`, `WindowScreenXY`, `WindowInnerScreenXY`, `MouseEventScreenPoint`, `UseStandinsForNativeColors`, `DeviceSensors`, `NavigatorHWConcurrency`, `JSDateTimeUTC`, and without `EfficientCanvasRandomization`. Test 02 reads the set from the engine and compares. The screen's size is not in that set: each page of the web in a tab is given the engine's own screen-size override as its window is created (`NulavioFingerprintingChild.sys.mjs`).
+The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `FontVisibilityLangPack`, `JSMathFdlibm`, `ScreenAvailToResolution`, `NavigatorHWConcurrencyTiered`, `MaxTouchPointsCollapse`, `IMEStyle`) plus Nulavio's (`privacy.fingerprintingProtection.overrides` in `firefox-branding.js`): `WebGLRendererConstant`, `WebGLVendorSanitize`, `WindowOuterSize`, `WindowScreenXY`, `WindowInnerScreenXY`, `MouseEventScreenPoint`, `UseStandinsForNativeColors`, `DeviceSensors`, `NavigatorHWConcurrency`, `JSDateTimeUTC`, `CSSPrefersReducedMotion`, `CSSPrefersContrast`, `CSSPrefersReducedTransparency`, and without `EfficientCanvasRandomization`. Test 02 reads the set from the engine and compares. The screen's size is not in that set: each page of the web in a tab is given the engine's own screen-size override as its window is created (`NulavioFingerprintingChild.sys.mjs`).
 
 ## Three things that were wrong before 2026-11-10
 
@@ -48,7 +49,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 |---|---|
 | Date format, language | A wrong language breaks forms and reading. The time zone is no longer left alone: pages read UTC, with a switch per site (ADR 0017) |
 | Window size, zoom | Hiding them means fixed window sizes with margins (letterboxing). The screen's size is no longer left alone (ADR 0016) |
-| Dark mode, reduced motion, contrast | They are how a site respects a person's accessibility settings |
+| Dark mode | It is how a site respects the person's theme. Reduced motion and contrast are no longer left alone: sites are not told them unless the person says so (ADR 0018) |
 | Audio (how the engine mixes a test sound) | The engine has no protection for it. The value depends on the engine build and processor, not on the person's settings |
 | Speech voices, cameras and microphones (count only, no names before permission) | Hiding them breaks reading aloud and device choice in calls |
 | System font name and size | No protection in the engine outside `privacy.resistFingerprinting` |
@@ -71,8 +72,8 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 
 ## Kept true by
 
-- `tests/integration/test_fingerprinting.py`, twelve tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
-- `tests/unit/test_prefs_and_guard.py`: the additions are the same in both tracks, and nothing that breaks sites or accessibility without a decision (language, colour scheme, reduced motion, keyboard, window rounding) can enter the default.
+- `tests/integration/test_fingerprinting.py`, thirteen tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
+- `tests/unit/test_prefs_and_guard.py`: the additions are the same in both tracks, and nothing that breaks sites or accessibility without a decision (language, colour scheme, keyboard, window rounding) can enter the default.
 - Guard at run time: a change to `privacy.fingerprintingProtection` or its branch made while the browser was closed is reported at the next start.
 - `tests/integration/test_privacy.py` (`test_04`) still compares Strict with Standard.
 
@@ -83,7 +84,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 | Group | Probes | Pass | Not yet |
 |---|---|---|---|
 | Device | 12 | 11 | the audio fingerprint (the engine has no protection for rendered audio) |
-| Settings | 11 | 9 | reduced motion, display contrast |
+| Settings | 11 | 11 | |
 | Screen | 2 | 2 | |
 
 The test file lists each probe that does not pass yet with its reason (`KNOWN_GAPS`), and [issue #79](https://github.com/nulavio/nulavio/issues/79) tracks them. Limits of that run: one machine, so a Device probe passes there only by differing per site or by a value that is the same on every machine by construction; and no panels around the screen, so the available-area probes show stability only.

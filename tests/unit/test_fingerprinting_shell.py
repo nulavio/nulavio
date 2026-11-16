@@ -44,7 +44,9 @@ class ScreenTest(unittest.TestCase):
         self.assertEqual(MODULE.count("FALLBACK_TOPIC"), 3)  # declared, added in the failure path, removed
         # Pages already open are decided again when the engine's protection is switched on or off.
         self.assertIn('const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];', MODULE)
-        self.assertIn('} else if (topic === "nsPref:changed") {\n          decideOpenPages();', MODULE)
+        # (One observer hears two kinds of preference: the person's setting, and the engine's switches.)
+        self.assertIn("          if (data === SHARE) {\n            applyAccessibility(true);", MODULE)
+        self.assertIn("          } else {\n            decideOpenPages();", MODULE)
 
     def test_it_follows_the_engines_switch_and_the_engines_own_word_for_an_exempted_site(self):
         wants = CHILD[CHILD.index("export function wantsConstant(") : CHILD.index("export class NulavioFingerprintingChild")]
