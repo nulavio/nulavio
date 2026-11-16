@@ -11,6 +11,154 @@ Update an installed Nulavio with `sudo dnf upgrade nulavio`. Only the latest rel
 
 <!-- releases -->
 
+<!-- release:v160.0-0.6 -->
+## [160.0-0.6](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.6) — 2026-11-16
+
+Nulavio 160.0-0.6, built from Firefox 160.0 (commit 7b94d699d48b).
+
+### What's new
+
+An update of the alpha with the same engine (Firefox 160.0): the whole browser can sit behind a password, sites get less to recognise your computer by, the Immersive mode works better in real use, and protected profiles and each version's checks are stricter.
+
+#### Changes that need your attention
+
+- Sites now see universal time (UTC) in place of your time zone, which helps recognise you from one site to the next. Hours a page works out by itself, as in calendars, chats and statements, show in UTC.
+- For a site that needs the right hour, open the shield in the address bar and turn on Use my time zone on this site. The choice is kept in Settings, with the other site exceptions.
+
+#### What is new
+
+- Every profile can be protected by a password: the last unprotected profile can be removed, and the profile chooser is then the only way in.
+- Sites read the same screen, 1920 by 1080, and 4 processors on every computer. The window's size does not change, and a site exempted with the shield reads the real values.
+- After an update, a bar offers what is new in the version, and the Help menu has an entry for it.
+- Ctrl+Shift+L copies a link to the selected text.
+- Meeting links, per profile: with Join in the browser, Zoom and Microsoft Teams links stay on the service's page and no app is opened. It is in Settings, Integrations.
+- When you sign in to Google in a profile of a group, a bar offers, once, to always open Google's sites in that profile.
+- The Immersive mode has a pin that keeps the toolbar and the tabs in view, shows the tab list for a moment when a tab opens in the background, and gives a very long site name a line of its own.
+- Clean links drop eleven more tracking parameters, from Google's ads, Instagram, Reddit, Facebook, X and others.
+
+#### Fixes
+
+- A protected profile refuses to open when its record of unlock-method changes is missing, and says what to restore from a backup.
+- Each version's notes give a stricter command to check where a download was built: it names the release workflow and the main branch.
+- The Flatpak bundle is checked file by file against the attested archive before it is signed.
+- In the Immersive mode, the toolbar no longer covers the tab list or the Assistant's panel, the page does not shift in Focus, and a dragged tab keeps the tab list open.
+- On KDE, the profile button keeps its contrast after the system changes between light and dark with the browser open.
+- The Guard's review page updates by itself when a finding changes, and a replaced extension shows the version the browser took in.
+- A profile unlocked from the phone is locked again when its lock watcher cannot start, and the watcher no longer misses a browser that closed within half a second.
+- After a change to the unlock methods, the protected profile's pages show the result even when the state cannot be read again.
+- Started with the confined option on a system where the browser could not sandbox page content inside it, such as Ubuntu by default, Nulavio refuses to start and says why, instead of running with less protection.
+- Nulavio removes one more environment variable that weakens the engine's sandbox before the browser starts, and the doctor command says when it is set.
+- A window density fixed by an administrator shows as fixed in Settings.
+
+In Portuguese and English: https://nulavio.net/novidades/160.0-0.6/ and https://nulavio.net/en/whats-new/160.0-0.6/
+
+### Features
+
+- profiles: every profile behind a password, with the chooser as the only way in (#289) ([64e2348f7816](https://github.com/nulavio/nulavio/commit/64e2348f78163b980ea828eea03b3c20e11d6800))
+- prefs: clean links drop the tracking parameters the engine's lists miss (#309) ([eb452e389412](https://github.com/nulavio/nulavio/commit/eb452e38941262db8c84eeb5cff7983c66997c2f))
+- shell: Ctrl+Shift+L copies a link to the selected text (#329) ([ab0ed735694b](https://github.com/nulavio/nulavio/commit/ab0ed735694ba9647e4f9bfb5025584676715207))
+- shell: Immersive gets a pin for touch, and shows a tab opened in the background (#335) ([b05c1fa0200b](https://github.com/nulavio/nulavio/commit/b05c1fa0200be6c22c569217c4ea822dd1d08b17))
+- shell: in Immersive a site too long for the band's row gets a line of its own (#342) ([60da0b269e2d](https://github.com/nulavio/nulavio/commit/60da0b269e2dc4afd1eb0b9d9cb676ade188bb37))
+- shell: routing rules for Google's sites offered when the person signs in to Google in a profile (#350) ([ec029ba886fd](https://github.com/nulavio/nulavio/commit/ec029ba886fd433c4a5ec79f629521a4725f157f))
+- perf: one command measures startup and memory against a baseline build (#353) ([1b00ed654376](https://github.com/nulavio/nulavio/commit/1b00ed654376a3f330f1f356604461b87fcae14d))
+- perf: Speedometer 3.1, pinned and served from this machine (#354) ([2f497f9c4f1d](https://github.com/nulavio/nulavio/commit/2f497f9c4f1dc4401d6c66b2442c318a22d5d704))
+- perf: JetStream 3.0 and MotionMark 1.3.2, pinned and served from this machine (#357) ([09a1843e5c34](https://github.com/nulavio/nulavio/commit/09a1843e5c342a7830a7ec7920f772503bcef58d))
+- perf: frame time from the same command, on a private Xvfb (#358) ([72c34d0e8138](https://github.com/nulavio/nulavio/commit/72c34d0e8138c7dac6673b280ebb969f765c370b))
+- perf: stock Firefox 160.0 as a second baseline, pinned to Mozilla's archive (#359) ([4ed5f12a3fc8](https://github.com/nulavio/nulavio/commit/4ed5f12a3fc85c09609b6c10d6ab5335dbc797d2))
+- perf: a 95 % bootstrap interval for each change (#360) ([f90fc7caacfb](https://github.com/nulavio/nulavio/commit/f90fc7caacfbba17b83e428ab0f6d96a1ca35778))
+- perf: measure each published release against the one before it and Firefox (#363) ([df5e937f5cc4](https://github.com/nulavio/nulavio/commit/df5e937f5cc48a52fa3fd1adf3869ddcaa8d51e4))
+- perf: the tools CLI and the fingerprinting protections' cost from the same command (#366) ([5e289a2e9050](https://github.com/nulavio/nulavio/commit/5e289a2e90503006c7210a2db42428d5292207b7))
+- shell: meeting links open in the app or join in the browser, per profile (#343) ([1016f9000d57](https://github.com/nulavio/nulavio/commit/1016f9000d5743d77c73961512be5809dca4be4b))
+- fingerprinting: pages read one screen size and one processor count on every computer (#375) ([aa3590b6d1eb](https://github.com/nulavio/nulavio/commit/aa3590b6d1eb4fb5117eca72e14b63040bc57064))
+- fingerprinting: pages read UTC as the time zone, with a switch per site in the shield's panel (#379) ([9bde32867450](https://github.com/nulavio/nulavio/commit/9bde32867450657a6c6fa821ba822202437d6a73))
+
+### Fixes
+
+- the rest of the experience follow-ups (cookie notices, the band, tests that switched HTTPS-Only off) (#287) ([81e94bdf4dad](https://github.com/nulavio/nulavio/commit/81e94bdf4dad6b02a857e6c9ac7bb5873b40d79d))
+- shell: what's new starts with the browser: SessionStore from the address the engine has (#306) ([445192aea483](https://github.com/nulavio/nulavio/commit/445192aea483082d7c4836617d4190ff1e458eb2))
+- release: the Companion job validates the Gradle wrapper and refuses an app changed without a new version (#299) ([3dcb1af0ba2e](https://github.com/nulavio/nulavio/commit/3dcb1af0ba2ee6ede32f78255e6212c358535057))
+- vault: the lock watcher sees an engine that lived under half a second (#303) ([f9e483ac6a6d](https://github.com/nulavio/nulavio/commit/f9e483ac6a6d72deba02167b528f4c211d94ae75))
+- launcher: --confined refuses to start where the engine could not sandbox its content inside bubblewrap (#295) ([a8e09b9a7a40](https://github.com/nulavio/nulavio/commit/a8e09b9a7a40388919d02612c60f27c3fd32a7e1))
+- release: sign\_repo.sh and sign\_apt\_repo.sh verify the rehearsal before they sign (#298) ([a812a118db66](https://github.com/nulavio/nulavio/commit/a812a118db6699566917b716212e5cdbee60ebc8))
+- shell: a density an administrator fixed reads as fixed in Settings (#302) ([f626623e2b41](https://github.com/nulavio/nulavio/commit/f626623e2b41e5fe0af7ff489b4f0c7ee87946e0))
+- vault: the lock watcher's fallback allows the kernel's coarse file clock (#314) ([e68d02e963fe](https://github.com/nulavio/nulavio/commit/e68d02e963fe2f9794eb9dcb68b2a3e0538b2c41))
+- shell: the vault pages keep a change's result when the state cannot be read again (#308) ([d6978110c7fe](https://github.com/nulavio/nulavio/commit/d6978110c7fea8e7c21fa06a5d2e7e7ab3b3892c))
+- vault: a phone unlock locks the profile again when its watcher cannot start (#330) ([7d6b49e00d8c](https://github.com/nulavio/nulavio/commit/7d6b49e00d8cf7c1c5388ea3cdb187b04b0c39ec))
+- release: the check after upload compares the served dnf repository file whole (#331) ([a7df2e5e5014](https://github.com/nulavio/nulavio/commit/a7df2e5e5014493bec8432f2073621dbfdc128bc))
+- release: the signing role's session leaves the publish job once it has signed (#332) ([02107a1b364f](https://github.com/nulavio/nulavio/commit/02107a1b364f6be6f817941e8c4a1dc53f064388))
+- launcher: the engine starts without MOZ\_ASSUME\_USER\_NS, and doctor says when it is set (#333) ([a142f9ca2e14](https://github.com/nulavio/nulavio/commit/a142f9ca2e14cdf676ec4bd4ac346d27a96a8ec4))
+- release: the Flatpak bundle is checked against the attested archive before it is signed (#338) ([f16063f44d66](https://github.com/nulavio/nulavio/commit/f16063f44d661b49824039420021bdeff350a444))
+- guard: a waiting finding says the version the engine took in after the start-up check (#341) ([a3dfaa1b6625](https://github.com/nulavio/nulavio/commit/a3dfaa1b66256cf901a25e06714b8ba30b330458))
+- guard: the review page redraws when a finding changes while it is open (#352) ([5786cbaad6ed](https://github.com/nulavio/nulavio/commit/5786cbaad6ed962ba995d56ffbbfe6b1ac211f7a))
+- shell: in Immersive the toolbar covers neither the tab list nor the assistant, and a dragged tab keeps the list (#355) ([f07a873e48bc](https://github.com/nulavio/nulavio/commit/f07a873e48bcf991af241c40edca1809d3fffc12))
+- perf: memory is read in a third start and only once two readings agree (#361) ([371269024479](https://github.com/nulavio/nulavio/commit/371269024479e028babbe5f70957a22efc948c53))
+- shell: the profile button follows a desktop's live scheme change (#369) ([6bb714023d32](https://github.com/nulavio/nulavio/commit/6bb714023d329397e370f8991fbb15cf4ed2ad6d))
+- release: the upload runs in a job that cannot take the signing role (#356) ([cc1bb14342fe](https://github.com/nulavio/nulavio/commit/cc1bb14342fe727a33ee19a3fcc2f12ef92cb054))
+- harden the release notes' attestation check and the Vault's generation record (#370) ([3a5dece8c545](https://github.com/nulavio/nulavio/commit/3a5dece8c5457b58fe8a3b5a0c5632f6867ec366))
+- release: the signing role trusts the two signing workflows on main, not any job of the environment (#372) ([c4567628b4f8](https://github.com/nulavio/nulavio/commit/c4567628b4f89531d5a618740714a02568be45ed))
+- release: the release run's integration tests pass on a build of a new version (#376) ([05956707afee](https://github.com/nulavio/nulavio/commit/05956707afee77e7ade439b20c34b14741a5cfad))
+- fingerprinting: only pages of the web, in tabs, read the constant screen, and an open page follows the switch (#382) ([7b94d699d48b](https://github.com/nulavio/nulavio/commit/7b94d699d48b91cd8b3422c4a63a1039ca6b278d))
+
+### Documentation
+
+- security: the scope packet for the independent review of the Vault and the release chain (#294) ([e39a4ac3c029](https://github.com/nulavio/nulavio/commit/e39a4ac3c0292e04b2064e7bb4a726ab8482a9ce))
+- security: what Google still sees when you sign in to its services, and what is allowed on other sites (#307) ([cf0bdf733005](https://github.com/nulavio/nulavio/commit/cf0bdf733005539475e62e355df01652014d4f50))
+- design: the maintainer's mockup of Imersivo "Faixa" as the spike's reference (#349) ([8884a072b947](https://github.com/nulavio/nulavio/commit/8884a072b947a51d65368f6c46c623d39ca674c9))
+- perf: the suite, its method and the first published baseline against Firefox 160.0 (#365) ([c4fefbb81d84](https://github.com/nulavio/nulavio/commit/c4fefbb81d84ada88be5b73b3ab3b4386eaa3da1))
+- release: what is new in 160.0-0.6 (#373) ([38ddc81845e1](https://github.com/nulavio/nulavio/commit/38ddc81845e1a01e03b2eb930984b659ece2111e))
+- release: 160.0-0.6's notes name the fingerprinting changes it ships (#383) ([39afecfa19be](https://github.com/nulavio/nulavio/commit/39afecfa19be482978748ee56f38c20605004ca5))
+
+### Tests
+
+- the clock-step test waits for its stand-in engine to finish starting (#297) ([f26201b07483](https://github.com/nulavio/nulavio/commit/f26201b07483880e2a9df32a16d0d8c9924ae4c8))
+- Copy Link to Highlight in the Nulavio build, and where to read about it (#300) ([43c313f41882](https://github.com/nulavio/nulavio/commit/43c313f41882aeaa2e3f19e16957f4db945ccedd))
+- calls work with Nulavio's prefs: a WebRTC call on this computer carries audio and video (#311) ([03ef3af41223](https://github.com/nulavio/nulavio/commit/03ef3af4122348504c64722e6d9d9b571742d293))
+- the text-fragment test reads the highlight from the page, and waits for the menu to close (#313) ([bcb02e4744b5](https://github.com/nulavio/nulavio/commit/bcb02e4744b531ff4b18a3ad728256d3f7e94fba))
+- protected media plays in the Nulavio build once DRM is on, and a site's DRM storage clears with its data (#310) ([3832b802d3d6](https://github.com/nulavio/nulavio/commit/3832b802d3d60d6df626641b7e61df42c6c76865))
+- fuzz the nv1 messages and the AI Bridge's address classifier with Hypothesis (#305) ([dfc5de2b417b](https://github.com/nulavio/nulavio/commit/dfc5de2b417bc4331b3da1a2f2c95156b09c4abf))
+- guard: another signed version put in place while closed is reported (#336) ([637bd545d4bd](https://github.com/nulavio/nulavio/commit/637bd545d4bd4bc33fbb89b68c473304c78471a4))
+- drm: Widevine installs and a public test stream plays; the bar and the setting are there (#340) ([6bd2506bc0e9](https://github.com/nulavio/nulavio/commit/6bd2506bc0e9889b33b0543f62c7a4e60f34fb16))
+- content-filter: Google's analytics, tag manager and ad tags on another site load nothing (#339) ([1ae7b0583755](https://github.com/nulavio/nulavio/commit/1ae7b0583755f18a44b9061ac2aadb714754fcf0))
+- fingerprinting: PrivacyTests' 25 probes run on the Nulavio build with their pass rule (#374) ([554208990df6](https://github.com/nulavio/nulavio/commit/554208990df6ab24e489f4078f8a9d98ad82cb50))
+- clean-links: the menu opens once the engine has read its clean-link lists (#381) ([6ae7deae247e](https://github.com/nulavio/nulavio/commit/6ae7deae247e57c27ee9cb0d330f775db68f218c))
+
+### Maintenance
+
+- release: record v160.0-0.5 (#304) ([30e3ba941373](https://github.com/nulavio/nulavio/commit/30e3ba9413732c7b2062dbc349284109a40e5ed8))
+
+### Build and CI
+
+- ai-review: send a pull request to the model only when it touches a CODEOWNERS path or carries the ai-review label (#296) ([3267fa5af450](https://github.com/nulavio/nulavio/commit/3267fa5af450c358f475bf5d8676d590ee0c0763))
+- ai-review: call the Messages API from a standard-library script instead of Claude Code (#301) ([4ff8867c8189](https://github.com/nulavio/nulavio/commit/4ff8867c8189af9c9953db1354da45df2286c707))
+
+[Full changelog](https://github.com/nulavio/nulavio/compare/v160.0-0.5...7b94d699d48b91cd8b3422c4a63a1039ca6b278d)
+
+### Install and verify
+
+Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/
+
+On Ubuntu, `nulavio.sources` from the download page has the SHA-256 `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`.
+
+Other distributions, with Flatpak:
+
+```sh
+flatpak install --user nulavio-160.0-0.6.x86_64.flatpak
+```
+
+Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.1.0.apk`. Its signing certificate's SHA-256 is `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (`apksigner verify --print-certs nulavio-companion-0.1.0.apk` prints it).
+
+Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`): check that first, as the download page shows. Each also has a GitHub build-provenance attestation from the release workflow on `main`; check it with both of these options:
+
+```sh
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
+```
+
+[Build and test run](https://github.com/nulavio/nulavio/actions/runs/43811410472).
+
+[Security changelog](https://github.com/nulavio/nulavio/blob/main/docs/security/changelog.md) and [published advisories](https://github.com/nulavio/nulavio/security/advisories). Commit categories are not a vulnerability assessment.
+
+
 <!-- release:v160.0-0.5 -->
 ## [160.0-0.5](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.5) — 2026-11-14
 
