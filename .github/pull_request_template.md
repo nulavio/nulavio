@@ -24,7 +24,7 @@ It becomes the squash-merge commit. Process: docs/process/pull-requests.md.
 ## Security
 
 - Security-relevant: yes / no
-- Invariants touched (definitions in `.github/ai-review/instructions.md`; tick each one the change affects and say how it still holds):
+- Invariants touched (definitions in `REVIEW.md`; tick each one the change affects and say how it still holds):
   - [ ] I1 protections (sandbox, Fission, TLS, signatures, Safe Browsing, Remote Settings, updates, downgrade)
   - [ ] I2 no telemetry, no Nulavio-operated remote service
   - [ ] I3 secrets only on stdin or in 0600 files

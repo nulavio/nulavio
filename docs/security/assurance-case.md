@@ -14,7 +14,7 @@ It rests on four arguments.
 
 ## 2. The trust boundaries are known
 
-[Trust boundaries](../architecture/trust-boundaries.md) lists every place where data crosses from less to more trusted (web content to the parent process, extensions to browser APIs, native messaging hosts, the profile on disk, other local processes, the network, update and supply channels) and the rule that holds at each one. A new boundary must add a row there and a threat-model scenario (invariant I11 in the [review rules](../../.github/ai-review/instructions.md)).
+[Trust boundaries](../architecture/trust-boundaries.md) lists every place where data crosses from less to more trusted (web content to the parent process, extensions to browser APIs, native messaging hosts, the profile on disk, other local processes, the network, update and supply channels) and the rule that holds at each one. A new boundary must add a row there and a threat-model scenario (invariant I11 in the [review rules](../../REVIEW.md)).
 
 ## 3. Secure design principles are applied
 
@@ -52,4 +52,4 @@ GitHub's CodeQL also scans the repository, and OpenSSF Scorecard checks the proj
 
 ## How the case stays true
 
-Every pull request is checked against the invariants I1–I12, by the CI checks above and by the reviewer ([review rules](../../.github/ai-review/instructions.md)). A change that alters behaviour updates the [residual risks](residual-risks.md) and the [security changelog](changelog.md) (I11). Vulnerabilities found after release are handled as [SECURITY.md](../../SECURITY.md) describes and fixed with a test that fails without the fix ([CONTRIBUTING.md](../../CONTRIBUTING.md#tests-are-part-of-the-change)).
+Every pull request is checked against the invariants I1–I12, by the CI checks above and by the reviewer ([review rules](../../REVIEW.md)). A change that alters behaviour updates the [residual risks](residual-risks.md) and the [security changelog](changelog.md) (I11). Vulnerabilities found after release are handled as [SECURITY.md](../../SECURITY.md) describes and fixed with a test that fails without the fix ([CONTRIBUTING.md](../../CONTRIBUTING.md#tests-are-part-of-the-change)).
