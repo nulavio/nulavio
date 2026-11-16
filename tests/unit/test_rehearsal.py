@@ -69,7 +69,8 @@ class NeededTest(unittest.TestCase):
                 {"workflow_runs": [run_entry("c" * 40, "push"), run_entry(SHA, "workflow_dispatch"), run_entry("b" * 40)]}
             )
 
-        self.assertEqual(gate.last_green(REPO, gh, workflow=night.WORKFLOW, events=night.EVENTS), SHA)
+        # A green run started by hand is not the baseline: it closes no issue, so the night after it must build.
+        self.assertEqual(gate.last_green(REPO, gh, workflow=night.WORKFLOW, events=night.EVENTS), "b" * 40)
         self.assertIn("/actions/workflows/rehearsal.yml/runs?branch=main&status=success", asked[0][1])
         self.assertEqual(gate.last_green(REPO, gh), "c" * 40)  # ci.yml's own question is as it was
         self.assertIn("/actions/workflows/ci.yml/", asked[1][1])

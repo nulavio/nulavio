@@ -16,8 +16,8 @@ name: rehearsal
 #
 # Cost: about an hour of a 16-processor Blacksmith runner, about US$3 a night that builds.
 # A night builds nothing when main is at the last green rehearsal's commit or only Markdown
-# changed since (scripts/ci/rehearsal_needed.py). By hand it always builds, and then only
-# says what it would do to the issue.
+# changed since (scripts/ci/rehearsal_needed.py). By hand it always builds, only says what it
+# would do to the issue, and does not count as a green night.
 # docs/architecture/build.md says which tests run where.
 
 on:

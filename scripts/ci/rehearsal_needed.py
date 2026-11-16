@@ -8,12 +8,14 @@ test builds nothing:
 - every file changed since then is Markdown: the same rule as ci.yml's integration gate
   (needs_integration.py), for the same reason.
 
-The last green rehearsal is the newest successful run of rehearsal.yml on main, by the schedule or
-by hand, read from the Actions API. A night that skipped the build is green too, so by induction its
-commit is as tested as the last night that built. A night that failed is not, so the next night
-builds again even with nothing new: that is how a test that only fails sometimes shows.
-A run started by hand always builds. So does anything that cannot be read: an API or git error, or
-a last green commit that is not an ancestor of HEAD.
+The last green rehearsal is the newest successful scheduled run of rehearsal.yml on main, read from
+the Actions API. A night that skipped the build is green too, so by induction its commit is as tested
+as the last night that built. A night that failed is not, so the next night builds again even with
+nothing new: that is how a test that only fails sometimes shows.
+A run started by hand always builds and is never the baseline: it writes to no issue, so if it
+counted, the night after it would build nothing and an issue left open by a failed night would stay
+open with main green. Anything that cannot be read means a build too: an API or git error, or a last
+green commit that is not an ancestor of HEAD.
 
 Reads EVENT, GITHUB_REPOSITORY and GH_TOKEN from the environment, never from expressions inside the
 workflow script. Prints `build=true|false` and `base=<sha or empty>`.
@@ -30,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import needs_integration as ci
 
 WORKFLOW = "rehearsal.yml"
-EVENTS = ("schedule", "workflow_dispatch")
+EVENTS = ("schedule",)
 
 
 def needed(event: str, base: str | None, head: str | None, changed: list[str] | None) -> bool:
