@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SESSION = re.compile(r"harness\.(?:GeckoProfileSession|Session)\(")
 CLEANUP = re.compile(r"\.cleanup\(\)|add(?:Class)?Cleanup\([^)]*\.cleanup\b")
 
-# Invariant I1 (.github/ai-review/instructions.md): the prefs of a protection. A test may read one; a line that
+# Invariant I1 (REVIEW.md): the prefs of a protection. A test may read one; a line that
 # names one in any other way (a setter, a prefs file, a dictionary of prefs, an argument handed to a script) is
 # looked at as a write, since the name is all that such a line needs to carry. Clearing one is a write too: it
 # drops a value the profile had of its own, and what is left is whatever the default is.

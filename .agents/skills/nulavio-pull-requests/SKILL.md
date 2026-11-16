@@ -46,7 +46,7 @@ disagree, the documents win: fix this file in the same pull request.
 
 1. Read `gh pr diff <n>` at the head commit, not your memory of writing it.
    Check it against the non-negotiables and the invariants in
-   `.github/ai-review/instructions.md`.
+   `REVIEW.md`.
 2. Decide whether a second, independent review is required: a path in
    `.github/CODEOWNERS` (which includes `AGENTS.md` and `CLAUDE.md` anywhere,
    these skills under `.agents/` and `.coderabbit.yaml`), a workflow,

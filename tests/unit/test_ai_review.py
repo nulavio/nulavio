@@ -31,6 +31,7 @@ import verify_claude_code_release as verify_cc  # noqa: E402
 
 WORKFLOW = (ROOT / ".github" / "workflows" / "ai-review.yml").read_text()
 INSTRUCTIONS = (ROOT / ".github" / "ai-review" / "instructions.md").read_text()
+RULES = (ROOT / "REVIEW.md").read_text()
 SCHEMA = json.loads((ROOT / ".github" / "ai-review" / "schema.json").read_text())
 LOCAL_SCRIPT = ROOT / "scripts" / "review" / "ai_review_local.sh"
 HOOK = ROOT / "scripts" / "git-hooks" / "pre-push"
@@ -198,6 +199,7 @@ class WorkflowTest(unittest.TestCase):
         for path in (
             ".github/workflows/ci.yml",
             ".github/ai-review/instructions.md",
+            "REVIEW.md",
             ".gitattributes",
             ".gitleaks.toml",
             ".claude/settings.json",
@@ -475,7 +477,8 @@ class LocalReviewTest(unittest.TestCase):
             "--max-budget-usd 3",
         ):
             self.assertIn(flag, script)
-        self.assertIn("--append-system-prompt-file .github/ai-review/instructions.md", script)
+        self.assertIn('--append-system-prompt-file "$work/instructions.md"', script)
+        self.assertIn('{ cat "$base/.github/ai-review/instructions.md"; echo; cat "$base/REVIEW.md"; }', script)
         self.assertNotIn("eval ", script)
 
     def test_local_script_refuses_bad_arguments_before_doing_anything(self):
@@ -488,10 +491,21 @@ class LocalReviewTest(unittest.TestCase):
 
 class InstructionsTest(unittest.TestCase):
     def test_schema_invariants_match_the_instructions(self):
-        documented = set(re.findall(r"^\*\*(I\d+-[a-z0-9-]+)\.\*\*", INSTRUCTIONS, re.M))
+        documented = set(re.findall(r"^\*\*(I\d+-[a-z0-9-]+)\.\*\*", RULES, re.M))
         enum = set(SCHEMA["properties"]["findings"]["items"]["properties"]["invariant"]["enum"])
         self.assertEqual(enum, documented | {"other"})
         self.assertEqual(len(documented), 12)
+
+    def test_every_reviewer_reads_the_invariants_from_review_md(self):
+        # REVIEW.md holds them once: the API review appends it to its instructions, the local review too, and
+        # OpenCodeReview and CodeRabbit read it by name. The instructions keep only a pointer.
+        self.assertNotRegex(INSTRUCTIONS, r"^\*\*I\d+-")
+        self.assertIn("are in `REVIEW.md` at the root of the repository", INSTRUCTIONS)
+        prompt = ai_review_api.system_prompt()
+        self.assertTrue(prompt.startswith(INSTRUCTIONS.rstrip()))
+        self.assertTrue(prompt.endswith(RULES))
+        self.assertIn("reads it from the base branch, never from the pull request", RULES)
+        self.assertIn('"REVIEW.md"', (ROOT / ".coderabbit.yaml").read_text())
 
     def test_instructions_keep_the_reviewer_advisory_and_suspicious(self):
         for phrase in (
@@ -780,7 +794,7 @@ class PullRequestFlowFilesTest(unittest.TestCase):
         # author's review (#215): pull-requests.md, step 3, sends every CODEOWNERS path to a second one.
         patterns = {line.split()[0] for line in (ROOT / ".github" / "CODEOWNERS").read_text().splitlines()
                     if line.strip() and not line.startswith("#")}  # fmt: skip
-        for pattern in ("AGENTS.md", "CLAUDE.md", "/.agents/", "/.coderabbit.yaml", "/.github/"):
+        for pattern in ("AGENTS.md", "CLAUDE.md", "/.agents/", "/.coderabbit.yaml", "/.github/", "/REVIEW.md"):
             self.assertIn(pattern, patterns)  # no leading slash: an AGENTS.md in any directory
 
 
