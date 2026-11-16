@@ -254,8 +254,9 @@ class WindowUI {
    * #322: with "Esconder o título da página na barra da janela" on, the engine leaves the page's title out of the
    * window's title in every window of this profile, private ones too (its exposeContentTitleInWindow switches): the
    * title bar, the taskbar, Alt+Tab and screen-sharing pickers read the brand, and the profile's name when there is
-   * more than one profile. Turned off (`changed`), the false this wrote is cleared; a value set by hand otherwise, or
-   * one an administrator locked, is left as it is. Every window's title is redrawn at once.
+   * more than one profile. Turned off (`changed`), a false in either engine switch is cleared, so page titles come back
+   * (also when that false had been set by hand in about:config: the switch is the one place that says what is hidden);
+   * a value an administrator locked is never written. Every window's title is redrawn at once.
    */
   #pageTitle(changed) {
     const hide = Services.prefs.getBoolPref(PREF_HIDE_TITLE, false);
