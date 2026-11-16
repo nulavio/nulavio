@@ -30,8 +30,10 @@ const MAX_URL_LENGTH = 2048;
 const SUGGEST_TYPE = "application/x-suggestions+json";
 
 /* Providers Nulavio offers by name. URLs come from each provider's own
-   OpenSearch description (checked 2026-10-25). `firstRun` providers are
-   added to every new profile; the others only when the user asks. */
+   OpenSearch description (checked 2026-10-25; Ecosia, Qwant and Startpage
+   2026-11-16, docs/research/search-providers.md). `firstRun` providers are
+   added to every new profile; the others only when the user asks. Listed to
+   the person by name, alphabetically (#151): this order means nothing. */
 export const PROVIDERS = Object.freeze({
   duckduckgo: Object.freeze({
     name: "DuckDuckGo",
@@ -62,6 +64,34 @@ export const PROVIDERS = Object.freeze({
     suggest: "https://kagisuggest.com/api/autosuggest?q={searchTerms}",
     firstRun: false,
   }),
+  ecosia: Object.freeze({
+    name: "Ecosia",
+    alias: "@ecosia",
+    search: "https://www.ecosia.org/search?q={searchTerms}",
+    suggest: "https://ac.ecosia.org/autocomplete?q={searchTerms}&type=list",
+    firstRun: false,
+  }),
+  qwant: Object.freeze({
+    name: "Qwant",
+    alias: "@qwant",
+    search: "https://www.qwant.com/?q={searchTerms}",
+    suggest: "https://api.qwant.com/v3/suggest/?q={searchTerms}&client=opensearch",
+    firstRun: false,
+  }),
+  startpage: Object.freeze({
+    name: "Startpage",
+    alias: "@startpage",
+    search: "https://www.startpage.com/sp/search?query={searchTerms}",
+    suggest: "https://www.startpage.com/osuggestions?q={searchTerms}",
+    firstRun: false,
+  }),
+});
+
+/* Providers with accounts (#151). Whether this profile is signed in is read from the presence of the provider's
+   session cookie, by name: its value is never read and nothing is sent. The name and the sign-in page are the
+   provider's own (Kagi: help.kagi.com/kagi/privacy/cookies.html, checked 2026-11-16). */
+export const ACCOUNTS = Object.freeze({
+  kagi: Object.freeze({ host: "kagi.com", cookie: "kagi_session", signIn: "https://kagi.com/signin" }),
 });
 
 /** An error the settings page can translate: `code` is stable, `message` is for logs. */
@@ -276,8 +306,58 @@ class NulavioSearchClass {
       separatePrivateDefault:
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.featureGate", false) &&
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.enabled", false),
-      providers: Object.entries(PROVIDERS).map(([key, p]) => ({ key, name: p.name, alias: p.alias })),
+      providers: Object.entries(PROVIDERS)
+        .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      accounts: this.accounts(),
     };
+  }
+
+  /**
+   * #151: whether this profile is signed in to each provider that has accounts, from the presence of its session
+   * cookie in this profile's normal (not private) cookie jar. `signedIn` is null when the cookies could not be read.
+   */
+  accounts() {
+    const result = {};
+    for (const [key, account] of Object.entries(ACCOUNTS)) {
+      let signedIn = null;
+      try {
+        signedIn = Services.cookies.getCookiesFromHost(account.host, {}).some(cookie => cookie.name === account.cookie);
+      } catch (e) {
+        console.error(`Nulavio Search: cookies of ${account.host}`, e);
+      }
+      result[key] = { signedIn, signIn: account.signIn, host: account.host };
+    }
+    return result;
+  }
+
+  /**
+   * #151: one engine becomes this profile's search in one step. Either `provider`, a curated key (added when the
+   * profile does not have it), or `id`, an engine already in the list (a SearXNG instance, a custom engine, an
+   * OpenSearch one). It becomes the default for normal windows and, unless `privateToo` is false, for private
+   * windows. `suggest` true or false allows or stops sending what is typed to it (the per-provider consent);
+   * left out, the consent stays as it is. Nothing is sent to the provider by choosing it.
+   */
+  async choose({ provider = null, id = null, privateToo = true, suggest = undefined } = {}) {
+    await lazy.SearchService.init();
+    if ((provider === null) === (id === null) || (suggest !== undefined && typeof suggest !== "boolean")) {
+      fail("invalid-choice");
+    }
+    if (provider !== null && !Object.hasOwn(PROVIDERS, provider)) {
+      fail("unknown-provider");
+    }
+    const engine = await this.#engine(provider !== null ? await this.addProvider(provider) : id);
+    if (suggest === true && !engine.supportsResponseType(SUGGEST_TYPE)) {
+      fail("no-suggestions");
+    }
+    await lazy.SearchService.setDefault(engine, lazy.SearchService.CHANGE_REASON.USER);
+    if (privateToo) {
+      await lazy.SearchService.setDefaultPrivate(engine, lazy.SearchService.CHANGE_REASON.USER_PRIVATE_SPLIT);
+    }
+    if (suggest !== undefined) {
+      await this.setSuggestOptIn(engine.id, suggest);
+    }
+    return engine.id;
   }
 
   async #addUserEngine({ name, search, suggest, alias }) {

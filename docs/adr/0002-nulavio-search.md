@@ -51,6 +51,8 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   addOpenSearch({url}) -> id                 // downloads the description once, at the user's request
   remove(id) ; setDefault(id, {private?}) ; setAlias(id, alias)
   setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
+  choose({provider | id, privateToo?, suggest?}) -> id   // #151: add if missing, make default (and private), consent only if asked
+  accounts() -> {kagi: {signedIn, signIn, host}}          // #151: the session cookie's presence, never its value
   onChanged
 Errors are stable codes (needs-https, missing-terms, alias-taken, ...), translated by the page.
 
@@ -59,6 +61,18 @@ Patch 0004 (toolkit/components/search/SearchSuggestionController.sys.mjs):
 ```
 
 Where the consent lives: the upstream switch `browser.search.suggest.enabled` stays the master switch; turning it on in the engine's own Settings counts as consent for the current default engine only (the module adds that engine to the list). The Shell's search settings turn the master switch on with the first provider and off with the last.
+
+## Amendment, 2026-11-16 (#151)
+
+- Ecosia, Qwant and Startpage join Kagi as providers added **on request**, checked against their own OpenSearch
+  descriptions ([search providers](../research/search-providers.md)). The first-run providers and the default are
+  unchanged.
+- Settings › Search starts with one action, "Escolher o provedor de pesquisa deste perfil": every engine and every
+  provider Nulavio knows, by name in alphabetical order, none marked. "Usar" adds the provider when missing and makes
+  it the default, for private windows too unless that box is unticked, and allows its suggestions only when that box
+  is ticked (the consent of point 4).
+- A provider with accounts (Kagi) says whether the profile is signed in, from the presence of its session cookie,
+  and offers its sign-in page.
 
 ## Consequences and risks
 

@@ -191,6 +191,9 @@ nulavio-confirmed-group =
 
 ## Search
 
+nulavio-search-choose-group =
+    .label = Choose this profile's search provider
+    .description = One click on "Use" makes it this profile's search: added to the list if missing, and made the default. The order is alphabetical and none is marked; Nulavio has no partnership with any. Providers with accounts say whether this profile is signed in. A temporary profile forgets the sign-in when it closes.
 nulavio-search-group =
     .label = Suggestions: who receives what you type
     .description = With suggestions on, what you type in the address bar goes to the engine before you search. In Nulavio, only the engines switched on here receive it.

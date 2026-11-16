@@ -280,14 +280,17 @@ class SearchProvidersTest(unittest.TestCase):
 
     def setUp(self):
         self.text = module_text("NulavioSearch.sys.mjs")
-        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export class SearchSettingsError")]
+        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export const ACCOUNTS")]
         self.providers = {
             key: dict(re.findall(r'(\w+): ("[^"]*"|null|true|false)', body))
             for key, body in re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S)
         }
 
     def test_curated_providers(self):
-        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi"})
+        # The first-run three, then the ones offered on request (#151 added Ecosia, Qwant and Startpage, checked
+        # 2026-11-16 in docs/research/search-providers.md).
+        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi", "ecosia", "qwant", "startpage"})
+        self.assertEqual({key for key, p in self.providers.items() if p["firstRun"] == "true"}, {"duckduckgo", "brave", "mojeek"})
         for key, p in self.providers.items():
             with self.subTest(provider=key):
                 self.assertRegex(p["search"], r'^"https://[a-z0-9.-]+/[^"]*\{searchTerms\}')
@@ -304,6 +307,17 @@ class SearchProvidersTest(unittest.TestCase):
 
     def test_no_nulavio_endpoint(self):
         self.assertIsNone(re.search(r"nulavio\.net|nulavio\.(com|org|io)", self.text), "a Nulavio endpoint")
+
+    def test_a_sign_in_is_read_from_a_cookies_name_never_its_value(self):
+        """#151: providers with accounts name their session cookie; the module reads only whether it is there."""
+        block = self.text[self.text.index("export const ACCOUNTS") : self.text.index("export class SearchSettingsError")]
+        accounts = dict(re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S))
+        self.assertEqual(set(accounts), {"kagi"})
+        self.assertIn('cookie: "kagi_session"', accounts["kagi"])
+        self.assertIn('signIn: "https://kagi.com/signin"', accounts["kagi"])
+        body = self.text[self.text.index("  accounts() {") : self.text.index("  async choose(")]
+        self.assertIn("cookie.name === account.cookie", body)
+        self.assertNotIn(".value", body, "a cookie's value is read")
 
     def test_baseline_turns_remote_suggestions_and_trending_off(self):
         baseline = (ROOT / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8")

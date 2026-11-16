@@ -44,6 +44,11 @@ return {
   searxng: shown(el("nulavio-search-searxng-url")) ? el("nulavio-search-searxng-url").value : null,
   opensearch: shown(el("nulavio-search-opensearch-url")) ? el("nulavio-search-opensearch-url").value : null,
   said: bar("nulavio-search-said"), error: bar("nulavio-search-error"),
+  choices: rows("nulavio-search-choose", "nulavio-search-choice").map(row => ({ key: row.dataset.choice, name: row.label,
+    says: row.description, buttons: [...row.querySelectorAll("moz-button")].map(b => [b.dataset.action, b.label]) })),
+  privateToo: shown(el("nulavio-search-choose-privateToo")) ? el("nulavio-search-choose-privateToo").checked : null,
+  suggest: shown(el("nulavio-search-choose-suggest")) ? el("nulavio-search-choose-suggest").checked : null,
+  chose: bar("nulavio-search-choose-said"), choseError: bar("nulavio-search-choose-error"),
 };
 """
 )
@@ -173,6 +178,40 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertEqual(failed["error"], "Não foi possível ler essa descrição.")
         self.assertEqual(failed["opensearch"], "https://example.org/opensearch.xml")
         self.assertEqual(self.m.chrome("return window.__asked;"), ["https://example.org/opensearch.xml"])
+
+    def test_03_a_provider_is_chosen_in_one_step(self):
+        """#151: every engine and every provider Nulavio knows, by name in alphabetical order, none marked; "Usar"
+        makes one the profile's search, for private windows too unless that box is unticked; a provider with accounts
+        says whether the profile is signed in and offers to sign in."""
+        self.open()
+        now = self.seen(lambda n: n["choices"])
+        names = [row["name"] for row in now["choices"]]
+        self.assertEqual(names, sorted(names))
+        self.assertTrue({"Brave Search", "DuckDuckGo", "Ecosia", "Kagi", "Mojeek", "Qwant", "Startpage"} <= set(names), names)
+        self.assertEqual((now["privateToo"], now["suggest"]), (True, False))
+        kagi = next(row for row in now["choices"] if row["name"] == "Kagi")
+        self.assertEqual(
+            kagi["says"],
+            "Ainda não está neste perfil: entra quando você escolher."
+            " Precisa de conta. Este perfil não está conectado em kagi.com.",
+        )
+        self.assertEqual(kagi["buttons"], [["signin", "Entrar"], ["choose", "Usar"]])
+        in_use = [row["name"] for row in now["choices"] if row["says"].startswith("Em uso")]
+        self.assertEqual(len(in_use), 1, now["choices"])
+        # Mojeek for normal windows only: the box unticked, then "Usar".
+        self.m.chrome(CLICK, ["#nulavio-search-choose-privateToo"])
+        self.seen(lambda n: n["privateToo"] is False)
+        mojeek = next(row for row in now["choices"] if row["name"] == "Mojeek")
+        self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{mojeek["key"]}"]'])
+        done = self.seen(lambda n: n["chose"])
+        self.assertEqual(done["chose"], "Mojeek é a pesquisa deste perfil nas janelas normais.")
+        self.assertEqual(next(row for row in done["choices"] if row["name"] == "Mojeek")["says"], "Em uso nas janelas normais.")
+        defaults = self.m.chrome(
+            S + "return S.list().then(list => [list.find(e => e.isDefault).name, list.find(e => e.isDefaultPrivate).name]);"
+        )
+        self.assertEqual(defaults[0], "Mojeek")
+        self.assertNotEqual(defaults[1], "Mojeek")
+        self.assertEqual(self.state()["optIn"], [], "choosing is not consent to send typed text")
 
 
 if __name__ == "__main__":

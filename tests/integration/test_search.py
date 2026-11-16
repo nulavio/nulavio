@@ -67,6 +67,9 @@ SEARCH_HOSTS = (
     "wikipedia.org",
     "kagi.com",
     "kagisuggest.com",
+    "ecosia.org",
+    "qwant.com",
+    "startpage.com",
     "mercadolivre.com.br",
 )
 
@@ -544,6 +547,80 @@ class SearchPrivacyTest(unittest.TestCase):
                 self.assertEqual(alias() or "", stored or "")
         finally:
             self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before or "")
+
+    def test_14_a_provider_is_chosen_in_one_step_and_nothing_reaches_it_before(self):
+        """#151: one call adds the provider when it is missing and makes it the default, for private windows too
+        unless asked otherwise, and sends typed text to it only when that is chosen. Choosing contacts nobody."""
+        self.require_nulavio()
+        before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        normal = next(e[0] for e in before if e[1])
+        private = next(e[0] for e in before if e[2])
+        restore = "await S.setDefault(args[0]); await S.setDefault(args[1], {private: true});"
+        self.addCleanup(self.search, restore, normal, private)
+        self.m.chrome(NET_START)
+        try:
+            # Listed by name, alphabetically, with the ones that have accounts marked.
+            providers = self.search("return (await S.state()).providers.map(p => [p.name, p.account]);")
+            self.assertEqual([name for name, _ in providers], sorted(name for name, _ in providers))
+            self.assertEqual([name for name, account in providers if account], ["Kagi"])
+            # A provider the profile does not have: added, and the default in both kinds of window.
+            qwant = self.search("return S.choose({provider: 'qwant'});")
+            self.addCleanup(self.search, "await S.remove(args[0]);", qwant)
+            listed = self.search("return (await S.list()).find(e => e.id === args[0]);", qwant)
+            seen_as = (listed["name"], listed["alias"], listed["isDefault"], listed["isDefaultPrivate"])
+            self.assertEqual(seen_as, ("Qwant", "@qwant", True, True))
+            self.assertFalse(listed["suggestOptIn"], "choosing a provider is not consent to send it typed text")
+            # One the profile has, for normal windows only, with its suggestions: private windows keep theirs.
+            mojeek = self.search("return (await S.list()).find(e => e.alias === '@mojeek').id;")
+            brave = self.search("return S.choose({provider: 'brave', privateToo: false, suggest: true});")
+            now = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate, e.suggestOptIn]);")
+            self.assertIn([brave, True, False, True], now)
+            self.assertIn([qwant, False, True, False], now)
+            self.assertTrue(self.pref("browser.search.suggest.enabled"))
+            # Chosen again without suggestions: the consent is taken back, and the engine's own switch with it.
+            self.search("return S.choose({id: args[0], privateToo: false, suggest: false});", brave)
+            self.assertEqual(self.pref("nulavio.search.suggest.optin", ""), "")
+            self.assertIs(self.pref("browser.search.suggest.enabled"), False)
+            # An engine of the person's own (a SearXNG instance), chosen by its id.
+            searx = self.search("return S.addSearxng({url: 'https://searx.example.org/'});")
+            self.addCleanup(self.search, "await S.remove(args[0]);", searx)
+            self.assertEqual(self.search("return S.choose({id: args[0]});", searx), searx)
+            both = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+            self.assertIn([searx, True, True], both)
+            # Refused: no target, two targets, an unknown provider, suggestions from one that has none.
+            for body, code in (
+                ("return S.choose({});", "invalid-choice"),
+                ("return S.choose({provider: 'brave', id: args[0]});", "invalid-choice"),
+                ("return S.choose({provider: 'nope'});", "unknown-provider"),
+                ("return S.choose({id: args[1], suggest: true});", "no-suggestions"),
+                ("return S.choose({provider: 'brave', suggest: 'yes'});", "invalid-choice"),
+            ):
+                with self.subTest(code=code, body=body):
+                    self.assertEqual(self.search_error(body, searx, mojeek), code)
+        finally:
+            seen = self.m.chrome(NET_STOP)
+        self.assert_nothing_about(seen, "\u0000", hosts=(*SEARCH_HOSTS, "searx.example.org"))
+
+    def test_15_signed_in_is_read_from_the_session_cookies_name_and_survives_a_restart(self):
+        """#151: whether the profile is signed in to a provider with accounts is the presence of its session cookie
+        (Kagi: kagi_session), never its value. A cookie of another name does not count, and a sign-in kept by the
+        profile is still there after a restart. Stand-in cookies: the tests never sign in anywhere."""
+        self.require_nulavio()
+        add = (
+            "Services.cookies.add('kagi.com', '/', args[0], 'stand-in', true, true, false, Date.now() + 86400000, {},"
+            " Ci.nsICookie.SAMESITE_LAX, Ci.nsICookie.SCHEME_HTTPS); return true;"
+        )
+        signed = "return S.accounts().kagi;"
+        self.addCleanup(self.m.chrome, "Services.cookies.removeCookiesFromExactHost('kagi.com', '{}');")
+        self.assertEqual(self.search(signed), {"signedIn": False, "signIn": "https://kagi.com/signin", "host": "kagi.com"})
+        self.search(add, "kagi_search")  # Kagi's CSRF cookie, set before signing in
+        self.assertFalse(self.search(signed)["signedIn"])
+        self.search(add, "kagi_session")
+        self.assertTrue(self.search(signed)["signedIn"])
+        self.assertTrue(self.search("return (await S.state()).accounts.kagi.signedIn;"))
+        type(self).session.stop()
+        type(self).m = self.m = type(self).session.start()
+        self.assertTrue(harness.wait_until(lambda: self.search(signed)["signedIn"], 15), self.search(signed))
 
 
 if __name__ == "__main__":
