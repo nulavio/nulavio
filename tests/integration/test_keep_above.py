@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import unittest
 
 import harness
@@ -97,7 +98,9 @@ class KeepAboveElsewhereTest(unittest.TestCase):
 class KeepAbovePlasmaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.session = harness.GeckoProfileSession(name="Pessoal", desktop_bus=True)
+        # The throwaway instance is on the desktop's own session bus while it runs: a name of its own, so the engine's
+        # remote service never pairs with a real profile's instance or takes links meant for it.
+        cls.session = harness.GeckoProfileSession(name=f"nulavio-test-{os.getpid()}-{int(time.time())}", desktop_bus=True)
         cls.m = cls.session.start()
 
     @classmethod

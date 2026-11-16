@@ -144,14 +144,18 @@ async function runScript(text) {
 }
 
 async function runScriptNow(text) {
-  const dir = PathUtils.join(PathUtils.profileDir, "nulavio");
-  await IOUtils.makeDirectory(dir, { permissions: 0o700 });
-  await IOUtils.setPermissions(dir, 0o700); // makeDirectory leaves an existing directory's mode as it is
-  // A new name for each run, created by this write and refused if anything is there already (a link included).
-  const name = `${PLUGIN}-${Services.uuid.generateUUID().toString().slice(1, -1)}`;
-  const file = PathUtils.join(dir, `${name}.js`);
-  await IOUtils.writeUTF8(file, text, { mode: "create" });
-  await IOUtils.setPermissions(file, 0o600);
+  // A new directory and a new file for each run, both created here (a link or anything already at either path is
+  // refused), so nothing is written through a path another program prepared.
+  const dir = await IOUtils.createUniqueDirectory(PathUtils.profileDir, PLUGIN, 0o700);
+  const name = PathUtils.filename(dir);
+  const file = PathUtils.join(dir, "script.js");
+  try {
+    await IOUtils.writeUTF8(file, text, { mode: "create" });
+    await IOUtils.setPermissions(file, 0o600);
+  } catch (e) {
+    await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
+    throw e;
+  }
   try {
     const id = (await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "loadScript", "ss", file, name))?.[0];
     if (!Number.isInteger(id) || id < 0) {
@@ -162,7 +166,7 @@ async function runScriptNow(text) {
     }
   } finally {
     await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", name);
-    await IOUtils.remove(file, { ignoreAbsent: true });
+    await IOUtils.remove(dir, { recursive: true, ignoreAbsent: true });
   }
 }
 

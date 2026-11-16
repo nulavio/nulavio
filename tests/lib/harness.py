@@ -765,7 +765,7 @@ class GeckoProfileSession:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
     def start(self) -> Marionette:
-        if self.desktop_bus and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+        if self.desktop_bus and os.environ.get("NULAVIO_TEST_PLASMA") == "1" and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
             # Only for a test that asks the real desktop for something (KWin's "keep above", #170), run by hand
             # on a Plasma session with NULAVIO_TEST_HEADFUL=1: the engine's window and the window manager meet there.
             self.env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
