@@ -170,6 +170,27 @@ class ReleaseManifestTest(unittest.TestCase):
         subprocess.run(["git", "-C", str(self.repo), "tag", "v160.0-0.1", self.base], check=True)
         self.refused("not newer")
 
+    def test_an_upload_is_refused_when_a_newer_release_is_tagged_published_or_drafted(self):
+        check = release_manifest.check_not_older
+        check("v159.0.1-0.1", self.repo)  # nothing else exists
+        check("v159.0.1-0.1", self.repo, ["v159.0.1-0.1", "v159.0.1-0.0.9", "v158.0-0.4", "unrelated"])
+        for newer in ("v159.0.1-0.2", "v159.0.1-0.1.1", "v160.0-0.1"):
+            with self.subTest(draft=newer), self.assertRaises(release_manifest.ManifestError) as caught:
+                check("v159.0.1-0.1", self.repo, [newer])
+            self.assertIn("roll the dnf and APT repositories back", str(caught.exception))
+        subprocess.run(["git", "-C", str(self.repo), "tag", "v159.0.1-0.1", self.base], check=True)
+        check("v159.0.1-0.1", self.repo)  # its own tag: the same release uploaded again
+        subprocess.run(["git", "-C", str(self.repo), "tag", "v159.0.1-0.3", self.base], check=True)
+        with self.assertRaises(release_manifest.ManifestError):
+            check("v159.0.1-0.1", self.repo)
+        self.published("160.0-0.1")
+        with self.assertRaises(release_manifest.ManifestError):
+            check("v159.0.1-0.3", self.repo)
+        with self.assertRaises(release_manifest.ManifestError):
+            check("159.0.1-0.1", self.repo)
+        self.assertEqual(release_manifest.main(["not-older", "v160.0-0.2", "--repo", str(self.repo), "--also", "v160.0-0.1"]), 0)
+        self.assertEqual(release_manifest.main(["not-older", "v160.0-0.2", "--repo", str(self.repo), "--also", "v160.0-0.3"]), 1)
+
     def test_the_portable_archive_is_listed_checked_and_published(self):
         archive = "packages/nulavio-159.0.1-0.1.linux-x86_64.tar.xz"
         (self.out / archive).write_bytes(b"tree")
