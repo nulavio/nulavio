@@ -83,10 +83,11 @@ PREF_WRITERS = {
     "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
     # the engine's per-site fingerprinting list, from the sites' time zone permissions (#79, ADR 0017); and the
     # engine's set without its three accessibility entries while the person's setting says so, with the bar that
-    # offers that setting once (ADR 0018)
+    # offers that setting once (ADR 0018). The per-site list is also handed to the engine again, unchanged, after
+    # the general set changed (#405): two more of each write
     "NulavioFingerprinting.sys.mjs": {
-        "clearUserPref(GRANULAR)": 1,
-        "setStringPref(GRANULAR)": 1,
+        "clearUserPref(GRANULAR)": 3,
+        "setStringPref(GRANULAR)": 3,
         "clearUserPref(OVERRIDES)": 1,
         "setStringPref(OVERRIDES)": 1,
         "clearUserPref(WRITTEN)": 1,
