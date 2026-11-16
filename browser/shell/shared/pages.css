@@ -333,7 +333,11 @@ html[data-page="newtab"]:not([data-painted]) .page {
     /* B-11 (UX6): tighter still, so "Manter …" ends on the first screen at 150 % on 1280 x 800. */
     .layout-choice { gap: var(--nv-space-2); padding-block: var(--nv-space-3); }
     .layout-options { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nv-space-3); }
-    .layout-option__preview { block-size: 2.5rem; inline-size: auto; }
+    /* Three in a row, each option is too narrow for the picture beside its name: where the row is under
+       36rem wide (a 1280 x 800 screen at 150 %) the narrow-column arrangement below set each name one
+       letter per line and made the row 270px tall (#403). The picture stays above the name here. */
+    .layout-option { grid-template-columns: minmax(0, 1fr); align-items: normal; }
+    .layout-option__preview { block-size: 2.5rem; inline-size: auto; grid-row: auto; }
     /* Each hint still describes its radio (aria-describedby), off screen. */
     .layout-option__hint {
       position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden;
