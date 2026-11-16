@@ -6,7 +6,6 @@ and connection; both sides are tabs of the same profile, in the side tab list an
 from __future__ import annotations
 
 import json
-import time
 import unittest
 
 import harness
@@ -166,15 +165,43 @@ class SplitViewTest(unittest.TestCase):
         self.assertIn("split", " ".join(english).lower())
         print(json.dumps({"pt-BR": portuguese, "en-US": english}, ensure_ascii=False))
 
+    def painted_toolbar(self) -> str:
+        """The window's own colour (the first of the frame, the toolbox and the toolbar that is not transparent), read after
+        two animation frames, so the window has painted it."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "const colour = () => [document.documentElement, gNavToolbox, document.getElementById('nav-bar')]"
+                ".map(e => getComputedStyle(e).backgroundColor).find(c => c !== 'rgba(0, 0, 0, 0)') ?? null;"
+                "requestAnimationFrame(() => requestAnimationFrame(() => done(colour())));"
+            )
+        finally:
+            self.m.set_context("content")
+
+    def settled_toolbar(self, unlike: str | None) -> str:
+        """Waits until the toolbar's colour is not `unlike` (the other theme's) and holds over two painted frames."""
+        seen = []
+
+        def settled() -> bool:
+            seen.append(self.painted_toolbar())
+            return len(seen) > 1 and seen[-1] == seen[-2] and seen[-1] != unlike
+
+        self.assertTrue(harness.wait_until(settled, 10), seen[-3:])
+        return seen[-1]
+
     def test_05_captures_in_both_themes(self):
         self.split()
         folder = harness.artifacts_dir() / "split-view"
         folder.mkdir(parents=True, exist_ok=True)
+        light = None
         try:
             for dark in (0, 1):
                 self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
                 self.assertTrue(harness.wait_until(lambda want=bool(dark): self.m.chrome(DARK_NOW) == want, 10))
-                time.sleep(1)  # the media query flips before the window is painted in the new colours
+                # The media query flips before the window is painted in the new colours: wait for the paint.
+                colour = self.settled_toolbar(light if dark else None)
+                light = light or colour
                 self.m.set_context("chrome")
                 try:
                     (folder / f"split-{'dark' if dark else 'light'}.png").write_bytes(self.m.screenshot_png())
