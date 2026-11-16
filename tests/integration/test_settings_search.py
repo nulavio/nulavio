@@ -236,6 +236,8 @@ class SettingsSearchTest(unittest.TestCase):
         pending = "return IOUtils.readJSON(PathUtils.join(args[0], 'nulavio-search-choice.json')).catch(e => e.name);"
         work = self.run_async(create, "Trabalho", {"provider": "qwant"})
         study = self.run_async(create, "Estudo", None)
+        self.assertIsInstance(work, dict, work)
+        self.assertIsInstance(study, dict, study)
         self.assertEqual(self.run_async(pending, work["path"]), {"provider": "qwant", "privateToo": True})
         self.assertEqual(self.run_async(pending, study["path"]), "NotFoundError", "no choice: ADR 0002's default")
         # A provider Nulavio does not offer is refused before any profile is made.

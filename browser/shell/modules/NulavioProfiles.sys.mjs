@@ -20,6 +20,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   PENDING_FILE: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   validatePending: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
+  isLink: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
@@ -99,9 +100,7 @@ function userJs(prefs, title) {
 /** #151: a carried search choice written into a profile's folder: owner-only, atomically, never through a link. */
 async function writeSearchChoice(folder, choice) {
   const path = PathUtils.join(folder, lazy.PENDING_FILE);
-  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
-  file.initWithPath(path);
-  if (file.isSymlink()) {
+  if (lazy.isLink(path)) {
     fail("unsafe-file");
   }
   await IOUtils.writeJSON(path, choice, { tmpPath: `${path}.tmp` });

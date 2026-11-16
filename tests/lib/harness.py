@@ -602,9 +602,8 @@ class Session:
     def profile_dir(self) -> Path:
         return self.home / "data" / "profiles" / self.profile_name
 
-    def prepare(self, setup: bool = True) -> list[str]:
-        if setup:
-            self.nulavio("setup", "--yes", "--profile", self.profile_name, *self.setup_args)
+    def prepare(self) -> list[str]:
+        self.nulavio("setup", "--yes", "--profile", self.profile_name, *self.setup_args)
         dry = self.nulavio("run", "--dry-run", "--profile", self.profile_name, *self.run_args)
         command = dry.stdout.strip().split()
         prefs = dict(TEST_PREFS)
@@ -622,8 +621,8 @@ class Session:
             return str(value)
         return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-    def start(self, setup: bool = True) -> Marionette:
-        command = self.prepare(setup)
+    def start(self) -> Marionette:
+        command = self.prepare()
         command += ["--marionette", "--new-instance"]
         env = dict(self.env)
         # Test-only: Marionette's chrome context (Firefox 159+ reads only this variable).
@@ -666,12 +665,6 @@ class Session:
                 os.killpg(self.process.pid, signal.SIGKILL)
                 self.process.wait(timeout=10)
             self.process = None
-
-    def restart(self) -> Marionette:
-        """The same profile again, as a person closes and opens it: no new setup."""
-        self.stop()
-        (self.profile_dir / "MarionetteActivePort").unlink(missing_ok=True)
-        return self.start(setup=False)
 
     def cleanup(self) -> None:
         self.stop()
