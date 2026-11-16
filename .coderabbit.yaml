@@ -112,8 +112,8 @@ reviews:
         Nulavio is a security-sensitive Linux browser built from Firefox source, with a
         standard-library-only Python launcher, a built-in WebExtension ("Shell"), an Android
         Companion and build and release scripts. The rules reviewers block on are the
-        non-negotiables in CONTRIBUTING.md and the invariants I1 to I12 in
-        .github/ai-review/instructions.md: cite the invariant when a finding breaks one.
+        non-negotiables in CONTRIBUTING.md and the invariants I1 to I12 in REVIEW.md: cite
+        the invariant when a finding breaks one.
 
         Report defects, regressions, privacy problems and security problems. Every finding
         states a concrete scenario (input or state, then the wrong result) and its impact;
@@ -207,7 +207,7 @@ knowledge_base:
     enabled: true
     filePatterns:
       - "CONTRIBUTING.md"
-      - ".github/ai-review/instructions.md"
+      - "REVIEW.md"
       - "docs/process/pull-requests.md"
       - "browser/AGENTS.md"
       - "launcher/AGENTS.md"

@@ -4,7 +4,7 @@ name: ai-review
 # Advisory only: never a required check, never an approval; whoever merges decides.
 #
 # Design (trust boundary TB16 in docs/architecture/trust-boundaries.md):
-# - pull_request_target, so this file, the review instructions and the tool list
+# - pull_request_target, so this file, the review instructions, REVIEW.md and the tool list
 #   always come from main; the pull request cannot rewrite its own reviewer.
 # - Nothing from the pull request is executed. Its head is checked out into a
 #   separate directory only so git can compute the diff, then deleted.

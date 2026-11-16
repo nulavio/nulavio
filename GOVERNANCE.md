@@ -17,7 +17,7 @@ Decisions are made in public, in writing:
 
 Anyone can propose a change or argue against one in the issue or pull request. The maintainer decides what the project is and does: its direction, its ADRs, the risks it accepts. Day-to-day changes are reviewed and merged by the coding agents that work for him ([how](docs/process/pull-requests.md#review-and-merging)), and a proposal that is declined is told why. A decision recorded in an ADR is changed by a new ADR that supersedes it, not by editing the old one.
 
-Some rules are not up for a case-by-case decision: the non-negotiables in [CONTRIBUTING.md](CONTRIBUTING.md#non-negotiables-reviewers-will-block-on-these) and the security invariants reviewers check ([`.github/ai-review/instructions.md`](.github/ai-review/instructions.md)).
+Some rules are not up for a case-by-case decision: the non-negotiables in [CONTRIBUTING.md](CONTRIBUTING.md#non-negotiables-reviewers-will-block-on-these) and the security invariants reviewers check ([`REVIEW.md`](REVIEW.md)).
 
 ## Roles and responsibilities
 
