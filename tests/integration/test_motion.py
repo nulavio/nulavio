@@ -5,7 +5,6 @@ Headless, throwaway profile.
 
 from __future__ import annotations
 
-import time
 import unittest
 
 import harness
@@ -40,8 +39,9 @@ class MotionTest(unittest.TestCase):
         self.m.execute("document.documentElement.removeAttribute('data-painted');")
         hidden = "return getComputedStyle(document.querySelector('.page')).visibility;"
         self.assertEqual(self.m.execute(hidden), "hidden")
-        time.sleep(0.9)
-        self.assertEqual(self.m.execute(hidden), "visible", "the new tab stayed invisible")
+        # Waited for, not slept through: on a busy machine the reveal can start later than its delay (a release
+        # run's whole suite failed here once on a 0.7 s sleep and passed three times alone).
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(hidden) == "visible", 8), "the new tab stayed invisible")
         # 2. A list still loading shows its placeholder rows after 400 ms.
         self.open("settings/settings.html#integrations", "return document.documentElement.dataset.ready === 'true';")
         probe = (
@@ -50,8 +50,8 @@ class MotionTest(unittest.TestCase):
             "return getComputedStyle(ul).visibility;"
         )
         self.assertEqual(self.m.execute(probe), "hidden")
-        time.sleep(0.7)
-        self.assertEqual(self.m.execute("return getComputedStyle(document.getElementById('probe')).visibility;"), "visible")
+        shown = "return getComputedStyle(document.getElementById('probe')).visibility;"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(shown) == "visible", 8), "the placeholder rows never showed")
         # 3. A security moment that is still loading says so after 400 ms.
         self.open("passwords/lookalike.html", "return document.readyState === 'complete';")
         moment = (
@@ -60,9 +60,8 @@ class MotionTest(unittest.TestCase):
             "return getComputedStyle(ctx, '::after').visibility;"
         )
         self.assertEqual(self.m.execute(moment), "hidden")
-        time.sleep(0.7)
         after = "return getComputedStyle(document.querySelector('.moment__context'), '::after').visibility;"
-        self.assertEqual(self.m.execute(after), "visible")
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(after) == "visible", 8), "the loading line never showed")
         self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
     def toggle_sidebar(self):
