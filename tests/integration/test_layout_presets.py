@@ -1222,6 +1222,18 @@ class LayoutPresetsTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "lateral", 10))
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
             self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral"])
+            # With "Abas no topo" the switch goes (Imersivo is not built there). Tab right after that choice lands
+            # on "Manter …", not on a switch about to be hidden, and the focus is still in the card once it applied
+            # (independent review of #404).
+            self.m.execute("document.querySelector('#layout-choice input[value=lateral]').focus();")
+            self.m.chrome(KEY, ["ArrowDown", "ArrowDown", 40])
+            self.m.chrome(KEY, ["Tab", "Tab", 9])
+            self.assertTrue(harness.wait_until(lambda: focused() == "layout-choice-done", timeout=3), focused())
+            self.assertTrue(harness.wait_until(lambda: self.state()["preset"] == "top", 10))
+            self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("top"), 10))
+            self.assertEqual(focused(), "layout-choice-done")
+            self.assertTrue(self.m.execute("return document.getElementById('layout-choice-immersive-row').hidden;"))
+            self.assertEqual(self.m.chrome("return window.nvApplied;"), ["focus", "lateral", "top"])
             # B-2: outside Lateral the card no longer says it started in Lateral and can be kept.
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#layout-choice input[value=top]")})
             self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("top"), 10))
