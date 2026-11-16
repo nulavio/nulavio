@@ -253,6 +253,36 @@ class ContainerTest(StorageCase):
             self.assertIn("err_record_missing", messages, lang)
         self.assertFalse(box.mounted())
 
+    def test_a_refused_unlock_writes_nothing_into_the_volume(self):
+        # #412: the record's directory was made before the record was read, so a mount refused for a
+        # missing record left an empty directory in a volume it was about to refuse.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("user_pref('x', 1);")
+        box.record_generation(vault)
+        shutil.rmtree(box.mountpoint / storage.STATE_DIR)  # the record and its directory are gone
+        box.unmount()
+
+        def listing() -> list[tuple[str, int]]:
+            return sorted((str(path.relative_to(box.cipher)), path.stat().st_size) for path in box.cipher.rglob("*"))
+
+        before = listing()
+        again = Vault.load(box.vault_path)
+        again.unlock_password(PASSWORD)
+        for _ in range(2):  # the refusal holds at the next try, and that try writes nothing either
+            with self.assertRaises(storage.StorageError) as ctx:
+                storage.Container(box.mountpoint).mount(again)
+            self.assertEqual(ctx.exception.code, "record-missing")
+            self.assertFalse(box.mounted())
+            self.assertEqual(listing(), before)
+
+    def test_the_first_mount_of_a_new_volume_still_makes_its_record(self):
+        box, vault = self.new_container()  # init() makes the volume; nothing is mounted yet
+        box.mount(vault)
+        self.assertEqual(json.loads(box.state_path.read_text())["generation"], int(vault.meta["generation"]))
+        self.assertEqual(os.stat(box.mountpoint / storage.STATE_DIR).st_mode & 0o777, 0o700)
+        box.unmount()
+
     def test_a_key_file_saved_before_the_record_was_required_still_opens(self):
         # Key files saved by 160.0-0.5 and earlier have no `recorded`: their volumes stay usable, and
         # their next save adds it.
