@@ -270,7 +270,7 @@ Publication/exact-SHA remote CI and human approval are separate gates. UX3 is
 not complete: D-UX2's safe new-profile adoption/migration and first-run choice
 belong to the next slice; D-UX13, D-UX17, D-UX23, extra sidebar curation,
 Shell/assistant redesign, command palette and split view remain open.
-(Later: D-UX13, D-UX23, the sidebar tools and the assistant (UX5) shipped; D-UX17's title option, the command palette and split view are still open.)
+(Later: D-UX13, D-UX23, the sidebar tools and the assistant (UX5) shipped; D-UX17's title option came with #322 ("Esconder o título da página na barra da janela" in Aparência, through the engine's `privacy.exposeContentTitleInWindow` switches; checked on a dev_sync'd package, not an engine build); the command palette and split view are still open.)
 
 **UX3E — Lateral for new profiles and the first-run choice (locally verified, 2026-11-02).** On base `5a98bd703233` (D-UX2):
 - **New profiles.** A genuinely new profile starts in Lateral, and its first new tab asks once, in pt-BR and en-US, whether to keep it, with the three presets live and synced with Settings.

@@ -229,6 +229,37 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/edit-page":
+            # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
+            # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
+            frame = f"http://localhost:{self.port}/page/frame"
+            page = f"<!doctype html><title>edit-page</title><p id=text>Texto original.</p><iframe id=frame src='{frame}'>"
+            return page.encode(), html, {}
+        if path == "/copy-blocked":
+            # Allow-copy fixture (tests/integration/test_allow_copy.py): a page that cancels copy, cut, paste, the
+            # page menu and selection, and turns selection off, as some banks do; it counts what its handlers saw.
+            # With frame=1 it holds a frame from another site (localhost) that blocks the same way.
+            frame = f"<iframe id=frame src='http://localhost:{self.port}/copy-blocked'></iframe>" if query.get("frame") else ""
+            page = (
+                "<!doctype html><title>copy-blocked</title><style>body { user-select: none; }</style>"
+                "<p id=text>Numero 1234-5678</p><input id=field>"
+                f"{frame}<script>window.seen = [];"
+                "for (const type of ['copy', 'cut', 'paste', 'contextmenu', 'selectstart']) {"
+                "  window.addEventListener(type, e => { seen.push(type); e.preventDefault(); }, true);"
+                "  document.addEventListener(type, e => { seen.push(type); e.preventDefault(); });"
+                "}"
+                "document.oncopy = document.onpaste = document.oncontextmenu = () => false;</script>"
+            )
+            return page.encode(), html, {}
+        if path == "/web-editor":
+            # The other side of the allow-copy fixture: an editor that handles paste itself, as web editors do.
+            page = (
+                "<!doctype html><title>web-editor</title><div id=editor contenteditable>x</div>"
+                "<script>window.seen = []; document.getElementById('editor').addEventListener('paste', e => {"
+                "  seen.push('paste'); e.preventDefault();"
+                "  e.target.textContent = 'editor:' + e.clipboardData.getData('text/plain'); });</script>"
+            )
+            return page.encode(), html, {}
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.

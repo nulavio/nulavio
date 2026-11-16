@@ -21,6 +21,7 @@ export const TYPES = Object.freeze([
   "trackingprotection-pb", // tracking protection off (private windows, this session)
   "https-only-load-insecure", // HTTPS-Only off
   "nulavio-timezone", // pages read the system's time zone, not UTC (NulavioFingerprinting.TIME_ZONE)
+  "nulavio-allow-copy", // the site's pages cannot cancel copy, paste or the page menu (NulavioAllowCopy, #160)
   "cookie", // cookies always allowed, blocked or kept for the session
   "install", // may offer to install add-ons
   "popup", // pop-ups allowed
