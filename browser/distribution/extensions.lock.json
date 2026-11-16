@@ -129,6 +129,51 @@
         "webRequest",
         "webRequestBlocking"
       ]
+    },
+    {
+      "key": "kagi-privacy-pass",
+      "id": "privacypass@kagi.com",
+      "name": "Kagi Privacy Pass",
+      "role": "search-provider",
+      "default_install": false,
+      "version": "1.0.13",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5076327/kagi_privacy_pass-1.0.13.xpi",
+      "sha256": "74cfe0ed0171371934ca061be030f66800b2f3e367c9553d771cfabfad8b61af",
+      "size": 224117,
+      "license": "MIT",
+      "homepage": "https://github.com/kagisearch/privacypass-extension",
+      "reviewed_permissions": [
+        "*://*.kagi.com/*",
+        "*://*.kagi2pv5bdcxxqla5itjzje2cgdccuwept5ub6patvmvn3qgmgjd6vid.onion/*",
+        "alarms",
+        "cookies",
+        "declarativeNetRequestWithHostAccess",
+        "storage",
+        "webRequest",
+        "webRequestBlocking"
+      ]
+    },
+    {
+      "key": "kagi-search",
+      "id": "search@kagi.com",
+      "name": "Kagi Search for Firefox",
+      "role": "search-provider",
+      "default_install": false,
+      "version": "0.7.8",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5244301/kagi_search_for_firefox-0.7.8.xpi",
+      "sha256": "8ef7beb36edecbac778cfb20cb630ce4fb28e67661db0367a06b6726759e9430",
+      "size": 31185,
+      "license": "MIT",
+      "homepage": "https://github.com/kagisearch/browser_extensions",
+      "reviewed_permissions": [
+        "activeTab",
+        "contextMenus",
+        "cookies",
+        "declarativeNetRequestWithHostAccess",
+        "https://*.kagi.com/*",
+        "storage",
+        "webRequest"
+      ]
     }
   ]
 }

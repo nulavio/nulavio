@@ -13,6 +13,9 @@
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  AddonManager: "resource://gre/modules/AddonManager.sys.mjs",
+  ExtensionPermissions: "resource://gre/modules/ExtensionPermissions.sys.mjs",
+  NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   ConfigSearchEngine: "moz-src:///toolkit/components/search/ConfigSearchEngine.sys.mjs",
   SearchService: "moz-src:///toolkit/components/search/SearchService.sys.mjs",
   SearchUtils: "moz-src:///toolkit/components/search/SearchUtils.sys.mjs",
@@ -91,8 +94,19 @@ export const PROVIDERS = Object.freeze({
    session cookie, by name: its value is never read and nothing is sent. The name and the sign-in page are the
    provider's own (Kagi: help.kagi.com/kagi/privacy/cookies.html, checked 2026-11-16). */
 export const ACCOUNTS = Object.freeze({
-  kagi: Object.freeze({ host: "kagi.com", cookie: "kagi_session", signIn: "https://kagi.com/signin" }),
+  kagi: Object.freeze({
+    host: "kagi.com",
+    cookie: "kagi_session",
+    signIn: "https://kagi.com/signin",
+    // #152: what makes it work where the profile is not signed in (private windows, temporary profiles), each
+    // the provider's own extension, pinned (browser/distribution/extensions.lock.json), installed only when the
+    // person asks for it and allowed in private windows. The maintainer's decision of 2026-11-14 on #152:
+    // Privacy Pass, and Kagi's extension with its Session Link with a warning; never the token in the address.
+    extensions: Object.freeze(["kagi-privacy-pass", "kagi-search"]),
+  }),
 });
+const EXTENSIONS_URL = "resource://builtin-addons/nulavio-shell/shared/search-extensions.json";
+const PRIVATE_PERMISSION = "internal:privateBrowsingAllowed";
 
 /* #151: a choice made in one profile for another. The Shell writes it into the other profile's folder, and that
    profile's Shell reads it once at its next start, makes that engine its search, and deletes the file. It never
@@ -151,6 +165,12 @@ function isLoopback(hostname) {
  * @param {boolean} [options.requireTerms=true] - Whether {searchTerms} is required.
  * @returns {string} The normalised template.
  */
+/* #152 (ADR 0002, amendment of 2026-11-16): a search address never carries a session. A provider's session token in
+   the address would end up in the engine list, the history, the address bar and anything that copies the address;
+   the provider's own way in (a sign-in, or its extension) is offered instead. The parameters below are the names
+   known to carry one (Kagi's Session Link: `token`) and the common names for the same thing. */
+const SESSION_PARAMS = new Set(["token", "session", "session_token", "sessiontoken", "sessionid", "session_id", "auth_token", "access_token"]);
+
 export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (typeof raw !== "string") {
     fail("invalid-url");
@@ -170,6 +190,11 @@ export function validateTemplate(raw, { requireTerms = true } = {}) {
   }
   if (url.username || url.password) {
     fail("credentials-in-url");
+  }
+  for (const key of [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()]) {
+    if (SESSION_PARAMS.has(key.toLowerCase())) {
+      fail("session-in-template");
+    }
   }
   if (!url.hostname) {
     fail("invalid-url");
@@ -341,6 +366,7 @@ class NulavioSearchClass {
         .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
       accounts: this.accounts(),
+      accountExtensions: await this.accountExtensions().catch(e => (console.error("Nulavio Search: extensions", e), {})),
       carry: await this.carryable().catch(e => (console.error("Nulavio Search: carryable", e), null)),
     };
   }
@@ -361,6 +387,87 @@ class NulavioSearchClass {
       result[key] = { signedIn, signIn: account.signIn, host: account.host };
     }
     return result;
+  }
+
+  /** The pinned extensions, from the Shell's own packaged file (never the network). */
+  async #pinnedExtensions() {
+    try {
+      const data = await new Promise((resolve, reject) => {
+        lazy.NetUtil.asyncFetch({ uri: EXTENSIONS_URL, loadUsingSystemPrincipal: true }, (stream, status) => {
+          if (!Components.isSuccessCode(status)) {
+            reject(new SearchSettingsError("data-missing"));
+            return;
+          }
+          resolve(JSON.parse(lazy.NetUtil.readInputStreamToString(stream, stream.available(), { charset: "UTF-8" })));
+        });
+      });
+      return data.extensions ?? {};
+    } catch (e) {
+      console.error("Nulavio Search: the pinned search extensions could not be read", e);
+      return {};
+    }
+  }
+
+  /**
+   * #152: for each provider with accounts, its own extensions that make it work outside a signed-in profile, and
+   * whether each is installed, on, and allowed in private windows. Read only; nothing is installed here.
+   */
+  async accountExtensions() {
+    const pinned = await this.#pinnedExtensions();
+    const result = {};
+    for (const [provider, account] of Object.entries(ACCOUNTS)) {
+      result[provider] = [];
+      for (const key of account.extensions ?? []) {
+        const pin = pinned[key];
+        if (!pin) {
+          continue;
+        }
+        const addon = await lazy.AddonManager.getAddonByID(pin.id);
+        const permissions = addon ? await lazy.ExtensionPermissions.get(pin.id) : null;
+        result[provider].push({
+          key,
+          name: pin.name,
+          installed: Boolean(addon),
+          active: Boolean(addon?.isActive),
+          inPrivate: Boolean(permissions?.permissions.includes(PRIVATE_PERMISSION)),
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * #152: install one provider's own extension, at the person's request: the pinned file, checked against its
+   * SHA-256 (the engine also checks Mozilla's signature), turned on and allowed in private windows, which is what
+   * it is for. Nothing is installed by any other path, and nothing is bundled.
+   */
+  async installAccountExtension(provider, key) {
+    if (!Object.hasOwn(ACCOUNTS, provider) || !ACCOUNTS[provider].extensions?.includes(key)) {
+      fail("unknown-extension");
+    }
+    const pin = (await this.#pinnedExtensions())[key] ?? fail("unknown-extension");
+    let addon = await lazy.AddonManager.getAddonByID(pin.id);
+    if (!addon) {
+      const install = await lazy.AddonManager.getInstallForURL(pin.url, {
+        hash: `sha256:${pin.sha256}`,
+        name: pin.name,
+        version: pin.version,
+        telemetryInfo: { source: "nulavio-shell" },
+      });
+      addon = await install.install().catch(() => null);
+      if (!addon || addon.id !== pin.id) {
+        fail("install-failed"); // download, hash or signature check failed: nothing changed
+      }
+    }
+    if (!addon.isActive) {
+      await addon.enable();
+    }
+    const permissions = await lazy.ExtensionPermissions.get(pin.id);
+    if (!permissions.permissions.includes(PRIVATE_PERMISSION)) {
+      await lazy.ExtensionPermissions.add(pin.id, { permissions: [PRIVATE_PERMISSION], origins: [] });
+      await addon.reload(); // the engine reads the private-window permission when the extension starts
+    }
+    return (await this.accountExtensions())[provider].find(each => each.key === key);
   }
 
   /**

@@ -74,6 +74,17 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
 - A provider with accounts (Kagi) says whether the profile is signed in, from the presence of its session cookie,
   and offers its sign-in page.
 
+## Amendment, 2026-11-16 (#152): a provider that needs an account, outside a signed-in profile
+
+The maintainer's decision of 2026-11-14 on #152, as built:
+
+- **Any provider with accounts:** its row in Settings › Pesquisa says, before it is chosen, that private windows and temporary profiles will not be signed in, and names the providers that need no account.
+- **Kagi:** two of its own extensions, each offered once the profile has Kagi, installed only on a click, pinned with their SHA-256 in `browser/distribution/extensions.lock.json` (both MIT, from Kagi's repositories), and allowed in private windows, which is what they are for:
+  - **Kagi Privacy Pass** (option a): anonymous tokens that Kagi cannot link to the account or to each other. Not on the Starter plan; no personalisation, lenses or custom bangs; 3,000 tokens a month, made in a normal window ([Kagi](https://help.kagi.com/kagi/privacy/privacy-pass.html), read 2026-11-16).
+  - **Kagi Search for Firefox** (option b), with a warning: its Session Link is a credential and the extension keeps it in the profile; it also brings its own "Kagi" engine. Measured on Firefox 160 (2026-11-16): in a profile that has Nulavio's Kagi, the extension installs and runs, and the engine refuses its engine for the name it already has (`SearchService` "An engine called Kagi already exists"), so Nulavio's stays; in a profile without it, the extension's Kagi joins the list and the default engine does not change.
+  - **Refused (option c):** a search address that carries a session. `validateTemplate` refuses a template with a query or fragment parameter named `token`, `session`, `session_token`, `sessiontoken`, `sessionid`, `session_id`, `auth_token` or `access_token` (error `session-in-template`), which covers Kagi's Session Link and the same idea elsewhere.
+- Nothing is bundled and nothing is installed by any other path.
+
 ## Consequences and risks
 
 | Risk | Mitigation |

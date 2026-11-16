@@ -60,6 +60,18 @@ def providers() -> dict:
     return {"schema": 1, "generated": "scripts/build/make_shell.py", "providers": out}
 
 
+def search_extensions() -> dict:
+    """The search providers' own extensions the Shell may install, only on the person's request (#152): the pinned
+    entries of browser/distribution/extensions.lock.json whose role is "search-provider"."""
+    pins = json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
+    out = {
+        entry["key"]: {k: entry[k] for k in ("id", "name", "version", "url", "sha256", "size")}
+        for entry in pins["extensions"]
+        if entry.get("role") == "search-provider"
+    }
+    return {"schema": 1, "generated": "scripts/build/make_shell.py", "extensions": out}
+
+
 def manifest() -> dict:
     return json.loads((SOURCE / "manifest.json").read_text(encoding="utf-8"))
 
@@ -100,6 +112,7 @@ def assemble(out: Path, privileged: bool = True) -> list[str]:
         (out / relative).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, out / relative)
     (out / "shared" / "providers.json").write_text(json.dumps(providers(), indent=2) + "\n", encoding="utf-8")
+    (out / "shared" / "search-extensions.json").write_text(json.dumps(search_extensions(), indent=2) + "\n", encoding="utf-8")
     if not privileged:
         data = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         for key in PRIVILEGED_KEYS:

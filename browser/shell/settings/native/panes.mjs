@@ -1596,6 +1596,9 @@
         words.push(msg("chooseNotAdded"));
       }
       if (row.account) {
+        // #152: said before the provider is chosen, with the providers that need no account, by name.
+        const free = (search.state.value?.providers ?? []).filter(provider => !provider.account).map(provider => provider.name);
+        words.push(msg("chooseAccountPrivate", free.join(", ")));
         words.push(
           row.account.signedIn === true
             ? msg("chooseSignedIn", row.account.host)
@@ -1761,6 +1764,68 @@
           carryTo(open.map(profile => profile.id));
         } else if (open.some(profile => String(profile.id) === target)) {
           carryTo([Number(target)]);
+        }
+      },
+    });
+    // #152: a provider with accounts outside a signed-in profile (private windows, temporary profiles). Its own
+    // extensions, offered only once the profile has that provider, installed only on a click, allowed in private
+    // windows. Each says what it costs; a session in the search address is refused (validateTemplate).
+    const accountExtensionRows = () => {
+      const state = search.state.value;
+      const have = new Set(enginesNow().map(engine => engine.provider).filter(Boolean));
+      return Object.entries(state?.accountExtensions ?? {})
+        .filter(([provider]) => have.has(provider))
+        .flatMap(([provider, extensions]) => extensions.map(extension => ({ provider, ...extension })));
+    };
+    setting({
+      id: "nulavio-search-account-extensions",
+      setup: chooseSetup,
+      visible: () => search.state.ready && accountExtensionRows().length > 0,
+      getControlConfig(config) {
+        const rows = accountExtensionRows().flatMap(extension => stacked({
+          key: `extension-${extension.key}`,
+          control: "moz-box-item",
+          controlAttrs: {
+            label: extension.name,
+            description: [
+              msg(`accountExtension_${extension.key.replaceAll("-", "_")}`),
+              extension.installed
+                ? msg(extension.active && extension.inPrivate ? "accountExtensionReady" : "accountExtensionNotReady")
+                : "",
+            ].filter(Boolean).join(" "),
+            class: "nulavio-search-account-extension",
+            "data-extension": extension.key,
+          },
+          options:
+            extension.installed && extension.active && extension.inPrivate
+              ? []
+              : [
+                  {
+                    key: `install-${extension.key}`,
+                    control: "moz-button",
+                    slot: "actions",
+                    disabled: chooseBench.state.busy,
+                    controlAttrs: {
+                      label: msg(extension.installed ? "accountExtensionAllow" : "accountExtensionInstall"),
+                      "aria-label": msg("accountExtensionInstallNamed", extension.name),
+                      "data-action": "install",
+                      "data-extension": extension.key,
+                      "data-provider": extension.provider,
+                    },
+                  },
+                ],
+        }));
+        return { ...config, options: rows };
+      },
+      onUserClick(event) {
+        const button = event.target.closest?.('[data-action="install"]');
+        const extension = accountExtensionRows().find(each => each.key === button?.dataset.extension);
+        if (extension) {
+          chooseBench.act(
+            () => shell.NulavioSearch.installAccountExtension(extension.provider, extension.key),
+            msg("accountExtensionDone", extension.name),
+            msg("accountExtensionInstalling", extension.name)
+          );
         }
       },
     });
@@ -2566,6 +2631,11 @@
           { id: "nulavio-search-choose", control: "moz-box-group" },
         ],
       },
+      nulavioSearchAccounts: {
+        l10nId: "nulavio-search-accounts-group",
+        headingLevel: 2,
+        items: [{ id: "nulavio-search-account-extensions", control: "moz-box-group" }],
+      },
       nulavioSearchCarry: {
         l10nId: "nulavio-search-carry-group",
         headingLevel: 2,
@@ -2669,6 +2739,7 @@
         ...config,
         groupIds: [
           "nulavioSearchChoose",
+          "nulavioSearchAccounts",
           "nulavioSearchCarry",
           ...after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
         ],
