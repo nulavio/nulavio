@@ -180,6 +180,8 @@ class PrivacyTestsProbes(unittest.TestCase):
             origins = [f"http://{site}:{cls.port}" for site in SITES]
             m.chrome(PREPARE, [list(LOCAL_ONLY), list(SITES), origins, config["motion"], config["contrast"]])
             cls.patched = bool(m.chrome(HAS_PATCH))
+            # A build of this tree has the patch: without it the audio probe would be skipped, not failed.
+            assert cls.patched or not harness.built_from_this_tree(), "a build of this tree without patch 0012's targets"
             out = {"protected": cls.load_pages(m)}
             with cls.unprotected(m):
                 out["plain"] = cls.load_pages(m)

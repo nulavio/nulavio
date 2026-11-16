@@ -461,6 +461,13 @@ class DistributionTest(unittest.TestCase):
         runner = (ROOT / "scripts" / "release" / "run_integration.sh").read_text()
         self.assertIn("export NULAVIO_REQUIRE_NETWORK=${NULAVIO_REQUIRE_NETWORK:-1}", runner)
         self.assertIn('-e "NULAVIO_REQUIRE_NETWORK=$NULAVIO_REQUIRE_NETWORK"', runner)
+        # Nor does it skip a test of what an engine patch adds: the engine it runs is a build of this tree.
+        self.assertIn("export NULAVIO_BUILT_FROM_TREE=${NULAVIO_BUILT_FROM_TREE:-1}", runner)
+        self.assertIn('-e "NULAVIO_BUILT_FROM_TREE=$NULAVIO_BUILT_FROM_TREE"', runner)
+        harness_text = (ROOT / "tests" / "lib" / "harness.py").read_text()
+        self.assertIn('return os.environ.get("NULAVIO_BUILT_FROM_TREE") == "1"', harness_text)
+        for name in ("test_fingerprinting.py", "test_privacytests.py"):
+            self.assertIn("harness.built_from_this_tree()", (ROOT / "tests" / "integration" / name).read_text())
         module = (ROOT / "tests" / "integration" / "test_content_filter.py").read_text()
         self.assertIn('os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1"', module)
 

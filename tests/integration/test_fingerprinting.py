@@ -350,9 +350,10 @@ class FingerprintingTest(unittest.TestCase):
         self.assertLessEqual(RELIED_ON, engine, "the engine's own set lost a protection Nulavio's docs name")
         self.assertLessEqual(removed, engine, "an override removes something the engine no longer turns on")
         # A name the engine does not know is skipped. Only the two that Nulavio's own patch adds may be unknown,
-        # and only both together (an engine from before the patch).
+        # and only both together (an engine from before the patch), never in a build of this tree.
         unknown = added - set(state["known"])
-        self.assertIn(unknown, (set(), PATCHED_IN), "an override names a target this engine does not have")
+        allowed = (set(),) if harness.built_from_this_tree() else (set(), PATCHED_IN)
+        self.assertIn(unknown, allowed, "an override names a target this engine does not have")
         self.assertEqual(set(state["on"]), (engine - removed) | (added - unknown))
 
     def test_03_canvas_reads_differ_per_site_and_stay_stable_within_one(self):
@@ -604,8 +605,11 @@ class FingerprintingTest(unittest.TestCase):
         )
 
     def patched(self) -> bool:
-        """Whether this engine has Nulavio's patch 0012 (its two targets)."""
-        return set(self.m.chrome(TARGETS)["known"]).issuperset(PATCHED_IN)
+        """Whether this engine has Nulavio's patch 0012 (its two targets). A build of this tree must have it."""
+        has = set(self.m.chrome(TARGETS)["known"]).issuperset(PATCHED_IN)
+        if not has and harness.built_from_this_tree():
+            self.fail(f"this engine is a build of this tree and does not know {sorted(PATCHED_IN)}: patch 0012 is missing")
+        return has
 
     def test_11_rendered_audio_differs_per_site_and_stays_the_same_within_one(self):
         first, other, again = self.measure("127.0.0.1"), self.measure("localhost"), self.measure("127.0.0.1")
@@ -736,8 +740,16 @@ class FingerprintingTest(unittest.TestCase):
             plain = self.measure()["screen"]["size"]
         constant = "1920x1080"
         self.assertNotEqual(plain, constant, "this display has the constant's size: nothing was tested")
-        self.m.chrome("Services.prefs.setBoolPref('dom.disable_open_during_load', false);")  # the pages open pop-ups unasked
-        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('dom.disable_open_during_load');")
+        # The pages open pop-ups unasked: allowed for these two sites alone, as a person would in the address bar.
+        popups = (
+            "for (const origin of Array.from(arguments).slice(1)) {"
+            "  const site = Services.scriptSecurityManager.createContentPrincipalFromOrigin(origin);"
+            "  if (arguments[0]) Services.perms.addFromPrincipal(site, 'popup', Services.perms.ALLOW_ACTION);"
+            "  else Services.perms.removeFromPrincipal(site, 'popup');"
+            "}"
+        )
+        self.m.chrome(popups, [True, one, other])
+        self.addCleanup(self.m.chrome, popups, [False, one, other])
         # A protected page: every document it makes reads the constant.
         protected = documents(one, other)
         self.record("screen-documents", {"protected": protected, "plain": plain})

@@ -688,6 +688,14 @@ class NulavioCallFailed(AssertionError):
         super().__init__(f"nulavio {' '.join(args)} exited with status {done.returncode}; its stderr{cut}:\n{said}")
 
 
+def built_from_this_tree() -> bool:
+    """Whether the engine under test is a build of this tree, with every patch in browser/patches/series
+    (scripts/release/run_integration.sh says so: NULAVIO_BUILT_FROM_TREE=1). A test of what a patch adds must
+    not skip there: a build that lost the patch would pass with nothing checked. A development package (an
+    older engine with this tree's Shell) leaves it unset, and such a test may skip."""
+    return os.environ.get("NULAVIO_BUILT_FROM_TREE") == "1"
+
+
 def nulavio_engine():
     """The Nulavio build (Track B) if that is the engine under test, else None."""
     try:

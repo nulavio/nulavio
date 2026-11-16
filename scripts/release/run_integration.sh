@@ -13,6 +13,9 @@
 # it writes stays the caller's.
 # The network is required: a test that needs it and cannot reach it fails here instead of
 # being skipped (NULAVIO_REQUIRE_NETWORK=1; set it to 0 to get the skips back).
+# The engine is taken for a build of this tree, with every patch in browser/patches/series: a test of
+# what a patch adds fails here when the engine does not have it, instead of being skipped
+# (NULAVIO_BUILT_FROM_TREE=1; set it to 0 for an older engine with this tree's Shell).
 # NULAVIO_TEST_ARTIFACTS and NULAVIO_ASAN_LOG_DIR (AddressSanitizer reports, sets
 # ASAN_OPTIONS) are directories on the host, mounted in.
 set -euo pipefail
@@ -21,6 +24,7 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 install=$(realpath "${1:?usage: run_integration.sh <install-dir> [test-file-pattern]}")
 pattern=${2:-test*.py}
 export NULAVIO_REQUIRE_NETWORK=${NULAVIO_REQUIRE_NETWORK:-1}
+export NULAVIO_BUILT_FROM_TREE=${NULAVIO_BUILT_FROM_TREE:-1}
 [[ -x $install/nulavio ]] || { echo "run_integration: $install has no nulavio executable" >&2; exit 2; }
 asan=
 if [[ -n ${NULAVIO_ASAN_LOG_DIR:-} ]]; then
@@ -40,7 +44,8 @@ image=localhost/nulavio-$name
 podman build -q -t "$image" -f "$repo/ci/containers/$name.Containerfile" "$repo/ci/containers" >/dev/null
 args=(--rm --security-opt label=disable --device /dev/fuse --cap-add SYS_ADMIN
       "--userns=keep-id:uid=1000,gid=1000"
-      -v "$repo:/src:ro" -v "$install:/opt/nulavio-built:ro" -e "NULAVIO_REQUIRE_NETWORK=$NULAVIO_REQUIRE_NETWORK")
+      -v "$repo:/src:ro" -v "$install:/opt/nulavio-built:ro" -e "NULAVIO_REQUIRE_NETWORK=$NULAVIO_REQUIRE_NETWORK"
+      -e "NULAVIO_BUILT_FROM_TREE=$NULAVIO_BUILT_FROM_TREE")
 if [[ -n ${NULAVIO_TEST_ARTIFACTS:-} ]]; then
     mkdir -p "$NULAVIO_TEST_ARTIFACTS"
     args+=(-v "$(realpath "$NULAVIO_TEST_ARTIFACTS"):/artifacts" -e NULAVIO_TEST_ARTIFACTS=/artifacts)
