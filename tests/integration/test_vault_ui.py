@@ -632,6 +632,16 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(sorted(rows), ["password", "recovery-code"])
         self.assertTrue(self.m.execute("return document.getElementById('few').hidden;"))  # two methods: no warning
         self.shoot("methods-idle")
+        # #413: a lost record or key file is not replaced, so the page's "why" text says what a whole backup is.
+        why = self.m.execute(
+            "const d = document.querySelector('details.why'); d.open = true;"
+            "return [...d.querySelectorAll('p')].map(p => p.textContent.trim());"
+        )
+        self.assertEqual(len(why), 2, why)
+        self.assertIn(".vault", why[1])
+        self.assertEqual(why[1], self.m.execute("return browser.i18n.getMessage('methodsBackup');"))
+        self.shoot("methods-why")
+        self.m.execute("document.querySelector('details.why').open = false;")
         # A change without the current secret is refused next to the field, and nothing changes.
         self.click("#add-password")
         self.type_into("new-password", "second pass 22")

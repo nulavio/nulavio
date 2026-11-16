@@ -1079,6 +1079,7 @@
   "unlockWhy": {"message": "Este perfil é protegido: os arquivos dele ficam criptografados no disco enquanto ele está bloqueado. Nada dele é lido, nem um link que pediu para abri-lo, até você desbloquear aqui. O Nulavio não tem chave mestra."},
   "phoneWhy": {"message": "Conectar um celular soma mais um jeito de desbloquear este perfil; a senha e o código de recuperação continuam valendo. Os mesmos 6 dígitos nas duas telas mostram que ninguém mais leu o código."},
   "methodsWhy": {"message": "Cada método guarda a mesma chave do perfil, cifrada de um jeito próprio, então qualquer um deles abre o perfil. O Nulavio não guarda cópia nem tem chave mestra: se todos se perderem, ninguém abre os dados."},
+  "methodsBackup": {"message": "Para fazer backup deste perfil, bloqueie-o e copie a pasta inteira dele, aquela cujo nome termina em .vault: os arquivos cifrados e o arquivo de chaves juntos. Partes copiadas em dias diferentes podem não abrir juntas."},
   "aiRequestWhy": {"message": "Um agente conectado pediu algo que o nível de autonomia dele manda perguntar antes. Nada acontece até você responder; sem resposta, o pedido é negado quando expira."},
   "err_workspace_change": {"message": "Não pela Área de IA: mude isto na sua própria janela do Nulavio. Aqui só dá para parar, pausar ou revogar o agente."},
   "err_provider_auth": {"message": "O provedor recusou a chave de API. O pedido chegou a ele, mas a chave não foi aceita: confira a chave nas Configurações."},

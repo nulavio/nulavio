@@ -195,6 +195,35 @@ class ContainerTest(StorageCase):
         self.assertEqual(ctx.exception.code, "rollback")
         self.assertFalse(box.mounted())
 
+    def test_a_backup_of_the_whole_folder_restored_whole_opens_as_it_was(self):
+        # vault-and-unlock.md, "Backing up a protected profile" (#413): the .vault folder copied with the
+        # profile locked, then put back whole over a profile that went on changing, opens with the
+        # secrets of then and holds the files of then. Nothing outside the folder says it is older.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("then")
+        box.record_generation(vault)
+        box.unmount()
+        backup = self.tmp / "backup.vault"
+        shutil.copytree(box.root, backup, symlinks=True)
+        later = Vault.load(box.vault_path)
+        later.unlock_password(PASSWORD)
+        box.mount(later)
+        code = later.add_recovery_code(FAST)
+        later.save()
+        box.record_generation(later)  # a later generation, in the key file and in the volume
+        (box.mountpoint / "prefs.js").write_text("later")
+        box.unmount()
+        shutil.rmtree(box.root)
+        shutil.copytree(backup, box.root, symlinks=True)
+        restored = Vault.load(box.vault_path)
+        with self.assertRaises(VaultError):
+            restored.unlock_recovery_code(code)  # the backup was made before this code existed
+        restored.unlock_password(PASSWORD)
+        box.mount(restored)
+        self.assertEqual((box.mountpoint / "prefs.js").read_text(), "then")
+        box.unmount()
+
     def test_a_key_file_is_refused_when_its_record_is_missing(self):
         # U-T21: a password removed, then the key file from before put back and the record in the volume
         # removed (writing the volume's files needs no key). Refused, as a rollback is.
