@@ -157,6 +157,8 @@ A protected profile `P` is one folder, `P.vault/`: the encrypted volume (`cipher
   - an older `vault.json` over a newer volume: "the profile's key file is older than the profile" (`rollback`);
   - a volume whose record is missing, with a key file that says there was one: "the record inside the profile … is missing" (`record-missing`). Nothing is opened in either case.
 - **A backup does not replace the secrets.** The restored profile opens with the password, the recovery code or the other methods it had when it was copied. Nulavio has no master key.
+- **A backup keeps the secrets it was made with.** A copy made before an unlock method was removed or replaced still opens with that method's secret, restored whole in Nulavio or outside it, and a new key for the profile does not reach copies made earlier ([R70](../security/residual-risks.md), [U-T33](../security/threat-model-unlock.md)). After removing a lost phone or a code someone else saw, delete the older backups or keep them as safe as that secret.
+- **The computer's login stays on the computer.** "Protect with my computer login" keeps its key in the system keyring (Secret Service), not in the folder. A backup opens with the login only on this computer and while the keyring still holds that key; on another computer, or after the method was removed or the keyring was lost, it opens with the password or the recovery code.
 - **There is no way to make a new record without the old one** (decided for 1.0, #413): that would be the same act someone holding an older key file wants. A profile whose record is lost and that has no backup does not open in Nulavio.
 
 The profile's unlock-methods page says the first point in its "why" text.
