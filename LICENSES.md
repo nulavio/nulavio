@@ -24,7 +24,7 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 | KeePassXC-Browser | 1.10.4.1 | GPL-3.0-only | Downloaded on explicit request |
 | Bitwarden extension | 2026.10.0 | Not declared on AMO. The upstream repo mixes GPL-3.0 and the Bitwarden License | Downloaded on explicit request; **must not be bundled** until clarified |
 | Inter, JetBrains Mono, Noto Sans (fonts) | — | SIL OFL 1.1 | Referenced by CSS only; **not bundled** (system fonts are used if absent) |
-| PrivacyTests.org's fingerprinting probe pages | commit `12e48c75` (2026-11-11) | MIT (Arthur Edelstein and contributors) | **In the source repository only, not in any package.** Copied unchanged into `tests/fixtures/privacytests/` with their `LICENSE`; the integration tests load them from this machine ([#79](https://github.com/nulavio/nulavio/issues/79)) |
+| PrivacyTests.org's fingerprinting probe pages | commit `5e675fa8` (2026-11-16) | MIT (Arthur Edelstein and contributors) | **In the source repository only, not in any package.** Copied unchanged into `tests/fixtures/privacytests/` with their `LICENSE`; the integration tests load them from this machine ([#79](https://github.com/nulavio/nulavio/issues/79)) |
 | ruff (dev tool) | 0.17.2 | MIT | Lint/format in development and CI only; hash-pinned |
 | actionlint, gitleaks, zizmor (dev tools) | 1.7.12, 8.30.1, 1.31.1 | MIT | Security scanners in development and CI only; version and SHA-256 pinned ([code scanning](docs/security/code-scanning.md)) |
 | Opengrep (dev tool) | 1.32.0 | LGPL-2.1 | Runs Nulavio's own rules in development and CI only; version and SHA-256 pinned |
