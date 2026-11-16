@@ -27,6 +27,13 @@ return { open: document.getElementById("contentAreaContextMenu").state === "open
          shown: item ? !item.hidden : false, disabled: item ? item.disabled : true };
 """
 
+# Whether the engine can clean this address yet. Its strip-on-share lists are read a moment after start-up, and a
+# page menu opened before that keeps its clean-link item disabled for as long as it is open.
+CAN_CLEAN = """
+const stripper = Cc["@mozilla.org/url-query-string-stripper;1"].getService(Ci.nsIURLQueryStringStripper);
+try { return stripper.canStripForShare(Services.io.newURI(arguments[0])); } catch (e) { return false; }
+"""
+
 CLIPBOARD = """
 const trans = Cc["@mozilla.org/widget/transferable;1"].createInstance(Ci.nsITransferable);
 trans.init(null);
@@ -61,6 +68,10 @@ class CleanLinksTest(unittest.TestCase):
 
     def test_02_a_clean_link_drops_each_added_parameter_and_keeps_the_pages_own(self):
         self.m.navigate(self.page)
+        # The first 160.0-0.6 release runs opened the menu before the lists were read, once: the item stayed disabled.
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(CAN_CLEAN, [self.page]), 30), "the engine never read its clean-link lists"
+        )
         self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
         self.m.execute(
             "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
