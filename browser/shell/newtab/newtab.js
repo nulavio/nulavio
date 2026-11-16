@@ -546,6 +546,7 @@ const PROVIDER_LINES = {
   "proton-pass": "firstrunProviderProton",
   keepassxc: "firstrunProviderKeepass",
   bitwarden: "firstrunProviderBitwarden",
+  "1password": "firstrunProvider1Password",
 };
 
 async function firstRun() {

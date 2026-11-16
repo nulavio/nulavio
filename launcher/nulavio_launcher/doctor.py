@@ -243,6 +243,53 @@ def check_native_messaging() -> list[Check]:
     return checks
 
 
+# 1Password's desktop app talks only to browsers it knows; any other browser's binary name goes in this file, one per
+# line, written by root (support.1password.com/additional-browsers, read 2026-11-16). Nulavio never writes it (#81,
+# the maintainer's decision of 2026-11-16): doctor says the exact command and the person runs it.
+ONEPASSWORD_ALLOWED = Path("/etc/1password/custom_allowed_browsers")
+ONEPASSWORD_APP = (Path("/opt/1Password/1password"), Path("/usr/bin/1password"))
+# Browsers 1Password recognises by itself (Firefox among them): no step needed for Track A.
+ONEPASSWORD_KNOWN = frozenset({"firefox", "firefox-bin", "firefox-esr"})
+
+
+def check_1password(engine_path: Path | None = None) -> list[Check]:
+    """When 1Password's desktop app is installed and the engine is a browser it does not know (the Nulavio build),
+    whether its binary name is in custom_allowed_browsers, with the command that adds it. Nothing when the app is
+    not installed. Reads only; never writes the file."""
+    app = next((path for path in ONEPASSWORD_APP if path.exists()), None)
+    if app is None:
+        return []
+    if engine_path is None:
+        try:
+            engine_path = engine_mod.find_engine().path
+        except engine_mod.EngineError:
+            return []
+    name = Path(engine_path).name
+    if name in ONEPASSWORD_KNOWN:
+        return [Check("passwords", "1Password desktop app", "ok", f"{app}; it knows the engine ({name}) by itself")]
+    try:
+        allowed = {line.strip() for line in ONEPASSWORD_ALLOWED.read_text(encoding="utf-8").splitlines()}
+    except FileNotFoundError:
+        allowed = set()
+    except OSError as exc:
+        return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
+    if name in allowed:
+        return [Check("passwords", "1Password desktop app", "ok", f"'{name}' is in {ONEPASSWORD_ALLOWED}")]
+    command = f"echo {name} | sudo tee -a {ONEPASSWORD_ALLOWED}"
+    if not ONEPASSWORD_ALLOWED.parent.is_dir():
+        command = f"sudo install -d -m 0755 {ONEPASSWORD_ALLOWED.parent} && {command}"
+    return [
+        Check(
+            "passwords",
+            "1Password desktop app",
+            "info",
+            f"to unlock the 1Password extension with the desktop app, add '{name}' to {ONEPASSWORD_ALLOWED}: "
+            f"`{command}`, then quit 1Password (its menu > Quit) and open it again. Nulavio does not change that file. "
+            "Without it, the extension still works with a sign-in in the browser.",
+        )
+    ]
+
+
 def check_seeds(prof: profile.Profile) -> list[Check]:
     """A default of Nulavio whose value changed since this profile got it (#384): on its way, or kept as the
     person's. A choice is only named when the default moved after it was made; any other choice is just a choice."""
@@ -300,7 +347,15 @@ def check_profiles() -> list[Check]:
 
 
 def run_all() -> list[Check]:
-    return check_engine() + check_platform() + check_media() + check_secrets() + check_native_messaging() + check_profiles()
+    return (
+        check_engine()
+        + check_platform()
+        + check_media()
+        + check_secrets()
+        + check_native_messaging()
+        + check_1password()
+        + check_profiles()
+    )
 
 
 def to_json(checks: list[Check]) -> str:

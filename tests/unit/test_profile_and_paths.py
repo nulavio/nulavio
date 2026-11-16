@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -468,6 +469,45 @@ class ProfileTest(TempHome):
         profile.delete(prof)
         self.assertFalse(prof.path.exists())
         self.assertTrue(paths.profiles_root().exists())
+
+
+class OnePasswordDoctorTest(unittest.TestCase):
+    """#81: doctor says how the 1Password desktop app learns the Nulavio build, and never writes its file."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.app = self.tmp / "opt" / "1password"
+        self.allowed = self.tmp / "etc" / "1password" / "custom_allowed_browsers"
+        for name, value in (("ONEPASSWORD_APP", (self.app,)), ("ONEPASSWORD_ALLOWED", self.allowed)):
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_nothing_without_the_desktop_app(self):
+        self.assertEqual(doctor.check_1password(Path("/usr/lib64/nulavio/nulavio")), [])
+
+    def test_firefox_needs_no_step(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/firefox/firefox"))
+        self.assertEqual(check.status, "ok")
+
+    def test_the_nulavio_build_gets_the_exact_command_and_the_file_is_never_written(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "info")
+        self.assertIn(f"sudo install -d -m 0755 {self.allowed.parent} && echo nulavio | sudo tee -a {self.allowed}", check.detail)
+        self.assertFalse(self.allowed.exists(), "doctor wrote 1Password's file")
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`echo nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_text("librewolf\nnulavio\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "ok")
+        self.assertEqual(self.allowed.read_text(encoding="utf-8"), "librewolf\nnulavio\n")
 
 
 if __name__ == "__main__":

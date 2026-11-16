@@ -25,7 +25,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 const DATA_URL = "resource://builtin-addons/nulavio-shell/shared/providers.json";
-const ORDER = ["builtin", "proton-pass", "keepassxc", "bitwarden"];
+const ORDER = ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"];
 export const PREF_DISMISSED = "nulavio.passwords.lookalikeDismissed";
 // The engine's own permission name (LoginManager.sys.mjs); test_vault_ui checks it still decides.
 const PERMISSION_SAVE_LOGINS = "login-saving";

@@ -47,7 +47,7 @@ return {
 };
 """
 
-PROVIDERS = ("proton-pass", "keepassxc-browser", "bitwarden")
+PROVIDERS = ("proton-pass", "keepassxc-browser", "bitwarden", "1password")
 
 
 @unittest.skipUnless(harness.engine_available(), "no supported Gecko engine installed")
@@ -127,6 +127,10 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
 
     def test_bitwarden(self):
         self.check_provider("bitwarden")
+
+    def test_1password(self):
+        # #81: installs, Mozilla's signature accepted, background running, popup renders; never with an account.
+        self.check_provider("1password")
 
 
 if __name__ == "__main__":
