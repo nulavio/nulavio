@@ -135,15 +135,25 @@ export function script(uuid, on) {
     `for (const w of workspace.windowList()) { if (w.internalId.toString() === "${uuid}") { w.keepAbove = ${on}; } }\n`;
 }
 
+let queue = Promise.resolve(); // one change at a time: two windows never share a script or a plugin name
+
 async function runScript(text) {
+  const run = queue.then(() => runScriptNow(text));
+  queue = run.catch(() => {});
+  return run;
+}
+
+async function runScriptNow(text) {
   const dir = PathUtils.join(PathUtils.profileDir, "nulavio");
   await IOUtils.makeDirectory(dir, { permissions: 0o700 });
-  const file = PathUtils.join(dir, `${PLUGIN}.js`);
-  await IOUtils.writeUTF8(file, text);
+  await IOUtils.setPermissions(dir, 0o700); // makeDirectory leaves an existing directory's mode as it is
+  // A new name for each run, created by this write and refused if anything is there already (a link included).
+  const name = `${PLUGIN}-${Services.uuid.generateUUID().toString().slice(1, -1)}`;
+  const file = PathUtils.join(dir, `${name}.js`);
+  await IOUtils.writeUTF8(file, text, { mode: "create" });
   await IOUtils.setPermissions(file, 0o600);
   try {
-    await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", PLUGIN);
-    const id = (await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "loadScript", "ss", file, PLUGIN))?.[0];
+    const id = (await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "loadScript", "ss", file, name))?.[0];
     if (!Number.isInteger(id) || id < 0) {
       fail("keep-above-failed");
     }
@@ -151,7 +161,7 @@ async function runScript(text) {
       fail("keep-above-failed");
     }
   } finally {
-    await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", PLUGIN);
+    await bus(KWIN, "/Scripting", "org.kde.kwin.Scripting", "unloadScript", "s", name);
     await IOUtils.remove(file, { ignoreAbsent: true });
   }
 }

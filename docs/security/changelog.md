@@ -38,6 +38,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).
 
+**New ways the browser talks to the desktop**:
+
+- "Manter acima das outras janelas" on KDE Plasma (#170): on the person's action, Nulavio asks KWin over the session bus to run a one-line script that keeps that one window above the others. Whatever answers as KWin learns the profile's path and the window's id (R77).
+
 ## Nulavio 160.0-0.4 (Firefox 160.0), published 2026-11-14
 
 A security update of the alpha, with the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.4), [advisory GHSA-j8cq-r5j6-q2x3](https://github.com/nulavio/nulavio/security/advisories/GHSA-j8cq-r5j6-q2x3), [run 43534834214](https://github.com/nulavio/nulavio/actions/runs/43534834214)). The findings came from the LESIS automated code scan; the fixes were prepared in the advisory's private fork and landed in #150 and #178. The release was approved by the maintainer and signed through KMS; the job then installed it in clean Fedora and Ubuntu containers from the site's repository files, with the signature checks on. Drafting the GitHub release failed in the job (#236); the maintainer's token drafted it from the job's own files, after their signed checksums were checked.

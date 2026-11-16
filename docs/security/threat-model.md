@@ -344,6 +344,21 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_release_metadata`, `test_release_metadata_workflow`, `test_release_notes` |
 | Residual | Existing supply-chain and shared-account limits (S13, S19); this automation does not accept or reduce those risks by itself |
 
+### S21 — A program on the session bus posing as KWin (keep above, #170)
+
+| Field | |
+|---|---|
+| Assets | Which pages are open (a window's id and its stacking); the profile's path |
+| Adversary | T-LOCAL: any program of the same user, which can own the name `org.kde.KWin` on the session bus where KWin does not run, or replace KWin |
+| Preconditions | The person uses "Manter acima das outras janelas" or Ctrl+Alt+K |
+| Boundary | TB10 |
+| Impact | The program receives what Nulavio asks KWin: the absolute path of the profile (in `loadScript`'s argument), the random caption used to find the window, and the window's id; it decides whether the menu item is enabled and what state it shows; it can answer falsely about that one window's stacking. It does not receive page content or addresses (the caption is a random mark, not the page's title) |
+| Preventive | Only on the person's action. The script holds only an id checked as a UUID and a boolean, from a new 0600 file in the profile's 0700 directory that is created by that write (refused if anything is at the path) and removed after the run; one change at a time. The window counts only when the answer names this process's id and the random caption |
+| Detective | The state shown is read back from what answers; a false answer is not detected |
+| Limitations | A same-user program can already do much more (S11); this adds no way in, only one more thing it can watch |
+| Tests | `test_keep_above` (elsewhere: refused and said; the script refuses an injected id; on Plasma by hand: KWin's own state read back) |
+| Residual | Low; listed as R77 |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.
