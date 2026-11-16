@@ -53,6 +53,7 @@ nothing.
 |---|---|---|---|
 | Kagi | `kagi_session` | `https://kagi.com/signin` | [Kagi's cookie list](https://help.kagi.com/kagi/privacy/cookies.html) ("Session identifier, which should never be shared"), read 2026-11-16; the sign-in link is the one on `kagi.com/welcome` |
 
-A sign-in is kept by the profile like any other site's cookies: it survives a restart, in an encrypted profile too
-while it is unlocked, and a temporary profile forgets it when it closes. Private windows never have it; what Nulavio
+A sign-in is kept by the profile like any other site's cookies: it survives a restart (`test_search` 15), and a
+temporary profile forgets it when it closes. In an encrypted profile the cookie store is inside the encrypted volume,
+so it should be kept while the profile is unlocked; that is not tested yet (#440). Private windows never have it; what Nulavio
 offers there is #152.
