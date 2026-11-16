@@ -74,6 +74,8 @@ class TimeZoneTest(unittest.TestCase):
             ("clearUserPref", "GRANULAR"),
             ("setStringPref", "OVERRIDES"),
             ("clearUserPref", "OVERRIDES"),
+            ("setStringPref", "WRITTEN"),
+            ("clearUserPref", "WRITTEN"),
             ("setBoolPref", "OFFERED"),
             ("setBoolPref", "OFFERED"),
             ("setBoolPref", "SHARE"),
@@ -127,9 +129,14 @@ class MotionAndContrastTest(unittest.TestCase):
     def test_the_setting_rewrites_the_set_itself_and_only_those_three_entries(self):
         self.assertIn(f"const ACCESSIBILITY = Object.freeze({json.dumps(list(self.ENTRIES))});", MODULE)
         apply = MODULE[MODULE.index("function applyAccessibility(changed) {") : MODULE.index("/** What the system asks for")]
-        # On: from the build's default, so a new build's set is taken in. Off: cleared only when just turned off.
-        self.assertIn('withoutAccessibility(Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""))', apply)
-        self.assertIn("} else if (changed) {\n    Services.prefs.clearUserPref(OVERRIDES);", apply)
+        # On: from the build's default (so a new build's set is taken in), or from the person's own set, which
+        # keeps its other entries. Off: only when just turned off; a person's own set gets the entries back.
+        self.assertIn('const own = user !== null && user !== Services.prefs.getStringPref(WRITTEN, "");', apply)
+        self.assertIn(
+            'withoutAccessibility(own ? user : Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""))', apply
+        )
+        self.assertIn("} else if (!changed) {\n    return;", apply)
+        self.assertIn("next = own ? withAccessibility(user) : null;", apply)
         self.assertIn("if (Services.prefs.prefIsLocked(OVERRIDES)) {", apply)
         self.assertIn('export const SHARE = "nulavio.fingerprinting.shareAccessibility";', MODULE)
         # It relaxes a protection: not one of the personalisation options, which may write none.
@@ -141,6 +148,14 @@ class MotionAndContrastTest(unittest.TestCase):
             '{ id: "nulavio-share-accessibility", l10nId: "nulavio-share-accessibility", control: "moz-toggle" },', protections
         )
         self.assertIn("shell.NulavioFingerprinting.setShareAccessibility(Boolean(value));", panes)
+
+    def test_the_guard_watches_the_setting(self):
+        # A change made to it outside the browser (user.js, a script) is reported at the next start, like a change
+        # to the engine's own fingerprinting prefs. (Review of #380.)
+        guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        watched = guard[guard.index("WATCHED_PREFS = Object.freeze([") : guard.index("]);", guard.index("WATCHED_PREFS"))]
+        self.assertIn('"nulavio.fingerprinting.shareAccessibility",', watched)
+        self.assertIn('"privacy.fingerprintingProtection.",', watched)  # the set it rewrites
 
     def test_the_bar_is_offered_once_and_only_when_the_system_asks(self):
         offer = MODULE[MODULE.index("async function offerAccessibility(win) {") : MODULE.index("let watching = null;")]

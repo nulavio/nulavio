@@ -20,8 +20,10 @@ These settings exist for people who need them. A site that honours reduced motio
 **"Deixar os sites verem minhas preferências de movimento e contraste"**, in Settings › Privacidade e Segurança, with the protections. On, the engine's set is the build's default without those three entries. Everything else in the set stays.
 
 - It is written by `NulavioFingerprinting.sys.mjs`, not by the personalisation options: it relaxes a protection, and those options may write none.
-- On, the set is written again from the build's default at each start, so a later build's default is taken in.
-- Off, the value is cleared at the moment the setting is turned off, and never at a start: a set a person wrote themselves in `about:config` is left alone.
+- The Guard watches it: a change made to it outside the browser is reported at the next start, like a change to the engine's own fingerprinting preferences.
+- On, the three entries are taken out of the build's default set, and again at each start, so a later build's default is taken in.
+- **A set the person wrote themselves** in `about:config` keeps everything else in it: on, it loses the three entries; off, it gets them back. The module tells its own value from the person's by remembering what it last wrote (`nulavio.fingerprinting.overridesWritten`).
+- Off, the module's own value is cleared at the moment the setting is turned off, and never at a start.
 
 ### 3. A bar offers the setting once
 

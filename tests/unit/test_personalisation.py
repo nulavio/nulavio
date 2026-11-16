@@ -89,6 +89,8 @@ PREF_WRITERS = {
         "setStringPref(GRANULAR)": 1,
         "clearUserPref(OVERRIDES)": 1,
         "setStringPref(OVERRIDES)": 1,
+        "clearUserPref(WRITTEN)": 1,
+        "setStringPref(WRITTEN)": 1,
         "setBoolPref(OFFERED)": 2,
         "clearUserPref(SHARE)": 1,
         "setBoolPref(SHARE)": 2,

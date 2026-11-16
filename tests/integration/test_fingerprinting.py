@@ -501,6 +501,23 @@ class FingerprintingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is None, 5), self.m.chrome(user_set))
         self.measure()
         self.assertEqual(self.m.execute(ASKS), [False, False])
+        # A set the person wrote themselves keeps what else is in it (review of #380): on, it loses the three
+        # entries and nothing more; off, it gets them back.
+        own = (
+            self.m.chrome(f"return Services.prefs.getDefaultBranch('').getStringPref('{OVERRIDES_PREF}');")
+            + ",+ScreenOrientation"
+        )
+        self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [own])
+        self.addCleanup(self.m.chrome, clear, [OVERRIDES_PREF, "nulavio.fingerprinting.overridesWritten"])
+        self.share(True)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) != own, 5))
+        self.assertEqual(set(self.m.chrome(user_set).split(",")), want | {"+ScreenOrientation"})
+        self.share(False)
+        self.assertTrue(
+            harness.wait_until(lambda: set((self.m.chrome(user_set) or "").split(",")) == set(own.split(",")), 5),
+            self.m.chrome(user_set),
+        )
+        self.m.chrome(clear, [OVERRIDES_PREF, "nulavio.fingerprinting.overridesWritten"])
         # Settings has the switch, with the protections in Privacidade e Segurança, with its explanation; pressing
         # it is the same setting. (The system's settings are put back first: the page is pictured as most see it.)
         self.m.chrome(clear, list(system))

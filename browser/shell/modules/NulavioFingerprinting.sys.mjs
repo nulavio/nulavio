@@ -21,8 +21,9 @@
 
    Motion and contrast: pages are not told that the system asks for less motion or more contrast (the engine's
    CSSPrefersReducedMotion, CSSPrefersContrast and CSSPrefersReducedTransparency, in the default set; ADR 0018).
-   One setting, "let sites see my motion and contrast preferences", takes those three out again. It rewrites the
-   set itself, not the per-site list: with the motion one in the set the engine also scrolls smoothly whatever
+   One setting, "let sites see my motion and contrast preferences", takes those three out again (and nothing
+   else: a set the person wrote themselves keeps its other entries). It rewrites the set itself, not the
+   per-site list: with the motion one in the set the engine also scrolls smoothly whatever
    the system asks, so that pages cannot tell, and only the set itself undoes that. When the system has either
    preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way.
 
@@ -58,6 +59,9 @@ export const SHARE = "nulavio.fingerprinting.shareAccessibility";
 /** Set once the bar that offers the setting was answered or closed. */
 export const OFFERED = "nulavio.fingerprinting.accessibilityOffered";
 const OVERRIDES = "privacy.fingerprintingProtection.overrides"; // the engine's set, a default of the build
+/** The set this module last wrote there from the build's default: how it tells its own value from a set the
+    person wrote themselves, which it must not replace. */
+const WRITTEN = "nulavio.fingerprinting.overridesWritten";
 const ACCESSIBILITY = Object.freeze(["CSSPrefersReducedMotion", "CSSPrefersContrast", "CSSPrefersReducedTransparency"]);
 const BAR = "nulavio-accessibility-offer";
 
@@ -205,7 +209,7 @@ function decideOpenPages() {
   }
 }
 
-/** The build's set without the three accessibility entries. Pure. */
+/** A set without the three accessibility entries. Pure. */
 export function withoutAccessibility(overrides) {
   return String(overrides ?? "")
     .split(",")
@@ -214,20 +218,43 @@ export function withoutAccessibility(overrides) {
     .join(",");
 }
 
-/** Make the engine's set follow the setting. On: the build's default without the three entries, written again
-    at each start so a new build's default is taken in. Off: the value this wrote is cleared, at the moment the
-    setting is turned off and never at a start, so a set the person wrote themselves is left alone. */
+/** A set with the three accessibility entries turned on again, and whatever else it had. Pure. */
+export function withAccessibility(overrides) {
+  return [withoutAccessibility(overrides), ...ACCESSIBILITY.map(name => `+${name}`)].filter(Boolean).join(",");
+}
+
+/** Make the engine's set follow the setting, and leave alone what else a person put in it.
+
+    On: the three entries are taken out. Of the build's default when the value there is the build's or this
+    module's own (and again at each start, so a later build's default is taken in); of the person's own set
+    when they wrote one, which keeps everything else they chose.
+
+    Off, at the moment the setting is turned off and never at a start: this module's own value is cleared, and
+    a person's own set gets the three entries back. */
 function applyAccessibility(changed) {
   if (Services.prefs.prefIsLocked(OVERRIDES)) {
     return; // a policy decides
   }
+  const user = Services.prefs.prefHasUserValue(OVERRIDES) ? Services.prefs.getStringPref(OVERRIDES, "") : null;
+  const own = user !== null && user !== Services.prefs.getStringPref(WRITTEN, "");
+  let next = user;
   if (Services.prefs.getBoolPref(SHARE, false)) {
-    const shared = withoutAccessibility(Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""));
-    if (Services.prefs.getStringPref(OVERRIDES, "") !== shared) {
-      Services.prefs.setStringPref(OVERRIDES, shared);
-    }
-  } else if (changed) {
+    next = withoutAccessibility(own ? user : Services.prefs.getDefaultBranch("").getStringPref(OVERRIDES, ""));
+  } else if (!changed) {
+    return;
+  } else {
+    next = own ? withAccessibility(user) : null;
+  }
+  if (next === null) {
     Services.prefs.clearUserPref(OVERRIDES);
+  } else if (next !== user) {
+    Services.prefs.setStringPref(OVERRIDES, next);
+  }
+  // Remembered only for a value made from the build's default.
+  if (next !== null && !own) {
+    Services.prefs.setStringPref(WRITTEN, next);
+  } else {
+    Services.prefs.clearUserPref(WRITTEN);
   }
 }
 
