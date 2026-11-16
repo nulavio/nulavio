@@ -21,9 +21,11 @@ Until now Nulavio left the screen's size alone on purpose: the engine's own way 
 Pages read `screen.width` 1920 and `screen.height` 1080 on every computer. The available area is the same size at 0,0, and the `device-width` and `device-height` media queries agree with it.
 
 - **How:** the engine has a per-tab screen size made for automation (`browsingContext.setScreenAreaOverride`). The Shell sets it. No engine patch.
-- **When:** every new tab gets it before it has a page (`NulavioFingerprinting.sys.mjs`). Then each page decides for itself as its window is created, in its own process (`NulavioFingerprintingChild.sys.mjs`). That is the one moment after the page before it is gone and before the new page's first script, so:
+- **When:** each page decides for itself as its window is created, in its own process (`NulavioFingerprintingChild.sys.mjs`). That is the one moment after the page before it is gone and before the new page's first script, so:
   - a page's first script already reads the right size;
   - a protected page keeps the constant until it is replaced, also while a site the person exempted is on its way. An earlier version of this change decided when the request was made, and the page still shown could then read the display's size until the answer came (found in review).
+- **Which pages:** pages of the web, in tabs. An extension's pages (its popup, its background page, its pages in a tab) and the browser's own read the display's size: the engine keeps its fingerprinting protection away from them too, and an extension may place its windows by the screen.
+- **Pages already open** are decided again when the engine's protection is switched on or off, and when the Shell starts.
 - **The window is left alone.** `innerWidth`, `innerHeight` and CSS layout are the window's real size. No margins, no fixed window sizes.
 - **It follows the engine's protection.** It is on while fingerprinting protection is on (the Strict category, Nulavio's default) and off otherwise. A site the person exempts with the shield in the address bar reads the display's size, like the other plain values: the page asks the engine's own record of that exemption, in ordinary and in private windows. Mozilla's remote list of per-site exceptions for single protections does not reach the screen's size, which is not one of the engine's protections.
 - **Why 1920×1080:** it is a size many real desktop displays have, so the value does not stand out the way an odd one would.
@@ -46,12 +48,26 @@ Pages read `screen.width` 1920 and `screen.height` 1080 on every computer. The a
 - **Nulavio's own pages read the same values.** The override is per tab, not per page. Nothing in the Shell uses the screen's size.
 - **Distribution Firefox (Track A)** gets the processor count, which is a preference, and not the screen, which needs the Shell.
 
+## Known limits
+
+The size is kept per tab, by the Shell, and not per document, by the engine. An independent review of the merged change (2026-11-15) traced these in the engine's code; none was run:
+
+1. **A frame from another site in the page that leaves.** When a protected page gives way to an exempted site in the same tab and the same browsing context (the page has an `unload` listener, or both are on one host), a frame of the old page that is in another process can read the display's size in its last moments, after the new page has decided.
+2. **A media query inside an SVG image.** An image document has no tab of its own, so `device-width` there answers with the real display. A page could read it by drawing such an image and reading the result back, where canvas reads allow it.
+3. **A pop-up of an exempted site, on the same origin,** reads the constant: its first, empty document decides before the site's own page takes its place, and that page creates no new window. This fails on the safe side; a remote-desktop site that opens its session in a pop-up gets 1920×1080.
+4. **A frame is not asked.** The tab's top page decides for every frame in it: a frame of an exempted site inside a protected page reads the constant, and a frame inside an exempted page reads the display's. The engine's own protections go by the top page's exemption in the same way.
+5. **Automation.** WebDriver BiDi's screen emulation uses the same per-tab value, and each page load overwrites it.
+6. **Profiles the launcher made before this change** (distribution Firefox, Track A, and the launcher's own profiles on the Nulavio build) keep the set of protections they were seeded with, so they keep the processor tiers: a seeded preference is the person's from then on. The profiles the Nulavio build makes itself take the new default.
+
+Limits 1 to 4 go away with the size decided per document inside the engine (`nsScreen`, `nsMediaFeatures`), which is an engine patch and is tracked in #79 with the audio patch.
+
 ## Checked
 
 - `test_privacytests`: PrivacyTests' own Screen probes on two display sizes, and its processor probe.
 - `test_fingerprinting` 08: the size, the available area and the media query on two sites, from the page's first script; an exempted site reads the display's, also after a protected page in another process; back and forward.
 - `test_fingerprinting` 08b: a protected page that sends the tab to an exempted site that takes 2.5 s to answer reads 1920×1080 the whole time; the exempted site then reads the display's from its first script.
 - `test_fingerprinting` 08c: a private window has the constant, and its own exemption.
+- `test_fingerprinting` 08d: an extension's page in a tab reads the display's size; a page that stays open follows the engine's switch off and on, without a new load.
 - `tests/regression/run_sites.py` on 50 real sites, before and after: see the pull request.
 
 Not checked: a display larger than 1920×1080 (headless runs have a smaller one).

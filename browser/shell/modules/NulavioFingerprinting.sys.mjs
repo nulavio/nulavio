@@ -19,12 +19,17 @@
    it can be removed. From those permissions this module writes the engine's own per-site list
    (privacy.fingerprintingProtection.granularOverrides), which is what the engine reads (ADR 0017).
 
-   The screen is set in two places. Here, every new tab gets the constant when its browsing context is made,
-   before it has any page. And in the page's own process, NulavioFingerprintingChild decides for each page as
-   its window is created: the one moment that is after the page before it and before the new page's first
-   script. */
+   The screen is decided by each page as its window is created, in the page's own process
+   (NulavioFingerprintingChild): the one moment that is after the page before it and before the new page's
+   first script. This module only starts that, and decides again for the pages already open when the Shell
+   starts or when the engine's protection is switched on or off. */
 
-import { SCREEN, protectionOn, setScreen } from "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs";
+import {
+  SCREEN,
+  protectionOn,
+  setScreen,
+  wantsConstant,
+} from "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs";
 
 export { SCREEN };
 
@@ -33,7 +38,8 @@ export const TIME_ZONE = "nulavio-timezone";
 
 const SHELL = "shell@nulavio.net";
 const ACTOR = "NulavioFingerprinting";
-const TOPICS = ["browsing-context-attached", "browser-delayed-startup-finished", "perm-changed"];
+const TOPICS = ["browser-delayed-startup-finished", "perm-changed"];
+const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];
 const GRANULAR = "privacy.fingerprintingProtection.granularOverrides"; // the engine's per-site list (JSON)
 const SHOW_TIME_ZONE = "-JSDateTimeUTC";
 const ROW = "nulavio-trustpanel-timezone";
@@ -168,6 +174,20 @@ function showTimeZoneRow(panel) {
   row.querySelector(`#${ROW}-description`).textContent = t(state.on ? "timeZoneSwitchOn" : "timeZoneSwitchOff");
 }
 
+/** Decide again for every page open in a tab: at the Shell's start, and when the engine's protection is
+    switched on or off (the category changed in Settings), so an open page does not keep what it had. */
+function decideOpenPages() {
+  for (const win of Services.wm.getEnumerator("navigator:browser")) {
+    for (const browser of win.gBrowser?.browsers ?? []) {
+      const context = browser.browsingContext;
+      const page = context?.currentWindowGlobal;
+      if (context && !context.isDiscarded && page) {
+        setScreen(context, wantsConstant(page.documentPrincipal, page.cookieJarSettings, context.usePrivateBrowsing));
+      }
+    }
+  }
+}
+
 let watching = null;
 
 export const NulavioFingerprinting = {
@@ -202,22 +222,25 @@ export const NulavioFingerprinting = {
           if (data === "cleared" || subject?.QueryInterface?.(Ci.nsIPermission).type === TIME_ZONE) {
             sync();
           }
+        } else if (topic === "nsPref:changed") {
+          decideOpenPages();
         } else if (topic === "browser-delayed-startup-finished") {
           attach(subject);
-        } else if (subject.top === subject && subject.isContent && !subject.isDiscarded) {
-          // A new tab, or the tab's new context when a page changes process. Its first page decides for itself.
-          setScreen(subject, protectionOn(subject.usePrivateBrowsing));
         }
       },
     };
     for (const topic of TOPICS) {
       Services.obs.addObserver(watching, topic);
     }
+    for (const pref of SWITCHES) {
+      Services.prefs.addObserver(pref, watching);
+    }
     try {
       ChromeUtils.registerWindowActor(ACTOR, {
         child: {
           esModuleURI: "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs",
-          events: { DOMWindowCreated: {}, pageshow: {} },
+          // Capturing: before the page's own pageshow listeners, for a page taken back from the engine's cache.
+          events: { DOMWindowCreated: {}, pageshow: { capture: true } },
         },
         allFrames: false,
         messageManagerGroups: ["browsers"],
@@ -230,13 +253,8 @@ export const NulavioFingerprinting = {
     sync();
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       attach(win);
-      for (const browser of win.gBrowser?.browsers ?? []) {
-        const context = browser.browsingContext;
-        if (context && !context.isDiscarded) {
-          setScreen(context, protectionOn(context.usePrivateBrowsing));
-        }
-      }
     }
+    decideOpenPages();
   },
 
   /** The switch for the page a tab shows: { site, offered, on }. */
@@ -255,6 +273,9 @@ export const NulavioFingerprinting = {
     }
     for (const topic of TOPICS) {
       Services.obs.removeObserver(watching, topic);
+    }
+    for (const pref of SWITCHES) {
+      Services.prefs.removeObserver(pref, watching);
     }
     for (const win of watching.windows) {
       win.removeEventListener("popupshowing", watching.panelShowing, true);

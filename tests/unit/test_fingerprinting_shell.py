@@ -30,16 +30,27 @@ class ScreenTest(unittest.TestCase):
         parent = (SHELL / "experiments" / "privacy" / "parent.js").read_text(encoding="utf-8")
         start = parent[parent.index("  onStartup() {") : parent.index("  onShutdown(")]
         self.assertIn("this.fingerprinting().watch();", start)
-        # A new tab has the constant before any page; then the page's own process decides, at the two moments a
-        # page comes to be shown: its window created, or the page taken back from the engine's cache.
-        self.assertIn('const TOPICS = ["browsing-context-attached", ', MODULE)
-        self.assertIn("events: { DOMWindowCreated: {}, pageshow: {} },", MODULE)
+        # The page's own process decides, at the two moments a page comes to be shown: its window created, or
+        # the page taken back from the engine's cache (capturing: before the page's own listeners).
+        self.assertIn("events: { DOMWindowCreated: {}, pageshow: { capture: true } },", MODULE)
         self.assertIn("allFrames: false,", MODULE)
+        self.assertIn('messageManagerGroups: ["browsers"],', MODULE)  # tabs only: no extension popup, no sidebar
         self.assertIn('if (event.type === "pageshow" && !event.persisted) {', CHILD)
+        # Nothing gives a tab the constant before it has a page: every context would get it, an extension's too.
+        self.assertNotIn("browsing-context-attached", MODULE)
+        # Pages already open are decided again when the engine's protection is switched on or off.
+        self.assertIn('const SWITCHES = ["privacy.fingerprintingProtection", "privacy.fingerprintingProtection.pbmode"];', MODULE)
+        self.assertIn('} else if (topic === "nsPref:changed") {\n          decideOpenPages();', MODULE)
 
     def test_it_follows_the_engines_switch_and_the_engines_own_word_for_an_exempted_site(self):
-        self.assertIn("exempted = Boolean(this.document.cookieJarSettings?.isOnContentBlockingAllowList);", CHILD)
-        self.assertIn("setScreen(context, protectionOn(context.usePrivateBrowsing) && !exempted);", CHILD)
+        wants = CHILD[CHILD.index("export function wantsConstant(") : CHILD.index("export class NulavioFingerprintingChild")]
+        self.assertIn("if (!protectionOn(isPrivate)) {", wants)
+        self.assertIn("return !cookieJarSettings?.isOnContentBlockingAllowList;", wants)
+        # Not for the browser's own pages or an extension's.
+        self.assertIn('principal?.isSystemPrincipal || principal?.addonPolicy || principal?.schemeIs?.("moz-extension")', wants)
+        self.assertIn(
+            "setScreen(context, wantsConstant(doc.nodePrincipal, doc.cookieJarSettings, context.usePrivateBrowsing));", CHILD
+        )
         # Nothing is taken from a page still shown: no hook on a request that is only on its way.
         for text in (MODULE, CHILD):
             self.assertNotIn("http-on-modify-request", text)
