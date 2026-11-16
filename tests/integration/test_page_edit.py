@@ -138,6 +138,16 @@ class PageEditTest(unittest.TestCase):
         # Next to the engine's "View Page Source".
         self.assertEqual(self.m.chrome(f"return {MENU_ITEM}.nextElementSibling.id;"), "context-viewsource")
 
+    def test_06_closing_the_bar_ends_editing(self):
+        # Review of #385 (CodeRabbit): the bar closed with its own button takes editing with it.
+        self.m.chrome(KEY)
+        self.assertTrue(harness.wait_until(lambda: self.bar() is not None, 10))
+        self.m.chrome(
+            'gBrowser.getNotificationBox(gBrowser.selectedBrowser).getNotificationWithValue("nulavio-page-edit").dismiss();'
+        )
+        self.assertTrue(harness.wait_until(lambda: self.design() == "off", 10), self.design())
+        self.assertIsNone(self.bar())
+
     def test_05_the_browsers_own_pages_are_not_offered(self):
         base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
         self.m.navigate(base + "newtab/newtab.html")

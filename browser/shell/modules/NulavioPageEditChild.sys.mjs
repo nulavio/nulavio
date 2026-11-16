@@ -10,17 +10,23 @@
    brought back from the engine's cache is never editable without the marker the parent shows. */
 
 export class NulavioPageEditChild extends JSWindowActorChild {
+  // Whether this document was made editable here: a site's own editor (its own designMode) is never touched.
+  #ours = false;
+
   receiveMessage(message) {
     if (message.name !== "Set" || this.browsingContext?.top !== this.browsingContext) {
       return false;
     }
     const doc = this.document;
-    doc.designMode = message.data?.on === true ? "on" : "off";
+    const on = message.data?.on === true;
+    doc.designMode = on ? "on" : "off";
+    this.#ours = on && doc.designMode === "on";
     return doc.designMode === "on";
   }
 
   handleEvent(event) {
-    if (event.type === "pagehide" && event.target === this.document && this.document.designMode === "on") {
+    if (event.type === "pagehide" && event.target === this.document && this.#ours) {
+      this.#ours = false;
       this.document.designMode = "off";
     }
   }

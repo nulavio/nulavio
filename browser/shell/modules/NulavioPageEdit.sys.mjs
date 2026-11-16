@@ -74,7 +74,13 @@ async function showBar(win, box, browser) {
       return false; // set() closes the bar
     },
   };
-  await box.appendNotification(BAR, { label: t("pageEditBar"), priority: box.PRIORITY_INFO_MEDIUM }, [stop]);
+  // Closed with its own close button, the bar takes editing with it: the page is never editable without the marker.
+  const closed = event => {
+    if (event === "dismissed") {
+      NulavioPageEdit.set(browser, false).catch(() => {});
+    }
+  };
+  await box.appendNotification(BAR, { label: t("pageEditBar"), priority: box.PRIORITY_INFO_MEDIUM, eventCallback: closed }, [stop]);
 }
 
 const MENU_ITEM = "context-nulavio-edit-page";
