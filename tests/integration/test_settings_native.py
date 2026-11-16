@@ -724,9 +724,9 @@ class NativeSettingsTest(unittest.TestCase):
         )
 
     def test_08_every_pane_in_the_navigation_has_something_to_use_and_its_address_opens_it(self):
-        # #116: a pane shows in the navigation only while it holds something a person can use. Today none is empty
-        # (accounts, the engine's AI controls and Labs were checked by hand on 2026-11-12); this fails when an engine
-        # update brings a pane with nothing to use, so it gets hidden while it is so (ADR 0008, decision on #116).
+        # #116: a pane belongs in the navigation only while it holds something a person can use. Today none is empty
+        # (accounts, the engine's AI controls and Labs were checked by hand on 2026-11-12). This fails when an engine
+        # update brings a pane with nothing to use: then it has to be hidden while it is empty (ADR 0008).
         self.open("about:preferences")
         panes = self.m.chrome(SHOWN_PANES)
         self.assertGreaterEqual(len(panes), len(JOURNEY_NAV), panes)
