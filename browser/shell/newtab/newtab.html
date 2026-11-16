@@ -209,6 +209,12 @@
           <span class="hint layout-option__hint" id="newtab-layout-focus-hint" data-i18n="layoutChoiceFocusHint"></span>
         </label>
       </fieldset>
+      <!-- #240: Imersivo (ADR 0009) is a switch on top of the arrangement, not a fourth arrangement. Offered with the
+           side tab list (Lateral, Foco), where the mode works; the same pref as the switch in Settings. -->
+      <label class="check check--switch layout-immersive" id="layout-choice-immersive-row" hidden>
+        <input type="checkbox" role="switch" id="layout-choice-immersive" data-option="immersive" aria-describedby="layout-choice-immersive-hint">
+        <span><span data-i18n="keyImmersive"></span><span class="hint" id="layout-choice-immersive-hint" data-i18n="layoutChoiceImmersiveHint"></span></span>
+      </label>
       </div>
       <div class="firstrun__do">
         <p class="visually-hidden" id="layout-choice-current" role="status" aria-live="polite" data-i18n="layoutLoading"></p>

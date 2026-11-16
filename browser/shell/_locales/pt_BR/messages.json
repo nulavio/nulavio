@@ -1326,6 +1326,7 @@
   "commandToggleImmersive": {"message": "Ligar ou desligar o modo Imersivo"},
   "layoutImmersiveOn": {"message": "Imersivo ligado. A barra de endereço volta com Ctrl+L."},
   "layoutImmersiveOff": {"message": "Imersivo desligado."},
+  "layoutChoiceImmersiveHint": {"message": "Tira de vista a barra de endereço e as abas; a faixa do topo continua mostrando o perfil e o site. Ctrl+L traz a barra de endereço de volta."},
   "keyImmersive": {"message": "Imersivo"},
   "keyNone": {"message": "Sem tecla"},
   "keysResetTitle": {"message": "Restaurar os atalhos padrão?"},

@@ -1326,6 +1326,7 @@
   "commandToggleImmersive": {"message": "Turn Immersive on or off"},
   "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
   "layoutImmersiveOff": {"message": "Immersive off."},
+  "layoutChoiceImmersiveHint": {"message": "Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. Ctrl+L brings the address bar back."},
   "keyImmersive": {"message": "Immersive"},
   "keyNone": {"message": "No key"},
   "keysResetTitle": {"message": "Restore the default shortcuts?"},
