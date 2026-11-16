@@ -631,6 +631,16 @@ class FingerprintingTest(unittest.TestCase):
         # The same sound on the same site reads the same, in one page and in the next (sites keep working).
         self.assertEqual(first["audio"]["first"], first["audio"]["again"])
         self.assertEqual(first["audio"]["first"], again["audio"]["first"])
+        # It does not lean on the canvas noise: with that taken out of the set, two sites still read different sums
+        # (the engine makes its per-site key only while a canvas noise is on; the patch makes it for this one too).
+        without_canvas = self.m.chrome(TARGETS)["overrides"] + ",-CanvasRandomization"
+        self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [without_canvas])
+        self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
+        self.assertNotIn("CanvasRandomization", self.m.chrome(TARGETS)["on"])
+        alone = [self.measure(host)["audio"]["first"]["sum"] for host in ("127.0.0.1", "localhost")]
+        self.m.chrome(f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
+        self.assertNotEqual(alone[0], alone[1], "without the canvas noise the audio noise was gone")
+        self.assertNotIn(plain["audio"]["first"]["sum"], alone)
         # The noise cannot be heard: the loudest sample moves by less than one part in a thousand.
         self.assertAlmostEqual(
             first["audio"]["first"]["peak"], plain["audio"]["first"]["peak"], delta=plain["audio"]["first"]["peak"] / 1000
@@ -711,7 +721,11 @@ class FingerprintingTest(unittest.TestCase):
         sets = {
             "": False,
             "+ScreenSizeConstant": True,
-            "-EfficientCanvasRandomization, +ScreenSizeConstant ,+DeviceSensors": True,
+            "-EfficientCanvasRandomization,+ScreenSizeConstant,+DeviceSensors": True,
+            # The engine skips no space: with one before the sign it does not know the entry, and neither may we.
+            "-EfficientCanvasRandomization, +ScreenSizeConstant,+DeviceSensors": False,
+            "+ScreenSizeConstant ": False,
+            "ScreenSizeConstant": False,
             "+ScreenSizeConstant,-ScreenSizeConstant": False,
             "-AllTargets,+ScreenSizeConstant": True,
             "+ScreenSizeConstant,-AllTargets": False,
@@ -767,6 +781,17 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(exempted, dict.fromkeys(every[:-1], plain) | {"image": "display"})
         # A frame of the exempted site inside a protected page is not exempted: it reads the constant.
         self.assertEqual(documents(other, one), dict.fromkeys(every[:-1], constant) | {"image": "constant"})
+        # The tab's own screen size is automation's to set (WebDriver BiDi's emulation uses it), and it comes before
+        # the constant. The Shell leaves it alone on the engine's way: it is still there after the next load.
+        self.measure("localhost")
+        tab_size = "gBrowser.selectedBrowser.browsingContext"
+        self.m.chrome(f"{tab_size}.setScreenAreaOverride(800, 600);")
+        try:
+            self.assertEqual(self.measure("localhost")["screen"]["size"], "800x600")
+            self.assertEqual(self.measure("localhost")["screen"]["size"], "800x600")
+        finally:
+            self.m.chrome(f"{tab_size}.resetScreenAreaOverride();")
+        self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
         # A set the person wrote without the target: the engine no longer answers, and the tab's size does, for
         # the pages of the web and not for the exempted site.
         own = ",".join(i for i in self.m.chrome(TARGETS)["overrides"].split(",") if i.strip() != "+ScreenSizeConstant")

@@ -23,6 +23,7 @@ Patch 0012 adds a target to the engine's fingerprinting protection, `AudioRandom
   - the next session reads other values.
 - **Why a factor per sample:** one factor for the whole buffer could be divided out by comparing two samples.
 - **It follows the engine's protection** like the rest of the set: on in the Strict category, off for a site the person exempts with the shield, off for the browser's own pages and for extensions.
+- **It does not depend on the canvas noise.** The engine makes its per-site key only while a canvas noise is on; the patch makes it for the audio noise alone as well, so a set without the canvas entries still has this one.
 
 ### 2. Sound that is played is not touched
 
@@ -32,7 +33,12 @@ The patch changes only the buffer an offline rendering returns. What the person 
 
 - **The change cannot be heard.** One part in ten thousand is about 80 dB below the sound itself. `test_fingerprinting` 11 holds the loudest sample within one part in a thousand of the plain one.
 - **A page that needs exact samples does not get them.** An audio editor that renders offline and compares with a reference bit for bit, or a test suite for audio code, sees the difference. The shield's switch for that site turns it off.
-- **Live audio can still be read.** What a page reads from a context that plays (an `AnalyserNode`, an `AudioWorklet`, a `ScriptProcessorNode`) is not changed. Neither is what a worklet computes inside an offline context before the result is returned, nor the samples `decodeAudioData` returns for a file. Those readings are harder to make stable, and the common probes do not use them. They are a known gap, written in [fingerprinting](../research/fingerprinting.md).
+- **Other ways to read audio are not covered.** The noise is put on the buffer an offline rendering returns, and only there:
+  - a node inside the offline graph hands its samples to script while the rendering runs (an `AnalyserNode`, a `ScriptProcessorNode`, an `AudioWorklet`), before the noise. Those values are as steady as the returned buffer's, so a probe built on them reads the same on every site. The probes this was measured against (PrivacyTests', FingerprintJS's) read the returned buffer;
+  - what a page reads from a context that plays is not changed (harder to make steady, since it depends on timing);
+  - nor are the samples `decodeAudioData` returns for a file.
+
+  They are a known gap, written in [fingerprinting](../research/fingerprinting.md) and tracked in [#406](https://github.com/nulavio/nulavio/issues/406).
 - **A script written against this noise can get around it.** The noise for a buffer comes from the buffer's own samples, so a script that renders the same sound many times at slightly different lengths gets different noise on the same samples each time, and the average comes close to the plain value. The engine's canvas noise has the same limit. The noise is aimed at the probes in use, which render once and read once; it does not stop a tracker that targets Nulavio.
 - **A pause at the end of a long rendering.** The key is made from every sample (so that one known sound does not give away the noise of another), and that pass runs on the page's main thread when the rendering is handed over. See Cost.
 - **A patch to carry.** It touches five engine files (`RFPTargets.inc`, `nsRFPService`, `AudioDestinationNode`, `nsScreen`, `nsMediaFeatures`) and has to be carried across engine updates. Mozilla tracks its own audio protection in its bug 1358149; if the engine gets one, this target goes.

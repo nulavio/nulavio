@@ -91,7 +91,15 @@ class ScreenTest(unittest.TestCase):
         )
         self.assertIn('return known && turnsOn(Services.prefs.getStringPref(OVERRIDES, ""), TARGET);', decides)
         # Then no path gives a tab the constant: not a page's own decision, not the fallback.
-        self.assertIn("setScreen(subject, protectionOn(subject.usePrivateBrowsing) && !engineDecides());", MODULE)
+        self.assertIn("subject.isContent && !subject.isDiscarded && !engineDecides()) {", MODULE)
+        # Nor does a page clear the tab's size at each load: that would undo WebDriver BiDi's screen emulation,
+        # which is the same value (independent review of #402).
+        handle = CHILD[CHILD.index("  handleEvent(event) {") :]
+        self.assertLess(handle.index("if (engineDecides()) {\n      return;"), handle.index("setScreen(context,"))
+        # The set is read as the engine reads it: no space skipped, a sign first.
+        turns = CHILD[CHILD.index("export function turnsOn(") : CHILD.index("/** Whether the engine gives each document")]
+        self.assertNotIn(".trim()", turns)
+        self.assertIn('(item[0] === "+" || item[0] === "-")', turns)
         self.assertEqual(len(re.findall(r"\bsetScreen\(", MODULE)), 2)  # the fallback, and the pages already open
         self.assertIn(
             "setScreen(context, wantsConstant(page.documentPrincipal, page.cookieJarSettings, context.usePrivateBrowsing));",

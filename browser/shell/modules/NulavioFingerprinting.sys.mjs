@@ -387,8 +387,8 @@ export const NulavioFingerprinting = {
       console.error("Nulavio fingerprinting: pages cannot decide their screen size, every new context gets the constant", e);
       watching.fallback = {
         observe(subject) {
-          if (subject.top === subject && subject.isContent && !subject.isDiscarded) {
-            setScreen(subject, protectionOn(subject.usePrivateBrowsing) && !engineDecides());
+          if (subject.top === subject && subject.isContent && !subject.isDiscarded && !engineDecides()) {
+            setScreen(subject, protectionOn(subject.usePrivateBrowsing));
           }
         },
       };

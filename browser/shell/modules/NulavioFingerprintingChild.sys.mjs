@@ -28,12 +28,16 @@ const OVERRIDES = "privacy.fingerprintingProtection.overrides";
 const TARGET = "ScreenSizeConstant"; // Nulavio's engine patch 0012
 let known = null;
 
-/** Whether the set of protections in `overrides` turns `target` on: the last entry that names it, or every
-    target at once, decides, as the engine reads the list. Pure. */
+/** Whether the set of protections in `overrides` turns `target` on, read exactly as the engine reads the list
+    (nsRFPService::CreateOverridesFromText): entries between commas with no space skipped, the first character
+    + or -, the rest the name; the last entry that names the target, or every target at once, decides. An entry
+    the engine would skip (a space before the sign, another first character) is skipped here too: taking it for
+    on would leave the screen to an engine that is not giving it. Pure. */
 export function turnsOn(overrides, target) {
   let on = false;
-  for (const item of String(overrides ?? "").split(",").map(entry => entry.trim())) {
-    if (item.slice(1) === target || item.slice(1) === "AllTargets") {
+  for (const item of String(overrides ?? "").split(",")) {
+    const name = item.slice(1);
+    if ((item[0] === "+" || item[0] === "-") && (name === target || name === "AllTargets")) {
       on = item[0] === "+";
     }
   }
@@ -94,6 +98,12 @@ export class NulavioFingerprintingChild extends JSWindowActorChild {
     }
     const context = this.browsingContext;
     if (!context || context.top !== context) {
+      return;
+    }
+    // The engine answers each document itself: the tab's size is not this module's to set or to clear. It is
+    // also what WebDriver BiDi's screen emulation sets, which a clear at every page load would undo. (Where the
+    // set of protections changes while pages are open, the parent clears what this module had set.)
+    if (engineDecides()) {
       return;
     }
     const doc = this.document;

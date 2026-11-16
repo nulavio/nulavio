@@ -51,7 +51,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 | Date format, language | A wrong language breaks forms and reading. The time zone is no longer left alone: pages read UTC, with a switch per site (ADR 0017) |
 | Window size, zoom | Hiding them means fixed window sizes with margins (letterboxing). The screen's size is no longer left alone (ADR 0016) |
 | Dark mode | It is how a site respects the person's theme. Reduced motion and contrast are no longer left alone: sites are not told them unless the person says so (ADR 0018) |
-| Audio read from a context that plays (an `AnalyserNode`, an `AudioWorklet`) | Engine patch 0012 covers what an offline rendering returns, which is what the common probes read (ADR 0019). Live readings are not changed: they are harder to make stable, and noise there would have to stay out of what the person hears |
+| Audio read inside the graph, or from a context that plays (an `AnalyserNode`, a `ScriptProcessorNode`, an `AudioWorklet`) | Engine patch 0012 covers the buffer an offline rendering returns, which is what the probes it was measured against read (ADR 0019). A node inside an offline graph still hands script the samples without the noise, the same on every site; that is a gap for a later patch. Readings from sound that plays are not changed either: noise there would have to stay out of what the person hears |
 | Speech voices, cameras and microphones (count only, no names before permission) | Hiding them breaks reading aloud and device choice in calls |
 | System font name and size | No protection in the engine outside `privacy.resistFingerprinting` |
 | Keyboard layout | Faking a layout breaks shortcuts in web apps on non-US keyboards |

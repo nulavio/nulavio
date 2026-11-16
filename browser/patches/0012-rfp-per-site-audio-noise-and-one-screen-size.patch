@@ -11,8 +11,12 @@ fingerprinting protection does not cover without full resistFingerprinting:
    the canvas noise already uses and from the samples themselves. Two sites
    read different values; one site reads the same values again for the same
    sound. Every sample gets its own step, so the noise cannot be divided out
-   as one factor. Only offline rendering is covered: what a page reads from a
-   live context (an AnalyserNode, an AudioWorklet) is not changed.
+   as one factor. Only the buffer an offline rendering returns is covered.
+   What a page reads from a context that plays is not changed, and neither
+   is what a node inside the offline graph itself hands to script while it
+   renders (an AnalyserNode, a ScriptProcessorNode, an AudioWorklet): a
+   probe built on those still reads the same on every site. The per-site
+   key is made for this target alone too, without the canvas noise.
 
 2. The screen's size. A new target, ScreenSizeConstant, makes screen.width and
    height, the available area (at 0,0) and the device-width and device-height
@@ -20,7 +24,8 @@ fingerprinting protection does not cover without full resistFingerprinting:
    to. It is decided per document by the engine's own check, so a site the
    person exempts, the browser's own pages and extensions read the real size,
    and a frame or a pop-up is asked for itself. Responsive design mode and
-   WebDriver BiDi's screen emulation come first, as they do today. The
+   WebDriver BiDi's screen emulation come first, as they do today, and a
+   page being printed keeps the paper's size. The
    existing ScreenRect target (the window's inner size as the screen) only
    helps with fixed window sizes, which Nulavio does not use.
 
@@ -105,22 +110,48 @@ bug 1358149; a constant screen is a different trade-off from ScreenRect.
      RefPtr<AudioBuffer> renderedBuffer =
 --- a/layout/style/nsMediaFeatures.cpp
 +++ b/layout/style/nsMediaFeatures.cpp
-@@ -79,6 +79,12 @@
-     }
+@@ -94,6 +94,13 @@
+     return pc->GetPageSize();
    }
  
-+  // Nulavio: one screen size for every computer, as nsScreen says.
++  // Nulavio: one screen size for every computer, as nsScreen says. After the
++  // branch above: a page being printed keeps the paper's size.
 +  if (aDocument.ShouldResistFingerprinting(RFPTarget::ScreenSizeConstant)) {
 +    return CSSPixel::ToAppUnits(CSSIntSize(nsRFPService::kConstantScreenWidth,
 +                                           nsRFPService::kConstantScreenHeight));
 +  }
 +
-   nsPresContext* pc = aDocument.GetPresContext();
-   // NOTE(emilio): We should probably figure out how to return an appropriate
-   // device size here, though in a multi-screen world that makes no sense
+   return pc->DeviceContext()->GetDeviceSurfaceDimensions();
+ }
+ 
 --- a/toolkit/components/resistfingerprinting/nsRFPService.cpp
 +++ b/toolkit/components/resistfingerprinting/nsRFPService.cpp
-@@ -1865,6 +1865,36 @@
+@@ -1343,7 +1343,11 @@
+           RFPTarget::WebGLRandomization) &&
+       !nsContentUtils::ShouldResistFingerprinting(
+           "Checking the target activation globally without local context",
+-          RFPTarget::EfficientCanvasRandomization)) {
++          RFPTarget::EfficientCanvasRandomization) &&
++      // Nulavio: the audio noise uses the same key, also without the canvas's.
++      !nsContentUtils::ShouldResistFingerprinting(
++          "Checking the target activation globally without local context",
++          RFPTarget::AudioRandomization)) {
+     return NS_ERROR_NOT_AVAILABLE;
+   }
+ 
+@@ -1447,7 +1451,10 @@
+       !nsContentUtils::ShouldResistFingerprinting(
+           aChannel, RFPTarget::WebGLRandomization) &&
+       !nsContentUtils::ShouldResistFingerprinting(
+-          aChannel, RFPTarget::EfficientCanvasRandomization)) {
++          aChannel, RFPTarget::EfficientCanvasRandomization) &&
++      // Nulavio: the audio noise uses the same key, also without the canvas's.
++      !nsContentUtils::ShouldResistFingerprinting(
++          aChannel, RFPTarget::AudioRandomization)) {
+     return Nothing();
+   }
+   auto sessionKeyStr = sessionKey.ToString();
+@@ -1865,6 +1872,39 @@
  }
  
  // static
@@ -134,9 +165,12 @@ bug 1358149; a constant screen is a different trade-off from ScreenRect.
 +  // It fails when the site has no randomization key, and then nothing is
 +  // changed.
 +  nsTArray<uint8_t> key;
++  // (The size is a uint32_t there: a rendering of 2^30 samples or more gives
++  // the key its first 4 GiB less one byte, never a wrapped size.)
++  const uint64_t bytes = uint64_t(aLength) * sizeof(float);
 +  nsresult rv = GenerateCanvasKeyFromImageData(
 +      aCookieJarSettings, reinterpret_cast<uint8_t*>(aData),
-+      static_cast<uint32_t>(aLength * sizeof(float)), key);
++      static_cast<uint32_t>(std::min<uint64_t>(bytes, UINT32_MAX)), key);
 +  if (NS_FAILED(rv) || key.Length() < 16) {
 +    return;
 +  }
