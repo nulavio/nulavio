@@ -248,14 +248,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(self.publish.index('tar -C "$RUNNER_TEMP" -xf'), check)
         self.assertLess(check, self.publish.index("upload_repo.sh"))
         step = self.publish[self.publish.rindex("- name:", 0, check) : check]
-        # Every release, drafts included, the way the build job reads them; assignments, so a failing gh or curl
-        # fails the step.
+        # Every release, drafts included, the way the build job reads them; an assignment, so a failing gh fails the
+        # step.
         self.assertIn("releases=$(gh api --paginate \"repos/$GITHUB_REPOSITORY/releases\" --jq '.[].tag_name')", step)
         # And what the bucket serves now: a newer upload whose run stopped before its draft has no tag and no draft.
         self.assertIn("served=$(curl -fsSL --proto '=https'", step)
         self.assertIn("sed -n 's/^URIs: //p' site/apt/nulavio.sources", step)
         self.assertIn('also=(--also "v$served")', step)
-        self.assertIn('if [ -z "$served" ]', step)
+        # Without pipefail a failing curl leaves it empty: the form check stops the job then, and on anything that
+        # is not <version>-<release>, which not-older would otherwise drop without a word.
+        self.assertIn('if ! [[ "$served" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
         self.assertNotIn("${{", step.split("run: |", 1)[1])
 
     def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):

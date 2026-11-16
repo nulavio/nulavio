@@ -409,8 +409,10 @@ jobs:
           apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
           served=$(curl -fsSL --proto '=https' --retry 3 "$apt/dists/stable/main/binary-amd64/Packages" |
             awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
-          if [ -z "$served" ]; then
-            echo "::error::the bucket's APT index lists no nulavio version"
+          # Empty when curl failed (this shell has no pipefail) or nulavio is not listed; anything but
+          # <version>-<release> would be dropped as not a release tag, so both stop the job.
+          if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
             exit 1
           fi
           also=(--also "v$served")
