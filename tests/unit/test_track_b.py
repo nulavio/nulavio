@@ -468,6 +468,9 @@ class DistributionTest(unittest.TestCase):
         self.assertIn('return os.environ.get("NULAVIO_BUILT_FROM_TREE") == "1"', harness_text)
         for name in ("test_fingerprinting.py", "test_privacytests.py"):
             self.assertIn("harness.built_from_this_tree()", (ROOT / "tests" / "integration" / name).read_text())
+        # The job that runs a published release's archive with that release's own tests says so too.
+        device = (ROOT / ".github" / "workflows" / "privacytests.yml").read_text()
+        self.assertIn("docker run --rm --security-opt seccomp=unconfined -e NULAVIO_BUILT_FROM_TREE=1 \\\n", device)
         module = (ROOT / "tests" / "integration" / "test_content_filter.py").read_text()
         self.assertIn('os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1"', module)
 
