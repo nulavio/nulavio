@@ -40,6 +40,8 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 - Distribution Firefox with the launcher (Track A): a profile the launcher made before a fingerprinting protection was added did not get it, with no message (#384). The launcher wrote the set of protections into a profile once. It now follows the baseline in a profile where nobody changed it, at the profile's next launch; a set the person wrote themselves is kept, and `nulavio doctor` names it with the value to set ([R78](residual-risks.md)). The Nulavio build was not affected: there the set is the build's default, or the one the Shell writes while "let sites see my motion and contrast preferences" is on, and the launcher leaves both alone.
 
+- A site with "Usar meu fuso horário neste site" on kept the earlier set of fingerprinting protections until the browser restarted, when the set changed while it was open: turning "Deixar os sites verem minhas preferências de movimento e contraste" on or off did not reach that site (#405). The engine works out each site's own set when the per-site list is set, and not again; the Shell now hands it the list again after the general set changes.
+
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).

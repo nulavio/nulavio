@@ -115,6 +115,12 @@ class TimeZoneTest(unittest.TestCase):
         expected = [
             ("setStringPref", "GRANULAR"),
             ("clearUserPref", "GRANULAR"),
+            # #405: the same list handed to the engine again after the general set changed (taken away and put
+            # back, or an empty one set and cleared): the value before and after is the same.
+            ("clearUserPref", "GRANULAR"),
+            ("setStringPref", "GRANULAR"),
+            ("setStringPref", "GRANULAR"),
+            ("clearUserPref", "GRANULAR"),
             ("setStringPref", "OVERRIDES"),
             ("clearUserPref", "OVERRIDES"),
             ("setStringPref", "WRITTEN"),
@@ -129,6 +135,14 @@ class TimeZoneTest(unittest.TestCase):
         # An entry is this module's by its shape; a person's own entries in the list stay.
         self.assertIn('const ours = entry => entry?.thirdPartyDomain === "*" && entry?.overrides === SHOW_TIME_ZONE;', MODULE)
         self.assertIn("if (text === current || Services.prefs.prefIsLocked(GRANULAR)) {", MODULE)
+        again = MODULE[MODULE.index("function handListAgain() {") : MODULE.index("/** For the page a tab shows")]
+        self.assertIn("if (Services.prefs.prefIsLocked(GRANULAR)) {\n    return;", again)
+        self.assertIn("Services.prefs.clearUserPref(GRANULAR);\n    Services.prefs.setStringPref(GRANULAR, current);", again)
+        self.assertIn('Services.prefs.setStringPref(GRANULAR, "[]");\n    Services.prefs.clearUserPref(GRANULAR);', again)
+        # Only after a change of the general set, and after the engine's own observer has it.
+        self.assertIn("if (data === OVERRIDES && !watching.handing) {", MODULE)
+        self.assertIn("Services.tm.dispatchToMainThread(() => {", MODULE)
+        self.assertIn("watching.handing = false;\n                  handListAgain();", MODULE)
 
     def test_the_choice_is_a_site_permission_that_settings_lists_and_a_private_window_cannot_make(self):
         self.assertIn('export const TIME_ZONE = "nulavio-timezone";', MODULE)
