@@ -355,6 +355,18 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("--compose-url-policy=full", self.text)
         self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
 
+    def test_a_bundle_given_by_hand_is_still_checked_before_signing(self):
+        # publish_release.sh keeps NULAVIO_FLATPAK_BUNDLE for a run by hand (#467): the bundle is checked against the
+        # archive, or by the hash a check accepted, before anything is signed, refused in CI without that hash, and
+        # covered by SHA256SUMS.
+        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        signing = script.index('"$repo/scripts/release/sign_repo.sh"')
+        self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), signing)
+        self.assertLess(script.index("check_flatpak_bundle.py"), signing)
+        self.assertIn("GITHUB_ACTIONS", script)
+        self.assertLess(script.index('cp "$bundle" "$stage/github/"'), script.index("sha256sum -- * >SHA256SUMS"))
+        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', script)
+
     def test_the_flatpak_is_started_before_it_is_bundled(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))

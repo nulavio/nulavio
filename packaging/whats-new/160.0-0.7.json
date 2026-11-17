@@ -24,7 +24,7 @@
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
     ],
     "action": [
-      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. Instale o pacote RPM ou APT, traga favoritos e senhas exportando-os no Nulavio do Flatpak, e depois remova o Flatpak. O Flatpak volta pelo Flathub, que atualiza."
+      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. No Fedora ou no Ubuntu, instale o pacote RPM ou APT, exporte favoritos e senhas no Flatpak e importe-os; depois remova o Flatpak. Em outra distribuição, remova-o e espere o Flathub."
     ]
   },
   "en-US": {
@@ -48,7 +48,7 @@
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
     ],
     "action": [
-      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. Install the RPM or APT package, bring your bookmarks and passwords by exporting them in the Flatpak's Nulavio, then remove the Flatpak. The Flatpak returns through Flathub, which updates."
+      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. On Fedora or Ubuntu, install the RPM or APT package, export bookmarks and passwords in the Flatpak and import them, then remove it. Elsewhere, remove it and wait for Flathub."
     ]
   }
 }

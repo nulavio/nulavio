@@ -21,7 +21,6 @@ sys.path.insert(0, str(ROOT / "scripts" / "site"))
 sys.path.insert(0, str(ROOT / "scripts" / "brand"))
 
 import build_site  # noqa: E402
-import flatpak_manifest  # noqa: E402
 import verify_live  # noqa: E402
 from contrast import ratio  # noqa: E402
 
