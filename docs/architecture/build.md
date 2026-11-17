@@ -164,7 +164,7 @@ What this does not do, also in residual risk [R79](../security/residual-risks.md
 - **The record is a statement, not a proof CI makes.** CI and the publish step check that the record names the pinned release; neither can tell that the build and the reading happened. The record is written by the script on the machine that built (the build laptop), and what stands behind it is the review of the pull request that lands it: a second review by the project's rule for a CODEOWNERS path, which is a convention and not something GitHub enforces. To let a reviewer check it against a build of their own, the record carries the SHA-256 of the library that was read, of the mozconfig that built it and of the patch stack.
 - **What a new reading costs.** A change to a patch or to the mozconfig needs one, because the record is bound to them. Whoever changes a patch builds the engine anyway; after a build of the variant, `python3 -I scripts/build/networking_check.py <version> --write` takes about a second, and the record goes into the same pull request.
 
-The first record (Firefox 160.0, 2026-11-16) is the script's reading of a local build with patches 0001 to 0012: 267 052 symbols, 6 874 undefined names, none of the engine's 21 functions.
+The first record (Firefox 160.0, read on 2026-11-17 UTC) is the script's reading of a local build with patches 0001 to 0012: 267 052 symbols, 6 874 undefined names, none of the engine's 21 functions.
 
 ## Google Safe Browsing key
 
