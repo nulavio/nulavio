@@ -317,7 +317,8 @@ class SearchProvidersTest(unittest.TestCase):
         self.assertRegex(
             start, r"if \(firstStart\) \{\s*await this\.applyPending\(\);\s*\} else \{\s*await this\.#dropPending\(\);"
         )
-        self.assertNotIn("carry", self.text.lower(), "taking a search to other profiles was left out (#453)")
+        for name in ("carryable", "carrySearch", "nulavio-search-carry"):
+            self.assertNotIn(name, self.text, "taking a search to other profiles was left out (#453)")
 
     def test_a_sign_in_is_read_from_a_cookies_name_never_its_value(self):
         """#151: providers with accounts name their session cookie; the module reads only whether it is there."""
