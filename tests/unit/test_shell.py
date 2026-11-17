@@ -632,6 +632,18 @@ class PasswordsTest(unittest.TestCase):
                 self.assertTrue(provider["extension"]["url"].startswith("https://addons.mozilla.org/"))
                 self.assertEqual(provider["prefs"]["signon.rememberSignons"], False)
 
+    def test_new_tab_knows_every_provider(self):
+        """The new tab's password status names each external provider (review of #478: it had no 1Password)."""
+        config = json.loads((ROOT / "browser" / "config" / "providers.json").read_text())["providers"]
+        lock = {
+            e["key"]: e["id"]
+            for e in json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())["extensions"]
+        }
+        expected = {lock[p["extension"]] for p in config.values() if p["extension"]}
+        newtab = (SHELL / "newtab" / "newtab.js").read_text(encoding="utf-8")
+        block = newtab[newtab.index("const PROVIDERS = [") : newtab.index("];", newtab.index("const PROVIDERS = ["))]
+        self.assertEqual(set(re.findall(r'\["([^"]+)", "', block)), expected)
+
     def test_lookalike_check_reads_nothing_from_pages(self):
         child = module_text("NulavioLookalikeChild.sys.mjs")
         for forbidden in (".value", "innerText", "textContent", "location", "document.", "form", "fetch(", "keydown"):

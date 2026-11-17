@@ -297,7 +297,8 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
             "1Password desktop app",
             "info",
             f"to unlock the 1Password extension with the desktop app, add '{name}' to {ONEPASSWORD_ALLOWED}: "
-            f"`{command}`, then quit 1Password (its menu > Quit) and open it again. Nulavio does not change that file. "
+            f"`{command}`, then quit 1Password (its menu > Quit) and open it again. The line trusts any program named "
+            f"'{name}', so it is meant for an install root owns (RPM, DEB). Nulavio does not change that file. "
             "Without it, the extension still works with a sign-in in the browser.",
         )
     ]

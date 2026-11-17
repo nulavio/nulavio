@@ -8,11 +8,13 @@ import { wireSettingsLinks } from "../lib/settings.js";
 import { chip, confirmDialog, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
 
 const UBLOCK_ID = "uBlock0@raymondhill.net";
-// Official extensions of the supported credential providers (browser/config/providers.json).
+// Official extensions of the supported credential providers (browser/config/providers.json;
+// tests/unit/test_shell.py keeps the two lists equal).
 const PROVIDERS = [
   ["78272b6fa58f4a1abaac99321d503a20@proton.me", "Proton Pass"],
   ["keepassxc-browser@keepassxc.org", "KeePassXC-Browser"],
   ["{446900e4-71c2-419f-a6a7-df9c091e268b}", "Bitwarden"],
+  ["{d634138d-c276-4fc8-924b-40a0ea21d284}", "1Password"],
 ];
 
 function show(key, text, level = "ok") {
