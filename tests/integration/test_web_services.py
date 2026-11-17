@@ -330,15 +330,26 @@ class WebServicesTest(unittest.TestCase):
         google = [url for url in self.m.chrome(GUARD_SEEN) if urlsplit(url).hostname == "translate.google.com"]
         self.assertEqual(google, [], "the page went to a service without a click")
         # On a public page the same item is offered and usable: the page's address is the tab's own (the menu's data
-        # has none for a page the Shell holds no host permission for). The page itself is not fetched: the request
-        # guard cancels it, and the tab keeps its address.
+        # has none for a page the Shell holds no host permission for). A public name, answered here by the fixture
+        # (as test_immersive does), with the HTTPS-Only exception a person gives on the engine's warning.
         self.m.chrome(CLOSE_MENU)
+        public = "artigo.example.org"
+        site = "Services.scriptSecurityManager.createContentPrincipalFromOrigin(`http://${arguments[0]}:${arguments[1]}`)"
         self.m.chrome(
-            "gBrowser.selectedBrowser.fixupAndLoadURIString('https://example.org/artigo',"
-            " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});"
+            "Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);"
+            f"Services.perms.addFromPrincipal({site}, 'https-only-load-insecure', Ci.nsIPermissionManager.ALLOW_ACTION);",
+            [public, self.server.port],
         )
+        self.addCleanup(
+            self.m.chrome,
+            f"Services.prefs.clearUserPref('network.dns.localDomains'); Services.perms.removeFromPrincipal({site},"
+            " 'https-only-load-insecure');",
+            [public, self.server.port],
+        )
+        page = f"http://{public}:{self.server.port}/service-links"
+        self.m.navigate(page)
         here = "return gBrowser.selectedBrowser.currentURI.spec;"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(here) == "https://example.org/artigo", 10), self.m.chrome(here))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(here) == page, 10), self.m.chrome(here))
         usable = "Traduzir página com Google Translate"
         shown = self.menu_until(lambda items: any(i["label"] == usable and not i["disabled"] for i in items), on="body")
         self.assertTrue(any(i["label"] == usable and not i["disabled"] for i in shown), shown)
