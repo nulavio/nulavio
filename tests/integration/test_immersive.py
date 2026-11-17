@@ -1197,7 +1197,13 @@ class ImmersiveTest(unittest.TestCase):
             "return { moving: gNavToolbox.hasAttribute('movingtab') || gBrowser.tabContainer.hasAttribute('movingtab'),"
             " pointer: getComputedStyle(document.getElementById('nav-bar')).pointerEvents };"
         )
-        self.assertEqual(self.m.chrome(state), {"moving": False, "pointer": "auto"})
+        self.assertFalse(self.m.chrome(state)["moving"], self.m.chrome(state))
+        # With Imersivo on, a hidden toolbar takes no pointer by design: the check is the window with it off.
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', false);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(state) == {"moving": False, "pointer": "auto"}, 5), self.m.chrome(state)
+        )
 
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
