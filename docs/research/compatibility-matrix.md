@@ -66,6 +66,27 @@ The Widevine network test (`test_drm` test 04 with `NULAVIO_NETWORK_TESTS=1`; ne
 
 It says that Widevine installs, gets a licence and decrypts in the Nulavio build. It says nothing about a service: each one adds its own checks (the table above), and the Flatpak is not covered by it.
 
+## Video calls (#221)
+
+On every change, automated: a call on this computer with the engine's fake camera and microphone, and the question before a screen is shared (`tests/integration/test_webrtc.py`). By hand, on each engine release, per service; alphabetical, none preferred. Only what could be done with no account is run so far: Jitsi Meet.
+
+| Service | Join as a guest | Camera and microphone | Audio and video, both ways | Chat | Screen sharing | End-to-end encryption | Release, package | Notes |
+|---|---|---|---|---|---|---|---|---|
+| Google Meet | ⬜ | | | | | | | not run: no account was used |
+| Jitsi Meet | ✅ | 🟡 the engine's fake devices | ✅ | ✅ | ⬜ | not offered, as in Firefox 160.0 | Firefox 160.0, a build of `main` at 68ec0575 (not a released package), 2026-11-17 | below |
+| Microsoft Teams | ⬜ | | | | | | | not run: no account was used |
+| Proton Meet | ⬜ | | | | | | | not run: no account was used |
+| Webex | ⬜ | | | | | | | not run: no account was used |
+| Whereby | ⬜ | | | | | | | not run: no account was used |
+| Zoom | ⬜ | | | | | | | not run: no account was used |
+
+The Jitsi Meet row, 2026-11-17 ([evidence](evidence/calls-jitsi-2026-11-17.json)): two new profiles on one computer, driven by a script, headless, with a new profile's defaults (tracking protection Strict, only the default route's address offered to peers).
+
+- **On `meet.ffmuc.net`**, a public instance that asks for no account: each guest gets the page before the meeting with the camera's picture and the microphone working, types a name, joins; each sees two people; audio and video arrive on both sides (through the instance's bridge, over UDP, reached directly); a chat message arrives.
+- **End-to-end encryption is not offered**: the page's own library says it is not supported, in Nulavio and in Fedora's Firefox 160.0 alike, with the same script. So it is not something Nulavio's settings take away; whether Jitsi offers it to any Gecko browser on that instance was not looked into.
+- **On `meet.jit.si`** the page before the meeting works the same, and then the guest waits: a room there starts only when someone signs in ("no moderator has arrived yet"). That is the service's rule, not a failure of the browser; the whole call was not run there.
+- **Not run:** screen sharing, background blur, noise suppression, reactions, a real camera and microphone, a call through a VPN or proxy route (#217), the temporary profile, a call that needs a relay, more than two people.
+
 ## Environments
 
 | Environment | Status | Notes |
