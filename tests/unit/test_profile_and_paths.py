@@ -547,6 +547,8 @@ class OnePasswordDoctorTest(unittest.TestCase):
     def test_root_owned_needs_root_and_no_group_or_other_write_up_to_the_root(self):
         engine = self.tmp / "nulavio"
         engine.touch()
+        # Resolved before os.stat is replaced: resolving calls it (on some Python versions), and the fake must not.
+        real, tmp = engine.resolve(), self.tmp.resolve()
 
         def fake(owner_of, mode_of):
             def stat_of(path):
@@ -558,15 +560,15 @@ class OnePasswordDoctorTest(unittest.TestCase):
         self.addCleanup(self.root_owned.start)
         with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o100755)):
             self.assertTrue(doctor._root_owned(engine))
-        with mock.patch.object(doctor.os, "stat", fake(lambda p: 1000 if p == engine.resolve() else 0, lambda p: 0o100755)):
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 1000 if p == real else 0, lambda p: 0o100755)):
             self.assertFalse(doctor._root_owned(engine), "the engine is the user's")
-        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == self.tmp.resolve() else 0o40755)):
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == tmp else 0o40755)):
             self.assertFalse(doctor._root_owned(engine), "a folder above it anyone can write")
-        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o42775 if p == self.tmp.resolve() else 0o40755)):
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o42775 if p == tmp else 0o40755)):
             self.assertFalse(doctor._root_owned(engine), "a folder above it a group can write")
         link = self.tmp / "link"
         link.symlink_to(engine)
-        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0 if p != engine.resolve() else 1000, lambda p: 0o100755)):
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0 if p != real else 1000, lambda p: 0o100755)):
             self.assertFalse(doctor._root_owned(link), "a link to the user's file is judged by the file")
         self.assertFalse(doctor._root_owned(self.tmp / "missing"))
 
