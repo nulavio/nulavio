@@ -25,19 +25,10 @@ this.nulavioLayout = class extends ExtensionAPI {
       console.error("Nulavio page edit", e); // the key still works
     }
     try {
-      this.keepAbove().watch(); // "Manter acima das outras janelas" in the View menu, on KDE Plasma (#170)
-    } catch (e) {
-      console.error("Nulavio keep above", e);
-    }
-    try {
       ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLoadLine.sys.mjs").NulavioLoadLine.watch();
     } catch (e) {
       console.error("Nulavio load line", e); // the tab's own throbber still says a page is loading
     }
-  }
-
-  keepAbove() {
-    return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioKeepAbove.sys.mjs").NulavioKeepAbove;
   }
 
   getAPI(context) {
@@ -83,12 +74,6 @@ this.nulavioLayout = class extends ExtensionAPI {
           const tab = context.extension.tabManager.get(tabId);
           const say = key => tab?.window?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
           return pageEdit().set(tab?.nativeTab?.linkedBrowser ?? null, on ?? null, say);
-        }),
-        // #170: the key, from the background page, for the window of the tab it was pressed in.
-        setKeepAbove: call(tabId => {
-          const win = context.extension.tabManager.get(tabId)?.window;
-          const say = key => win?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
-          return this.keepAbove().set(win, null, say);
         }),
         // From Settings (a page) or from the key (the background page, with the tab it was pressed in).
         setImmersive: call((on, tabId) => {
