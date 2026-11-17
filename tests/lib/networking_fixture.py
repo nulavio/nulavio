@@ -12,11 +12,12 @@ sys.path.insert(0, str(ROOT / "scripts" / "build"))
 import networking_check  # noqa: E402
 
 RECORD = "browser/build/networking-check.json"
+# A real patch of one line, and the file it touches before and after (for a tree that has it applied or not).
+PATCH = "--- a/dom/x.cpp\n+++ b/dom/x.cpp\n@@ -1 +1 @@\n-int before;\n+int after;\n"
+PATCHED_FILE, UNPATCHED, PATCHED = "dom/x.cpp", "int before;\n", "int after;\n"
 
 
-def write_inputs(
-    repo: Path, *, mozconfig: str = "ac_add_options --enable-release\n", patch: str = "--- a/dom/x.cpp\n+++ b/dom/x.cpp\n"
-) -> None:
+def write_inputs(repo: Path, *, mozconfig: str = "ac_add_options --enable-release\n", patch: str = PATCH) -> None:
     """The three things a record is bound to: the release mozconfig, the variant, and a patch stack of one patch."""
     build, patches = repo / "browser" / "build", repo / "browser" / "patches"
     build.mkdir(parents=True, exist_ok=True)

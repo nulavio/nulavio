@@ -39,6 +39,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import apply_patches  # noqa: E402
+
 RECORD = ROOT / "browser" / "build" / "networking-check.json"
 ENGINE = ROOT / "browser" / "build" / "engine.json"
 CHECK_SOURCE = "python/mozbuild/mozbuild/action/check_binary.py"
@@ -101,10 +105,11 @@ def repository_inputs(repo: Path = ROOT) -> dict:
 
 
 def built_with(tree: Path, repo: Path = ROOT) -> dict:
-    """The repository's inputs, once the build is seen to have used them: build_nulavio.sh writes the tree's
-    mozconfig as the release mozconfig, then the variant, then lines of the machine's own (how many jobs).
-    The patches are applied by that same script before every build; this cannot see them in the tree, which
-    is why it is run after a build and not instead of one."""
+    """The repository's inputs, once the tree is seen to have them: its mozconfig is the release mozconfig,
+    then the variant, then lines of the machine's own (how many jobs), as build_nulavio.sh writes it; and
+    every patch of this checkout's series is applied in it (apply_patches.py's own check, on a scratch copy:
+    the tree is not touched). What this cannot see is that the library was built after them: that is why it
+    runs after a build and not instead of one."""
     try:
         used = (tree / "mozconfig").read_bytes()
         expected = (repo / MOZCONFIG).read_bytes() + (repo / VARIANT).read_bytes()
@@ -121,10 +126,20 @@ def built_with(tree: Path, repo: Path = ROOT) -> dict:
     unknown = [line for line in extra if not MACHINE_LINE.fullmatch(line)]
     if unknown:
         raise CannotCheck(f"the build's mozconfig has an option this does not know after the variant: {unknown[0][:80]!r}")
+    patches = repo / "browser" / "patches"
     try:
-        return repository_inputs(repo)
+        names = [line.strip() for line in (patches / "series").read_text(encoding="utf-8").splitlines()]
+        stack = [patches / name for name in names if name and not name.startswith("#")]
+        applied = apply_patches.applied_prefix(tree, stack) if stack else 0
+        found = repository_inputs(repo)
     except OSError as error:
         raise CannotCheck(f"the patch stack cannot be read ({error})") from None
+    if applied != len(stack):
+        raise CannotCheck(
+            f"the source tree has {applied} of this checkout's {len(stack)} patches applied: it was built with another "
+            "stack; build again from this checkout"
+        )
+    return found
 
 
 class CannotCheck(RuntimeError):

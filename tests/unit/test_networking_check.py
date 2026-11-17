@@ -88,6 +88,9 @@ class TreeCase(unittest.TestCase):
             + (build / "mozconfig.no-lto").read_bytes()
             + b"\nmk_add_options MOZ_PARALLEL_BUILD=2\n"
         )
+        patched = self.tree / networking_fixture.PATCHED_FILE  # the tree has the checkout's one patch applied
+        patched.parent.mkdir(parents=True)
+        patched.write_text(networking_fixture.PATCHED)
         check = self.tree / nc.CHECK_SOURCE
         check.parent.mkdir(parents=True)
         check.write_text(CHECK_BINARY)
@@ -142,6 +145,18 @@ class CheckTest(TreeCase):
         (self.tree / "mozconfig").unlink()
         self.assertIn("cannot be compared", self.refused())
         self.assertEqual(self.calls, [])
+
+    def test_a_tree_without_the_checkouts_whole_patch_stack_is_refused(self):
+        patched = self.tree / networking_fixture.PATCHED_FILE
+        patched.write_text(networking_fixture.UNPATCHED)  # built before the patch, or with another stack
+        self.assertIn("has 0 of this checkout's 1 patches applied", self.refused())
+        self.assertEqual(self.calls, [])
+        self.assertEqual(patched.read_text(), networking_fixture.UNPATCHED)  # the check does not touch the tree
+        patched.write_text(networking_fixture.PATCHED)
+        self.assertEqual(self.check()["result"], "passed")
+        self.assertEqual(patched.read_text(), networking_fixture.PATCHED)
+        patched.unlink()
+        self.assertIn("has 0 of this checkout's 1 patches applied", self.refused())
 
     def test_only_the_machines_own_lines_may_follow_the_variant(self):
         build = self.repo / "browser" / "build"
