@@ -10,11 +10,14 @@ Mozilla's servers: that test runs only with NULAVIO_NETWORK_TESTS=1.
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
+from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import harness
+from marionette import MarionetteError
 
 SV = 'const SV = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs");'
 # The services' hosts and the linked page's: what a click could send to. The engine's own background traffic
@@ -136,6 +139,21 @@ class WebServicesTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, CLOSE_MENU)
         harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
         return self.m.chrome(MENU)
+
+    def activate(self, label: str, reopen) -> None:
+        """Click the item with this label in the open menu. The background page draws its items again a moment after
+        the settings change; if that happened while the menu was open, the item is gone from it: open it again once."""
+        for attempt in (1, 2):
+            try:
+                self.assertTrue(self.m.chrome(ACTIVATE, [label]))
+                return
+            except MarionetteError as e:
+                if attempt == 2 or "hidden" not in str(e):
+                    raise
+                self.m.chrome(CLOSE_MENU)
+                reopen()
+                ready = lambda: any(i["label"] == label and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
+                self.assertTrue(harness.wait_until(ready, 5), self.m.chrome(MENU))
 
     def test_01_nothing_is_offered_before_a_service_is_chosen(self):
         state = self.ok("return SV.NulavioServices.state();")
@@ -281,7 +299,7 @@ class WebServicesTest(unittest.TestCase):
             by_label["Traduzir seleção com DeepL"]["shown"] and not by_label["Traduzir seleção com DeepL"]["disabled"]
         )
         self.assertEqual(self.m.chrome(GUARD_SEEN), [], "something left before the click")
-        self.assertTrue(self.m.chrome(ACTIVATE, ["Traduzir seleção com DeepL"]))
+        self.activate("Traduzir seleção com DeepL", self.open_menu_on_text)
         want = f"https://www.deepl.com/translator#xx/pt-BR/{enc('Olá & mundo/?#')}"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10))
         opened = self.m.chrome("return [gBrowser.selectedBrowser.currentURI.spec, gBrowser.selectedTab._tPos];")
@@ -328,7 +346,7 @@ class WebServicesTest(unittest.TestCase):
         label = "Resumir página com o assistente"
         offered = lambda: any(i["label"] == label and i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or [])  # noqa: E731
         self.assertTrue(harness.wait_until(offered, 5), self.m.chrome(MENU))
-        self.assertTrue(self.m.chrome(ACTIVATE, [label]))
+        self.activate(label, self.open_menu_on_page)
         sidebar = "return SidebarController.isOpen ? SidebarController.currentID : null;"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(sidebar), 10))
         self.assertIn("nulavio", self.m.chrome(sidebar))
@@ -448,12 +466,12 @@ class OnDeviceTranslationTest(unittest.TestCase):
         self.assertTrue(changed, "the page was not translated")
         print("pt:", m.execute("return document.getElementById('text').textContent;"))
         hosts = set(m.chrome("return [...window.nulavioHosts];")) - {"127.0.0.1", "localhost"}
-        listed = {
-            "firefox.settings.services.mozilla.com",
-            "firefox-settings-attachments.cdn.mozilla.net",
-            "content-signature-2.cdn.mozilla.net",
-        }
-        self.assertLessEqual(hosts, listed, hosts)
+        # The models come from Remote Settings; the engine's other background traffic of the same minutes (the
+        # content filter's lists, for one) is on the documented list too. Nothing else may appear.
+        doc = Path(__file__).resolve().parents[2] / "docs" / "security" / "new-profile-connections.json"
+        listed = {host for c in json.loads(doc.read_text(encoding="utf-8"))["connections"] for host in c["hosts"]}
+        self.assertIn("firefox-settings-attachments.cdn.mozilla.net", hosts, "the models did not come from Remote Settings")
+        self.assertLessEqual(hosts, listed, hosts - listed)
 
 
 if __name__ == "__main__":

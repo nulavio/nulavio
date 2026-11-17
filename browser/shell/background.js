@@ -396,13 +396,17 @@ async function drawServiceMenus() {
 // One drawing at a time, in order: several settings changed together (a choice and its clean-up) must not leave the
 // map naming one service for an item that shows another.
 let serviceDrawing = (async () => {})();
+let serviceRedraw = null;
 function redrawServiceMenus() {
-  serviceDrawing = serviceDrawing.then(drawServiceMenus).catch(console.error);
-  return serviceDrawing;
+  // Settings changed together arrive as several events: one drawing for all of them (as rebuildLinkMenu does).
+  clearTimeout(serviceRedraw);
+  serviceRedraw = setTimeout(() => {
+    serviceDrawing = serviceDrawing.then(drawServiceMenus).catch(console.error);
+  }, 100);
 }
 
 if (browser.nulavioServices && browser.menus) {
-  redrawServiceMenus();
+  serviceDrawing = drawServiceMenus().catch(console.error);
   browser.nulavioServices.onChanged.addListener(redrawServiceMenus);
   browser.menus.onShown.addListener(async (info, tab) => {
     // Every item this menu's contexts call for, not only the ones the engine drew: an item hidden in a private
