@@ -184,7 +184,8 @@ class ContentFilterDefaultsTest(unittest.TestCase):
             if after not in names:
                 return False
             heard = heard[names.index(after) + 1 :]
-        return any(m["what"] == "staticFilteringDataChanged" and not (without & set(m["lists"] or [])) for m in heard)
+        # A report that names no list says nothing about which ones were loaded: it does not count.
+        return any(m["what"] == "staticFilteringDataChanged" and m["lists"] and not (without & set(m["lists"])) for m in heard)
 
     def test_01_a_new_profile_has_the_cookie_notice_lists_beside_the_stock_ones(self):
         state = self.state()
