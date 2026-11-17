@@ -1,0 +1,12 @@
+measure             build (median)  baseline (median)  change  95 % interval   Firefox (median)
+startup_first_ms    950.0           997.0              -4.7 %  -15.7 … -2.4 %  685.0           
+startup_second_ms   500.0           502.0              -0.4 %  -7.9 … +8.8 %   347.0           
+pss_mib_1_tabs      543.9           549.1              -1.0 %  -1.1 … +8.4 %   419.8           
+processes_1_tabs    8.0             8.0                +0.0 %  +0.0 … +0.0 %   8.0             
+unreadable_1_tabs   0.0             0.0                -       -               0.0             
+readings_1_tabs     2.0             2.0                +0.0 %  +0.0 … +0.0 %   2.0             
+pss_mib_10_tabs     593.2           598.6              -0.9 %  -1.0 … +7.7 %   446.1           
+processes_10_tabs   11.0            11.0               +0.0 %  +0.0 … +0.0 %   11.0            
+unreadable_10_tabs  0.0             0.0                -       -               0.0             
+readings_10_tabs    2.0             2.0                +0.0 %  +0.0 … +0.0 %   2.0             
+speedometer3_score  13.1            12.7               +3.3 %  +2.0 … +4.5 %   19.1            
