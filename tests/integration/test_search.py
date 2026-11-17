@@ -627,7 +627,7 @@ class SearchPrivacyTest(unittest.TestCase):
         self.assertFalse(run(signed)["signedIn"])
         run(add, "kagi_session")
         self.assertTrue(run(signed)["signedIn"])
-        self.assertTrue(run("return (await S.state()).accounts.kagi.signedIn;"))
+        self.assertNotIn("accounts", run("return S.state();"), "the experiment's state carries nothing read from cookies")
         m = session.restart()
         self.assertTrue(harness.wait_until(lambda: run(signed)["signedIn"], 15), run(signed))
 

@@ -311,7 +311,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preventive | **Now:** each profile is a separate engine instance and directory; switching passes only an activation command, never cookies or storage; the engine's lock refuses deleting a running profile; switching reuses a running instance. Links from other apps are routed by the user's rules before any request; if the target cannot take a link, nothing is loaded and opening it elsewhere is an explicit choice |
 | Detective | Toolbar shows the active profile's colour, icon and name |
 | Limitations | Same-UID processes can read every profile (TB6, S11); routing moves only an address, never a session; with in-page routing on, a page chooses that address ([R45](residual-risks.md), [review](routing-m5-review.md)) |
-| Tests | `test_profiles` 05, 06, 08; `test_routing` |
+| Tests | `test_profiles` 05, 06, 08; `test_routing`; for a new profile's search choice (#151): `test_search` 16 and `test_settings_search` 04 (the file is a provider key only, 0600; read at the first start only, removed unread later; a link never followed) |
 | Residual | **Low** |
 
 ### S19 — Malicious or mistaken change reaching `main`

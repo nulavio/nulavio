@@ -1451,7 +1451,9 @@
     // -- search: what Nulavio adds to the engine's own Search pane. Which engines may receive what the person
     // types (suggestions, engine by engine: NulavioSearch keeps that list and the engine's patch reads it), and
     // the engines Nulavio knows how to add. Default engine, aliases and removal are the engine's own controls. --
-    const search = source(() => shell.NulavioSearch.state());
+    // The sign-in state (#151) is read here, by the settings page, and is not part of state(): Shell pages that ask the
+    // search experiment for its state do not get anything read from cookies.
+    const search = source(async () => ({ ...(await shell.NulavioSearch.state()), accounts: shell.NulavioSearch.accounts() }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
     const searchSetup = (emitChange, stops) => {
@@ -1665,6 +1667,8 @@
           () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
           msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name)
         );
+        // Consent is given for one provider at a time: the box is clear again for the next choice.
+        chooseBench.show({ suggest: false });
       },
     });
     for (const [name, words] of [

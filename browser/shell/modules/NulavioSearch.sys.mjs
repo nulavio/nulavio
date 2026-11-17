@@ -343,7 +343,6 @@ class NulavioSearchClass {
       providers: Object.entries(PROVIDERS)
         .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-      accounts: this.accounts(),
     };
   }
 

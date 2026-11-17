@@ -51,6 +51,7 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   addOpenSearch({url}) -> id                 // downloads the description once, at the user's request
   remove(id) ; setDefault(id, {private?}) ; setAlias(id, alias)
   setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
+NulavioSearch.sys.mjs, called by the settings page (privileged), not part of the experiment API (#151):
   choose({provider | id, privateToo?, suggest?}) -> id   // #151: add if missing, make default (and private), consent only if asked
   accounts() -> {kagi: {signedIn, signIn, host}}          // #151: the session cookie's presence, never its value
   applyPending()                                          // #151: a new profile's first start only, then deleted
