@@ -8,7 +8,7 @@
     visibility: visible !important;
     opacity: var(--nv-security-opacity) !important;
     /* UX3F A1: the neutral band is a quiet 24px row on the window surface.
-       Alert states (private, temporary, agent, raw, Guard) keep their strong
+       Alert states (private, temporary, agent, Guard) keep their strong
        fills, patterns and edges below, so a strong band now always means one. */
     min-block-size: var(--nv-space-6);
     padding: 0;
@@ -19,7 +19,7 @@
     -moz-window-dragging: drag;
   }
   /* ADR 0010: the neutral band is part of the frame's one surface and draws no rule line under itself.
-     A band that states something (private, temporary, an agent's window, raw automation, the Guard) is
+     A band that states something (private, temporary, an agent's window, the Guard) is
      not neutral and keeps its line with its fill. */
   #nulavio-band[nv-neutral] { border-block-end-color: transparent; }
   #nulavio-band-widget {
@@ -109,7 +109,7 @@
   /* D-UX19: "Aberto pela sua regra · Mudar", next to the profile; calm text, never a seal */
   .nv-band-row .nv-band-route { flex: none; white-space: nowrap; color: var(--nv-color-text-secondary); }
   /* Alert rows keep the pre-UX3F filled chip, exactly as strong as before. */
-  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-identity {
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-temporary="true"]) .nv-band-identity {
     padding-inline: var(--nv-space-2);
     background: var(--profile-fill, var(--nv-color-identity-slate));
     color: var(--nv-color-identity-on);
@@ -117,7 +117,7 @@
     border-radius: var(--nv-radius-sm);
     font-weight: var(--nv-font-weight-semibold);
   }
-  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-raw="true"], [data-temporary="true"]) .nv-band-flag {
+  .nv-band-row:is([data-private="true"], [data-agent="true"], [data-temporary="true"]) .nv-band-flag {
     background: transparent;
     color: inherit;
     box-shadow: none;
@@ -175,11 +175,6 @@
   .nv-fullscreen-line .nv-fullscreen-agent {
     border-block: 0;
     border-block-start: var(--nv-security-fullscreenHeight) double var(--nv-color-fullscreen-foreground);
-  }
-  .nv-fullscreen-line .nv-fullscreen-raw {
-    border: 0;
-    background: repeating-linear-gradient(135deg, var(--nv-color-fullscreen-automation) 0 3px,
-      var(--nv-color-fullscreen-ink) 3px 6px);
   }
   .nv-fullscreen-line .nv-fullscreen-guard {
     background: var(--nv-color-security-guard-edge);
@@ -259,12 +254,6 @@
     border-block: 0;
     border-block-start: var(--nv-security-fullscreenHeight) solid var(--nv-color-fullscreen-foreground);
   }
-  .nv-band-row .nv-band-raw {
-    background: var(--nv-color-security-raw-fill);
-    color: var(--nv-color-security-raw-text);
-    border-color: var(--nv-color-security-raw-text);
-    font-weight: var(--nv-font-weight-semibold);
-  }
   /* Calmaria (2026-11): state glyphs are outline SVGs drawn here, 16 px at 1.5 px, before the words
      (never Unicode in the text: it changed with the desktop font and was read aloud). Solid shapes are
      only for who you are (the tile); no silhouette is in both sets. The words remain the cue. */
@@ -340,15 +329,6 @@
     .nv-band-row :is(.nv-band-protection, .nv-band-route, .nv-band-seal, .nv-band-pause, .nv-band-stop,
         .nv-band-task-stop, .nv-band-assistant-pause)::before { forced-color-adjust: none; background-color: CanvasText; }
   }
-  .nv-band-raw::before {
-    content: "";
-    display: inline-block;
-    inline-size: var(--nv-space-5);
-    block-size: var(--nv-icon-size-sm);
-    margin-inline-end: var(--nv-space-2);
-    vertical-align: middle;
-    background: repeating-linear-gradient(135deg, var(--nv-color-security-raw-text) 0 2px, var(--nv-color-security-raw-fill) 2px 4px);
-  }
   .nv-band-row .nv-band-temporary {
     background: var(--nv-color-security-temporary-fill);
     color: var(--nv-color-security-temporary-text);
@@ -391,9 +371,6 @@
     }
     :root[nulavio-window-agent] #browser { border-color: CanvasText; }
     .nv-fullscreen-line > span { background: Canvas; border-color: CanvasText; }
-    .nv-fullscreen-line .nv-fullscreen-raw { background: Mark; border-block: 1px double MarkText; }
-    .nv-band-raw::before { border: 3px double Mark; background: Canvas; }
-    .nv-band-row .nv-band-raw { border: 3px double Mark !important; }
   }
 }
 

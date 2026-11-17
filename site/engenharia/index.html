@@ -1056,9 +1056,9 @@
 <tr><th scope="row">Enviar formulários</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
 <tr><th scope="row">Arquivos, sessões com login, trabalho em segundo plano</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
 <tr><th scope="row">Compras, configurações de conta</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
-<tr><th scope="row">Rede local e páginas internas, JavaScript, inspeção de rede, outros perfis, abas privadas</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
+<tr><th scope="row">Rede local, JavaScript, inspeção de rede, outros perfis, abas privadas</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>pergunta</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
 <tr><th scope="row">Cookies e armazenamento</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>permite</td></tr>
-<tr><th scope="row">Automação bruta e páginas privilegiadas</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia (opção à parte)</td></tr>
+<tr><th scope="row">As páginas internas do navegador</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>bloqueia</td></tr>
 </tbody>
 </table>
 </div>
@@ -1066,17 +1066,17 @@
 <p class="note prose">O Controle total só liga depois que você aceita um aviso. O Autônomo não pergunta de novo o que já cobre. «Pergunta» abre um pedido para você; se não houver como perguntar, a resposta é não.</p>
 <div class="claim" id="s8-3">
 <div class="claim-text">
-<h3><span class="num">8.3</span> Automação bruta, à parte</h3>
-<p>O acesso direto ao protocolo WebDriver BiDi não faz parte de nenhum nível, nem do Controle total. É uma opção separada para cada agente, com aviso próprio, e a janela passa a dizer que o Nulavio não confere nem registra o que acontece nela. A parada de emergência continua encerrando tudo.</p>
+<h3><span class="num">8.3</span> Sem automação bruta para agentes</h3>
+<p>O Nulavio não entrega mais a um agente a automação bruta, o protocolo WebDriver BiDi do navegador fora da política do Nulavio. O que um agente pede pelas ferramentas do Nulavio segue as permissões dele e fica registrado; um programa rodando na sua conta ainda pode alcançar o navegador por caminhos que o Nulavio não vê. As páginas internas do navegador não são oferecidas a nenhum agente, nem no controle total.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">Como conferir</p>
 <dl>
 <dt>Decisão</dt>
-<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › emenda de 2026-10-28</code></dd>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › emenda de 2026-11-17</code></dd>
 <dt>Testes</dt>
-<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop</code></dd>
-<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_20_raw_automation_is_gone_and_a_stored_opt_in_grants_nothing</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_21_the_ai_workspace_window_says_who_drives_it</code></dd>
 <dt>Risco</dt>
 <dd><code class="ref" translate="no">docs/security/residual-risks.md › R42</code></dd>
 </dl>

@@ -57,6 +57,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Removed**:
 
 - The Track A preview, Nulavio's profile on the distribution's Firefox (#464, ADR 0001 amendment of 2026-11-17): `nulavio setup` and `run` refuse an engine that is not the Nulavio build, and its chrome theme is gone. People who used it move to the RPM or APT package; their profiles stay where they were, and the README gives the steps to bring bookmarks and passwords. R1, R4, R5, R12, R13 and R17 closed with it.
+- Raw automation (#463, ADR 0007 amendment of 2026-11-17): no tool hands an agent the AI Workspace's WebDriver BiDi endpoint any more, so nothing an agent does through the bridge escapes the per-call policy and the activity record (a program running as the user can still reach the workspace's automation port, AI-T17 and AI-T18). The browser's internal pages, which only its opt-in opened, are offered to no agent; an opt-in recorded by an earlier version grants nothing, and the agents' page says once that it was removed. R42 closed.
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 

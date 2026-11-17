@@ -734,17 +734,15 @@ class WindowBandTest(unittest.TestCase):
             "Services.prefs.clearUserPref('browser.display.document_color_use');"
         )
 
-    def test_10_authoritative_agent_and_raw_latches_compose_with_retained_guard_findings(self):
+    def test_10_authoritative_agent_composes_with_retained_guard_findings(self):
         # Like the existing AI UI fixture: a real registry entry and workspace preference.
-        # The marker is synthetic (a live test PID), read/latched by the real AI owner;
-        # test_ai_bridge independently exercises actual endpoint handover and stop.
+        # Raw automation and its band state were removed (#463): a marker an earlier version wrote changes nothing.
         result = chrome_async(
             self.m,
             f"""
           const A = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs').NulavioAI;
           const {{agent}} = await A.add({{name:'Farol composition fixture',client:'other',
             autonomy:'full_control',acceptFullControl:true}});
-          await A.change(agent.id,'raw-automation',{{enabled:true,acceptRawAutomation:true}});
           Services.prefs.setStringPref('nulavio.ai.workspace',agent.id);
           const t = (key,subs=[]) => WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(key,subs);
           const W = {WINDOW};
@@ -756,7 +754,7 @@ class WindowBandTest(unittest.TestCase):
           try {{
             const pending = W.refresh();
             await A.markWorkspace({{text:t('aiWorkspaceBar',[agent.name,t('aiLevel_full_control')]),
-              rawText:t('aiWorkspaceBarRaw'),stopLabel:t('aiStopAgent'),pausedText:t('aiWorkspaceBarPaused',[agent.name])}});
+              stopLabel:t('aiStopAgent'),pausedText:t('aiWorkspaceBarPaused',[agent.name])}});
             release(null); // stale pre-markWorkspace idle snapshot
             await pending;
             retained = !document.querySelector('#nulavio-band .nv-band-agent').hidden;
@@ -790,10 +788,11 @@ class WindowBandTest(unittest.TestCase):
                 [agent_id],
             ),
         )
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome("return !document.querySelector('#nulavio-band .nv-band-raw').hidden;"), 10)
-        )
-        assert_layout_matrix(self, self.m, "raw-guard-synthetic-live-pid")
+        time.sleep(2.5)  # longer than the old marker's 1 s poll
+        gone = "return !!document.querySelector('.nv-band-raw, .nv-fullscreen-raw, [nulavio-window-raw]');"
+        self.assertFalse(self.m.chrome(gone))
+        self.assertNotIn("raw", self.m.chrome("return document.documentElement.getAttribute('nulavio-state') || '';").split())
+        assert_layout_matrix(self, self.m, "agent-guard-old-raw-marker")
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
             time.sleep(0.3)
@@ -802,11 +801,11 @@ class WindowBandTest(unittest.TestCase):
                 time.sleep(0.3)
                 state = self.m.chrome(f"return {BAND_PROBE};")
                 assert_band(self, state)
-                for kind in ("agent", "guard", "raw"):
+                for kind in ("agent", "guard"):
                     self.assertTrue(any(f"nv-band-{kind}" in c["kind"] for c in state["cues"]), state)
                 self.m.set_context("chrome")
                 try:
-                    name = f"raw-guard-{'dark' if dark else 'light'}-{'fullscreen' if fullscreen else 'window'}.png"
+                    name = f"agent-guard-{'dark' if dark else 'light'}-{'fullscreen' if fullscreen else 'window'}.png"
                     (harness.artifacts_dir() / "window-band" / name).write_bytes(self.m.screenshot_png())
                 finally:
                     self.m.set_context("content")
@@ -822,7 +821,7 @@ class WindowBandTest(unittest.TestCase):
                     self.assertFalse(line["notice"], line)
                     self.assertEqual(line["h"], 3)
                     self.assertTrue(line["hit"], line)
-                    self.assertIn("nv-fullscreen-raw", line["kinds"])
+                    self.assertIn("nv-fullscreen-agent", line["kinds"])
                     self.assertIn("nv-fullscreen-guard", line["kinds"])
                     self.m.set_context("chrome")
                     try:
