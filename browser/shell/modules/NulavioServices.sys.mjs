@@ -195,7 +195,7 @@ export function refusedAddress(spec) {
     }
     return null;
   }
-  if (!host.includes(".") || /\.(local|internal|lan|intranet|corp|home\.arpa|test|invalid|example)$/.test(host)) {
+  if (!host.includes(".") || /\.(local|localdomain|internal|lan|home|box|router|intranet|corp|home\.arpa|test|invalid|example)$/.test(host)) {
     return "private-address";
   }
   return null;

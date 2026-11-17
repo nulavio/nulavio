@@ -31,11 +31,12 @@ Nothing until the click on an item that names the service. Then:
 
 A service that fetches an address is never offered one it should not fetch: not an address on this computer
 (`localhost`, loopback), a private, shared, link-local, documentation, benchmarking or reserved address, an IPv6 address
-that carries an IPv4 one (mapped, compatible, NAT64, 6to4), a `.local`, `.internal`, `.lan` or
-`.home.arpa` name, a host without a dot (an intranet name), an address with a user name, or anything that is not an
+that carries an IPv4 one (mapped, compatible, NAT64, 6to4), a name ending in a local suffix (`.local`, `.localdomain`, `.internal`, `.lan`, `.home`, `.box`, `.router`, `.home.arpa` and a few more), a host without a dot (an intranet name), an address with a user name, or anything that is not an
 `http(s)` page. The menu item stays, unusable, and says why. Private windows show none of these items unless the person
 ticks "Oferecer estes serviços e os resumos também nas janelas privadas"; then the service opens in a private tab.
 The assistant is never offered in a private window, whatever that box says (ADR 0007).
+
+Names are judged by their form, not resolved: a local host with a name that looks public is not recognised (S22).
 
 What is left, written as residual risk R80: a page's address can still carry a secret in its query (a token a site
 put there), and a web service then receives it on the click; the person chose that service and that click.

@@ -160,6 +160,8 @@ class WebServicesTest(unittest.TestCase):
             "http://printer.local/": "private-address",
             "http://intranet/": "private-address",
             "http://nas.home.arpa/": "private-address",
+            "http://fritz.box/": "private-address",
+            "http://server.localdomain/": "private-address",
             "http://[::127.0.0.1]/": "private-address",
             "http://[::ffff:10.0.0.1]/": "private-address",
             "http://[64:ff9b::a00:1]/": "private-address",

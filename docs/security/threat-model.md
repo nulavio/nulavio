@@ -361,4 +361,21 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 
 ---
 
+### S22 — What a click sends to a translation or summary service (#156, #154)
+
+| Field | |
+|---|---|
+| Assets | The text the person selects; the address of the page or link they act on, and what it carries (a token in a query) |
+| Adversary | T-WEB: a page that steers what is selected or which link is under the pointer; a service the person added (it keeps what it receives); a service address the person was told to type |
+| Preconditions | The person added a web service in Settings (none is added by default) and clicks a menu item that names it |
+| Boundary | TB22 |
+| Impact | The service receives the selected text (at most 5,000 characters) or the page's or link's address with its query, on that click. A page can arrange what is selected or what a link points to, but not make the click |
+| Preventive | Nothing before the click; items only for services the person added, each naming its service; the address's fragment is removed; literal addresses of this computer and of private, shared, link-local and reserved ranges (IPv4, and IPv6 including the forms that carry an IPv4 address) and names without a dot or with a listed local suffix are refused; private windows show the items only when allowed and never offer the assistant; a typed service must be https with a host not built from the page |
+| Detective | The item says the service and, when refused, why; Settings says what each service receives |
+| Limitations | A local name not on the suffix list (a LAN host named like a public one) is not recognised: names are not resolved to decide. A token a site put in its own query goes with the address |
+| Tests | `test_web_services` (addresses, refusals, the request recorded and cancelled, private windows) |
+| Residual | Medium for the token in a query; listed as R80 |
+
+---
+
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.
