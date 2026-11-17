@@ -147,6 +147,32 @@ class EngineCommandTest(unittest.TestCase):
                 self.assertIn("install the Nulavio package", said)
                 self.assertEqual(list(Path(home).rglob("*")), [], "nothing is written before the refusal")
 
+    def test_package_of_asks_rpm_then_dpkg(self):
+        # #470: the .deb's engine has no rpm database to ask, so the doctor's "updates" check asks dpkg too.
+        def which(name, rpm=True, dpkg=True):
+            return f"/usr/bin/{name}" if (name == "rpm" and rpm) or (name == "dpkg-query" and dpkg) else None
+
+        path = Path("/usr/lib/nulavio/nulavio")
+        rpm_owned = {("rpm", "-qf", str(path)): "nulavio-160.0-0.7.fc44.x86_64"}
+        rpm_none = {("rpm", "-qf", str(path)): "file /usr/lib/nulavio/nulavio is not owned by any package"}
+        dpkg = {("dpkg-query", "-S", str(path)): "nulavio: /usr/lib/nulavio/nulavio",
+                ("dpkg-query", "-W", "-f=${Version}", "nulavio"): "160.0-0.7"}  # fmt: skip
+        cases = (
+            (rpm_owned, {}, "nulavio-160.0-0.7.fc44.x86_64"),
+            (rpm_none, {}, ""),
+            (rpm_none, {"rpm": False}, ""),
+            ({**rpm_none, **dpkg}, {}, "nulavio 160.0-0.7"),
+            (dpkg, {"rpm": False}, "nulavio 160.0-0.7"),
+            ({}, {"rpm": False, "dpkg": False}, ""),
+        )
+        for answers, tools, owner in cases:
+            with (
+                self.subTest(answers=answers, tools=tools),
+                mock.patch.object(doctor.shutil, "which", side_effect=lambda n, t=tools: which(n, **t)),
+                mock.patch.object(doctor, "_run", side_effect=lambda cmd, a=answers: a.get(tuple(cmd), "")),
+            ):
+                self.assertEqual(doctor.package_of(path), owner)
+
     def test_version_output_parsing(self):
         self.assertEqual(engine.parse_version_output("Mozilla Firefox 158.0.1\n"), ("Mozilla Firefox", "158.0.1"))
         self.assertEqual(engine.parse_version_output("Nulavio Nulavio 158.0.1\n"), ("Nulavio", "158.0.1"))

@@ -1,4 +1,4 @@
-"""`nulavio doctor`: local environment and profile health checks.
+"""`nulavio doctor` (`nulavio-doctor` from a package, #470): local environment and profile health checks.
 
 Read-only. Reports facts the user can act on; never phones home.
 """
@@ -72,6 +72,21 @@ def _dbus_name_owner(name: str) -> str | None:
     return fields.get("Comm") or fields.get("Exe") or "unknown process"
 
 
+def package_of(path: Path) -> str:
+    """The package that owns `path`, from rpm or dpkg (#470: the .deb's engine has no rpm to ask), or ""."""
+    if shutil.which("rpm"):
+        owner = _run(["rpm", "-qf", str(path)])
+        if owner and "not owned" not in owner and "is not" not in owner:
+            return owner.splitlines()[0]
+    if shutil.which("dpkg-query"):
+        found = _run(["dpkg-query", "-S", str(path)])
+        if found and ":" in found and "no path found" not in found:
+            name = found.splitlines()[0].split(":", 1)[0].strip()
+            version = _run(["dpkg-query", "-W", "-f=${Version}", name])
+            return f"{name} {version}".strip()
+    return ""
+
+
 def check_engine() -> list[Check]:
     try:
         eng = engine_mod.find_engine()
@@ -83,9 +98,9 @@ def check_engine() -> list[Check]:
         checks.append(Check("engine", "version floor", "ok", f">= {engine_mod.MIN_ENGINE_MAJOR}"))
     except engine_mod.EngineError as exc:
         checks.append(Check("engine", "version floor", "fail", str(exc)))
-    owner = _run(["rpm", "-qf", str(eng.path)]) if shutil.which("rpm") else ""
-    if owner and "not owned" not in owner:
-        checks.append(Check("engine", "updates", "ok", f"package {owner}: security updates via the distribution"))
+    owner = package_of(eng.path)
+    if owner:
+        checks.append(Check("engine", "updates", "ok", f"package {owner}: security updates through the package manager"))
     else:
         checks.append(Check("engine", "updates", "warn", "engine not owned by a package; make sure it auto-updates"))
     st = os.stat(eng.path)
@@ -399,7 +414,9 @@ def check_profiles() -> list[Check]:
                 Check("extensions", f"{prof.name}: {ext['name']}", "info", f"{ext['version'] or '?'} - {state} - {origin}")
             )
     if not checks:
-        checks.append(Check("profile", "profiles", "info", "no Nulavio profile yet (run `nulavio setup`)"))
+        checks.append(
+            Check("profile", "profiles", "info", "no launcher profile; the browser's own profiles are not read by this check")
+        )
     return checks
 
 
