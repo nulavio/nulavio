@@ -26,7 +26,8 @@
     ],
     "action": [
       "Se você usava a prévia, que rodava o perfil do Nulavio sobre o Firefox da distribuição: ela não é mais oferecida. Instale o pacote. Os perfis da prévia ficam em ~/.local/share/nulavio/profiles, e o README do projeto diz como trazer os favoritos e as senhas.",
-      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. No Fedora ou no Ubuntu, instale o pacote RPM ou APT, exporte favoritos e senhas no Flatpak e importe-os; depois remova o Flatpak. Em outra distribuição, remova-o e espere o Flathub."
+      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. No Fedora ou no Ubuntu, instale o pacote RPM ou APT, exporte favoritos e senhas no Flatpak e importe-os; depois remova o Flatpak. Em outra distribuição, remova-o e espere o Flathub.",
+      "Se você deu a um agente de IA a automação bruta: ela saiu do Nulavio. O agente segue pelas ferramentas do Nulavio, com as suas permissões e o registro de atividade; uma biblioteca de automação própria precisa de um perfil do Firefox fora do Nulavio. Reconecte o agente depois de atualizar."
     ]
   },
   "en-US": {
@@ -52,7 +53,8 @@
     ],
     "action": [
       "If you used the preview, which ran Nulavio's profile on the distribution's Firefox: it is no longer offered. Install the package. The preview's profiles stay in ~/.local/share/nulavio/profiles, and the project's README says how to bring their bookmarks and passwords along.",
-      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. On Fedora or Ubuntu, install the RPM or APT package, export bookmarks and passwords in the Flatpak and import them, then remove it. Elsewhere, remove it and wait for Flathub."
+      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. On Fedora or Ubuntu, install the RPM or APT package, export bookmarks and passwords in the Flatpak and import them, then remove it. Elsewhere, remove it and wait for Flathub.",
+      "If you gave an AI agent raw automation: it was removed from Nulavio. The agent keeps working through Nulavio's tools, with your permissions and the activity log; an automation library of its own needs a Firefox profile outside Nulavio. Reconnect the agent after updating."
     ]
   }
 }

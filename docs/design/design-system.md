@@ -114,7 +114,7 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Recovery code | `.notice.mono` | Shown once; two groups typed back to confirm; removed from the page after confirmation |
 | Plain row | `.row--plain`, `.row__note` | Rows without a chip (agents, permissions, activity); a disclosure spans the row; notes in the body font |
 | Permission request | `ai/request.html` | Agent and level as a hint ("Nível: …"), the request as the headline, a risk callout by capability (critical / warning / info, `policy.RISK`), the site as `.url`, where the agent acts (its Área de IA or your profile), the expiry as a clock time. **Deny is the filled primary, first and focused**; "Permitir uma vez" secondary; "Permitir até o agente desconectar" quiet. "Gerenciar agentes" opens in a new tab |
-| Window agent bar | `NulavioAI.markWorkspace` (notification box, `dismissable = false`) | Names the agent, its level and where it acts, with "Parar agente". Info priority in an Área de IA, warning in one of the user's profiles, critical for raw automation ("Automação bruta: o Nulavio não verifica nem registra…"). Root attribute `nulavio-state` (`ai`, `ai-profile`, `raw`) for the window theme |
+| Window agent bar | `NulavioAI.markWorkspace` (notification box, `dismissable = false`) | Names the agent, its level and where it acts, with "Parar agente". Info priority in an Área de IA, warning in one of the user's profiles (the critical raw-automation bar went with raw automation, #463). Root attribute `nulavio-state` (`ai`, `ai-profile`) for the window theme |
 | Locked profile | `vault/unlock.html` | Chip + name, held address as `.url`, password first, other methods as secondary/quiet buttons, states in `body[data-state]` |
 | Included item (assistant) | `.assistant__chip` | What goes with the next message and the tab it is bound to ("só da aba “title” · host"), on `accent.tint` with an `accent.default` border; a 24 px remove control named after the item. Added only by an explicit action; leaves after Send. When it leaves on its own, `.assistant__drift` says why (words plus an icon) |
 | Off state (assistant) | `.assistant__off` | Replaces the composer (private window, emergency stop, paused, revoked): a heading naming the state, one sentence on what is not sent, and the way back (a secondary button to Settings). Panel states in `body[data-state]`: `ready`, `not-configured`, `not-allowed`, `blocked`, `private` |
@@ -316,10 +316,9 @@ older title-hiding proposal in the mockup rationale.
 
 Each warning composes independently: temporary (dashes and deleted-on-close
 words), private (plum/dots and assistant-off words), agent (name, actual level,
-lines and double content frame), raw automation (critical diagonal sample and
-explicit unchecked/unlogged words), and Guard (pending count and real Review
-entry). `NulavioAI.windowWarning()` reads the same raw session latch as the
-original non-dismissible bar; `windowState()` adds registry identity/level and
+lines and double content frame), and Guard (pending count and real Review
+entry). `NulavioAI.windowWarning()` reads the same session state as the
+non-dismissible bar; `windowState()` adds registry identity/level and
 an explicit unavailable result. A successful registry read also supersedes the
 old bar's cached paused flag, so an explicit backend resume is reflected. A synchronous warning event and a revision
 check prevent an older idle/status result from erasing a newer warning. Failed

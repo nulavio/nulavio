@@ -29,7 +29,7 @@ from nulavio_launcher.ai import audit, mcp, policy, registry, tools
 from nulavio_launcher.ai import bidi as bidi_mod
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
-from nulavio_launcher.ai.workspace import RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
+from nulavio_launcher.ai.workspace import OLD_RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
 
 
 def wait_for(predicate, timeout: float = 5.0) -> bool:
@@ -250,7 +250,7 @@ class AddressTest(unittest.TestCase):
         with mock.patch.object(policy.socket, "getaddrinfo", side_effect=OSError("no answer")):
             self.assertIn("local_resources", policy.classify_url("https://nas.example/").needs)
 
-    def test_the_shells_own_pages_need_raw_automation(self):
+    def test_the_shells_own_pages_are_internal_pages(self):
         # Audit A2: Settings, Vault and profile pages were reachable with local_resources alone.
         for url in ("moz-extension://0e3a/settings/settings.html#profiles", "moz-extension://0e3a/vault/unlock.html",
                     "view-source:https://example.org/"):  # fmt: skip
@@ -327,8 +327,8 @@ class PolicyTest(Home):
             "restricted": {"read_pages": True, "interact": False, "execute_js": False, "submit_forms": False},
             "assisted": {"interact": True, "submit_forms": False, "execute_js": False},
             "autonomous": {"interact": True, "submit_forms": True, "files": True, "transactions": False, "execute_js": False},
-            # Everything but raw automation, which is a separate opt-in (ADR 0007, 2026-10-28).
-            "full_control": {c: c != policy.RAW_CAPABILITY for c in policy.CAPABILITIES},
+            # Everything but the internal pages, which no agent gets (#463).
+            "full_control": {c: c != policy.INTERNAL_CAPABILITY for c in policy.CAPABILITIES},
         }
         for level, caps in expect.items():
             agent, _ = registry.add(level, "other", level, accept_full_control=True)
@@ -448,50 +448,62 @@ class PolicyTest(Home):
         with self.assertRaises(registry.RegistryError):
             registry.set_autonomy(agent["id"], "full_control")
 
-    def test_raw_automation_is_a_separate_opt_in(self):
-        """D-UX4 / SB-03: no level includes raw automation; it needs its own confirmation, per agent."""
-        raw = policy.RAW_CAPABILITY
+    def test_raw_automation_is_gone_and_no_agent_gets_the_internal_pages(self):
+        """#463: no tool hands the endpoint over, and nothing turns the internal pages on: no level, grant, session
+        answer, or the opt-in an earlier version recorded."""
+        internal = policy.INTERNAL_CAPABILITY
+        self.assertNotIn("raw_automation", tools.BY_NAME)
+        self.assertNotIn("raw_automation", {t.name for t in tools.TOOLS})
         for level in policy.PRESETS:
-            self.assertEqual(policy.PRESETS[level][raw], "block", level)
+            self.assertEqual(policy.PRESETS[level][internal], "block", level)
         agent, _ = registry.add("full", "other", "full_control", accept_full_control=True)
-        self.assertEqual(self.decide(agent["id"], raw).reason, "raw-automation-off")
+        self.assertEqual(self.decide(agent["id"], internal).reason, "internal-pages-off")
+        for mode in ("allow", "ask"):
+            with self.assertRaises(registry.RegistryError) as caught:
+                registry.grant(agent["id"], internal, mode)
+            self.assertEqual(caught.exception.code, "internal-pages-off")
+        with self.assertRaises(registry.RegistryError):
+            registry.grant_session(agent["id"], internal, "s-1")
+        registry.grant(agent["id"], internal, "block")  # blocking it again is harmless
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
         self.assertNotIn("raw_automation", {t["name"] for t in bridge.list_tools()})
-        for mode in ("allow", "ask"):  # without the warning, neither turns it on
-            with self.assertRaises(registry.RegistryError) as caught:
-                registry.grant(agent["id"], raw, mode)
-            self.assertEqual(caught.exception.code, "raw-automation-not-accepted")
-        self.assertFalse(self.decide(agent["id"], raw).allowed)
-        registry.set_raw_automation(agent["id"], True, accept=True)
-        self.assertTrue(registry.get(agent["id"])["raw_automation_accepted"])
-        self.assertTrue(self.decide(agent["id"], raw).allowed)
-        self.assertIn("raw_automation", {t["name"] for t in bridge.list_tools()})
-        registry.set_raw_automation(agent["id"], False)
-        self.assertIsNone(registry.get(agent["id"])["raw_automation_accepted"])
-        self.assertEqual(self.decide(agent["id"], raw).reason, "raw-automation-off")
-        with self.assertRaises(registry.RegistryError):  # turning it on again shows the warning again
-            registry.set_raw_automation(agent["id"], True)
-        registry.grant(agent["id"], raw, "ask", accept_raw_automation=True)
-        registry.grant(agent["id"], raw, "block")
-        self.assertIsNone(registry.get(agent["id"])["raw_automation_accepted"])
+        self.assertIn(internal, policy.classify_url("about:config").needs)
 
-    def test_registries_from_before_the_opt_in_lose_raw_automation(self):
-        """Tightening: a Full control agent, or a grant given without the new warning, no longer has it."""
+    def test_a_stored_raw_automation_opt_in_grants_nothing_and_is_said_once(self):
+        """#463: a registry written by a version with raw automation is read without error; its opt-in, an
+        allow grant and a session answer for the internal pages grant nothing, and the agents' page says so
+        until the person acknowledges it."""
         agent, _ = registry.add("old", "other", "full_control", accept_full_control=True)
         path = self.home / "state" / "ai" / "agents.json"
         data = json.loads(path.read_text())
-        data["agents"][agent["id"]]["grants"][policy.RAW_CAPABILITY] = {"mode": "allow", "set": "2026-10-27T10:00:00+00:00",
-                                                                        "until": None, "session": None}  # fmt: skip
+        stored = data["agents"][agent["id"]]
+        stored["raw_automation_accepted"] = "2026-11-01T10:00:00+00:00"
+        stored["grants"][policy.INTERNAL_CAPABILITY] = {"mode": "allow", "set": "2026-11-01T10:00:00+00:00",
+                                                        "until": None, "session": None}  # fmt: skip
+        stored.setdefault("session_grants", {})[policy.INTERNAL_CAPABILITY] = {
+            "session": "s-1",
+            "set": "2026-11-01T10:00:00+00:00",
+        }
         path.write_text(json.dumps(data))
-        self.assertEqual(self.decide(agent["id"], policy.RAW_CAPABILITY).reason, "raw-automation-off")
-        # Privileged pages are under the same option: Full control alone does not open about:config.
-        self.assertIn(policy.RAW_CAPABILITY, policy.classify_url("about:config").needs)
+        self.assertEqual(self.decide(agent["id"], policy.INTERNAL_CAPABILITY).reason, "internal-pages-off")
+        self.assertIn(policy.INTERNAL_CAPABILITY, policy.classify_url("about:config").needs)
+        overview = ai_cli.api_request({"op": "overview"})
+        listed = overview["agents"][0]
+        self.assertTrue(listed["raw_automation_removed"])
+        self.assertNotIn("raw_automation_accepted", listed)
+        self.assertEqual(listed["modes"][policy.INTERNAL_CAPABILITY], "block")
+        ai_cli.api_request({"op": "forget-raw-automation", "agent": agent["id"]})
+        stored = registry.get(agent["id"])
+        self.assertNotIn("raw_automation_accepted", stored)
+        self.assertNotIn(policy.INTERNAL_CAPABILITY, stored["grants"])
+        self.assertNotIn(policy.INTERNAL_CAPABILITY, stored.get("session_grants", {}))
+        self.assertFalse(ai_cli.api_request({"op": "overview"})["agents"][0]["raw_automation_removed"])
 
     def test_every_capability_has_a_risk_tier(self):
         self.assertEqual(set(policy.RISK), set(policy.CAPABILITIES))
         self.assertTrue(set(policy.RISK.values()) <= {"critical", "warning", "info"})
         for capability in ("transactions", "execute_js", "local_resources", "private_tabs", "multiple_profiles",
-                           policy.RAW_CAPABILITY):  # fmt: skip
+                           policy.INTERNAL_CAPABILITY):  # fmt: skip
             self.assertEqual(policy.RISK[capability], "critical", capability)
         for capability in ("interact", "submit_forms", "files"):
             self.assertEqual(policy.RISK[capability], "warning", capability)
@@ -740,43 +752,53 @@ class AuditTest(Home):
         self.assertEqual(denied.exception.decision.reason, "key-replaced")
         self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
 
-    def test_a_new_key_ends_raw_automation(self):
-        # The watcher of a handed-over endpoint looked at stop, pause and revoke, not at the key.
-        agent, _ = registry.add("raw", "other", "full_control", accept_full_control=True)
-        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), key_sha256=agent["token_sha256"])
-        workspace = mock.Mock()
-        bridge.workspace, bridge.raw = workspace, True
-        registry.rotate_token(agent["id"])
-        with mock.patch.object(tools.time, "sleep", side_effect=AssertionError("kept watching")):
-            bridge._raw_watch(workspace)
-        workspace.stop.assert_called_once_with()
-        self.assertFalse(bridge.raw)
-        ended = json.loads(audit.audit_path().read_text().splitlines()[-1])
-        self.assertEqual((ended["event"], ended["reason"]), ("raw-ended", "key-replaced"))
-
-    def test_the_site_list_covers_what_the_source_viewer_shows(self):
-        # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites.
-        agent, _ = registry.add("scoped", "other", "full_control", accept_full_control=True, domains=["example.org"])
-        registry.set_raw_automation(agent["id"], True, accept=True)
-        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+    def test_the_source_viewer_is_refused_before_anything_is_asked(self):
+        # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites. Raw automation is gone
+        # (#463): an internal page is refused before any question, so the person is never asked for local_resources
+        # for a page the agent could not open anyway (independent review of #504).
+        agent, _ = registry.add("scoped", "other", "autonomous", domains=["example.org"])
+        approver = Approve("session")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         outside, inside = "view-source:https://bank.example/acct", "view-source:https://docs.example.org/a"
-        with (
-            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
-            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
-        ):
-            result = bridge.call("navigate", {"tab": "t1", "url": outside})
-        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
-        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
-        self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://bank.example"))
-        page = {"text": "<html>", "url": inside, "title": ""}
-        for url, refused in ((outside, True), (inside, False)):
+        for url in (outside, inside, "about:config"):
+            with (
+                self.subTest(url=url),
+                mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+                mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+            ):
+                result = bridge.call("navigate", {"tab": "t1", "url": url})
+                self.assertTrue(result["isError"])
+                self.assertIn("not offered to agents", result["content"][0]["text"])
+                self.assertNotIn("Only the user can change this", result["content"][0]["text"])
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual(entry["reason"], "internal-pages-off")
+        self.assertEqual(approver.asked, [], "nothing is asked for an internal page")
+        self.assertNotIn("local_resources", registry.get(agent["id"]).get("session_grants", {}))
+        # A tab that is already there (a redirect, the page's own navigation): refused too, inside the sites or not.
+        for url, reason in ((outside, "internal-pages-off"), (inside, "internal-pages-off")):
+            page = {"text": "<html>", "url": url, "title": ""}
             with (
                 self.subTest(url=url),
                 mock.patch.object(tools.Bridge, "_url_of", return_value=url),
                 mock.patch.object(tools.Bridge, "_eval", return_value=page),
                 mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
             ):
-                self.assertEqual(bridge.call("page_read", {"tab": "t1"})["isError"], refused)
+                self.assertTrue(bridge.call("page_read", {"tab": "t1"})["isError"])
+                self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], reason)
+        self.assertEqual(approver.asked, [])
+        # The tool's own question is not asked either for a tab already at an internal page: a Restricted agent's
+        # dialog would ask for interact, an Autonomous one's evaluate for execute_js (independent review of #504).
+        reader = "about:reader?url=https://docs.example.org/a"
+        for level, tool, args in (("restricted", "dialog", {"tab": "t1", "accept": True}),
+                                  ("autonomous", "evaluate", {"tab": "t1", "expression": "1"})):  # fmt: skip
+            other, _ = registry.add(level, "other", level)
+            asks = Approve("session")
+            with self.subTest(tool=tool), mock.patch.object(tools.Bridge, "_url_of", return_value=reader):
+                result = tools.Bridge(other["id"], "s-2", approver=asks).call(tool, args)
+                self.assertTrue(result["isError"])
+                self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], "internal-pages-off")
+                self.assertEqual(asks.asked, [])
+                self.assertEqual(registry.get(other["id"]).get("session_grants", {}), {})
         tabs = [{"context": "t1", "profile": "AI Workspace", "url": outside}]
         with mock.patch.object(tools.Bridge, "_tabs", return_value=tabs), mock.patch.object(tools.Bridge, "_title") as title:
             listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]
@@ -1831,31 +1853,16 @@ class WorkspaceTest(Home):
         self.assertTrue(str(ws.profile_dir).startswith(str(self.home)))
         self.assertIn('user_pref("nulavio.ai.target", "workspace");', user_js)
 
-    def test_raw_marker_for_the_window(self):
-        """WCS-01: the hand-over is written where the Shell in the AI Workspace can see it, and never outlives it."""
+    def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
+        """#463: the marker the window read while raw automation was on is not written any more; one left in a
+        workspace's profile by an earlier version goes when the workspace starts."""
         agent, _ = registry.add("raw", "other", "autonomous")
-        registry.set_raw_automation(agent["id"], True, accept=True)
         ws = Workspace(agent["id"], engine=mock.Mock(path=Path("/x")))
         (ws.profile_dir).mkdir(parents=True, exist_ok=True)
-        (ws.profile_dir / RAW_MARKER).write_text("{}")  # left by a bridge that was killed
+        (ws.profile_dir / OLD_RAW_MARKER).write_text("{}")
         ws._write_prefs()
-        self.assertFalse((ws.profile_dir / RAW_MARKER).exists())
-        fake = mock.Mock()
-        ws.port = 4444
-
-        def start():
-            ws.bidi = fake
-            return fake
-
-        ws.start = start
-        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), workspace_factory=lambda a: ws)
-        result = bridge.call("raw_automation", {})
-        self.assertFalse(result["isError"], result)
-        marker = json.loads((ws.profile_dir / RAW_MARKER).read_text())
-        self.assertEqual((marker["agent"], marker["pid"]), (agent["id"], os.getpid()))
-        self.assertEqual(os.stat(ws.profile_dir / RAW_MARKER).st_mode & 0o777, 0o600)
-        bridge.close()
-        self.assertFalse((ws.profile_dir / RAW_MARKER).exists())
+        self.assertFalse((ws.profile_dir / OLD_RAW_MARKER).exists())
+        self.assertFalse(hasattr(ws, "mark_raw"))
 
     def test_profile_target_says_it_is_the_users_profile(self):
         """WCS-02 / AI-06: a profile opened for an agent is marked as the user's, by name, and only temporarily."""
@@ -2016,21 +2023,21 @@ class CliTest(Home):
         with mock.patch("sys.stdout", new=io.StringIO()), mock.patch("sys.stderr", new=io.StringIO()) as err:
             self.assertEqual(main(["ai", "add", "F", "--client", "other", "--autonomy", "full-control"]), 1)
             self.assertIn("irreversible", err.getvalue())
-            self.assertIn("Raw automation is not included", err.getvalue())
+            self.assertIn("internal pages are never included", err.getvalue())
             self.assertEqual(
                 main(["ai", "add", "F", "--client", "other", "--autonomy", "full-control", "--accept-full-control"]), 0
             )
 
-    def test_raw_automation_flag(self):
+    def test_the_internal_pages_cannot_be_granted_from_the_command_line(self):
         from nulavio_launcher.cli import main
 
         agent, _ = registry.add("R", "other", "full_control", accept_full_control=True)
         with mock.patch("sys.stdout", new=io.StringIO()), mock.patch("sys.stderr", new=io.StringIO()) as err:
             self.assertEqual(main(["ai", "grant", agent["id"], "debugging", "allow"]), 1)
-            self.assertIn("does not check, ask about or record", err.getvalue())
-            self.assertFalse(registry.get(agent["id"]).get("raw_automation_accepted"))
-            self.assertEqual(main(["ai", "grant", agent["id"], "debugging", "allow", "--accept-raw-automation"]), 0)
-        self.assertTrue(registry.get(agent["id"])["raw_automation_accepted"])
+            self.assertIn("not offered to agents", err.getvalue())
+            with self.assertRaises(SystemExit):  # the flag is gone
+                main(["ai", "grant", agent["id"], "debugging", "allow", "--accept-raw-automation"])
+        self.assertNotIn("debugging", registry.get(agent["id"])["grants"])
 
 
 class AutonomyControlsTest(Home):
@@ -2225,13 +2232,9 @@ class AutonomyControlsTest(Home):
         # SPA-01 / SB-02: consent texts come from the browser's locales; the API sends no English warning.
         self.assertNotIn("fullControlWarning", overview)
         self.assertNotIn(policy.FULL_CONTROL_WARNING, json.dumps(overview))
-        self.assertNotIn(policy.RAW_AUTOMATION_WARNING, json.dumps(overview))
-        with self.assertRaises(registry.RegistryError):
-            ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": True})
-        ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": True, "acceptRawAutomation": True})
-        self.assertEqual(ai_cli.api_request({"op": "overview"})["agents"][0]["modes"][policy.RAW_CAPABILITY], "allow")
-        ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": False})
-        self.assertEqual(ai_cli.api_request({"op": "overview"})["agents"][0]["modes"][policy.RAW_CAPABILITY], "block")
+        with self.assertRaises(registry.RegistryError):  # #463: the operation is gone
+            ai_cli.api_request({"op": "raw-automation", "agent": agent_id, "enabled": True, "acceptRawAutomation": True})
+        self.assertEqual(ai_cli.api_request({"op": "overview"})["agents"][0]["modes"][policy.INTERNAL_CAPABILITY], "block")
         ai_cli.api_request({"op": "pause", "agent": agent_id, "paused": True})
         ai_cli.api_request({"op": "stop", "stopped": True})
         self.assertTrue(ai_cli.api_request({"op": "overview"})["stopped"])
