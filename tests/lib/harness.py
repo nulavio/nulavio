@@ -38,6 +38,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
+# Since the preview was removed (#464), the launcher's `setup` and `run` refuse an engine that is not the Nulavio
+# build. Pull-request CI still runs the suites on the distribution's Firefox, and says so with this variable; every
+# tool and engine the harness starts inherits it. It is not a way to use Nulavio.
+os.environ.setdefault("NULAVIO_TEST_DISTRIBUTION_FIREFOX", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from marionette import Marionette  # noqa: E402

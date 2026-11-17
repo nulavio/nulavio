@@ -162,7 +162,6 @@ def create() -> Temporary:
             "created": now,
             "baseline_version": profile.BASELINE_VERSION,
             "provider": "builtin",
-            "theme": True,
             "locale": profile.ui_language(),
             "seeded": {},
             "pending_prefs": {},
