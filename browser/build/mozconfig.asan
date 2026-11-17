@@ -8,3 +8,8 @@
 ac_add_options --enable-address-sanitizer
 ac_add_options --disable-jemalloc
 ac_add_options --enable-debug-symbols=-gline-tables-only
+# No cross-language link-time optimisation here: the sanitised build is for finding
+# faults, not for speed, and it stays as it was built before #364 (thin Rust LTO; see
+# mozconfig.no-lto for why that line is needed once C++ LTO is off).
+ac_add_options --disable-lto
+mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"

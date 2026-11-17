@@ -10,8 +10,18 @@
 from a tree with uncommitted or untracked changes, an engine pin that differs
 from the source it built, a listed file missing or with another SHA-256, a base
 commit that is not on ``--on`` (default origin/main), a .deb whose version is not
-the RPM's. On success it prints JSON: the release tag (``v<version>-<release>`` from
+the RPM's, or a release the networking check's record does not cover: at the base
+commit, browser/build/networking-check.json is missing, names another Firefox
+release or source digest, was read with another mozconfig, variant or patch stack,
+or says neither "passed" nor "accepted" with an issue number (#430). On success it
+prints JSON: the release tag (``v<version>-<release>`` from
 the RPM), the RPMs, the .debs, the portable archives, the SBOMs.
+
+``networking-claim`` prints, as bytes, the claim that the rehearsal's Firefox release
+passed the Rust networking reading with the base commit's mozconfig, variant and patch
+stack. The signing job asks for an attestation of exactly those bytes by
+networking-check.yml on main before it signs (#455); the record in the repository
+is not part of it.
 
 ``packages`` refuses a packages directory holding any Nulavio RPM or .deb that
 the manifest does not list with the same SHA-256. sign_repo.sh and sign_apt_repo.sh
@@ -41,7 +51,10 @@ EMPTY_DIFF = hashlib.sha256(b"").hexdigest()
 ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
 DEB = re.compile(r"^nulavio_(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)_amd64\.deb$")
+COMMIT = re.compile(r"[0-9a-f]{40}")
 RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
+# The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
+NETWORKING_RECORD = "browser/build/networking-check.json"
 
 
 class ManifestError(RuntimeError):
@@ -65,6 +78,10 @@ def load(path: Path) -> dict:
                 "untracked", "packages", "sboms", "rehearsal"):  # fmt: skip
         if key not in manifest:
             raise ManifestError(f"{path}: no {key!r}: not a complete rehearsal manifest")
+    # The manifest comes from the build machine. Its base commit is handed to git as a revision: only a full
+    # commit hash, never something git could read as an option or as another kind of revision.
+    if not isinstance(manifest["nulavio_base_commit"], str) or not COMMIT.fullmatch(manifest["nulavio_base_commit"]):
+        raise ManifestError(f"{path}: the base commit is not a full commit hash")
     return manifest
 
 
@@ -100,6 +117,91 @@ def check_base(commit: str, repo: Path, ref: str) -> None:
     at = [subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{sources}"], capture_output=True) for rev in (commit, ref)]
     if at[0].returncode == 0 and (at[1].returncode != 0 or at[0].stdout != at[1].stdout):
         raise ManifestError(f"{sources} changed on {ref} since the base commit {commit[:12]}: build the release again")
+
+
+def _networking_module():
+    # Imported here, not at the top: next-release and the other commands of this file run in places that
+    # have only scripts/release/ (the metadata workflow's checkout of one directory, tests). Signing does
+    # not: without the module nothing can be compared, and nothing is published.
+    sys.path.insert(0, str(ROOT / "scripts" / "build"))
+    try:
+        import networking_check
+    except ImportError:
+        raise ManifestError("scripts/build/networking_check.py is missing: the networking record cannot be compared") from None
+    return networking_check
+
+
+def inputs_at(repo: Path, commit: str) -> dict:
+    """The digests of the release mozconfig, the variant and the patch stack as they are at a commit."""
+
+    def at_commit(path: str) -> bytes:
+        return subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], capture_output=True, check=True).stdout
+
+    try:
+        return _networking_module().inputs(at_commit)
+    except (subprocess.CalledProcessError, UnicodeDecodeError):
+        raise ManifestError(f"the mozconfig, its variant or the patch stack cannot be read at {commit[:12]}") from None
+
+
+def networking_claim(out: Path, repo: Path) -> bytes:
+    """The claim an attestation must exist for before this rehearsal is signed (#455).
+
+    Made from the manifest (the Firefox release and source digest that were built) and from the base commit
+    (its mozconfig, variant and patch stack). The record in the repository is not read: a record is a
+    statement, and "accepted" is one too. The signing job asks GitHub for an attestation of these bytes by
+    networking-check.yml on main; that workflow wrote the same bytes after building and reading for itself."""
+    manifest = load(out / "manifest.json")
+    commit = manifest["nulavio_base_commit"]
+    current = inputs_at(repo, commit)
+
+    def at_commit(path: str) -> bytes:
+        return subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], capture_output=True, check=True).stdout
+
+    module = _networking_module()
+    try:
+        read_with = module.reader(at_commit)
+    except subprocess.CalledProcessError:
+        raise ManifestError(f"the reader, the build script or the workflow cannot be read at {commit[:12]}") from None
+    return module.claim(manifest["firefox"], manifest["source_sha256"], current, read_with)
+
+
+def check_networking(manifest: dict, repo: Path) -> None:
+    """Publish only a Firefox release whose Rust code passed the engine's networking check (#430).
+
+    The release build is cross-language (#364) and cannot be read for that check, so it is made on another build of
+    the same source and recorded in the repository. The record is read at the manifest's base commit, which
+    check_base() has shown to be reviewed history: never from a working tree, where anyone could write it.
+    It must also have been read with that commit's mozconfig, variant and patch stack: a patch or a configure
+    option changed since asks for a new reading, or a new acceptance. The record is a statement all the same
+    (residual risk R79), and "accepted" is the maintainer's word only by the review of the pull request that
+    wrote it."""
+    commit = manifest["nulavio_base_commit"]
+    shown = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{NETWORKING_RECORD}"], capture_output=True)
+    try:
+        record = json.loads(shown.stdout) if shown.returncode == 0 else None
+    except ValueError:
+        record = None
+    how_to = f"run scripts/release/rehearse_release.sh --precheck {manifest['firefox']} and land its record by pull request"
+    if not isinstance(record, dict):
+        raise ManifestError(f"{NETWORKING_RECORD} cannot be read at the base commit {commit[:12]}: {how_to}")
+    if (record.get("firefox"), record.get("source_sha256")) != (manifest["firefox"], manifest["source_sha256"]):
+        raise ManifestError(
+            f"the networking check's record is about Firefox {record.get('firefox')}, not the {manifest['firefox']} "
+            f"this rehearsal built: nobody checked its Rust code; {how_to}"
+        )
+    result = record.get("result")
+    accepted = result == "accepted" and re.fullmatch(r"#\d+", str(record.get("accepted_in", "")))
+    if result != "passed" and not accepted:
+        raise ManifestError(f"the networking check's record says {result!r}: only a pass, or the maintainer's word, publishes")
+
+    # Also for a record accepted without a reading: it was accepted for one mozconfig, variant and patch
+    # stack, and a change to any of them asks for a new acceptance or a reading.
+    current = inputs_at(repo, commit)
+    if record.get("built_with") != current:
+        raise ManifestError(
+            "the networking check's record is for another mozconfig or patch stack than the base commit's: "
+            f"a patch or a configure option changed since; {how_to}"
+        )
 
 
 def tag(manifest: dict) -> tuple[str, list[str]]:
@@ -214,6 +316,7 @@ def verify(out: Path, repo: Path, ref: str) -> dict:
     check_tree(manifest)
     check_files(manifest, out)
     check_base(manifest["nulavio_base_commit"], repo, ref)
+    check_networking(manifest, repo)
     release_tag, rpms = tag(manifest)
     deb_files = debs(manifest, release_tag)
     check_newer(release_tag, repo)
@@ -261,6 +364,9 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("next-release", help="the package release to build for a Firefox version")
     n.add_argument("firefox")
     n.add_argument("--repo", type=Path, default=ROOT)
+    c = sub.add_parser("networking-claim", help="the claim whose attestation the signing job requires (bytes on stdout)")
+    c.add_argument("out", type=Path)
+    c.add_argument("--repo", type=Path, default=ROOT)
     o = sub.add_parser("not-older", help="uploading a release's repositories would not roll them back")
     o.add_argument("tag")
     o.add_argument("--repo", type=Path, default=ROOT)
@@ -269,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "verify":
             print(json.dumps(verify(args.out, args.repo, args.on), indent=2))
+        elif args.command == "networking-claim":
+            sys.stdout.buffer.write(networking_claim(args.out, args.repo))
         elif args.command == "not-older":
             check_not_older(args.tag, args.repo, args.also)
         elif args.command == "next-release":

@@ -14,8 +14,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "release"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import release_manifest  # noqa: E402
+import networking_fixture  # noqa: E402
 from verify_firefox_release import SIGNING_SUBKEYS  # noqa: E402
 
 RPM = "packages/x86_64/nulavio-159.0.1-0.1.fc44.x86_64.rpm"
@@ -34,7 +36,13 @@ class ReleaseManifestTest(unittest.TestCase):
         self.repo.mkdir()
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
-        subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+        # The base commit says the pinned release passed the networking check, read with its own mozconfig,
+        # variant and patch stack (#430).
+        self.record = self.repo / release_manifest.NETWORKING_RECORD
+        networking_fixture.write_inputs(self.repo)
+        networking_fixture.write_record(self.repo, "159.0.1", SOURCE)
+        subprocess.run([*git, "add", "."], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "base"], check=True)
         self.base = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
         subprocess.run([*git, "checkout", "-q", "-b", "side"], check=True)
         subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "unreviewed"], check=True)
@@ -114,6 +122,120 @@ class ReleaseManifestTest(unittest.TestCase):
         self.manifest["rehearsal"] = "failed"
         self.write()
         self.refused("did not finish")
+
+    def commit_record(self, record: dict | None, branch: str = "main") -> str:
+        """A new commit on the branch with this record (None: without the file); the manifest is built from it."""
+        git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+        subprocess.run([*git, "checkout", "-q", branch], check=True)
+        if record is None:
+            subprocess.run([*git, "rm", "-q", release_manifest.NETWORKING_RECORD], check=True)
+        else:
+            self.record.parent.mkdir(parents=True, exist_ok=True)
+            self.record.write_text(json.dumps(record) if isinstance(record, dict) else record)
+            subprocess.run([*git, "add", "."], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "record"], check=True)
+        head = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+        self.manifest["nulavio_base_commit"] = head
+        self.write()
+        return head
+
+    def test_a_release_nobody_checked_for_networking_in_rust_is_refused(self):
+        good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
+        for record, said in (
+            ({**good, "firefox": "159.0"}, "is about Firefox 159.0, not the 159.0.1"),  # the pin moved, the record did not
+            ({**good, "source_sha256": "1" * 64}, "nobody checked its Rust code"),
+            ({**good, "result": "failed"}, "says 'failed'"),
+            ({**good, "result": "accepted"}, "says 'accepted'"),  # accepted by nobody in particular
+            ({**good, "result": "accepted", "accepted_in": "the maintainer said so"}, "says 'accepted'"),
+            ("not json", "cannot be read at the base commit"),
+            (None, "cannot be read at the base commit"),
+        ):
+            with self.subTest(record=record):
+                self.commit_record(record)
+                self.refused(said)
+        self.commit_record({**good, "result": "accepted", "accepted_in": "#430"})
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+        self.commit_record(good)
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+
+    def test_a_patch_or_a_mozconfig_changed_since_the_reading_asks_for_a_new_one(self):
+        said = "is for another mozconfig or patch stack"
+        good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
+        for change in (
+            lambda: (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n"),
+            lambda: (self.repo / "browser/build/mozconfig").write_text("ac_add_options --enable-lto=cross\n"),
+            lambda: (self.repo / "browser/build/mozconfig.no-lto").write_text("ac_add_options --enable-debug\n"),
+        ):
+            with self.subTest(change=change):
+                change()
+                self.commit_record(good)  # the files changed, the record is the one read before
+                self.refused(said)
+                self.commit_record(networking_fixture.record(self.repo, "159.0.1", SOURCE))  # read again
+                self.assertEqual(self.verify()["firefox"], "159.0.1")
+                good = networking_fixture.record(self.repo, "159.0.1", SOURCE)
+        without = {key: value for key, value in good.items() if key != "built_with"}
+        self.commit_record(without)  # a record from before the binding says nothing about what it was read with
+        self.refused(said)
+        accepted = {**good, "result": "accepted", "accepted_in": "#430"}
+        self.commit_record({**without, "result": "accepted", "accepted_in": "#430"})  # accepted for no inputs in particular
+        self.refused(said)
+        self.commit_record(accepted)  # accepted for this mozconfig, variant and patch stack
+        self.assertEqual(self.verify()["firefox"], "159.0.1")
+        (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/z.cpp\n+++ b/dom/z.cpp\n")
+        self.commit_record(accepted)  # a patch changed since it was accepted
+        self.refused(said)
+
+    def commit_reader(self, text: str) -> None:
+        """The reader, the build script and the workflow at the base commit (what the claim's read_with names)."""
+        for path in networking_fixture.networking_check.READ_WITH:
+            (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / path).write_text(text + path + "\n")
+        self.commit_record(json.loads(self.record.read_text()))
+
+    def test_a_base_commit_that_is_not_a_full_hash_is_refused_before_git_sees_it(self):
+        for value in ("--output=/tmp/x", "main", "HEAD~1", self.base[:12], "", None, 7):
+            with self.subTest(value=value):
+                self.manifest["nulavio_base_commit"] = value
+                self.write()
+                self.refused("not a full commit hash")
+                with self.assertRaises(release_manifest.ManifestError) as caught:
+                    release_manifest.networking_claim(self.out, self.repo)
+                self.assertIn("not a full commit hash", str(caught.exception))
+
+    def test_a_base_commit_without_the_reader_gives_no_claim(self):
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.networking_claim(self.out, self.repo)
+        self.assertIn("cannot be read at", str(caught.exception))
+
+    def test_the_claim_comes_from_the_manifest_and_the_base_commit_never_from_the_record(self):
+        nc = networking_fixture.networking_check
+        self.commit_reader("# the reader\n")
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A reader changed at the base commit is another claim.
+        self.commit_reader("# the reader, tightened\n")
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        # A record that says "accepted", or names another release, changes nothing in the claim.
+        self.commit_record({"firefox": "1.0", "source_sha256": "0" * 64, "result": "accepted", "accepted_in": "#1"})
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A patch changed at the base commit is another claim: the old attestation no longer fits.
+        (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n")
+        self.commit_record(networking_fixture.record(self.repo, "159.0.1", SOURCE))
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # The command prints those bytes and nothing else.
+        done = subprocess.run(
+            [sys.executable, "-I", str(ROOT / "scripts" / "release" / "release_manifest.py"), "networking-claim", str(self.out),
+             "--repo", str(self.repo)],
+            capture_output=True,
+        )  # fmt: skip
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, release_manifest.networking_claim(self.out, self.repo))
+
+    def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
+        self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))
+        self.record.write_text(json.dumps(networking_fixture.record(self.repo, "159.0.1", SOURCE)))  # not committed
+        self.refused("is about Firefox 159.0")
 
     def test_a_package_changed_after_the_rehearsal_is_refused(self):
         (self.out / RPM).write_bytes(b"rpm, rebuilt by hand")

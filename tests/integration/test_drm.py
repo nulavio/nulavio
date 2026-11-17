@@ -263,7 +263,8 @@ class ProtectedMediaTest(unittest.TestCase):
     )
     def test_04_with_drm_on_widevine_installs_and_a_public_test_stream_plays(self):
         """#222, item 2: DRM turned on as Settings does, the engine installs Widevine from Mozilla's list, and the
-        Shaka Player demo's Widevine stream ("Angel One", H.264 in fragmented MP4, Google's test licence server) plays."""
+        Shaka Player demo's Widevine stream ("Angel One", H.264 in fragmented MP4, Google's test licence server) plays
+        past its clear start with a licence, and stops there without one."""
         self.m.chrome("Services.prefs.setBoolPref('media.eme.enabled', true);")
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
         self.m.set_context("chrome")
@@ -275,15 +276,26 @@ class ProtectedMediaTest(unittest.TestCase):
         self.assertNotIn("error", installed, installed)
         version = lambda: self.m.chrome("return Services.prefs.getStringPref('media.gmp-widevinecdm.version', '');")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: version(), 120), "Widevine was not installed")
+        codec = 'video/mp4; codecs="avc1.42c01e"'
+        # The control: the stream's first seconds are not encrypted (the packager's "clear lead"), so playing them
+        # proves nothing about Widevine. Without a licence the film plays that start and then waits for a key.
         self.m.navigate(self.server.url("/page/eme-widevine"))
-        result = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, 'video/mp4; codecs="avc1.42c01e"', WIDEVINE_LICENCE], 120)
+        without = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, codec, WIDEVINE_LICENCE, False, WIDEVINE_PAST_CLEAR], 120)
+        print(f"Widevine {version()}, no licence: {without}", file=sys.stderr)
+        self.assertNotIn("error", without, without)
+        self.assertFalse(without["licensed"])
+        self.assertTrue(without["waitedForKey"], f"the stream never waited for a key: is it encrypted? {without}")
+        self.assertLess(without["currentTime"], WIDEVINE_PAST_CLEAR, f"the stream played without a licence: {without}")
+
+        self.m.navigate(self.server.url("/page/eme-widevine"))
+        result = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, codec, WIDEVINE_LICENCE, True, WIDEVINE_PAST_CLEAR], 180)
         print(f"Widevine {version()}: {result}", file=sys.stderr)
         self.assertNotIn("error", result, result)
         self.assertEqual(result["keySystem"], "com.widevine.alpha")
         self.assertEqual(result["errors"], [], result)
         self.assertTrue(result["licensed"], f"no licence reached the CDM: {result}")
-        self.assertGreaterEqual(result["currentTime"], 1.5, f"the stream did not play: {result}")
-        self.assertGreater(result["frames"], 0, result)
+        self.assertGreaterEqual(result["currentTime"], WIDEVINE_PAST_CLEAR, f"the encrypted part did not play: {result}")
+        self.assertGreater(result["frames"], without["frames"], result)
 
 
 # #222, item 2: Widevine from the engine's own list (what turning DRM on starts), installed now instead of at the
@@ -304,8 +316,10 @@ const done = arguments[arguments.length - 1];
 # fragmented MP4 (the CDM decodes it itself), its first part.
 WIDEVINE_STREAM = "https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/v-0144p-0100k-libx264.mp4"
 WIDEVINE_LICENCE = "https://cwip-shaka-proxy.appspot.com/no_auth"
+# Seconds of the film that must play: past its clear start (measured: without a licence it stops at 7.8 s).
+WIDEVINE_PAST_CLEAR = 12
 WIDEVINE_PLAY = """
-const [url, type, licence] = arguments;
+const [url, type, licence, answer, until] = arguments;
 const done = arguments[arguments.length - 1];
 (async () => {
   const media = document.createElement("video");
@@ -318,10 +332,13 @@ const done = arguments[arguments.length - 1];
   const keys = await access.createMediaKeys();
   await media.setMediaKeys(keys);
   let licensed = false;
+  let waitedForKey = false;
+  media.addEventListener("waitingforkey", () => { waitedForKey = true; });
   // The stream carries its key id: the engine says "encrypted", and the licence comes from the server.
   media.addEventListener("encrypted", event => {
     const session = keys.createSession();
     session.addEventListener("message", async message => {
+      if (!answer) return;  // the control: the CDM's request is never sent, so it gets no key
       let status = "no answer";
       try {
         const answer = await fetch(licence, { method: "POST", body: message.message });
@@ -342,11 +359,15 @@ const done = arguments[arguments.length - 1];
   buffer.appendBuffer(await (await fetch(url, { headers: { Range: "bytes=0-399999" } })).arrayBuffer());
   await new Promise(r => buffer.addEventListener("updateend", r, { once: true }));
   media.play().catch(e => errors.push(`play: ${e}`));
+  // Until it has played `until` seconds, or stopped moving for eight (waiting for a key), or 90 s.
   const started = Date.now();
-  while (Date.now() - started < 60000 && media.currentTime < 1.5 && !errors.length) {
+  let last = -1, moved = Date.now();
+  while (Date.now() - started < 90000 && media.currentTime < until && !errors.length) {
+    if (media.currentTime !== last) { last = media.currentTime; moved = Date.now(); }
+    else if (Date.now() - moved > 8000) break;
     await new Promise(r => setTimeout(r, 200));
   }
-  return { licensed, currentTime: media.currentTime, readyState: media.readyState,
+  return { licensed, waitedForKey, currentTime: media.currentTime, readyState: media.readyState,
            frames: media.getVideoPlaybackQuality().totalVideoFrames, errors, keySystem: access.keySystem };
 })().then(done, e => done({ error: String(e) }));
 """
