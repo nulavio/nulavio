@@ -30,7 +30,7 @@ import harness
 import settings_page
 from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
 
-from nulavio_launcher import temporary
+from nulavio_launcher import profile, temporary
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles'
@@ -63,6 +63,42 @@ def guard_is_held(path: Path) -> bool:
     finally:
         os.close(fd)
     return False
+
+
+def windows_restored(path: Path) -> bool:
+    """The engine's own startup record (CrashMonitor's) says its windows are restored."""
+    try:
+        return json.loads((path / "sessionCheckpoints.json").read_text()).get("sessionstore-windows-restored") is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def left_behind(path: Path, pid: int) -> dict:
+    """What a failure to delete leaves to read: the watcher, the engine and its lock."""
+    if not path.exists():
+        return {"deleted": True}
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        state = "gone"
+    try:
+        lock = os.readlink(path / "lock")
+    except OSError:
+        lock = None
+    try:
+        held = guard_is_held(path)
+    except OSError:
+        held = None  # deleted meanwhile, or no guard file
+    try:
+        files = sorted(p.name for p in path.iterdir())[:30]
+    except OSError:
+        files = None
+    return {
+        "watcher_holds_its_lock": held,
+        "engine": state,
+        "lock": lock,
+        "files": files,
+    }
 
 
 @unittest.skipUnless(harness.nulavio_engine(), "the browser side needs the Nulavio build (NULAVIO_ENGINE)")
@@ -132,8 +168,18 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
         self.assertIn(str(path).encode(), args)
         self.assertNotIn(b"--marionette", args)  # an ordinary instance, nothing added for automation
 
+        # A person closes a window that is open. The watcher sees the engine by its profile lock, every half
+        # second; an engine that dies before it is seen counts as never started, and the folder goes only
+        # after the watcher's two minutes for a start (#488: a slower build, with AddressSanitizer, was
+        # killed that early). So the engine's own record that its windows are restored comes first.
+        self.assertTrue(
+            harness.wait_until(lambda: windows_restored(path), timeout=120), "the temporary instance did not open its window"
+        )
+        self.assertEqual(profile.Profile(name="temporary", path=path).running_pid(), pid)
         os.kill(pid, signal.SIGTERM)  # what closing its last window does: the engine exits
-        self.assertTrue(harness.wait_until(lambda: not path.exists(), timeout=90), "not deleted after closing")
+        self.assertTrue(
+            harness.wait_until(lambda: not path.exists(), timeout=90), f"not deleted after closing: {left_behind(path, pid)}"
+        )
         self.assertTrue((self.session.profile_dir / "prefs.js").exists())  # the user's profile is untouched
         self.assertEqual(self.chrome_user_profile_temporary(), {"temporary": False, "inMemory": False, "swapOnDisk": False})
 
