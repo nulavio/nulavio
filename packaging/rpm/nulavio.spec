@@ -62,6 +62,15 @@ cat > %{buildroot}%{_bindir}/nulavio <<'SH'
 exec %{nulavio_dir}/nulavio "$@"
 SH
 chmod 0755 %{buildroot}%{_bindir}/nulavio
+# The diagnostics (#470): `nulavio` alone stays the browser; this runs the doctor of the tools the browser carries,
+# for the engine this package installed.
+cat > %{buildroot}%{_bindir}/nulavio-doctor <<'SH'
+#!/bin/sh
+NULAVIO_ENGINE=%{nulavio_dir}/nulavio
+export NULAVIO_ENGINE
+exec %{nulavio_dir}/nulavio-tools/bin/nulavio doctor "$@"
+SH
+chmod 0755 %{buildroot}%{_bindir}/nulavio-doctor
 install -Dm0644 %{SOURCE1} %{buildroot}%{_datadir}/applications/nulavio.desktop
 for size in 16 32 48 64 128; do
   install -Dm0644 nulavio/browser/chrome/icons/default/default${size}.png \
@@ -72,6 +81,7 @@ done
 %license nulavio/LICENSE*
 %{nulavio_dir}
 %{_bindir}/nulavio
+%{_bindir}/nulavio-doctor
 %{_datadir}/applications/nulavio.desktop
 %{_datadir}/icons/hicolor/*/apps/nulavio.png
 

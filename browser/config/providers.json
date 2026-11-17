@@ -64,7 +64,7 @@
         "name": "com.1password.1password",
         "allowed_extension": "{d634138d-c276-4fc8-924b-40a0ea21d284}",
         "required": false,
-        "note": "Only for the desktop app's integration (unlock with the app, system authentication); the extension also works on its own with a sign-in in the browser. Host name and extension id as the desktop app writes them on Linux (~/.mozilla/native-messaging-hosts/com.1password.1password.json), from 1Password community reports and the extension's AMO id, read 2026-11-16, not yet measured with the app installed. For a browser 1Password does not know, its binary name must be in /etc/1password/custom_allowed_browsers (support.1password.com/additional-browsers): nulavio doctor says so; Nulavio never writes that file."
+        "note": "Only for the desktop app's integration (unlock with the app, system authentication); the extension also works on its own with a sign-in in the browser. Host name and extension id as the desktop app writes them on Linux (~/.mozilla/native-messaging-hosts/com.1password.1password.json), from 1Password community reports and the extension's AMO id, read 2026-11-16, not yet measured with the app installed. For a browser 1Password does not know, its binary name must be in /etc/1password/custom_allowed_browsers (support.1password.com/additional-browsers): nulavio-doctor (a package install; nulavio doctor in a source checkout) says so; Nulavio never writes that file."
       },
       "prefs": {
         "signon.rememberSignons": false,
