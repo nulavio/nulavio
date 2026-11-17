@@ -45,7 +45,7 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   state() -> {engines: [{id, name, alias, aliases, kind, provider, host, isDefault, isDefaultPrivate,
                          canSuggest, suggestHost, suggestOptIn, removable}],
               suggestions, suggestionsPrivate, separatePrivateDefault, providers}
-  addProvider("duckduckgo"|"brave"|"mojeek"|"kagi") -> id
+  addProvider(<a key of PROVIDERS: "brave", "duckduckgo", "ecosia", "kagi", "mojeek", "qwant", "startpage">) -> id
   addSearxng({url, alias?}) -> id            // https base URL of an instance the user names
   addCustom({name, url, alias?, suggestUrl?}) -> id
   addOpenSearch({url}) -> id                 // downloads the description once, at the user's request

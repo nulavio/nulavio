@@ -1579,13 +1579,11 @@
         engine: ofProvider.get(provider.key) ?? null,
         account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
         suggests: provider.suggests,
-        suggestHost: provider.suggestHost,
       }));
       const curatedKeys = new Set(curated.map(provider => provider.key));
       for (const engine of engines) {
         if (!curatedKeys.has(engine.provider)) {
-          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest,
-            suggestHost: engine.suggestHost });
+          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest });
         }
       }
       return rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -1665,9 +1663,13 @@
         const target = row.provider ? { provider: row.provider } : { id: row.engine.id };
         // The box speaks for this provider only when it can receive typed text at all.
         const suggest = row.suggests ? Boolean(chooseBench.state.suggest) : undefined;
-        // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed.
+        // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
+        // chosen engine's own (an engine of the person's with a curated provider's name may send elsewhere).
         const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
-        const said = suggest && row.suggestHost ? `${done} ${msg("engineSuggestOn", row.suggestHost)}` : done;
+        const said = id => {
+          const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
+          return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
+        };
         chooseBench.act(
           () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
           said

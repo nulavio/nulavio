@@ -353,6 +353,12 @@ class NulavioSearchClass {
     };
   }
 
+  /** The host an engine sends typed text to for suggestions, or null: the engine's own, whatever its name. */
+  suggestHostOf(id) {
+    const engine = lazy.SearchService.getEngineById(String(id));
+    return engine ? suggestHost(engine) : null;
+  }
+
   /**
    * #151: whether this profile is signed in to each provider that has accounts, from the presence of its session
    * cookie in this profile's normal (not private) cookie jar. `signedIn` is null when the cookies could not be read.

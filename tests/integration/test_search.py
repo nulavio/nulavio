@@ -601,6 +601,23 @@ class SearchPrivacyTest(unittest.TestCase):
             seen = self.m.chrome(NET_STOP)
         self.assert_nothing_about(seen, "\u0000", hosts=(*SEARCH_HOSTS, "searx.example.org"))
 
+    def test_14b_the_host_that_gets_typed_text_is_the_chosen_engines_own(self):
+        """#151: an engine of the person's that has a curated provider's name is the one chosen, and the host named for
+        its suggestions is that engine's, not the curated provider's."""
+        self.require_nulavio()
+        before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        normal = next(e[0] for e in before if e[1])
+        private = next(e[0] for e in before if e[2])
+        restore = "await S.setDefault(args[0]); await S.setDefault(args[1], {private: true});"
+        self.addCleanup(self.search, restore, normal, private)
+        own = self.search(
+            "return S.addCustom({name: 'Ecosia', url: 'https://other.example/?q=%s', suggestUrl: 'https://other.example/s?q=%s'});"
+        )
+        self.addCleanup(self.search, "await S.remove(args[0]);", own)
+        chosen = self.search("return S.choose({provider: 'ecosia', privateToo: false});")
+        self.assertEqual(chosen, own, "the profile's own engine of that name was the one chosen")
+        self.assertEqual(self.search("return S.suggestHostOf(args[0]);", chosen), "other.example")
+
     def test_15_signed_in_is_read_from_the_session_cookies_name_and_survives_a_restart(self):
         """#151: whether the profile is signed in to a provider with accounts is the presence of its session cookie
         (Kagi: kagi_session), never its value. A cookie of another name does not count, and a sign-in kept by the
