@@ -685,6 +685,80 @@ class SearchPrivacyTest(unittest.TestCase):
                 self.assertFalse(self.search(exists))
                 self.assertTrue(self.search("return (await S.list()).find(e => e.id === args[0]).isDefault;", mojeek))
 
+    def test_17_a_session_never_goes_in_a_search_address(self):
+        """#152 (ADR 0002, amendment of 2026-11-16): a search template that carries a session is refused, Kagi's
+        Session Link first; the parameter's name decides, in the query or the fragment, whatever its case."""
+        self.require_nulavio()
+        refused = (
+            "https://kagi.com/search?token=abc.def&q=%s",
+            "https://kagi.com/search?q={searchTerms}&Token=abc",
+            "https://example.org/?q=%s#session=abc",
+            "https://example.org/?q=%s&access_token=abc",
+            "https://example.org/?q=%s&sessionid=abc",
+        )
+        for url in refused:
+            with self.subTest(url=url):
+                self.assertEqual(
+                    self.search_error("return S.addCustom({name: 'Com sessão', url: args[0]});", url), "session-in-template"
+                )
+        self.assertNotIn("Com sessão", [e["name"] for e in self.search("return S.list();")])
+        # A parameter that only looks alike is not a session.
+        kept = self.search("return S.addCustom({name: 'Sem sessão', url: 'https://example.org/?q=%s&tokens=1&lang=pt'});")
+        self.search("await S.remove(args[0]);", kept)
+
+    def test_18_a_search_from_a_private_window_carries_no_cookie_of_the_normal_session(self):
+        """#152: an engine's cookie in the normal session (a stand-in for a provider's sign-in) goes with a search
+        from a normal window and never with one from a private window."""
+        self.require_nulavio()
+        engine = self.search(
+            "return S.addCustom({name: 'Fixture com conta', url: args[0]});", self.server.url("/search-cookie?q=%s")
+        )
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        self.m.chrome(
+            "Services.cookies.add('127.0.0.1', '/', 'sid', 'normal-session', false, false, false, Date.now() + 86400000, {},"
+            " Ci.nsICookie.SAMESITE_LAX, Ci.nsICookie.SCHEME_HTTP); return true;"
+        )
+        self.addCleanup(self.m.chrome, "Services.cookies.removeCookiesFromExactHost('127.0.0.1', '{}');")
+        search = (
+            "const { SearchService } = ChromeUtils.importESModule('moz-src:///toolkit/components/search/SearchService.sys.mjs');"
+            "const url = SearchService.getEngineById(arguments[0]).getSubmission(arguments[1]).uri.spec;"
+            "const win = arguments[2] ? [...Services.wm.getEnumerator('navigator:browser')].find(w =>"
+            " PrivateBrowsingUtils.isWindowPrivate(w)) : window;"
+            "win.openTrustedLinkIn(url, 'tab'); return url;"
+        )
+        self.m.chrome(search, [engine, "normal", False])
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/search-cookie"), 15))
+        self.assertEqual(self.server.cookies["/search-cookie"], "sid=normal-session", "the positive control: a normal search")
+        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+        before = len(self.server.requests_to("/search-cookie"))
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        windows = "[...Services.wm.getEnumerator('navigator:browser')]"
+        private = f"return {windows}.some(w => PrivateBrowsingUtils.isWindowPrivate(w) && w.gBrowser);"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(private), 10))
+        self.addCleanup(
+            self.m.chrome,
+            f"for (const w of {windows}) if (PrivateBrowsingUtils.isWindowPrivate(w)) w.close();",
+        )
+        self.m.chrome(search, [engine, "private", True])
+        self.assertTrue(harness.wait_until(lambda: len(self.server.requests_to("/search-cookie")) > before, 15))
+        self.assertIsNone(self.server.cookies["/search-cookie"], "a private window's search carried the normal session's cookie")
+
+    def test_19_an_opensearch_description_that_declares_a_session_is_not_kept(self):
+        """#152, review of #484: the addresses an OpenSearch description declares go through the session check once
+        the engine has read them; an engine whose search, suggestion or search-form address carries one is removed again."""
+        self.require_nulavio()
+        names = "return (await S.state()).engines.map(e => e.name);"
+        for name, param in (("Fixture OS busca", "search"), ("Fixture OS sugestao", "suggest"), ("Fixture OS form", "form")):
+            with self.subTest(declared_in=param):
+                url = self.server.url(f"/opensearch.xml?name={name.replace(' ', '+')}&{param}=token")
+                self.assertEqual(self.search_error("return S.addOpenSearch({url: args[0]});", url), "session-in-template")
+                self.assertNotIn(name, self.search(names))
+        # The positive control: the same description without the parameter is kept.
+        url = self.server.url("/opensearch.xml?name=Fixture+OS+limpo")
+        engine = self.search("return S.addOpenSearch({url: args[0]});", url)
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        self.assertIn("Fixture OS limpo", self.search(names))
+
 
 if __name__ == "__main__":
     unittest.main()
