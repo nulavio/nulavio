@@ -90,6 +90,9 @@
     get NulavioRouting() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs").NulavioRouting;
     },
+    get NulavioServices() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs").NulavioServices;
+    },
     get NulavioSearch() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch;
     },
@@ -1768,6 +1771,189 @@
       searchBench.bar("nulavio-search-said", "success", () => searchBench.state.said, () => Boolean(searchBench.state.said)),
     ];
 
+    // -- #156: web services used on a click, for translation. Translation stays on the device (the engine's own group,
+    // above); a web service is used only after the person adds it here, only from a menu item that names it. Listed by
+    // name, alphabetically, none marked. --
+    const services = source(() => shell.NulavioServices.state());
+    const servicesBench = workbench({ fresh: { instance: "", name: "", selection: "", page: "" } }, services);
+    const servicesSetup = (emitChange, stops) => {
+      stops.push(services.listen(emitChange));
+      servicesBench.watch(emitChange, stops);
+    };
+    const servicesNow = () => (services.state.ready ? services.state.value : null);
+    setting({
+      id: "nulavio-translate-added",
+      setup(emitChange, stops) {
+        servicesSetup(emitChange, stops);
+        services.refresh();
+        try {
+          stops.push(shell.NulavioServices.subscribe(services.refresh));
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      visible: () => Boolean(servicesNow()),
+      getControlConfig(config) {
+        const added = servicesNow()?.translators ?? [];
+        const rows = added.flatMap(service => stacked({
+          key: `translator-${service.id}`,
+          control: "moz-box-item",
+          controlAttrs: {
+            label: service.name,
+            description: msg(service.page ? "translateSendsBoth" : "translateSendsText"),
+            class: "nulavio-translator",
+            "data-service": service.id,
+          },
+          options: [
+            {
+              key: `remove-${service.id}`,
+              control: "moz-button",
+              slot: "actions",
+              disabled: servicesBench.state.busy,
+              controlAttrs: { label: msg("translateRemove"), "aria-label": msg("translateRemoveNamed", service.name), "data-action": "remove", "data-service": service.id },
+            },
+          ],
+        }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("translateNone"), class: "nulavio-translator-none" } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      onUserClick(event) {
+        const id = event.target.closest?.('[data-action="remove"]')?.dataset.service;
+        if ((servicesNow()?.translators ?? []).some(service => service.id === id)) {
+          servicesBench.act(() => shell.NulavioServices.removeTranslator(id), msg("doneRemoved"));
+        }
+      },
+    });
+    setting({
+      id: "nulavio-translate-known",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      getControlConfig(config) {
+        const have = new Set((servicesNow()?.translators ?? []).map(service => service.key));
+        const rows = (servicesNow()?.known ?? [])
+          .filter(service => (service.selection || service.page) && !service.instance && !have.has(service.key))
+          .flatMap(service => stacked({
+            key: `known-${service.key}`,
+            control: "moz-box-item",
+            controlAttrs: {
+              label: service.name,
+              description: [msg(service.page ? "translateSendsBoth" : "translateSendsText"), service.account ? msg("translateAccount") : ""].filter(Boolean).join(" "),
+              class: "nulavio-translate-known",
+              "data-service": service.key,
+            },
+            options: [
+              {
+                key: `add-${service.key}`,
+                control: "moz-button",
+                slot: "actions",
+                disabled: servicesBench.state.busy,
+                controlAttrs: { label: msg("addProviderButton", service.name), "data-action": "add", "data-service": service.key },
+              },
+            ],
+          }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("translateKnownNone") } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      onUserClick(event) {
+        const key = event.target.closest?.('[data-action="add"]')?.dataset.service;
+        if ((servicesNow()?.known ?? []).some(service => service.key === key && !service.instance)) {
+          servicesBench.act(() => shell.NulavioServices.addTranslator({ key }), msg("doneAdded"));
+        }
+      },
+    });
+    // A field of the forms below: kept in the bench until its "Adicionar" or "Usar".
+    const servicesField = (id, field, words, visible = () => Boolean(servicesNow())) =>
+      setting({
+        id,
+        setup: servicesSetup,
+        visible,
+        get: () => servicesBench.state.fresh[field],
+        set(value) {
+          servicesBench.state.fresh[field] = value;
+        },
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(words.label), description: words.note ? msg(words.note) : "", placeholder: words.placeholder ?? "" },
+        }),
+      });
+    const servicesButton = (id, label, action, cleared) =>
+      setting({
+        id,
+        setup: servicesSetup,
+        visible: () => Boolean(servicesNow()),
+        disabled: () => servicesBench.state.busy,
+        async onUserClick(event) {
+          event.preventDefault();
+          if (await servicesBench.act(() => action(servicesBench.state.fresh), msg("doneAdded"))) {
+            servicesBench.show({ fresh: { ...servicesBench.state.fresh, ...Object.fromEntries(cleared.map(field => [field, ""])) } });
+          }
+        },
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg(label) } }),
+      });
+    servicesField("nulavio-translate-instance", "instance", { label: "translateInstanceLabel", note: "translateInstanceNote", placeholder: "https://translate.example.org/" });
+    servicesButton("nulavio-translate-instance-add", "translateInstanceAdd", fresh => shell.NulavioServices.addTranslator({ key: "libretranslate", base: fresh.instance }), ["instance"]);
+    servicesField("nulavio-translate-custom-name", "name", { label: "translateCustomName" });
+    servicesField("nulavio-translate-custom-selection", "selection", {
+      label: "translateCustomSelection",
+      note: "translateCustomSelectionNote",
+      placeholder: "https://translate.example.org/?q={text}&to={lang}",
+    });
+    servicesField("nulavio-translate-custom-page", "page", {
+      label: "translateCustomPage",
+      note: "translateCustomPageNote",
+      placeholder: "https://translate.example.org/page?u={url}",
+    });
+    servicesButton(
+      "nulavio-translate-custom-add",
+      "translateCustomAdd",
+      fresh => shell.NulavioServices.addTranslator({ key: "custom", name: fresh.name, selection: fresh.selection, page: fresh.page }),
+      ["name", "selection", "page"]
+    );
+    setting({
+      id: "nulavio-translate-language",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      get: () => servicesNow()?.language ?? "",
+      set(value) {
+        servicesBench.act(() => shell.NulavioServices.setLanguage(String(value)), msg("doneSaved"));
+      },
+      getControlConfig(config) {
+        const now = servicesNow();
+        const named = tag => {
+          try {
+            return new Intl.DisplayNames([now?.browserLanguage ?? "pt-BR"], { type: "language" }).of(tag) ?? tag;
+          } catch {
+            return tag;
+          }
+        };
+        return {
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg("translateLanguage"), description: msg("translateLanguageNote") },
+          options: [
+            { value: "", controlAttrs: { label: msg("translateLanguageBrowser", named(now?.browserLanguage ?? "")) } },
+            ...(now?.languages ?? []).map(tag => ({ value: tag, controlAttrs: { label: named(tag) } })),
+          ],
+        };
+      },
+    });
+    setting({
+      id: "nulavio-services-private",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      get: () => Boolean(servicesNow()?.privateToo),
+      set(value) {
+        servicesBench.act(() => shell.NulavioServices.setPrivateToo(Boolean(value)), msg("doneSaved"));
+      },
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("servicesPrivateLabel"), description: msg("servicesPrivateNote") },
+      }),
+    });
+    const servicesBars = prefix => [
+      servicesBench.bar(`nulavio-${prefix}-error`, "error", () => servicesBench.state.error, () => Boolean(servicesBench.state.error)),
+      servicesBench.bar(`nulavio-${prefix}-said`, "success", () => servicesBench.state.said, () => Boolean(servicesBench.state.said)),
+    ];
+
     // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads whether it
     // is on and whether a cookie-notice list is switched on, and writes nothing there: lists change on its page. --
     const filter = source(async () => ({ ...shell.NulavioPrivacy.filter(), lists: await shell.NulavioPrivacy.filterLists() }));
@@ -2524,6 +2710,30 @@
         headingLevel: 2,
         items: [...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
       },
+      nulavioTranslate: {
+        l10nId: "nulavio-translate-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-translate-failed", services),
+          ...servicesBars("translate"),
+          { id: "nulavio-translate-added", control: "moz-box-group" },
+          { id: "nulavio-translate-language", control: "moz-select" },
+          { id: "nulavio-services-private", control: "moz-checkbox" },
+        ],
+      },
+      nulavioTranslateAdd: {
+        l10nId: "nulavio-translate-add-group",
+        headingLevel: 2,
+        items: [
+          { id: "nulavio-translate-known", control: "moz-box-group" },
+          { id: "nulavio-translate-instance", control: "moz-input-text" },
+          { id: "nulavio-translate-instance-add", control: "moz-button" },
+          { id: "nulavio-translate-custom-name", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-selection", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-page", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-add", control: "moz-button" },
+        ],
+      },
       nulavioAssistantEntry: {
         l10nId: "nulavio-assistant-group",
         headingLevel: 2,
@@ -2603,6 +2813,8 @@
         return edited;
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
+      // Web services for translation after the engine's own, which stays the default and on the device.
+      languages: config => ({ ...config, groupIds: after(config.groupIds, "translations", "nulavioTranslate", "nulavioTranslateAdd") }),
       // "Sobre": how many managed policies are in effect and whose they are.
       about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioWhatsNew", "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),

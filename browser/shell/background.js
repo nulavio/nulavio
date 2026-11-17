@@ -358,3 +358,92 @@ if (browser.nulavioAI && browser.omnibox) {
     browser.nulavioAI.assistantOffer({ kind: "draft", text: String(text).slice(0, 8000) }, tab.id).catch(console.error);
   });
 }
+
+// -- Web services on a click: translation (#156) -------------------------------
+// One item per service and use, named after the service ("Traduzir seleção com DeepL"), only for services the
+// person added in Settings. Each time a menu opens, the module says whether an item may be used there: hidden in a
+// private window unless the person allowed it, and shown but unusable, with the reason in its words, for an address
+// a service should not fetch (this computer, a local network, not a web page). The click opens the service's
+// address in a new tab; nothing is sent before it. The listeners are added at once, so the event page wakes for them.
+
+const SERVICE_MENU = "nulavio-svc-";
+const serviceItems = new Map(); // menu id -> the module's item
+const serviceStates = new Map(); // menu id -> what the item shows now ({visible, enabled, title})
+let serviceDrawings = 0;
+
+function serviceTitle(item, reason = null) {
+  const key = { "translate-selection": "menuTranslateSelection", "translate-page": "menuTranslatePage" }[item.use];
+  const title = t(key, item.name);
+  return reason ? t("menuServiceRefused", [title, t(`menuServiceReason_${reason.replaceAll("-", "_")}`)]) : title;
+}
+
+async function drawServiceMenus() {
+  const items = await browser.nulavioServices.menu();
+  for (const id of serviceItems.keys()) {
+    await browser.menus.remove(id).catch(() => {});
+  }
+  serviceItems.clear();
+  serviceStates.clear();
+  serviceDrawings += 1;
+  for (const [index, item] of items.entries()) {
+    // Menu ids become element ids, so they are short; the drawing's number makes an item of an earlier drawing (a
+    // menu still open while the list changed) find nothing, never the service now in its place (#491).
+    const id = `${SERVICE_MENU}${serviceDrawings}-${index}`;
+    serviceItems.set(id, item);
+    serviceStates.set(id, { visible: true, enabled: true, title: serviceTitle(item) });
+    browser.menus.create({ id, title: serviceTitle(item), contexts: item.contexts }, () => void browser.runtime.lastError);
+  }
+}
+
+// One drawing at a time, in order: several settings changed together (a choice and its clean-up) must not leave the
+// map naming one service for an item that shows another.
+let serviceDrawing = (async () => {})();
+let serviceRedraw = null;
+function redrawServiceMenus() {
+  // Settings changed together arrive as several events: one drawing for all of them (as rebuildLinkMenu does).
+  clearTimeout(serviceRedraw);
+  serviceRedraw = setTimeout(() => {
+    serviceDrawing = serviceDrawing.then(drawServiceMenus).catch(console.error);
+  }, 100);
+}
+
+if (browser.nulavioServices && browser.menus) {
+  serviceDrawing = drawServiceMenus().catch(console.error);
+  browser.nulavioServices.onChanged.addListener(redrawServiceMenus);
+  browser.menus.onShown.addListener(async (info, tab) => {
+    // Every item this menu's contexts call for, not only the ones the engine drew: an item hidden in a private
+    // window is not drawn anywhere until it is made visible again here.
+    const shown = [...serviceItems.keys()].filter(id => serviceItems.get(id).contexts.some(context => info.contexts.includes(context)));
+    if (!shown.length || !tab) {
+      return;
+    }
+    // Only an item whose state changes is updated, and the menu drawn again only then: an open menu drawn again
+    // replaces its items under the pointer.
+    let changed = false;
+    for (const id of shown) {
+      const item = serviceItems.get(id);
+      const target = info.pageUrl ?? "";
+      const verdict = await browser.nulavioServices.check(item.id, target, tab.id).catch(() => ({ usable: false, reason: "not-found", hidden: true }));
+      const next = { visible: !verdict.hidden, enabled: verdict.usable, title: serviceTitle(item, verdict.usable ? null : verdict.reason) };
+      const now = serviceStates.get(id);
+      if (now && now.visible === next.visible && now.enabled === next.enabled && now.title === next.title) {
+        continue;
+      }
+      await browser.menus.update(id, next);
+      serviceStates.set(id, next);
+      changed = true;
+    }
+    if (changed) {
+      browser.menus.refresh();
+    }
+  });
+  browser.menus.onClicked.addListener(async (info, tab) => {
+    await serviceDrawing; // a drawing under way decides what the item now is
+    const item = serviceItems.get(String(info.menuItemId));
+    if (!item || !tab) {
+      return;
+    }
+    const target = info.pageUrl ?? "";
+    browser.nulavioServices.open(item.id, { text: info.selectionText ?? "", target }, tab.id).catch(console.error);
+  });
+}

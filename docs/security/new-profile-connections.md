@@ -36,6 +36,13 @@ The record shows no request for any of these, and the integration test fails if 
 - An encrypted-DNS resolver: none is used until the person chooses one in the first run or in Settings.
 - Search suggestions, sponsored tiles and new-tab feeds.
 
+## On use: translation and web services
+
+Not part of a new profile left alone, so not in the list above; written here because they follow from a click.
+
+- **Translating a page on the device** (the engine's own translation, the default): the first time a pair of languages is used, the engine downloads its translation models and the engine that runs them from Mozilla's Remote Settings, the hosts of the list's fourth row (`firefox.settings.services.mozilla.com` for the records, `firefox-settings-attachments.cdn.mozilla.net` for the files). What is sent is the name of the collection and of each file, as for the other collections; the page's text stays on the computer. `tests/integration/test_web_services.py` (`OnDeviceTranslationTest`, with `NULAVIO_NETWORK_TESTS=1`) translates a page from English to Portuguese, checks that the files came from `firefox-settings-attachments.cdn.mozilla.net`, and fails if a host not in this list is asked (it does not tell the Remote Settings hosts from the list's other rows).
+- **A web service for translation** (#156): none until the person adds one in Settings, and then only on a click on the menu item that names it. The click opens the service in a new tab with the selected text or the page's address in it, which is all Nulavio puts in it; as with any site opened in a tab, the service also sees the person's IP address and any session the person has with it, and its page runs its own scripts. [Web services on a click](../architecture/web-services.md) lists them.
+
 ## How the list is kept
 
 - `tests/integration/test_new_profile_connections.py` starts a new profile with the engine's network log on (`MOZ_LOG=nsHttp:1,nsHostResolver:4`, written from the first moment of the process), leaves it alone for 75 s and compares every address asked for, and every name resolved, with the JSON file. A host that is not there, or a listed host asked over plain http when its entry does not say so, fails the test with the address. It needs the network: offline the engine does not even ask Remote Settings, and the test says that this is what it is missing, apart from an unlisted address.

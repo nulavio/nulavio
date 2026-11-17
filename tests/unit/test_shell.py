@@ -139,6 +139,7 @@ def module_text(name: str) -> str:
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
 API_NAMES += ("nulavioLayout", "nulavioPersonalise", "nulavioWhatsNew")
+API_NAMES += ("nulavioServices",)  # web services on a click, for translation (#156)
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -175,6 +176,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
         self.assertEqual(apis["nulavioWhatsNew"]["parent"]["events"], ["startup"])  # the Help entry and the bar (#198)
+        self.assertNotIn("events", apis["nulavioServices"]["parent"])  # only the menus' calls
 
     def test_an_engine_module_is_imported_from_one_address(self):
         # 160.0-0.5 shipped NulavioWhatsNew importing SessionStore from an address the engine no longer has

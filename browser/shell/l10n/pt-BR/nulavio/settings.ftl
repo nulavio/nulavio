@@ -191,6 +191,12 @@ nulavio-confirmed-group =
 
 ## Pesquisa
 
+nulavio-translate-group =
+    .label = Serviços de tradução na web
+    .description = A tradução do próprio navegador, acima, acontece no seu computador e continua sendo a padrão. Um serviço na web só é usado depois que você o adiciona, e só num clique no item do menu que tem o nome dele. As extensões dos próprios serviços não vêm com o Nulavio; se preferir uma, instale-a em addons.mozilla.org.
+nulavio-translate-add-group =
+    .label = Adicionar um serviço de tradução
+    .description = Em ordem alfabética, nenhum marcado; o Nulavio não tem parceria com nenhum. Ou uma instância LibreTranslate sua, ou o endereço de outro serviço.
 nulavio-search-choose-group =
     .label = Escolher o provedor de pesquisa deste perfil
     .description = Um clique em "Usar" faz dele a pesquisa deste perfil: entra na lista se faltar e vira o padrão. A ordem é alfabética e nenhum vem marcado; o Nulavio não tem parceria com nenhum. Provedores com conta dizem se este perfil está conectado. Um perfil temporário esquece o login quando fecha.

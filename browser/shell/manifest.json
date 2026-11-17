@@ -271,6 +271,20 @@
           "startup"
         ]
       }
+    },
+    "nulavioServices": {
+      "schema": "experiments/services/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/services/parent.js",
+        "paths": [
+          [
+            "nulavioServices"
+          ]
+        ]
+      }
     }
   },
   "permissions": [

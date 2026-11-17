@@ -314,6 +314,27 @@ class FixtureServer:
                 "  e.target.textContent = 'editor:' + e.clipboardData.getData('text/plain'); });</script>"
             )
             return page.encode(), html, {}
+        if path == "/english-page":
+            # Translation fixture (tests/integration/test_web_services.py): English text, said to be English.
+            return (
+                (
+                    b'<!doctype html><html lang="en"><title>english-page</title>'
+                    b"<p id=text>The weather is nice today, and the library opens at nine in the morning.</p>"
+                ),
+                html,
+                {},
+            )
+        if path == "/service-links":
+            # Web services fixture (tests/integration/test_web_services.py): text to select, and a link to a
+            # public address (never fetched: the test cancels every request that is not to this server).
+            return (
+                (
+                    "<!doctype html><title>service-links</title><p id=text>Olá & mundo/?#</p>"
+                    '<p><a id=out href="https://example.org/artigo?x=1">artigo</a></p>'
+                ).encode(),
+                html,
+                {},
+            )
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.
