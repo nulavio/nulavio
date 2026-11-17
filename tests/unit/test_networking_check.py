@@ -143,6 +143,25 @@ class CheckTest(TreeCase):
         self.assertIn("cannot be compared", self.refused())
         self.assertEqual(self.calls, [])
 
+    def test_only_the_machines_own_lines_may_follow_the_variant(self):
+        build = self.repo / "browser" / "build"
+        base = (build / "mozconfig").read_bytes() + (build / "mozconfig.no-lto").read_bytes()
+        machine = b"\nmk_add_options MOZ_PARALLEL_BUILD=16\nac_add_options CARGO=/nulavio-build/cargo_serial.sh\n"
+        machine += b"ac_add_options CARGOFLAGS=--jobs=1\n"
+        (self.tree / "mozconfig").write_bytes(base + machine)  # every line build_nulavio.sh adds
+        self.assertEqual(self.check()["result"], "passed")
+        others = (
+            b"ac_add_options --enable-lto=cross\n",
+            b"ac_add_options --enable-address-sanitizer\n",
+            b'mk_add_options "export CARGO_RUSTCFLAGS=-Cpasses=x"\n',
+            b"ac_add_options CARGO=/tmp/other.sh\n",
+        )
+        for extra in others:
+            self.calls.clear()
+            (self.tree / "mozconfig").write_bytes(base + machine + extra)
+            self.assertIn("an option this does not know after the variant", self.refused())
+            self.assertEqual(self.calls, [])
+
     def test_the_inputs_change_with_a_patch_the_series_or_a_mozconfig(self):
         first = nc.repository_inputs(self.repo)
         patches = self.repo / "browser" / "patches"

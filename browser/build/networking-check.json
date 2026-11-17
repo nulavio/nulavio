@@ -3,7 +3,7 @@
   "firefox": "160.0",
   "source_sha256": "2b23d2bf6716ea16b45c10aa5c275c78a1d7ff50ad53150809ab27424c58fd81",
   "result": "passed",
-  "checked": "2026-11-16",
+  "checked": "2026-11-17",
   "how": "scripts/build/networking_check.py read libgkrust.a of a build with Rust's own link-time optimisation and no cross-language LTO or sanitiser: 267052 symbols, 6874 undefined names; by the engine's rule it imports none of the engine's 21 networking functions.",
   "library_sha256": "136b43b246ebb30e9dd4b1447f6fb541e4c18282e5762071258adb50ea850216",
   "built_with": {

@@ -32,6 +32,7 @@ import datetime as _dt
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -66,6 +67,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# The only lines build_nulavio.sh appends to the tree's mozconfig after the variant.
+MACHINE_LINE = re.compile(
+    r"mk_add_options MOZ_PARALLEL_BUILD=\d{1,3}"
+    r"|ac_add_options CARGO=/nulavio-build/cargo_serial\.sh"
+    r"|ac_add_options CARGOFLAGS=--jobs=1"
+)
 MOZCONFIG = "browser/build/mozconfig"
 VARIANT = "browser/build/mozconfig.no-lto"
 SERIES = "browser/patches/series"
@@ -108,6 +115,12 @@ def built_with(tree: Path, repo: Path = ROOT) -> dict:
             "the build's mozconfig is not this checkout's release mozconfig followed by mozconfig.no-lto: "
             "build again from this checkout (rehearse_release.sh --precheck does)"
         )
+    # What may follow: the lines build_nulavio.sh adds for the machine (how many jobs, Cargo run one job at a
+    # time). Any other option after the variant could change what was built without changing a digest here.
+    extra = [line for line in used[len(expected) :].decode("utf-8", "replace").splitlines() if line.strip()]
+    unknown = [line for line in extra if not MACHINE_LINE.fullmatch(line)]
+    if unknown:
+        raise CannotCheck(f"the build's mozconfig has an option this does not know after the variant: {unknown[0][:80]!r}")
     try:
         return repository_inputs(repo)
     except OSError as error:

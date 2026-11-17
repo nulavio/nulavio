@@ -447,6 +447,52 @@ class PrecheckTest(unittest.TestCase):
         self.assertRegex(self.script, r"if \(\( precheck \)\); then\n    # Nothing a release run could take")
         self.assertIn('mkdir -p "$out/packages"', self.script.split("else\n", 1)[1][:200])  # made for a rehearsal only
 
+    def test_the_last_step_writes_a_result_that_is_not_a_manifest(self):
+        # The pre-check's own code for its last step, run as the script runs it (the manifest step is tested the same way).
+        match = re.search(
+            r"precheck_result\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
+            r"(.*?)\nEOF\n\}\n",
+            self.script,
+            re.S,
+        )
+        self.assertIsNotNone(match, "rehearse_release.sh must define precheck_result as a Python heredoc")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            writer, out, repo, tree = tmp / "writer.py", tmp / "out", tmp / "repo", tmp / "firefox-199.0"
+            writer.write_text(match.group(1))
+            for path in (out, repo / "browser" / "build", tree):
+                path.mkdir(parents=True)
+            git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
+            subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+            (tree / ".nulavio-source-sha256").write_text("ab" * 32 + "\n")
+            record = {"firefox": "199.0", "source_sha256": "ab" * 32, "result": "passed", "checked": "2026-11-17", "how": "read"}
+            (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(record))
+
+            def run() -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    [sys.executable, "-I", str(writer), str(out), "199.0", str(repo), str(tree)], capture_output=True, text=True
+                )
+
+            done = run()
+            self.assertEqual(done.returncode, 0, done.stderr)
+            result = json.loads((out / "precheck.json").read_text())
+            self.assertEqual((result["precheck"], result["signable"], result["variant"]), ("ok", False, "mozconfig.no-lto"))
+            self.assertEqual((result["firefox"], result["source_sha256"]), ("199.0", "ab" * 32))
+            self.assertEqual(result["networking_check"]["result"], "passed")
+            self.assertRegex(result["nulavio_base_commit"], r"^[0-9a-f]{40}$")
+            self.assertFalse((out / "manifest.json").exists())
+            for key in ("packages", "sboms", "rehearsal", "engine_json"):  # what release_manifest.py asks of a manifest
+                self.assertNotIn(key, result)
+            # A record that is not this build's passing one: no result is written.
+            for wrong in ({**record, "firefox": "198.0"}, {**record, "source_sha256": "cd" * 32}, {**record, "result": "failed"}):
+                (out / "precheck.json").unlink(missing_ok=True)
+                (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(wrong))
+                done = run()
+                self.assertNotEqual(done.returncode, 0, wrong)
+                self.assertIn("not this build's passing record", done.stderr)
+                self.assertFalse((out / "precheck.json").exists())
+
     def test_no_workflow_runs_a_precheck(self):
         for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             text = workflow.read_text(encoding="utf-8")

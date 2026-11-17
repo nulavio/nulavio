@@ -65,7 +65,7 @@ If Mozilla rotates the primary release key, update the pinned fingerprint only a
 
 Mozilla has shipped a major release every 2 weeks since Firefox 155 (2026-09-01), plus dot releases about weekly: about 4 or 5 full builds a month. It stages each release (the signed `SHA256SUMS` in `archive.mozilla.org/pub/firefox/releases/<version>/`) 8 to 25 hours before publishing it, so a build can be ready before the clock starts. Android uses some dot numbers that desktop skips (158.0.2 was Android only), so the next desktop dot release may skip a number.
 
-### Fast path: from Mozilla's fix to a build ready to sign
+### Fast path: from Mozilla's fix to a release built from main
 
 | Step | Tool | What it does |
 |---|---|---|
@@ -101,7 +101,7 @@ Each run takes a lock, so runs never overlap. It builds only a release whose sig
 
 ### Measured
 
-`rehearse_release.sh <version>` was first run in full on 2026-10-27 (Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). The first urgent release, Firefox 159.0 (2026-10-27), had its packages ready to sign 12.8 hours after Mozilla's release, inside the 24-hour target, with one interruption and one test fix on the way ([report](../research/evidence/release-rehearsal-2026-10-28.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from the start to checked packages. With a pre-build from the staged release, the packages are ready before Mozilla publishes; without it, about 1 hour 40 minutes after. Not rehearsed: signing with the release key and publishing.
+`rehearse_release.sh <version>` was first run in full on 2026-10-27 (Firefox 158.0.1, incremental build): **14 minutes**, every step passed ([report](../research/evidence/release-rehearsal-2026-10-27.md)). The first urgent release, Firefox 159.0 (2026-10-27), had its packages ready to sign 12.8 hours after Mozilla's release, inside the 24-hour target, with one interruption and one test fix on the way ([report](../research/evidence/release-rehearsal-2026-10-28.md)). For a new Firefox release the build is a full one (about 52 minutes measured), so about 70 minutes from the start to checked packages. Those figures are of the time this tool made the packages itself. Since #430 it pre-checks instead: with a pre-check from the staged release, the pin and the networking check's record are ready for a pull request before Mozilla publishes, and the packages are then built from `main` by `release.yml` (about an hour on the build machine, 59 minutes for 160.0-0.6), signed after the maintainer's approval. The first end-to-end pre-check on the build laptop (2026-11-17, Firefox 160.0, incremental build) took 1 hour 2 minutes, 55 minutes of it the integration suite.
 
 [Security changelog](../security/changelog.md): one entry per published build, with the hours from Mozilla's release to "ready to sign" and to "published".
 
