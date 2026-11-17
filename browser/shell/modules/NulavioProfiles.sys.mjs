@@ -103,7 +103,15 @@ async function writeSearchChoice(folder, choice) {
   if (lazy.isLink(path)) {
     fail("unsafe-file");
   }
-  await IOUtils.writeJSON(path, choice, { tmpPath: `${path}.tmp` });
+  // A temporary file of a random name, created new (never an existing file or link), owner-only before it is
+  // renamed into place; and the result checked before its mode is set again.
+  const tmp = `${path}.${Services.uuid.generateUUID().toString().slice(1, 9)}.tmp`;
+  await IOUtils.writeJSON(tmp, choice, { mode: "create" });
+  await IOUtils.setPermissions(tmp, 0o600);
+  await IOUtils.move(tmp, path);
+  if (lazy.isLink(path)) {
+    fail("unsafe-file");
+  }
   await IOUtils.setPermissions(path, 0o600);
 }
 
