@@ -333,7 +333,7 @@ class WebServicesTest(unittest.TestCase):
         # has none for a page the Shell holds no host permission for). A public name, answered here by the fixture
         # (as test_immersive does), with the HTTPS-Only exception a person gives on the engine's warning.
         self.m.chrome(CLOSE_MENU)
-        public = "artigo.example.org"
+        public = "artigo.example.com"  # not one of WATCHED: the request guard would cancel it
         site = "Services.scriptSecurityManager.createContentPrincipalFromOrigin(`http://${arguments[0]}:${arguments[1]}`)"
         self.m.chrome(
             "Services.prefs.setStringPref('network.dns.localDomains', arguments[0]);"
