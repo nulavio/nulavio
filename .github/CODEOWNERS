@@ -8,6 +8,7 @@
 
 /.github/                          @caiolombello
 /browser/build/                    @caiolombello
+/ci/containers/                    @caiolombello
 /browser/patches/                  @caiolombello
 /launcher/nulavio_launcher/vault/  @caiolombello
 /launcher/nulavio_launcher/ai/     @caiolombello

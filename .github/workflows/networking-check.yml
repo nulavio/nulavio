@@ -136,5 +136,6 @@ jobs:
           # The same command as release.yml's signing job, on the claim this commit needs. Run here so that the
           # first time it runs is not during a release (a rehearsal with publish: false never reaches signing).
           gh attestation verify "$RUNNER_TEMP/expected.json" --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main >/dev/null
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main \
+            --deny-self-hosted-runners >/dev/null
           echo "attested: a release of this commit's pin and inputs can be signed"

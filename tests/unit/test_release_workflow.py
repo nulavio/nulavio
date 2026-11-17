@@ -514,6 +514,8 @@ class NetworkingAttestationTest(unittest.TestCase):
         body = cls.release.split("\njobs:\n", 1)[1]
         cls.jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
         cls.verify = '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main'
+        # Only an attestation made on a GitHub-hosted runner counts: the attesting job, never the build machine.
+        cls.hosted = re.compile(re.escape(cls.verify) + r" \\\n +--deny-self-hosted-runners ")
 
     def test_the_workflow_reads_its_own_build_and_attests_only_the_claim(self):
         text = self.check
@@ -559,7 +561,7 @@ class NetworkingAttestationTest(unittest.TestCase):
             self.assertNotIn(word, jobs["attest"], word)
         for name, job in jobs.items():
             self.assertIn("if: github.ref == 'refs/heads/main'", job, name)
-        self.assertIn(self.verify, text)  # found here as the signing job will look for it
+        self.assertRegex(text, self.hosted)  # found here as the signing job will look for it
         commands = "\n".join(line for line in text.split("\njobs:\n", 1)[1].splitlines() if not line.lstrip().startswith("#"))
         self.assertNotIn("--write", commands)  # it changes nothing in the checkout
         self.assertNotIn("networking-check.json", commands)  # nor reads the committed record
@@ -593,7 +595,7 @@ class NetworkingAttestationTest(unittest.TestCase):
         self.assertLess(gate, verify)
         self.assertLess(verify, role)  # before the signing role is taken
         step = sign[gate : sign.index("- name:", gate)]  # this step alone
-        self.assertIn(self.verify, step)
+        self.assertRegex(step, self.hosted)
         self.assertIn("exit 1", step)
         self.assertNotIn("|| true", step)
         self.assertNotIn("continue-on-error", step)
@@ -604,7 +606,7 @@ class NetworkingAttestationTest(unittest.TestCase):
         start = build.index("Is the Rust networking reading attested")
         step = build[start : build.index("- name:", start + 10)]
         self.assertIn("--expected-claim", step)
-        self.assertIn(self.verify, step)
+        self.assertRegex(step, self.hosted)
         self.assertIn("::warning", step)
         self.assertNotIn("exit 1", step)  # an urgent update runs the reading in parallel with the build
 
