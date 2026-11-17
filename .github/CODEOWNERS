@@ -12,6 +12,7 @@
 /launcher/nulavio_launcher/vault/  @caiolombello
 /launcher/nulavio_launcher/ai/     @caiolombello
 /android/nv1/                      @caiolombello
+/scripts/build/                    @caiolombello
 /scripts/ci/                       @caiolombello
 /scripts/git-hooks/                @caiolombello
 /scripts/release/                  @caiolombello
