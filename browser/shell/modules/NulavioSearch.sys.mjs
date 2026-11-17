@@ -154,6 +154,12 @@ function isLoopback(hostname) {
  * @param {boolean} [options.requireTerms=true] - Whether {searchTerms} is required.
  * @returns {string} The normalised template.
  */
+/* #152 (ADR 0002, amendment of 2026-11-16): a search address never carries a session. A provider's session token in
+   the address would end up in the engine list, the history, the address bar and anything that copies the address;
+   the provider's own sign-in is the way in. The parameters below are the names known to carry one (Kagi's Session
+   Link: `token`) and the common names for the same thing. */
+const SESSION_PARAMS = new Set(["token", "session", "session_token", "sessiontoken", "sessionid", "session_id", "auth_token", "access_token"]);
+
 export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (typeof raw !== "string") {
     fail("invalid-url");
@@ -173,6 +179,11 @@ export function validateTemplate(raw, { requireTerms = true } = {}) {
   }
   if (url.username || url.password) {
     fail("credentials-in-url");
+  }
+  for (const key of [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()]) {
+    if (SESSION_PARAMS.has(key.toLowerCase())) {
+      fail("session-in-template");
+    }
   }
   if (!url.hostname) {
     fail("invalid-url");

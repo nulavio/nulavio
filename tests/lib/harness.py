@@ -191,6 +191,7 @@ class FixtureServer:
     def __init__(self):
         self.hits: list[str] = []
         self.agents: dict[str, str] = {}  # path (without the query) -> the User-Agent header it was last asked with
+        self.cookies: dict[str, str | None] = {}  # path (without the query) -> the Cookie header it was last asked with
         self._lock = threading.Lock()
         outer = self
 
@@ -199,6 +200,7 @@ class FixtureServer:
                 with outer._lock:
                     outer.hits.append(self.path)
                     outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
+                    outer.cookies[self.path.partition("?")[0]] = self.headers.get("Cookie")
                 if self.path.startswith("/slow-page"):
                     # Load-line fixture (tests/integration/test_load_line.py): a page whose body comes in ten pieces
                     # over `ms` milliseconds, with its length announced, so the engine reports real progress.

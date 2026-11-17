@@ -81,6 +81,8 @@
   "profilesSearch": {"message": "Search"},
   "profilesSearchNote": {"message": "The new profile's search engine. It can be changed later in Settings › Search."},
   "profilesSearchDefault": {"message": "Nulavio's default (DuckDuckGo)"},
+  "chooseAccountPrivate": {"message": "In private windows and temporary profiles this profile will not be signed in. No account needed: $NAMES$.", "placeholders": {"names": {"content": "$1"}}},
+  "err_session_in_template": {"message": "That address carries a session (for example token=). It would end up in the list of engines, the history and anything that copies the address. To sign in, use the provider's site."},
   "chooseUse": {"message": "Use"},
   "chooseUseNamed": {"message": "Use $NAME$ as this profile's search", "placeholders": {"name": {"content": "$1"}}},
   "chooseInUse": {"message": "In use in normal windows."},

@@ -193,6 +193,9 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertEqual(
             kagi["says"],
             "Ainda não está neste perfil: entra quando você escolher."
+            # #152: said before Kagi is chosen, with the providers that need no account.
+            " Nas janelas privadas e nos perfis temporários este perfil não estará conectado."
+            " Sem conta: Brave Search, DuckDuckGo, Ecosia, Mojeek, Qwant, Startpage."
             " Precisa de conta. Este perfil não está conectado em kagi.com.",
         )
         self.assertEqual(kagi["buttons"], [["signin", "Entrar"], ["choose", "Usar"]])

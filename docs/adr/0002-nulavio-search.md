@@ -84,6 +84,14 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
   from a file the creating profile writes into its folder; a profile that has run before never applies such a file.
   Taking one profile's provider to the others was built and left out by the maintainer's decision of 2026-11-17 (#453).
 
+## Amendment, 2026-11-16 (#152): a provider that needs an account, outside a signed-in profile
+
+The maintainer's decision of 2026-11-14 on #152, as narrowed by the feature review on 2026-11-17 (#453): the generic part is in 1.0; the Kagi-specific part (its Privacy Pass extension, and its own extension with a Session Link) is After 1.0, with #153.
+
+- **Any provider with accounts:** its row in Settings › Pesquisa says, before it is chosen, that private windows and temporary profiles will not be signed in, and names the providers that need no account.
+- **Refused:** a search address that carries a session. `validateTemplate` refuses a template with a query or fragment parameter named `token`, `session`, `session_token`, `sessiontoken`, `sessionid`, `session_id`, `auth_token` or `access_token` (error `session-in-template`), which covers Kagi's Session Link and the same idea elsewhere. The token would otherwise end up in the engine list, the history and anything that copies the address.
+- Not covered: the engine's own "Add search engine" dialog in Settings, which does not go through `validateTemplate` (as for its plain-`http` addresses, `test_search` 05d).
+
 ## Consequences and risks
 
 | Risk | Mitigation |

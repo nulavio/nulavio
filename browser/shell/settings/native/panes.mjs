@@ -1598,6 +1598,9 @@
         words.push(msg("chooseNotAdded"));
       }
       if (row.account) {
+        // #152: said before the provider is chosen, with the providers that need no account, by name.
+        const free = (search.state.value?.providers ?? []).filter(provider => !provider.account).map(provider => provider.name);
+        words.push(msg("chooseAccountPrivate", free.join(", ")));
         words.push(
           row.account.signedIn === true
             ? msg("chooseSignedIn", row.account.host)
