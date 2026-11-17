@@ -275,7 +275,7 @@ class FixtureServer:
             xml = (
                 '<?xml version="1.0" encoding="UTF-8"?>'
                 '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">'
-                f"<ShortName>{query.get('name', 'Fixture OpenSearch')}</ShortName>"
+                f"<ShortName>{urllib.parse.unquote_plus(query.get('name', 'Fixture+OpenSearch'))}</ShortName>"
                 f'<Url type="text/html" method="get" template="{base}/search-os?q={{searchTerms}}{extra["search"]}"/>'
                 '<Url type="application/x-suggestions+json" method="get"'
                 f' template="{base}/suggest-os?q={{searchTerms}}{extra["suggest"]}"/>'
