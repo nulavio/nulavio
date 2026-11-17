@@ -14,7 +14,7 @@ WebSocket upgrades that carry an Origin header (web pages) or a foreign Host.
 What the Shell in these windows reads (NulavioAI.sys.mjs): the prefs
 `nulavio.ai.workspace` (which agent drives the window) and `nulavio.ai.target`
 ("workspace", or "profile" with `nulavio.ai.target.label` for one of the user's
-own profiles),.
+own profiles).
 """
 
 from __future__ import annotations

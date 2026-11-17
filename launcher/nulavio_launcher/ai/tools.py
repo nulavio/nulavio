@@ -440,11 +440,20 @@ class Bridge:
         if capability == "local_resources" and self._may_reach_local():
             self._sync_network()  # "until the agent disconnects": nothing is held from now on, in this call too
 
+    def _refuse_internal(self, target: policy.Target, url: str, checked: list[str]) -> None:
+        """The browser's internal pages are offered to no agent (#463): refused before anything is asked, so the
+        person is never asked for local_resources for a page the agent could not open anyway."""
+        if policy.INTERNAL_CAPABILITY in target.needs:
+            self._target = url
+            checked.append(policy.INTERNAL_CAPABILITY)
+            raise Denied(policy.Decision(False, "block", policy.INTERNAL_CAPABILITY, "internal-pages-off"))
+
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             raise ToolError(str(exc)) from None
+        self._refuse_internal(target, url, checked)
         self.require("navigate", url, checked=checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
@@ -459,6 +468,7 @@ class Bridge:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
+        self._refuse_internal(target, url, checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
 
@@ -513,9 +523,11 @@ class Bridge:
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
+            who = (
+                "" if d.reason == "internal-pages-off" else " Only the user can change this, in Nulavio (not through this tool)."
+            )
             result = self._error(f"Denied by Nulavio: '{policy.CAPABILITIES.get(d.capability, d.capability)}' is "
-                                 f"{_why(d)}. Only the user can change this, in Nulavio (not through this tool)."
-                                 + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
+                                 f"{_why(d)}.{who}" + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
             outcome, decision, reason = "denied", "deny", d.reason
         except ToolError as exc:
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None

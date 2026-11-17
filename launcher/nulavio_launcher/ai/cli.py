@@ -85,9 +85,11 @@ def _agents(args) -> int:
         sites = ", ".join(a.get("domains") or []) or "any site"
         _out(f"{a['id']}  {a['name']:<20} {a['client']:<12} {state:<13} {sites}  workspace: {a['workspace']}")
         for cap, g in sorted(a.get("grants", {}).items()):
+            if cap == policy.INTERNAL_CAPABILITY:
+                continue  # an earlier version's grant: it grants nothing (#463), said below
             scope = f" until {g['until']}" if g.get("until") else " this session" if g.get("session") else ""
             _out(f"      {cap}: {g['mode']}{scope}")
-        if a.get("raw_automation_accepted"):
+        if a.get("raw_automation_accepted") or policy.INTERNAL_CAPABILITY in a.get("grants", {}):
             _out("      raw automation: removed from Nulavio; the opt-in this agent had grants nothing")
     if registry.stopped():
         _out("\nEMERGENCY STOP is on: every agent is blocked (`nulavio ai resume` to lift it).")

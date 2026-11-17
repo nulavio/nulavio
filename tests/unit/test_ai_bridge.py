@@ -752,29 +752,41 @@ class AuditTest(Home):
         self.assertEqual(denied.exception.decision.reason, "key-replaced")
         self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
 
-    def test_the_site_list_covers_what_the_source_viewer_shows(self):
+    def test_the_source_viewer_is_refused_before_anything_is_asked(self):
         # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites. Raw automation is gone
-        # (#463), so the source viewer is never opened for an agent; the site list still goes by what it shows.
-        agent, _ = registry.add("scoped", "other", "full_control", accept_full_control=True, domains=["example.org"])
-        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        # (#463): an internal page is refused before any question, so the person is never asked for local_resources
+        # for a page the agent could not open anyway (independent review of #504).
+        agent, _ = registry.add("scoped", "other", "autonomous", domains=["example.org"])
+        approver = Approve("session")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         outside, inside = "view-source:https://bank.example/acct", "view-source:https://docs.example.org/a"
-        with (
-            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
-            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
-        ):
-            result = bridge.call("navigate", {"tab": "t1", "url": outside})
-        self.assertIn("outside the sites this agent may use", result["content"][0]["text"])
-        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
-        self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://bank.example"))
-        page = {"text": "<html>", "url": inside, "title": ""}
-        for url, refused in ((outside, True), (inside, True)):
+        for url in (outside, inside, "about:config"):
+            with (
+                self.subTest(url=url),
+                mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+                mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+            ):
+                result = bridge.call("navigate", {"tab": "t1", "url": url})
+                self.assertTrue(result["isError"])
+                self.assertIn("not offered to agents", result["content"][0]["text"])
+                self.assertNotIn("Only the user can change this", result["content"][0]["text"])
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual(entry["reason"], "internal-pages-off")
+        self.assertEqual(approver.asked, [], "nothing is asked for an internal page")
+        self.assertNotIn("local_resources", registry.get(agent["id"]).get("session_grants", {}))
+        # A tab that is already there (a redirect, the page's own navigation): the site list still goes first, then
+        # the internal page is refused.
+        for url, reason in ((outside, "out-of-scope"), (inside, "internal-pages-off")):
+            page = {"text": "<html>", "url": url, "title": ""}
             with (
                 self.subTest(url=url),
                 mock.patch.object(tools.Bridge, "_url_of", return_value=url),
                 mock.patch.object(tools.Bridge, "_eval", return_value=page),
                 mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
             ):
-                self.assertEqual(bridge.call("page_read", {"tab": "t1"})["isError"], refused)
+                self.assertTrue(bridge.call("page_read", {"tab": "t1"})["isError"])
+                self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], reason)
+        self.assertEqual(approver.asked, [])
         tabs = [{"context": "t1", "profile": "AI Workspace", "url": outside}]
         with mock.patch.object(tools.Bridge, "_tabs", return_value=tabs), mock.patch.object(tools.Bridge, "_title") as title:
             listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]

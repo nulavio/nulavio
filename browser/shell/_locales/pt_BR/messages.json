@@ -581,7 +581,7 @@
   "aiCap_cookies_storage": {"message": "ler ou alterar cookies e dados de sites"},
   "aiCap_multiple_profiles": {"message": "trabalhar em mais de um perfil"},
   "aiCap_private_tabs": {"message": "usar abas privativas"},
-  "aiCap_local_resources": {"message": "acessar este computador, a rede local e páginas internas"},
+  "aiCap_local_resources": {"message": "acessar este computador e a rede local"},
   "aiCap_transactions": {"message": "fazer compras e pagamentos"},
   "aiCap_account_settings": {"message": "alterar configurações de contas"},
   "aiCap_background": {"message": "continuar trabalhando em segundo plano"},

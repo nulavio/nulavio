@@ -31,7 +31,7 @@ CAPABILITIES: dict[str, str] = {
     "cookies_storage": "Read or change cookies and site storage",
     "multiple_profiles": "Work in more than one profile",
     "private_tabs": "Use private tabs",
-    "local_resources": "Reach this computer, the local network and internal pages",
+    "local_resources": "Reach this computer and the local network",
     "transactions": "Make purchases and payments",
     "account_settings": "Change account settings",
     "background": "Keep working in the background",
