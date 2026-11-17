@@ -154,6 +154,18 @@ function isLoopback(hostname) {
  * @param {boolean} [options.requireTerms=true] - Whether {searchTerms} is required.
  * @returns {string} The normalised template.
  */
+/* #152 (ADR 0002, amendment of 2026-11-16): a search address never carries a session. A provider's session token in
+   the address would end up in the engine list, the history, the address bar and anything that copies the address;
+   the provider's own sign-in is the way in. The parameters below are the names known to carry one (Kagi's Session
+   Link: `token`) and the common names for the same thing. */
+const SESSION_PARAMS = new Set(["token", "session", "session_token", "sessiontoken", "sessionid", "session_id", "auth_token", "access_token"]);
+
+/** Whether an address has a session parameter in its query or fragment. */
+export function carriesSession(url) {
+  const keys = [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()];
+  return keys.some(key => SESSION_PARAMS.has(key.toLowerCase()));
+}
+
 export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (typeof raw !== "string") {
     fail("invalid-url");
@@ -173,6 +185,9 @@ export function validateTemplate(raw, { requireTerms = true } = {}) {
   }
   if (url.username || url.password) {
     fail("credentials-in-url");
+  }
+  if (carriesSession(url)) {
+    fail("session-in-template");
   }
   if (!url.hostname) {
     fail("invalid-url");
@@ -472,13 +487,36 @@ class NulavioSearchClass {
   async addOpenSearch({ url }) {
     await lazy.SearchService.init();
     const description = validateTemplate(url, { requireTerms: false });
+    let engine;
     try {
-      const engine = await lazy.SearchService.addOpenSearchEngine(description, null);
-      return engine.id;
+      engine = await lazy.SearchService.addOpenSearchEngine(description, null);
     } catch (e) {
       fail("opensearch-failed", String(e?.message ?? e));
     }
-    return null;
+    // The description declares its own addresses (search, suggestions, trending, visual search, search form, its
+    // own update address), which only the engine's parser reads (#484 review): each one the engine kept is checked as
+    // soon as it has them, and the engine is removed again when one carries a session or cannot be read.
+    let refused = "session-in-template";
+    try {
+      const declared = [];
+      for (const type of Object.values(lazy.SearchUtils.URL_TYPE)) {
+        if (type === lazy.SearchUtils.URL_TYPE.SEARCH_FORM) {
+          declared.push(engine.searchForm);
+        } else if (engine.supportsResponseType(type)) {
+          declared.push(engine.getSubmission("nulavio", type)?.uri?.spec);
+        }
+      }
+      if (!declared.some(address => address && carriesSession(new URL(address)))) {
+        refused = null;
+      }
+    } catch {
+      refused = "opensearch-failed";
+    }
+    if (refused) {
+      await lazy.SearchService.removeEngine(engine, lazy.SearchService.CHANGE_REASON.USER).catch(e => console.error("Nulavio Search: a refused OpenSearch engine", e));
+      fail(refused);
+    }
+    return engine.id;
   }
 
   async remove(id) {
