@@ -51,9 +51,14 @@ class EmeServer(harness.FixtureServer):
 
 
 # Plays one stream through MSE + EME with ClearKey; resolves with what the page saw.
+# Seconds the stream may take to reach 1.5 s once it is told to play, and the script's own limit: above the sum
+# of its steps (eight of 20 s at most, then that wait), so that the step that is late is the one reported.
+PLAY_WAIT = 30
+PLAY_LIMIT = 8 * 20 + PLAY_WAIT + 10
 PLAY = """
-const [url, type, kind, license, kid] = arguments;
+const [url, type, kind, license, kid, wait] = arguments;
 const done = arguments[arguments.length - 1];
+const began = Date.now();
 (async () => {
   const media = document.createElement(kind);
   media.muted = true;
@@ -62,9 +67,14 @@ const done = arguments[arguments.length - 1];
   media.addEventListener("error", () => errors.push(`media ${media.error?.code}: ${media.error?.message}`));
   const config = [{ initDataTypes: ["cenc", "keyids"],
                     [kind === "video" ? "videoCapabilities" : "audioCapabilities"]: [{ contentType: type }] }];
-  const access = await navigator.requestMediaKeySystemAccess("org.w3.clearkey", config);
-  const keys = await access.createMediaKeys();
-  await media.setMediaKeys(keys);
+  // Every step has a name and a limit, so that a step that never ends is reported by name and not as the
+  // script's own timeout. The first use of a key system starts the engine's plugin process, which took more
+  // than the old 30 s for the whole script once on the build machine (the nightly rehearsal of 2026-11-17).
+  const step = (what, promise, seconds = 20) =>
+    Promise.race([promise, new Promise((_, no) => setTimeout(() => no(`${what}: not done in ${seconds} s`), seconds * 1000))]);
+  const access = await step("requestMediaKeySystemAccess", navigator.requestMediaKeySystemAccess("org.w3.clearkey", config));
+  const keys = await step("createMediaKeys", access.createMediaKeys());
+  await step("setMediaKeys", media.setMediaKeys(keys));
   // The fixtures carry no pssh box (ffmpeg writes none), so no "encrypted" event comes: the session asks for
   // the key by its id ("keyids" init data, which ClearKey takes) before the media is appended.
   let licensed = false, encrypted = 0;
@@ -74,25 +84,24 @@ const done = arguments[arguments.length - 1];
     session.update(new TextEncoder().encode(license)).then(() => { licensed = true; resolve(); },
                                                            e => { errors.push(`update: ${e}`); resolve(); });
   }, { once: true }));
-  await session.generateRequest("keyids", new TextEncoder().encode(JSON.stringify({ kids: [kid] })));
-  await answered;
+  await step("generateRequest", session.generateRequest("keyids", new TextEncoder().encode(JSON.stringify({ kids: [kid] }))));
+  await step("the key request and its answer", answered);
   const source = new MediaSource();
   media.src = URL.createObjectURL(source);
-  const step = (what, promise) => Promise.race([promise, new Promise((_, no) => setTimeout(() => no(what), 8000))]);
   await step("sourceopen", new Promise(r => source.addEventListener("sourceopen", r, { once: true })));
   const buffer = source.addSourceBuffer(type);
-  buffer.appendBuffer(await (await fetch(url)).arrayBuffer());
+  buffer.appendBuffer(await step("the fixture", fetch(url).then(answer => answer.arrayBuffer())));
   await step("updateend", new Promise(r => buffer.addEventListener("updateend", r, { once: true })));
   source.endOfStream();
   // Not awaited: play() settles only once playback starts, which an unusable key would hold off for ever.
   media.play().catch(e => errors.push(`play: ${e}`));
   const started = Date.now();
-  while (Date.now() - started < 12000 && !media.ended && media.currentTime < 1.5 && !errors.length) {
+  while (Date.now() - started < wait * 1000 && !media.ended && media.currentTime < 1.5 && !errors.length) {
     await new Promise(r => setTimeout(r, 100));
   }
   const frames = kind === "video" ? media.getVideoPlaybackQuality().totalVideoFrames : null;
   return { licensed, encrypted, currentTime: media.currentTime, readyState: media.readyState, frames, errors,
-           keySystem: access.keySystem };
+           keySystem: access.keySystem, seconds: Math.round((Date.now() - began) / 100) / 10 };
 })().then(done, e => done({ error: String(e) }));
 """
 
@@ -157,7 +166,8 @@ class ProtectedMediaTest(unittest.TestCase):
             for kind, (name, mime) in STREAMS.items():
                 with self.subTest(kind=kind):
                     self.m.navigate(self.server.url(f"/page/eme-{kind}"))
-                    result = self.m.execute_async(PLAY, [self.server.url(f"/eme/{name}"), mime, kind, self.license, b64url(KID)])
+                    stream = [self.server.url(f"/eme/{name}"), mime, kind, self.license, b64url(KID), PLAY_WAIT]
+                    result = self.long_async(PLAY, stream, PLAY_LIMIT)
                     print(f"{kind}: {result}", file=sys.stderr)
                     self.assertNotIn("error", result, result)
                     self.assertEqual(result["errors"], [], result)
@@ -175,9 +185,13 @@ class ProtectedMediaTest(unittest.TestCase):
         try:
             name, mime = STREAMS["video"]
             self.m.navigate(self.server.url("/page/eme-wrong-key"))
-            result = self.m.execute_async(PLAY, [self.server.url(f"/eme/{name}"), mime, "video", wrong, b64url(KID)])
+            # The wait for playback is the short one: with a wrong key nothing plays, and it runs to its end.
+            result = self.long_async(PLAY, [self.server.url(f"/eme/{name}"), mime, "video", wrong, b64url(KID), 12], PLAY_LIMIT)
             print(f"wrong key: {result}", file=sys.stderr)
-            self.assertLess(result.get("currentTime", 0), 1.0, f"a stream played with a wrong key: {result}")
+            # The control must have got as far as playing: a step that failed or never ended plays nothing either.
+            self.assertNotIn("error", result, result)
+            self.assertTrue(result["licensed"], f"the wrong key was not even taken: {result}")
+            self.assertLess(result["currentTime"], 1.0, f"a stream played with a wrong key: {result}")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('media.eme.enabled');")
 
