@@ -395,7 +395,7 @@ async function drawServiceMenus() {
 
 // One drawing at a time, in order: several settings changed together (a choice and its clean-up) must not leave the
 // map naming one service for an item that shows another.
-let serviceDrawing = Promise.resolve();
+let serviceDrawing = (async () => {})();
 function redrawServiceMenus() {
   serviceDrawing = serviceDrawing.then(drawServiceMenus).catch(console.error);
   return serviceDrawing;
