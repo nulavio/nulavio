@@ -368,6 +368,7 @@ if (browser.nulavioAI && browser.omnibox) {
 
 const SERVICE_MENU = "nulavio-svc-";
 const serviceItems = new Map(); // menu id -> the module's item
+const serviceStates = new Map(); // menu id -> what the item shows now ({visible, enabled, title})
 
 function serviceTitle(item, reason = null) {
   const key = { "translate-selection": "menuTranslateSelection", "translate-page": "menuTranslatePage" }[item.use];
@@ -381,9 +382,11 @@ async function drawServiceMenus() {
     await browser.menus.remove(id).catch(() => {});
   }
   serviceItems.clear();
+  serviceStates.clear();
   for (const [index, item] of items.entries()) {
     const id = `${SERVICE_MENU}${index}`; // the item's own id stays in the map: menu ids become element ids
     serviceItems.set(id, item);
+    serviceStates.set(id, { visible: true, enabled: true, title: serviceTitle(item) });
     browser.menus.create({ id, title: serviceTitle(item), contexts: item.contexts }, () => void browser.runtime.lastError);
   }
 }
@@ -410,17 +413,25 @@ if (browser.nulavioServices && browser.menus) {
     if (!shown.length || !tab) {
       return;
     }
+    // Only an item whose state changes is updated, and the menu drawn again only then: an open menu drawn again
+    // replaces its items under the pointer.
+    let changed = false;
     for (const id of shown) {
       const item = serviceItems.get(id);
       const target = info.pageUrl ?? "";
       const verdict = await browser.nulavioServices.check(item.id, target, tab.id).catch(() => ({ usable: false, reason: "not-found", hidden: true }));
-      await browser.menus.update(id, {
-        visible: !verdict.hidden,
-        enabled: verdict.usable,
-        title: serviceTitle(item, verdict.usable ? null : verdict.reason),
-      });
+      const next = { visible: !verdict.hidden, enabled: verdict.usable, title: serviceTitle(item, verdict.usable ? null : verdict.reason) };
+      const now = serviceStates.get(id);
+      if (now && now.visible === next.visible && now.enabled === next.enabled && now.title === next.title) {
+        continue;
+      }
+      await browser.menus.update(id, next);
+      serviceStates.set(id, next);
+      changed = true;
     }
-    browser.menus.refresh();
+    if (changed) {
+      browser.menus.refresh();
+    }
   });
   browser.menus.onClicked.addListener(async (info, tab) => {
     await serviceDrawing; // a drawing under way decides what the item now is
