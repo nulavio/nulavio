@@ -72,6 +72,21 @@ class AllowCopyTest(unittest.TestCase):
         self.m.navigate(url)
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.readyState") == "complete", 10))
 
+    def reloaded(self, selection: str) -> None:
+        """The switch reloads the page: wait for the new document, where the page's own rule on selection is
+        lifted ("text") or back ("none"). `document.readyState` alone is also "complete" on the document that
+        is about to be replaced, so what followed could act on the old page: on a slower machine the copy then
+        reached a page that still blocked it (the pre-check of 2026-11-17)."""
+        script = "return document.readyState === 'complete' && document.body ? getComputedStyle(document.body).userSelect : '';"
+
+        def now() -> str:
+            try:
+                return self.m.execute(script)
+            except Exception:  # the document is being replaced: not yet
+                return ""
+
+        self.assertTrue(harness.wait_until(lambda: now() == selection, 15), f"the page kept user-select {now()!r}")
+
     def copy_text(self) -> str:
         """Select the number and copy it as the Edit menu does; what reached the clipboard."""
         self.m.chrome(PUT, ["antes"])
@@ -111,7 +126,7 @@ class AllowCopyTest(unittest.TestCase):
         self.assertRegex(row["tip"], r"Shift\+")
         self.panel("press")  # the switch reloads the page
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(f"return {COPY}.state(gBrowser.selectedBrowser).on;"), 10))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.readyState") == "complete", 10))
+        self.reloaded("text")
         listed = "return Services.perms.getAllByTypes(['nulavio-allow-copy']).map(p => p.principal.origin);"
         self.assertEqual(self.m.chrome(listed), [f"http://127.0.0.1:{self.server.port}"])
         self.assertEqual(self.copy_text(), "Numero 1234-5678")
@@ -153,7 +168,7 @@ class AllowCopyTest(unittest.TestCase):
         self.assertEqual(self.copy_text(), "Numero 1234-5678")
         self.panel("press")
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(f"return {COPY}.state(gBrowser.selectedBrowser).on;"), 10))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.readyState") == "complete", 10))
+        self.reloaded("none")
         self.assertEqual(self.copy_text(), "antes")
         self.assertEqual(self.m.chrome("return Services.perms.getAllByTypes(['nulavio-allow-copy']).length;"), 0)
 

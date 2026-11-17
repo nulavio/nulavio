@@ -399,6 +399,114 @@ class AsanWorkflowTest(unittest.TestCase):
         self.assertIn("NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig", build)
 
 
+class PrecheckTest(unittest.TestCase):
+    """#430: `rehearse_release.sh --precheck` builds the variant whose Rust library can be read for the engine's
+    networking check. It is not a release rehearsal, and nothing it leaves can be signed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = (RELEASE / "rehearse_release.sh").read_text(encoding="utf-8")
+
+    def test_the_precheck_chooses_its_one_variant_itself(self):
+        refusal = self.script.index("unset NULAVIO_MOZCONFIG_EXTRA: a variant build is never a release")
+        chosen = self.script.index("if (( precheck )); then export NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto; fi")
+        self.assertLess(refusal, chosen)  # a caller's variant (a sanitised build) is refused first
+        self.assertEqual(self.script.count("export NULAVIO_MOZCONFIG_EXTRA="), 1)
+
+    def test_a_callers_variant_is_refused_in_a_precheck_too(self):
+        for variant in ("mozconfig.asan", "mozconfig.no-lto"):
+            out = subprocess.run(
+                ["bash", str(RELEASE / "rehearse_release.sh"), "--precheck", "160.0", "/nonexistent"],
+                env={**os.environ, "NULAVIO_MOZCONFIG_EXTRA": variant},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(out.returncode, 2, variant)
+            self.assertIn("never a release", out.stderr)
+
+    def test_the_library_is_read_right_after_the_build_and_before_the_tests(self):
+        order = [self.script.index(text) for text in (
+            'step build "$repo/scripts/build/build_nulavio.sh" "$version"',
+            'step networking-check python3 -I "$repo/scripts/build/networking_check.py" "$version" --work "$work" --write',
+            'step unit-tests python3 -I "$repo/tests/run.py" unit',
+            'step integration-tests "$repo/scripts/release/run_integration.sh" "$install"',
+            "step precheck-result precheck_result",
+            'step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"',
+        )]  # fmt: skip
+        self.assertEqual(order, sorted(order))
+
+    def test_a_precheck_stops_before_any_package_and_writes_no_manifest(self):
+        after_tests = self.script[self.script.index("step precheck-result precheck_result") :]
+        stop, packages = after_tests.index("    exit 0\nfi\n"), after_tests.index("step rpm ")
+        self.assertLess(stop, packages)  # it leaves before the first packaging step
+        self.assertLess(packages, after_tests.index("step manifest manifest"))  # which a release run reaches last
+        # The steps between the tests and that exit make nothing a release could use.
+        self.assertNotRegex(after_tests[:stop], r"step (rpm|deb|archive|sbom|manifest|signed-repository)")
+        self.assertIn('rm -f "$out/manifest.json" "$out/precheck.json"', self.script)
+        self.assertIn('"signable": False', self.script)
+        self.assertRegex(self.script, r"if \(\( precheck \)\); then\n    # Nothing a release run could take")
+        self.assertIn('mkdir -p "$out/packages"', self.script.split("else\n", 1)[1][:200])  # made for a rehearsal only
+
+    def test_the_last_step_writes_a_result_that_is_not_a_manifest(self):
+        # The pre-check's own code for its last step, run as the script runs it (the manifest step is tested the same way).
+        match = re.search(
+            r"precheck_result\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
+            r"(.*?)\nEOF\n\}\n",
+            self.script,
+            re.S,
+        )
+        self.assertIsNotNone(match, "rehearse_release.sh must define precheck_result as a Python heredoc")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            writer, out, repo, tree = tmp / "writer.py", tmp / "out", tmp / "repo", tmp / "firefox-199.0"
+            writer.write_text(match.group(1))
+            for path in (out, repo / "browser" / "build", tree):
+                path.mkdir(parents=True)
+            git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
+            subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+            (tree / ".nulavio-source-sha256").write_text("ab" * 32 + "\n")
+            record = {"firefox": "199.0", "source_sha256": "ab" * 32, "result": "passed", "checked": "2026-11-17", "how": "read"}
+            (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(record))
+
+            def run() -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    [sys.executable, "-I", str(writer), str(out), "199.0", str(repo), str(tree)], capture_output=True, text=True
+                )
+
+            done = run()
+            self.assertEqual(done.returncode, 0, done.stderr)
+            result = json.loads((out / "precheck.json").read_text())
+            self.assertEqual((result["precheck"], result["signable"], result["variant"]), ("ok", False, "mozconfig.no-lto"))
+            self.assertEqual((result["firefox"], result["source_sha256"]), ("199.0", "ab" * 32))
+            self.assertEqual(result["networking_check"]["result"], "passed")
+            self.assertRegex(result["nulavio_base_commit"], r"^[0-9a-f]{40}$")
+            self.assertFalse((out / "manifest.json").exists())
+            for key in ("packages", "sboms", "rehearsal", "engine_json"):  # what release_manifest.py asks of a manifest
+                self.assertNotIn(key, result)
+            # A record that is not this build's passing one: no result is written.
+            for wrong in ({**record, "firefox": "198.0"}, {**record, "source_sha256": "cd" * 32}, {**record, "result": "failed"}):
+                (out / "precheck.json").unlink(missing_ok=True)
+                (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(wrong))
+                done = run()
+                self.assertNotEqual(done.returncode, 0, wrong)
+                self.assertIn("not this build's passing record", done.stderr)
+                self.assertFalse((out / "precheck.json").exists())
+
+    def test_no_workflow_runs_a_precheck(self):
+        for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            text = workflow.read_text(encoding="utf-8")
+            self.assertNotIn("--precheck", text, workflow.name)
+            self.assertNotIn("mozconfig.no-lto", text, workflow.name)
+
+    def test_the_prebuild_tool_only_ever_prechecks(self):
+        tool = (RELEASE / "autobuild.py").read_text(encoding="utf-8")
+        self.assertIn('"rehearse_release.sh"), "--precheck", version, str(out)]', tool)
+        self.assertEqual(tool.count('/ "rehearse_release.sh")'), 1)  # one call, and it is the pre-check
+        self.assertNotIn("READY TO SIGN", tool)
+        self.assertIn('"the pre-check left a manifest.json: it must not"', tool)
+
+
 class RepeatableBuildTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())

@@ -60,6 +60,10 @@ sys.path.insert(0, str(RELEASE))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 
 from test_openpgp_sign import FAKE_AWS, secret_numbers, spki  # noqa: E402
+
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+import networking_fixture  # noqa: E402
 from verify_firefox_release import SIGNING_SUBKEYS  # noqa: E402
 
 PYTHON = sys.executable
@@ -248,11 +252,14 @@ class RehearsalRepo:
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-publish-protections-"))
         self.repo = self.tmp / "repo"
-        for part in ("scripts/release", "scripts/upstream", "ci/containers"):
+        for part in ("scripts/release", "scripts/upstream", "scripts/build", "ci/containers"):
             shutil.copytree(ROOT / part, self.repo / part, ignore=shutil.ignore_patterns("__pycache__"))
         (self.repo / "site" / "keys").mkdir(parents=True)
         shutil.copy(ROOT / "site" / "keys" / "nulavio-packages.asc", self.repo / "site" / "keys")
         self.set_pairing("false")
+        # The base commit says the release these rehearsals build passed the networking check (#430).
+        networking_fixture.write_inputs(self.repo)
+        networking_fixture.write_record(self.repo, VERSION.split("-")[0], "b" * 64)
         git = ["git", "-C", str(self.repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
         subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
         subprocess.run([*git, "add", "-A"], check=True)

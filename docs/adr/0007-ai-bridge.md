@@ -195,3 +195,9 @@ None of them is offered in private windows or where an agent drives the browser.
 **Changelog.** These change what the assistant can do only in what the person sees and controls:
 - Every new path either tightens (a refusal before sending, a stop, a pause) or puts text where the person sends it.
 - The page copy that goes again in a conversation goes to the recipient that already received it, and the person can leave it out.
+
+## Amendment 2026-11-17: raw automation is removed (#453)
+
+The maintainer decided on 2026-11-17, in the [feature review](../product/feature-review-2026-11.md#a2-raw-automation) (row A2), to remove raw automation (A13, and decision 1's "A as an explicit raw automation option"). It handed an agent the AI Workspace's whole WebDriver BiDi endpoint, outside the per-call policy and the activity record (R42): the one path around what this ADR puts in front of agents. The amendment of 2026-10-28 had already taken it out of every level.
+
+Agents keep the MCP tools. An agent that needs its own automation library uses a Firefox profile outside Nulavio. The change, and what a registry with the opt-in on becomes, is #463; R42 closes when it lands.

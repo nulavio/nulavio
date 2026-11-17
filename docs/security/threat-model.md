@@ -359,6 +359,21 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_keep_above` (elsewhere: refused and said; the script refuses an injected id; on Plasma by hand: KWin's own state read back) |
 | Residual | Low; listed as R77 |
 
+### S22 — A record that says the Rust code was checked when it was not (#430)
+
+| Field | |
+|---|---|
+| Assets | The release's guard against Rust code that talks to the network around the engine's own stack, and so around a proxy the person set |
+| Adversary | Whoever can get a change to `browser/build/networking-check.json` merged: a mistaken or misled author of a pull request, an agent on the shared account (S19, R62), or a compromised build laptop that writes a false record |
+| Preconditions | A pull request that writes the record: one that moves the engine pin, changes a patch or the mozconfig, or only the record. The record says "passed" without a reading, or with a reading of another build; or it says "accepted" with an issue number, which nothing checks beyond its spelling |
+| Boundary | TB22 |
+| Impact | A release is built and published from a Firefox release, patch stack or configuration whose Rust code nobody read for networking imports. Nothing is exposed by the record itself: the harm needs Rust code that does import such a function, which Mozilla's own builds would also carry |
+| Preventive | The record is on a CODEOWNERS path: by the project's rule a second, independent review reads it before it is merged; that rule is a convention the agents keep, which GitHub does not enforce (R62). It must name the pinned release and source digest, and carry the digests of the mozconfig, the variant and the patch stack of the tree it sits in (`test_track_b`, and `release_manifest.py verify` at the manifest's base commit). The script that writes it refuses a tree that is not the pinned release, a build made from another mozconfig, a build whose library says nothing, and a reading that looks empty. A unit test keeps Rust code and its build files out of Nulavio's patches |
+| Detective | The record carries the SHA-256 of the library that was read: anyone with a build of the same inputs can compare. The nightly rehearsal and CI do not make the reading |
+| Limitations | CI cannot tell that the build and the reading happened: the record is a statement. "Accepted" is the maintainer's word only because a reviewer checks that the issue it names says so; it is bound to the mozconfig, variant and patch stack it was accepted for, like a reading. Nothing but the review rule stops the shared account from merging a false record (S19). The shipped binary itself is not read |
+| Tests | `test_networking_check`, `test_track_b` (`NetworkingCheckRecordTest`), `test_release_manifest` |
+| Residual | Low; listed as R79 |
+
 ---
 
 ### S23 — What a click sends to a translation service (#156)
