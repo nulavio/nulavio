@@ -175,6 +175,28 @@
       ]
     },
     {
+      "id": "loadLine",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.window.loadLine"
+      ],
+      "prefType": "bool",
+      "values": [
+        false,
+        true
+      ],
+      "prefValues": [
+        null,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioPersonalise",
+      "labelKey": "loadLineLabel",
+      "ui": [
+        "settings/native/panes.mjs#nulavio-load-line"
+      ]
+    },
+    {
       "id": "shortcuts",
       "kind": "command",
       "prefs": [],
