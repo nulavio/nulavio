@@ -26,7 +26,14 @@ this.nulavioServices = class extends ExtensionAPI {
       }
     };
     // The tab the menu was opened in, never "the most recent window"; whether it is private is read here.
-    const tabOf = tabId => context.extension.tabManager.get(tabId)?.nativeTab ?? null;
+    const wrapperOf = tabId => {
+      try {
+        return context.extension.tabManager.get(tabId);
+      } catch {
+        return null; // a tab that is gone
+      }
+    };
+    const tabOf = tabId => wrapperOf(tabId)?.nativeTab ?? null;
     return {
       nulavioServices: {
         menu: call(() => services.menu()),
@@ -41,7 +48,10 @@ this.nulavioServices = class extends ExtensionAPI {
           }
           const isPrivate = services.isPrivate(tab.linkedBrowser);
           const built = services.build(itemId, { text: clicked.text ?? "", target: clicked.target ?? "", isPrivate });
-          const win = tab.ownerGlobal;
+          const win = wrapperOf(tabId)?.window; // the tab's own window (a XUL tab's ownerGlobal is not reachable here)
+          if (!win) {
+            return { done: false };
+          }
           // A new tab next to this one, in the same window, so a private window's service opens privately.
           win.openTrustedLinkIn(built.open, "tab", { relatedToCurrent: true, inBackground: false });
           return { done: true };
