@@ -553,17 +553,38 @@ def _signals_as_exceptions():
 
 
 def _migration_lock(path: Path, *, wait: bool) -> int | None:
-    """An exclusive lock held for the whole migration; released by the kernel if the process dies."""
-    fd = os.open(path.with_name(path.name + ".migrating.lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
-    except BlockingIOError:
-        os.close(fd)
-        return None
-    return fd
+    """An exclusive lock held for the whole migration; released by the kernel if the process dies.
+
+    The lock is on a file beside the profile, which _release() removes. A run that waited for the lock
+    therefore gets it on a file the name no longer points to, while a run that starts just then makes
+    the file anew and locks that one: both would hold "the lock" (#434). So the lock counts only when
+    the file held is the one the name points to; otherwise this run asks again, for the file that is
+    there now.
+    """
+    name = path.with_name(path.name + ".migrating.lock")
+    while True:
+        fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+            held = os.fstat(fd)
+            try:
+                named = os.stat(name, follow_symlinks=False)
+            except FileNotFoundError:
+                named = None
+        except BlockingIOError:
+            os.close(fd)
+            return None
+        except BaseException:
+            os.close(fd)
+            raise
+        if named is not None and (named.st_dev, named.st_ino) == (held.st_dev, held.st_ino):
+            return fd
+        os.close(fd)  # removed while this run waited: its lock is on a file nobody else will open
 
 
 def _release(path: Path, fd: int) -> None:
+    # Removed while the lock is still held, never after: a run that waited then sees that its file has
+    # no name any more (_migration_lock), and no run can lock a file that is about to be removed.
     path.with_name(path.name + ".migrating.lock").unlink(missing_ok=True)
     os.close(fd)
 

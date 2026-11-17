@@ -528,7 +528,8 @@ class NetworkingAttestationTest(unittest.TestCase):
         steps = [text.index(part) for part in (
             'scripts/build/build_nulavio.sh "$firefox"',
             'scripts/build/networking_check.py "$firefox" --claim-out "$RUNNER_TEMP/claim/networking-claim.json"',
-            'scripts/build/networking_check.py "$firefox" --expected-claim > "$RUNNER_TEMP/expected.json"',
+            'scripts/build/networking_check.py "$firefox" --expected-claim \\\n',
+            '--compiler-from "$RUNNER_TEMP/claim/networking-claim.json" > "$RUNNER_TEMP/expected.json"',
             'cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"',
             "actions/attest-build-provenance@",
             'gh attestation verify "$RUNNER_TEMP/expected.json"',
@@ -605,10 +606,13 @@ class NetworkingAttestationTest(unittest.TestCase):
         build = self.jobs["build"]
         start = build.index("Is the Rust networking reading attested")
         step = build[start : build.index("- name:", start + 10)]
-        self.assertIn("--expected-claim", step)
+        # After the build: the claim names the Rust compiler the build used (#472), which nothing knows before it.
+        self.assertLess(build.index('scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"'), start)
+        self.assertIn('release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo .', step)
         self.assertRegex(step, self.hosted)
         self.assertIn("::warning", step)
-        self.assertNotIn("exit 1", step)  # an urgent update runs the reading in parallel with the build
+        self.assertNotIn("exit 1", step)  # a rehearsal is not stopped by it; the signing job is where it is required
+        self.assertNotIn("--expected-claim", build)  # nothing asks before the build, when the compiler is not known
 
     def test_the_prebuild_tool_only_ever_prechecks(self):
         tool = (RELEASE / "autobuild.py").read_text(encoding="utf-8")

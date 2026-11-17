@@ -1338,6 +1338,10 @@ class ReleaseFilesTest(TempDirTest):
         repo = self.tmp / "repo"
         (repo / "browser" / "build").mkdir(parents=True)
         (repo / "browser" / "build" / "engine.json").write_text(json.dumps({"firefox": "159.0", "source_sha256": D159}))
+        # The manifest step asks the reading's own module which Rust compiler the build names (#472).
+        (repo / "scripts" / "build").mkdir(parents=True)
+        for name in ("networking_check.py", "apply_patches.py"):
+            shutil.copy(ROOT / "scripts" / "build" / name, repo / "scripts" / "build" / name)
         env = {"PATH": os.environ.get("PATH", "/usr/bin"), "HOME": str(self.tmp), "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C"}
         for command in (
             ["init", "-q"],
@@ -1359,6 +1363,9 @@ class ReleaseFilesTest(TempDirTest):
         tree = self.tmp / "build" / "firefox-159.0"  # the source tree the build compiled
         tree.mkdir(parents=True)
         (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+        config = tree / "obj-nulavio" / "config.status"  # the build's own configuration, which names its compiler
+        config.parent.mkdir()
+        config.write_text("substs = {'RUSTC_COMMIT': '" + "c0" * 20 + "', 'RUSTC_VERSION': '1.99.0'}\n")
         install = self.tmp / "install"  # what make_distribution.py packed (#198)
         (install / "distribution").mkdir(parents=True)
 
@@ -1371,6 +1378,7 @@ class ReleaseFilesTest(TempDirTest):
         manifest = json.loads((out / "manifest.json").read_text())
         self.assertEqual((manifest["firefox"], manifest["source_sha256"], manifest["signing_subkey"]), ("159.0", D159, SUBKEY))
         self.assertEqual(manifest["rehearsal"], "ok")
+        self.assertEqual(manifest["compiled_with"], {"rustc_version": "1.99.0", "rustc_commit": "c0" * 20})
         self.assertEqual(manifest["engine_json"], {"firefox": "159.0", "source_sha256": D159})
         self.assertRegex(manifest["nulavio_base_commit"], r"^[0-9a-f]{40}$")
         files = {entry["file"]: entry["sha256"] for entry in manifest["packages"]}
@@ -1392,6 +1400,23 @@ class ReleaseFilesTest(TempDirTest):
                 self.assertIn(error, run.stderr)
                 self.assertFalse((out / "manifest.json").exists())
         (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+        # A build whose configuration does not name its Rust compiler, or names it oddly: no manifest (#472).
+        for text in (
+            "substs = {'RUSTC_VERSION': '1.99.0'}\n",
+            "substs = {'RUSTC_COMMIT': 'x', 'RUSTC_VERSION': '1.99.0'}\n",
+            None,
+        ):
+            with self.subTest(config=text):
+                (out / "manifest.json").unlink(missing_ok=True)
+                config.unlink(missing_ok=True)
+                if text:
+                    config.write_text(text)
+                run = write()
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn("which Rust compiler built this release cannot be said", run.stderr)
+                self.assertFalse((out / "manifest.json").exists())
+        config.write_text("substs = {'RUSTC_COMMIT': '" + "c0" * 20 + "', 'RUSTC_VERSION': '1.99.0'}\n")
+        self.assertEqual(write().returncode, 0)
         (out / "logs" / "verify-source.log").write_text("FAILED\n")
         self.assertNotEqual(write().returncode, 0)
 
