@@ -90,7 +90,7 @@ A prévia, que rodava o perfil do Nulavio sobre o Firefox da sua distribuição 
 3. Favoritos: Favoritos → Gerenciar favoritos → Importar e backup → Exportar favoritos para HTML. Senhas: Senhas (`about:logins`) → ⋯ → Exportar senhas. Esse arquivo não é criptografado: deixe-o fora de pastas compartilhadas.
 4. No Nulavio: Favoritos → Gerenciar favoritos → Importar e backup → Importar favoritos de HTML; Senhas → ⋯ → Importar de um arquivo. Depois apague o arquivo de senhas exportado.
 
-A extensão de um gerenciador de senhas (Proton Pass, Bitwarden, KeePassXC) guarda o cofre na própria conta ou no próprio banco de dados: entre de novo no Nulavio, não há o que exportar. Se você rodou `bin/nulavio desktop install`, remova a entrada do menu com `bin/nulavio desktop uninstall`: ela abre a prévia, que agora se recusa a abrir. Quando não precisar mais dos perfis da prévia, apague `~/.local/share/nulavio/profiles/`.
+A extensão de um gerenciador de senhas (Proton Pass, Bitwarden, KeePassXC) guarda o cofre na própria conta ou no próprio banco de dados: entre de novo no Nulavio, não há o que exportar. Se você rodou `bin/nulavio desktop install`, a entrada do menu abre a prévia, que agora se recusa a abrir, e o comando saiu (#465): apague `~/.local/share/applications/nulavio-preview.desktop` e os ícones `nulavio-preview.png` e `nulavio-preview.svg` em `~/.local/share/icons/hicolor/`. Quando não precisar mais dos perfis da prévia, apague `~/.local/share/nulavio/profiles/`.
 
 ## Testes
 

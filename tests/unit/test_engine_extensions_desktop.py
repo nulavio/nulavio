@@ -1,4 +1,4 @@
-"""Engine command construction, extension integrity, desktop integration."""
+"""Engine command construction and extension integrity."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import desktop, doctor, engine, extensions  # noqa: E402
+from nulavio_launcher import doctor, engine, extensions  # noqa: E402
 
 FAKE_ENGINE = engine.Engine(path=Path("/usr/lib64/firefox/firefox"), version="158.0.1", vendor="Mozilla Firefox")
 
@@ -232,30 +232,14 @@ class ExtensionLockTest(unittest.TestCase):
 
 
 class DesktopTest(unittest.TestCase):
-    def test_entry_never_registers_as_handler(self):
-        text = desktop.render_entry(Path("/opt/nulavio/bin/nulavio"))
-        self.assertNotIn("MimeType", text)
-        self.assertIn("Exec=/opt/nulavio/bin/nulavio run %u", text)
-        self.assertIn("StartupWMClass=nulavio-preview", text)
-        self.assertIn("Icon=nulavio-preview", text)
+    def test_the_preview_desktop_command_is_gone(self):
+        # #465: the packages install the menu entry; the preview's own `nulavio desktop` left with the preview.
+        from nulavio_launcher import cli
 
-    def test_exec_path_is_quoted(self):
-        text = desktop.render_entry(Path("/home/a b/$x/bin/nulavio"))
-        self.assertIn('Exec="/home/a b/\\$x/bin/nulavio" run %u', text)
-
-    def test_install_and_uninstall_touch_only_own_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            data_home = Path(tmp) / "share"
-            neighbour = data_home / "applications" / "other.desktop"
-            neighbour.parent.mkdir(parents=True)
-            neighbour.write_text("[Desktop Entry]\n")
-            with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(data_home), "NULAVIO_HOME": str(Path(tmp) / "n")}):
-                written = desktop.install(Path("/x/bin/nulavio"))
-                self.assertTrue(any(p.name == "nulavio-preview.desktop" for p in written))
-                self.assertTrue((data_home / "icons/hicolor/48x48/apps/nulavio-preview.png").exists())
-                removed = desktop.uninstall()
-            self.assertEqual(sorted(map(str, removed)), sorted(map(str, written)))
-            self.assertTrue(neighbour.exists())
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            cli.build_parser().parse_args(["desktop", "install"])
+        self.assertFalse((ROOT / "launcher" / "nulavio_launcher" / "desktop.py").exists())
+        self.assertFalse((ROOT / "packaging" / "linux" / "nulavio-preview.desktop.in").exists())
 
 
 if __name__ == "__main__":
