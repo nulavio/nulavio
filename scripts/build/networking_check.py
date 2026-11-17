@@ -100,6 +100,28 @@ def inputs(read) -> dict:
     }
 
 
+# What a workflow attests and a release recomputes (#455). The same bytes from both sides, or no match:
+# a fixed shape, sorted keys, no date, no counts, nothing a second build of the same inputs would change.
+CLAIM = "nulavio-rust-networking-check/v1"
+
+
+def claim(firefox: str, source_sha256: str, built_with: dict) -> bytes:
+    """The statement "this Firefox release, built with these inputs, passed the reading", as bytes.
+
+    networking-check.yml writes it from its own build and reading and attests the file. The release's
+    signing job writes it again from the manifest and the base commit (release_manifest.py networking-claim)
+    and asks GitHub for an attestation of exactly those bytes by that workflow on main. Nothing in it is
+    taken from the record in the repository."""
+    statement = {
+        "claim": CLAIM,
+        "firefox": firefox,
+        "source_sha256": source_sha256,
+        "built_with": {key: built_with[key] for key in ("mozconfig_sha256", "variant_sha256", "patch_stack_sha256")},
+        "result": "passed",
+    }
+    return (json.dumps(statement, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
 def repository_inputs(repo: Path = ROOT) -> dict:
     return inputs(lambda path: (repo / path).read_bytes())
 
@@ -304,7 +326,26 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
     parser.add_argument(
         "--inputs", action="store_true", help='print this checkout\'s "built_with" (for a record the maintainer accepts) and stop'
     )
+    parser.add_argument(
+        "--claim-out", type=Path, help="after a passing reading, write the claim a workflow attests to this file (#455)"
+    )
+    parser.add_argument(
+        "--expected-claim",
+        action="store_true",
+        help="print the claim this checkout's pin and inputs need, without a build, and stop",
+    )
     args = parser.parse_args(argv)
+    if args.expected_claim:
+        try:
+            engine = json.loads(ENGINE.read_text(encoding="utf-8"))
+            sys.stdout.buffer.write(claim(engine["firefox"], engine["source_sha256"], repository_inputs(ROOT)))
+        except (OSError, ValueError, KeyError) as error:
+            print(
+                f"networking-check: the pin, the mozconfig, its variant or the patch stack cannot be read ({error})",
+                file=sys.stderr,
+            )
+            return 2
+        return 0
     if args.inputs:
         try:
             print(json.dumps(repository_inputs(ROOT), indent=2))
@@ -326,6 +367,10 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
         print(record["how"], file=sys.stderr)
         return 1
     del record["imported"]
+    if args.claim_out:
+        # From this reading's own values: the release it read and the inputs it found the tree to have.
+        args.claim_out.parent.mkdir(parents=True, exist_ok=True)
+        args.claim_out.write_bytes(claim(record["firefox"], record["source_sha256"], record["built_with"]))
     text = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
     if args.write:
         RECORD.write_text(text, encoding="utf-8")

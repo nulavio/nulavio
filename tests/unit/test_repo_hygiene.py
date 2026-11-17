@@ -32,6 +32,8 @@ WRITE_PERMISSIONS = {
     ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
     ("scorecard.yml", "analysis", "id-token"): "signs the published result for scorecard.dev (publish_results)",
     ("release-signing-check.yml", "sign", "id-token"): "OIDC to AWS: the role only the release environment may assume (ci/aws/)",
+    ("networking-check.yml", "read", "id-token"): "signs the attestation of the Rust networking claim (Sigstore, #455)",
+    ("networking-check.yml", "read", "attestations"): "stores it; release.yml's signing job requires it before it signs",
     ("release.yml", "build", "id-token"): "signs the build-provenance attestation of the packages (Sigstore)",
     ("release.yml", "build", "attestations"): "stores that attestation with the repository",
     ("release.yml", "companion", "id-token"): "signs the build-provenance attestation of the unsigned Companion APK (Sigstore)",

@@ -317,6 +317,36 @@ class MainTest(TreeCase):
         self.assertIn("FAILED: the Rust library imports recv", err)
         self.assertFalse((self.tmp / "networking-check.json").exists())
 
+    def test_the_claim_is_the_same_bytes_from_a_reading_and_from_the_checkout(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        code, _out, _err = self.main("--claim-out", str(claim_file))
+        self.assertEqual(code, 0)
+        from_reading = claim_file.read_bytes()
+        expected = nc.claim(VERSION, DIGEST, nc.repository_inputs(self.repo))
+        self.assertEqual(from_reading, expected)
+        self.assertTrue(from_reading.endswith(b"\n"))
+        statement = json.loads(from_reading)
+        self.assertEqual(sorted(statement), ["built_with", "claim", "firefox", "result", "source_sha256"])
+        self.assertEqual((statement["claim"], statement["result"]), ("nulavio-rust-networking-check/v1", "passed"))
+        # Nothing a second build of the same inputs would change: no date, no library digest, no counts.
+        for word in (b"checked", b"library_sha256", b"how", b"symbols"):
+            self.assertNotIn(word, from_reading)
+        # Any other release, source or input is another claim.
+        inputs = nc.repository_inputs(self.repo)
+        self.assertNotEqual(nc.claim("200.0", DIGEST, inputs), expected)
+        self.assertNotEqual(nc.claim(VERSION, "cd" * 32, inputs), expected)
+        self.assertNotEqual(nc.claim(VERSION, DIGEST, {**inputs, "patch_stack_sha256": "0" * 64}), expected)
+
+    def test_a_reading_that_fails_or_cannot_be_made_writes_no_claim(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        self.output = readelf_text("recv")
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 1)
+        self.assertFalse(claim_file.exists())
+        self.output = readelf_text()
+        self.library.unlink()
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 2)
+        self.assertFalse(claim_file.exists())
+
     def test_inputs_prints_what_an_accepted_record_must_carry_without_a_build(self):
         out = io.StringIO()
         with mock.patch.object(nc, "ROOT", self.repo), contextlib.redirect_stdout(out):

@@ -185,6 +185,27 @@ class ReleaseManifestTest(unittest.TestCase):
         self.commit_record(accepted)  # a patch changed since it was accepted
         self.refused(said)
 
+    def test_the_claim_comes_from_the_manifest_and_the_base_commit_never_from_the_record(self):
+        expected = networking_fixture.networking_check.claim(
+            "159.0.1", SOURCE, networking_fixture.networking_check.repository_inputs(self.repo)
+        )
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A record that says "accepted", or names another release, changes nothing in the claim.
+        self.commit_record({"firefox": "1.0", "source_sha256": "0" * 64, "result": "accepted", "accepted_in": "#1"})
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A patch changed at the base commit is another claim: the old attestation no longer fits.
+        (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n")
+        self.commit_record(networking_fixture.record(self.repo, "159.0.1", SOURCE))
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # The command prints those bytes and nothing else.
+        done = subprocess.run(
+            [sys.executable, "-I", str(ROOT / "scripts" / "release" / "release_manifest.py"), "networking-claim", str(self.out),
+             "--repo", str(self.repo)],
+            capture_output=True,
+        )  # fmt: skip
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, release_manifest.networking_claim(self.out, self.repo))
+
     def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
         self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))
         self.record.write_text(json.dumps(networking_fixture.record(self.repo, "159.0.1", SOURCE)))  # not committed
