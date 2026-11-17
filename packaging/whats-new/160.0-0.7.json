@@ -22,6 +22,9 @@
       "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando doctor avisa quando ela falta e o que instalar.",
       "Com o Firefox da distribuição, um perfil criado antes de uma proteção contra reconhecimento existir passa a recebê-la no próximo início, a menos que você tenha mudado o conjunto; o comando doctor avisa quando manteve o seu.",
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
+    ],
+    "action": [
+      "Se você deu a um agente de IA a automação bruta: ela saiu do Nulavio. O agente continua funcionando pelas ferramentas do Nulavio, com as suas permissões e o registro de atividade; uma biblioteca de automação própria precisa de um perfil do Firefox fora do Nulavio."
     ]
   },
   "en-US": {
@@ -43,6 +46,9 @@
       "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the doctor command says when it is missing and what to install.",
       "With distribution Firefox, a profile made before a fingerprinting protection existed now gets it at its next start, unless you changed the set yourself; the doctor command says when it kept yours.",
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
+    ],
+    "action": [
+      "If you gave an AI agent raw automation: it was removed from Nulavio. The agent keeps working through Nulavio's tools, with your permissions and the activity log; an automation library of its own needs a Firefox profile outside Nulavio."
     ]
   }
 }

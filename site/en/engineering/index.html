@@ -1056,7 +1056,7 @@
 <tr><th scope="row">Purchases, account settings</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
 <tr><th scope="row">Local network and internal pages, JavaScript, network inspection, other profiles, private tabs</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-ask"/></svg>ask</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
 <tr><th scope="row">Cookies and storage</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-done"/></svg>allow</td></tr>
-<tr><th scope="row">Raw automation and privileged pages</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block (separate opt-in)</td></tr>
+<tr><th scope="row">The browser's internal pages</th><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td><td><svg class="icon icon-sm" aria-hidden="true" focusable="false"><use href="#i-block"/></svg>block</td></tr>
 </tbody>
 </table>
 </div>
@@ -1064,17 +1064,17 @@
 <p class="note prose">Full control turns on only after you accept a warning. Autonomous does not ask again for what it covers. «Ask» opens a request for you; if there is no way to ask, the answer is no.</p>
 <div class="claim" id="s8-3">
 <div class="claim-text">
-<h3><span class="num">8.3</span> Raw automation, kept apart</h3>
-<p>Direct access to the WebDriver BiDi protocol is not part of any level, Full control included. It is a separate opt-in for each agent, with its own warning, and the window then says that Nulavio neither checks nor records what happens in it. The emergency stop still ends everything.</p>
+<h3><span class="num">8.3</span> No way around the policy</h3>
+<p>An agent acts only through Nulavio's tools, under its permissions and with every action recorded. Raw automation, which handed an agent the browser's WebDriver BiDi protocol outside that policy, was removed. The browser's internal pages are offered to no agent, Full control included.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">How to check</p>
 <dl>
 <dt>Decision</dt>
-<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › amendment of 2026-10-28</code></dd>
+<dd><code class="ref" translate="no">docs/adr/0007-ai-bridge.md › amendment of 2026-11-17</code></dd>
 <dt>Tests</dt>
-<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_20_raw_automation_needs_debugging_bypasses_policy_and_still_ends_with_stop</code></dd>
-<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_21_the_ai_workspace_window_says_who_drives_it_and_when_nothing_is_checked</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_20_raw_automation_is_gone_and_a_stored_opt_in_grants_nothing</code></dd>
+<dd><code class="ref" translate="no">tests/integration/test_ai_bridge.py › test_21_the_ai_workspace_window_says_who_drives_it</code></dd>
 <dt>Risk</dt>
 <dd><code class="ref" translate="no">docs/security/residual-risks.md › R42</code></dd>
 </dl>

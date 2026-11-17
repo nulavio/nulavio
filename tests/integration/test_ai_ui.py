@@ -189,7 +189,7 @@ class AiUiTest(unittest.TestCase):
         total = next(a for a in self.agents().values() if a["name"] == "Total")
         self.assertEqual(total["autonomy"], "full_control")
         self.assertTrue(total["full_control_accepted"])
-        self.assertFalse(total.get("raw_automation_accepted"))  # raw automation stays a separate option
+        self.assertNotIn("raw_automation_accepted", total)  # raw automation is gone (#463)
 
     def ask_in_thread(self, agent_id: str, capability: str, target: str, place: str = "") -> tuple[threading.Thread, dict]:
         result: dict = {}
@@ -343,7 +343,7 @@ class AiUiTest(unittest.TestCase):
             self.assertEqual(fallback.asked, 1)  # nobody picked it up: the fallback was asked
             self.assertFalse(any("ai/request.html" in u for u in self.tabs()))
             # The window says who drives it, in a bar that cannot be closed (the real AI Workspace: test_ai_bridge 21-22).
-            texts = {"text": "Área de IA de Workspace", "rawText": "raw", "pausedText": "paused", "failedText": "failed",
+            texts = {"text": "Área de IA de Workspace", "pausedText": "paused", "failedText": "failed",
                      "stopLabel": "Parar agente"}  # fmt: skip
             self.m.set_context("chrome")
             try:
@@ -473,32 +473,29 @@ class AiUiTest(unittest.TestCase):
             )
         )
 
-    def test_09_raw_automation_is_a_separate_switch_with_its_own_warning(self):
+    def test_09_an_agent_that_had_raw_automation_is_told_once_that_it_is_gone(self):
+        # #463: the switch is gone; an agent whose registry entry still has the opt-in an earlier version recorded
+        # gets one notice in its row, until the person acknowledges it, and the opt-in grants nothing meanwhile.
         agent, _ = registry.add("Bruto", "other", "full_control", accept_full_control=True)
+        plain, _ = registry.add("Novo", "other", "full_control", accept_full_control=True)
+        path = registry._registry_path()
+        data = json.loads(path.read_text())
+        data["agents"][agent["id"]]["raw_automation_accepted"] = "2026-11-01T10:00:00+00:00"
+        path.write_text(json.dumps(data))
         self.open_page("settings/settings.html#ai")
         row = f"[data-agent-id='{agent['id']}']"
-        self.assertTrue(harness.wait_until(lambda: self.js(f'return !!document.querySelector("{row}");'), timeout=20))
+        notice = f"[data-raw-removed='{agent['id']}']"
+        self.assertTrue(harness.wait_until(lambda: self.js(f'return !!document.querySelector("{notice}");'), timeout=20))
+        self.assertIn(self.msg("aiRawRemoved"), self.js(f'return document.querySelector("{notice}").textContent;'))
+        self.assertFalse(self.js(f"return !!document.querySelector(\"[data-raw-removed='{plain['id']}']\");"))
         self.js(f'document.querySelector("{row} details").open = true;')
-        # D-UX4 / SB-03: not in the per-capability list, and off under Full control.
         self.assertFalse(self.js(f"return !!document.querySelector(\"[data-focus-key='mode-{agent['id']}-debugging']\");"))
-        switch = f"[data-focus-key='raw-{agent['id']}']"
-        self.assertFalse(self.js(f'return document.querySelector("{switch}").checked;'))
-        self.click(switch)
-        dialog = self.open_dialog()
-        self.assert_critical_consent(dialog, self.msg("aiRawTitle", "Bruto"), self.msg("aiRawBody", "Bruto"))
-        self.shoot("raw-automation-warning", "ai")
-        self.click("dialog[open] button[value=cancel]")
-        time.sleep(1)
-        self.assertFalse(registry.get(agent["id"]).get("raw_automation_accepted"))
-        self.assertFalse(self.js(f'return document.querySelector("{switch}").checked;'))
-        self.click(switch)
-        self.open_dialog()
-        self.click("dialog[open] button[value=confirm]")
-        self.assertTrue(harness.wait_until(lambda: registry.get(agent["id"]).get("raw_automation_accepted"), timeout=20))
-        self.assertTrue(harness.wait_until(lambda: self.js(f'return document.querySelector("{switch}")?.checked;'), timeout=20))
-        self.click(switch)  # off again needs no confirmation
-        self.assertTrue(harness.wait_until(lambda: not registry.get(agent["id"]).get("raw_automation_accepted"), timeout=20))
-        self.assertFalse(self.js("return !!document.querySelector('dialog[open]');"))
+        self.assertFalse(self.js("return !!document.querySelector(\"[data-focus-key^='raw-'], [data-raw-automation]\");"))
+        self.assertEqual(policy.effective_mode(registry.get(agent["id"]), "debugging", "")[0], "block")
+        self.shoot("raw-automation-removed", "ai")
+        self.click(f"{notice} button")
+        self.assertTrue(harness.wait_until(lambda: "raw_automation_accepted" not in registry.get(agent["id"]), timeout=20))
+        self.assertTrue(harness.wait_until(lambda: not self.js(f'return !!document.querySelector("{notice}");'), timeout=20))
 
     def test_10_the_assistant_appears_as_an_agent_at_once(self):
         """AI-11: its client has a name, and the list refreshes after it is configured."""
