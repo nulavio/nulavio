@@ -249,7 +249,7 @@ class ApiTest(TempHome):
                 raise OSError("engine failed")
             return 0
 
-        engine = mock.Mock(builtin_theme=True)
+        engine = mock.Mock(builtin_theme=True, vendor="Nulavio")
         with mock.patch.object(cli.engine_mod, "find_engine", return_value=engine), \
              mock.patch.object(cli.engine_mod, "check_supported"), mock.patch.object(cli, "_run", side_effect=fake_run), \
              mock.patch.object(cli.extensions, "install") as install, redirect_stdout(io.StringIO()):  # fmt: skip
@@ -260,8 +260,10 @@ class ApiTest(TempHome):
         self.assertFalse(any(path.exists() for path in seen))
 
     def test_run_temporary_installs_the_pinned_filter_for_distribution_firefox(self):
-        engine = mock.Mock(builtin_theme=False)
-        with mock.patch.object(cli.engine_mod, "find_engine", return_value=engine), \
+        # Only the test harness runs the distribution's Firefox since the preview was removed (#464).
+        engine = mock.Mock(builtin_theme=False, vendor="Mozilla Firefox")
+        with mock.patch.dict(os.environ, {cli.engine_mod.HARNESS_FIREFOX_ENV: "1"}), \
+             mock.patch.object(cli.engine_mod, "find_engine", return_value=engine), \
              mock.patch.object(cli.engine_mod, "check_supported"), mock.patch.object(cli, "_run", return_value=0), \
              mock.patch.object(cli.extensions, "install") as install, redirect_stdout(io.StringIO()):  # fmt: skip
             self.assertEqual(cli.main(["run", "--temporary"]), 0)

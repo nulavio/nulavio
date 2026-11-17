@@ -295,7 +295,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Impact | Every keystroke, including text never searched for (pasted passwords, private URLs), reaches a third party |
 | Preventive | **Now:** suggestions and trending off by default (both tracks); Track B requires per-provider consent at the single fetch point (patch 0004), so consent for one engine does not cover others reached through aliases; the settings page names the host that receives the text |
 | Detective | Nulavio settings show which providers receive typed text |
-| Limitations | Track A has one global switch (R17); DNS is not measured by the test (R20) |
+| Limitations | The preview had one global switch (R17, resolved: removed in #464); DNS is not measured by the test (R20) |
 | Tests | `test_search` 02, 03, 05 |
 | Residual | **Low** (Track B) / **Medium** (Track A with suggestions turned on) |
 

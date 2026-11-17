@@ -196,7 +196,7 @@ def _create(args) -> int:
             _err("no terminal to ask for a password; use --password-stdin")
             return 1
     prof, code = profiles.create(
-        args.name, password=password, keyring=keyring() if args.keyring else None, provider=args.provider, theme=not args.no_theme
+        args.name, password=password, keyring=keyring() if args.keyring else None, provider=args.provider
     )
     print(f"Encrypted profile '{prof.name}' created: {prof.path}")
     print("\nRecovery code (shown once; write it down and keep it away from this computer):\n")
@@ -674,7 +674,6 @@ def add_parser(sub) -> None:
     q.add_argument("--keyring", action="store_true", help="also unlock with your computer login (system keyring)")
     q.add_argument("--no-password", action="store_true", help="no profile password (needs --keyring)")
     q.add_argument("--provider", default="builtin")
-    q.add_argument("--no-theme", action="store_true")
     q.add_argument("--password-stdin", action="store_true", help="read secrets from stdin, one per line")
     q = vsub.add_parser("encrypt", help="encrypt an existing, closed profile in place")
     q.add_argument("name", nargs="?")

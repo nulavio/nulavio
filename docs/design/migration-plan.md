@@ -25,4 +25,4 @@ Found during the audit; they change behaviour, not just looks, so they are not m
 
 ## Track A (preview)
 
-The preview keeps `browser/theme/userChrome.css` (recolouring only). Aligning it with `tokens.json` (generate it from the same tokens) is cheap and planned with M2's remaining work. Geometry and the route mark stay Track B only.
+The preview and its `browser/theme/userChrome.css` were removed on 2026-11-17 (#464); nothing here applies to it any more.

@@ -1,6 +1,6 @@
 # Nulavio Shell: UI architecture
 
-The Nulavio Shell is everything a person sees of Nulavio around and inside the browser window. It keeps the Gecko and Firefox back end (tabs, sessions, sync, extensions, permissions, security UI) and changes how it looks and what Nulavio adds. Track B (the Nulavio build) only; the Track A preview keeps its recolouring `userChrome.css`.
+The Nulavio Shell is everything a person sees of Nulavio around and inside the browser window. It keeps the Gecko and Firefox back end (tabs, sessions, sync, extensions, permissions, security UI) and changes how it looks and what Nulavio adds. Track B (the Nulavio build) only; the Track A preview and its recolouring `userChrome.css` were removed in #464.
 
 ## Layers
 

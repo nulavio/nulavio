@@ -131,9 +131,9 @@ class ProfileTest(TempHome):
         self.assertEqual(second, [])
         self.assertIs(prefs.read_user_prefs(prof.path / "prefs.js")["dom.security.https_only_mode"], False)
         user_js = prefs.read_user_prefs(prof.path / "user.js")
-        enforced = {p.name for p in profile.baseline_prefs() + profile.theme_prefs() if p.mode == "enforce"}
+        enforced = {p.name for p in profile.baseline_prefs() if p.mode == "enforce"}
         self.assertEqual(set(user_js), enforced)
-        self.assertEqual(mode(prof.path / "chrome" / "userChrome.css"), 0o600)
+        self.assertFalse((prof.path / "chrome").exists(), "the preview's chrome theme is gone (#464)")
 
     # -- a seeded value follows the baseline; a value the person chose stays (#384) --------------------
 
@@ -359,27 +359,19 @@ class ProfileTest(TempHome):
         with self.assertRaises(profile.ProfileError):
             profile.set_provider(prof, "made-up")
 
-    def test_builtin_theme_replaces_only_the_launchers_css(self):
-        # The Nulavio build ships its window theme: the preview userChrome.css would
-        # override it, so the launcher removes its own copy and never installs it.
+    def test_preview_theme_removed_and_users_css_kept(self):
+        # The preview's userChrome.css is no longer installed (#464); a copy an earlier launcher wrote would override
+        # the Nulavio build's window theme, so it is removed. A file the person wrote stays.
         prof = self.make()
         css = prof.path / "chrome" / "userChrome.css"
+        css.parent.mkdir(mode=0o700)
+        css.write_text(f"/* {profile.PREVIEW_THEME_MARKER} */\n#nav-bar {{ background: none; }}\n")
         profile.prepare_for_launch(prof, {})
-        self.assertTrue(css.exists())
-        profile.prepare_for_launch(prof, {}, builtin_theme=True)
         self.assertFalse(css.exists())
         self.assertNotIn("toolkit.legacyUserProfileCustomizations.stylesheets", prefs.read_user_prefs(prof.path / "user.js"))
         css.write_text("/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n")
-        profile.prepare_for_launch(prof, {}, builtin_theme=True)
+        profile.prepare_for_launch(prof, {})
         self.assertEqual(css.read_text(), "/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n", "user's file touched")
-
-    def test_theme_off_removes_css_and_pref(self):
-        prof = self.make()
-        profile.prepare_for_launch(prof, {})
-        profile.set_theme(prof, False)
-        profile.prepare_for_launch(prof, {})
-        self.assertFalse((prof.path / "chrome" / "userChrome.css").exists())
-        self.assertNotIn("toolkit.legacyUserProfileCustomizations.stylesheets", prefs.read_user_prefs(prof.path / "user.js"))
 
     def test_start_page_escapes_values_and_has_no_scripts(self):
         prof = self.make()

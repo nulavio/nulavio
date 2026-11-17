@@ -123,6 +123,30 @@ class EngineCommandTest(unittest.TestCase):
         nulavio = engine.Engine(path=Path("/opt/nulavio/nulavio"), version="158.0.1", vendor="Nulavio")
         self.assertTrue(nulavio.builtin_theme)
 
+    def test_setup_and_run_refuse_the_distribution_firefox(self):
+        # The preview is no longer offered (#464): only the test harness, which says so, runs Firefox.
+        nulavio = replace(FAKE_ENGINE, vendor="Nulavio")
+        engine.require_nulavio(nulavio, {})
+        engine.require_nulavio(FAKE_ENGINE, {engine.HARNESS_FIREFOX_ENV: "1"})
+        for environ in ({}, {engine.HARNESS_FIREFOX_ENV: "0"}, {engine.HARNESS_FIREFOX_ENV: ""}):
+            with self.subTest(environ=environ), self.assertRaisesRegex(engine.EngineError, "no longer offered"):
+                engine.require_nulavio(FAKE_ENGINE, environ)
+        from nulavio_launcher import cli
+
+        clean = {k: v for k, v in os.environ.items() if k != engine.HARNESS_FIREFOX_ENV}
+        for command in (["setup", "--yes"], ["run", "--dry-run"]):
+            with (
+                self.subTest(command=command),
+                tempfile.TemporaryDirectory() as home,
+                mock.patch.dict(os.environ, {**clean, "NULAVIO_HOME": home}, clear=True),
+                mock.patch.object(engine, "find_engine", return_value=FAKE_ENGINE),
+                mock.patch("sys.stderr") as stderr,
+            ):
+                self.assertEqual(cli.main(command), 1)
+                said = "".join(call.args[0] for call in stderr.write.call_args_list)
+                self.assertIn("install the Nulavio package", said)
+                self.assertEqual(list(Path(home).rglob("*")), [], "nothing is written before the refusal")
+
     def test_version_output_parsing(self):
         self.assertEqual(engine.parse_version_output("Mozilla Firefox 158.0.1\n"), ("Mozilla Firefox", "158.0.1"))
         self.assertEqual(engine.parse_version_output("Nulavio Nulavio 158.0.1\n"), ("Nulavio", "158.0.1"))
