@@ -129,7 +129,7 @@ class AiBridgeTest(unittest.TestCase):
         c = self.client(env)
         result = c.call("tab_new", url=self.fx.url("/agent-task"))
         self.assertTrue(result["isError"])
-        self.assertIn("this computer, the local network", result["content"][0]["text"])
+        self.assertIn("this computer and the local network", result["content"][0]["text"])
         self.assertEqual(self.fx.hits, [])  # the request never left the bridge
 
     def test_04_site_list(self):
