@@ -212,6 +212,20 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertEqual(defaults[0], "Mojeek")
         self.assertNotEqual(defaults[1], "Mojeek")
         self.assertEqual(self.state()["optIn"], [], "choosing is not consent to send typed text")
+        # With the suggestions box ticked: the message names the host that now receives what is typed, and the box is
+        # clear again for the next choice (consent is for one provider at a time).
+        self.m.chrome(CLICK, ["#nulavio-search-choose-suggest"])
+        self.seen(lambda n: n["suggest"] is True)
+        brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
+        self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
+        told = self.seen(lambda n: n["chose"] and n["chose"].startswith("Brave Search"))
+        self.assertEqual(
+            told["chose"],
+            "Brave Search é a pesquisa deste perfil nas janelas normais."
+            " Ligado: o que você digita é enviado a search.brave.com enquanto você digita.",
+        )
+        self.assertIs(told["suggest"], False)
+        self.assertEqual(len(self.state()["optIn"]), 1)
 
     def run_async(self, body: str, *args):
         """Privileged async JS in the window; returns its value, or the error's text."""

@@ -94,7 +94,7 @@
   "choosePrivateTooLabel": {"message": "Usar também nas janelas privadas"},
   "choosePrivateTooNote": {"message": "Desmarcado, as janelas privadas continuam com o mecanismo que já usam."},
   "chooseSuggestLabel": {"message": "Mostrar sugestões dele enquanto digito"},
-  "chooseSuggestNote": {"message": "Marcado, o que você digita na barra de endereço vai, antes de você pesquisar, ao endereço de sugestões do provedor que você escolher agora (o mesmo que a lista abaixo mostra). Vale só para essa escolha."},
+  "chooseSuggestNote": {"message": "Marcado, o que você digita na barra de endereço vai ao endereço de sugestões do provedor que você escolher agora, antes de você pesquisar; ao escolher, a mensagem diz qual é. Vale só para essa escolha."},
   "chooseDone": {"message": "$NAME$ é a pesquisa deste perfil nas janelas normais.", "placeholders": {"name": {"content": "$1"}}},
   "chooseDoneBoth": {"message": "$NAME$ é a pesquisa deste perfil nas janelas normais e nas privadas.", "placeholders": {"name": {"content": "$1"}}},
   "err_invalid_choice": {"message": "Essa escolha não pôde ser feita. A lista foi atualizada."},

@@ -341,7 +341,14 @@ class NulavioSearchClass {
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.featureGate", false) &&
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.enabled", false),
       providers: Object.entries(PROVIDERS)
-        .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
+        .map(([key, p]) => ({
+          key,
+          name: p.name,
+          alias: p.alias,
+          account: key in ACCOUNTS,
+          suggests: Boolean(p.suggest),
+          suggestHost: p.suggest ? new URL(p.suggest.replace("{searchTerms}", "x")).host : null,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     };
   }

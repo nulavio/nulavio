@@ -94,7 +94,7 @@
   "choosePrivateTooLabel": {"message": "Use it in private windows too"},
   "choosePrivateTooNote": {"message": "Unticked, private windows keep the engine they use now."},
   "chooseSuggestLabel": {"message": "Show its suggestions while I type"},
-  "chooseSuggestNote": {"message": "Ticked, what you type in the address bar goes, before you search, to the suggestions address of the provider you choose now (the one the list below shows). It counts for that choice only."},
+  "chooseSuggestNote": {"message": "Ticked, what you type in the address bar goes to the suggestions address of the provider you choose now, before you search; on choosing, the message names it. It counts for that choice only."},
   "chooseDone": {"message": "$NAME$ is this profile's search in normal windows.", "placeholders": {"name": {"content": "$1"}}},
   "chooseDoneBoth": {"message": "$NAME$ is this profile's search in normal and private windows.", "placeholders": {"name": {"content": "$1"}}},
   "err_invalid_choice": {"message": "That choice could not be made. The list was refreshed."},
