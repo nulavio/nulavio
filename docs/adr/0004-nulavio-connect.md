@@ -72,6 +72,15 @@ class Status:
 - **MPRIS** is the engine's own (media keys and the desktop's media controls); **per-profile proxy** is already per profile in the engine's connection settings, and Guard reports proxy changes made outside the browser. Nulavio adds no separate adapter for either.
 - **Verification**: `tests/unit/test_connect_p1.py` (FIDO descriptors in a fake sysfs, refusals, one link to one device, plugin files, the runner answering KRunner's `Match`/`Run` on a private session bus) and `tests/integration/test_connect.py` 05–06 (the states in the browser, sending a link through a stand-in `kdeconnect-cli`, adding and removing the plugin).
 
+## Amendment 2026-11-17: KRunner and KDE Connect leave P1 (#453)
+
+The maintainer decided on 2026-11-17, in the [feature review](../product/feature-review-2026-11.md#i2-krunner-plugin) (rows I2 and I3), to remove two P1 integrations:
+
+- **The KRunner plugin** (#461). KDE's own runners open a typed address or a web-search keyword in the default browser, and the plugin did no more than that: it left the profile to routing. It was also a session-bus service any program of the user could call (R44).
+- **"Send link to device" through KDE Connect** (#462). Plasma Browser Integration, which P0 detects, ships its own KDE Connect plugin.
+
+P0 (Settings → Integrações, the default browser) and the other P1/P2 status rows (KDE Connect's own status, screen-cast, security keys, notifications, activities) are unchanged: a package install cannot run `nulavio doctor` (#470), so that pane is where people read these facts.
+
 ## Risks
 
 | Risk | Mitigation |
