@@ -427,7 +427,7 @@ class NulavioServicesClass {
     const lang = this.language();
     if (use === "translate-selection" || use === "translate-page") {
       const t = this.translators().find(each => each.id === id) ?? fail("not-found");
-      const value = use === "translate-selection" ? { text: String(text).slice(0, MAX_TEXT).replace(/[\uD800-\uDBFF]$/, "") } : { url: target };
+      const value = use === "translate-selection" ? { text: String(text).slice(0, MAX_TEXT).replace(/[\uD800-\uDBFF]$/, "").toWellFormed() } : { url: target };
       if (use === "translate-selection" && !value.text.trim()) {
         fail("nothing-selected");
       }
