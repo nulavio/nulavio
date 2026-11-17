@@ -358,3 +358,96 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Decided by:** #221, #222.
 - **Recommendation: Keep.**
 
+### Profiles
+
+#### R1 Profiles: templates, selector, colours and glyphs
+
+- **Code:** 1,690 lines (`NulavioProfiles.sys.mjs` 974, `NulavioAvatars.sys.mjs`, the profile menu, the experiment, three helpers) and about 589 lines of Settings (the profiles' list and editor).
+- **Seams:** three methods of the engine's `SelectableProfileService` are replaced at run time (see [the seams](#the-engines-seams)).
+- **Boundaries and risks:** TB13; R18.
+- **Tests:** `test_profiles` (15), `test_profile_colors` (5), `test_profile_initialization` (6), `test_settings_profiles` (9).
+- **Failures:** #209, #280, #368, #409 (closed).
+- **Decided by:** ADR 0003; FR-06; SEC-15.
+- **The engine already:** has profiles with a selector, avatars and colours since 2025 (verified: `browser.profiles.enabled` is true in 160.0's `firefox.js`). Nulavio adds the templates, the glyphs, the toolbar button and what the Vault needs (a protected profile is never the start-up one, the last unprotected profile).
+- **Fit and cost:** the second promise of the README. The method replacements are the cost at each update.
+- **Recommendation: Keep.**
+
+#### R2 The engine's profile chooser unlocks protected profiles
+
+- **Code:** 847 lines (patch 0011 of 164 lines, `browser/shell/chooser/`, its strings).
+- **Seams:** the patch, in `about:profilemanager`'s chooser.
+- **Boundaries and risks:** R18.
+- **Tests:** `test_profile_chooser` (8).
+- **Decided by:** #43 (option A, change the engine's chooser).
+- **Fit and cost:** without it, a protected profile cannot be chosen when the browser starts. It goes with R7.
+- **Recommendation: Keep.**
+
+#### R3 Smart Profile Routing: links from other apps and typed addresses
+
+- **Code:** 1,585 lines (`NulavioRouter.sys.mjs` 309, `NulavioRouting.sys.mjs` 835, the ask and refusal pages, the experiment, patch 0005 of 53 lines) and about 216 lines of Settings.
+- **Seams:** patch 0005 in the address bar; the engine's remote service (D-Bus) for command lines; `SelectableProfileService`.
+- **Boundaries and risks:** TB14; R21, R22, R23, R55.
+- **Tests:** `test_routing` (32), `test_settings_routing` (4).
+- **Decided by:** ADR 0003; FR-22.
+- **The engine already:** nothing routes a link to a profile. Containers (the Multi-Account Containers extension) separate cookies inside one profile (inferred).
+- **Fit and cost:** profiles without routing mean choosing the profile by hand for every link from another app. One of the larger features; its rules engine is pure and tested.
+- **Recommendation: Keep.**
+
+#### R4 Routing of links clicked in pages (M5)
+
+- **Code:** inside R3 (a switch, off by default: verified, `NulavioRouter.sys.mjs`, "Opt-in … Default off").
+- **Boundaries and risks:** R24, R45; a [security review](../security/routing-m5-review.md) before it was offered.
+- **Tests:** `test_routing` 15 to 22.
+- **Recommendation: Keep, off by default as today.**
+
+#### R5 Temporary profile
+
+- **Code:** the launcher's `temporary.py` (295 lines) and the Shell's entries in the profile menu and Settings.
+- **Boundaries and risks:** R37.
+- **Tests:** `test_temporary` (5, unit and integration).
+- **Decided by:** FR-28; ADR 0003.
+- **The engine already:** private windows. They keep the profile's extensions, saved logins and settings; a temporary profile has none of them and leaves no folder (inferred from the design, not compared here).
+- **Fit and cost:** small, and it answers "a window that shares nothing" without a second browser.
+- **Recommendation: Keep.**
+
+#### R6 Sensitive-sites profile template
+
+- **Code:** a template inside `NulavioProfiles.sys.mjs` and a `user.js` it writes.
+- **Boundaries and risks:** R47.
+- **Tests:** `test_profiles` 11.
+- **Decided by:** SEC-20; Phase 5.
+- **Recommendation: Keep.**
+
+#### R7 Vault: protected profiles
+
+- **Code:** 5,391 lines:
+  - the launcher's `vault/` without the phone (`storage.py` 995, `cli.py` 723, `core.py` 538, `profiles.py` 350, `coordinator.py`, `sodium.py`, `providers.py`);
+  - the Shell's Vault pages and `NulavioVault.sys.mjs`;
+  - `NulavioTools.sys.mjs` and `make_tools.py`, which ship the `nulavio` tools next to the engine.
+- **Seams:** gocryptfs (FUSE) and the system libsodium through `ctypes`; the engine's profile service; R2's patch.
+- **Boundaries and risks:** TB5, TB11; R30, R31, R32, R70.
+- **Tests:** `test_vault_profiles` (4), `test_vault_ui` (20); unit `test_vault`, `test_vault_storage`. FUSE is missing in pull-request CI, so `test_vault_profiles` runs in release runs only (#376, #378).
+- **Failures:** #177, #187, #258, #277, #325, #411, #412 (closed); #434 open (P3).
+- **Decided by:** ADRs 0006 and 0015; FR-24, FR-25.
+- **Reviewed:** the independent review of #224 read it as a whole; every finding is closed ([release criteria](release-criteria.md#the-independent-review-of-the-vault-and-the-release-chain-224-done-every-finding-closed)).
+- **The engine already:** a primary password protects saved logins only, not the profile.
+- **Fit and cost:** the README's third promise and one of 1.0's two audited areas. The largest feature after the AI Bridge.
+- **Recommendation: Keep.**
+
+#### R8 Phone unlock and the Android Companion
+
+- **Code:** 3,749 lines:
+  - the launcher's `phone.py`, `phone_session.py` and `link.py` (1,024);
+  - the Shell's phone page and QR helper;
+  - the Android app and its protocol library (2,414 lines of Java).
+- **Release cost:** a second build system (Gradle, with locked dependencies and R53's advisories), a second key in AWS KMS (ADR 0014, TB18), a Companion job in `release.yml`, and F-Droid's recipe.
+- **Seams:** Android's Keystore and BiometricPrompt; mDNS on the local network.
+- **Boundaries and risks:** R48 (one real phone), R49 (the network sees a phone operation).
+- **Tests:** `test_companion_emulator` (5); unit `test_phone_link`, `test_companion_protocol`, `test_companion_build`, `test_companion_version`, `test_apk_sign`.
+- **Decided by:** ADR 0005; D10 revised on 2026-11-10: phone unlock "came back in … with the Companion on F-Droid" ([release criteria](release-criteria.md#scope-of-10-decided-2026-11-04)).
+- **Open issues:** #207 (F-Droid: ask again from 2027-01-27), #227 (the real phone again, with the signed APK).
+- **Today:** pairing a phone is not offered. It is behind `nulavio.vault.phone.pairing`, false by default (verified: `NulavioVault.sys.mjs`); unlocking with a phone already paired does not depend on it.
+- **Fit and cost:** a convenience on top of R7, which already has two recovery methods. The condition it came back under (F-Droid) is now after 1.0. It is the one feature that makes Nulavio maintain a second platform.
+- **Recommendation: After 1.0, for offering pairing.** Keep the code and the pref as they are. Offer pairing when F-Droid accepts the Companion (#207) and #227 has passed. **Reverses** the 2026-11-10 scope decision: the release criteria and the roadmap's Phase 2c need the amendment.
+- **For people who use it today:** nobody can pair from the browser today, so nothing changes in the browser. The README ("comes with the next release") and the landing page ("Coming soon") need new words, and so does the Companion's place in the release (the signed APK keeps being built, or stops until then: a decision for the issue).
+
