@@ -55,15 +55,18 @@ ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
   .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
 // The drawn one: after a refresh of the menu the engine may keep a hidden copy of an item next to the new one.
-// The menu is drawn again after the background page updates it (menus.refresh): only an item laid out on screen can
-// be activated, so this answers false until there is one.
+// The menu is drawn again after the background page updates it (menus.refresh), and a headless window does not lay
+// out the new items: the click is the command event the extension menus listen to, as activateItem sends it, and the
+// menu is closed after it, as a click closes it.
+const menu = d.getElementById('contentAreaContextMenu');
 const item = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
-  .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && i.getBoundingClientRect().height > 0);
+  .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && !i.disabled);
 if (!item) return false;
 try {
-  d.getElementById('contentAreaContextMenu').activateItem(item);
+  menu.activateItem(item);
 } catch (e) {
-  return false;
+  item.doCommand();
+  menu.hidePopup();
 }
 return true;
 """
