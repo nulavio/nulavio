@@ -617,7 +617,8 @@ class LocaleKeysTest(unittest.TestCase):
         for name in ("pt_BR", "en"):
             with self.subTest(locale=name):
                 text = (SHELL / "_locales" / name / "messages.json").read_text(encoding="utf-8")
-                keys = [key for key, _ in json.loads(text, object_pairs_hook=lambda pairs: pairs)]
+                # The engine keeps message names in lower case, so two that differ only in case are one.
+                keys = [key.lower() for key, _ in json.loads(text, object_pairs_hook=lambda pairs: pairs)]
                 self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
 
 
