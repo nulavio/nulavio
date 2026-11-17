@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -468,6 +469,121 @@ class ProfileTest(TempHome):
         profile.delete(prof)
         self.assertFalse(prof.path.exists())
         self.assertTrue(paths.profiles_root().exists())
+
+
+class OnePasswordDoctorTest(unittest.TestCase):
+    """#81: doctor says how the 1Password desktop app learns the Nulavio build, and never writes its file."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.app = self.tmp / "opt" / "1password"
+        self.allowed = self.tmp / "etc" / "1password" / "custom_allowed_browsers"
+        for name, value in (("ONEPASSWORD_APP", (self.app,)), ("ONEPASSWORD_ALLOWED", self.allowed)):
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.root_owned = mock.patch.object(doctor, "_root_owned", return_value=True)
+        self.root_owned.start()
+        self.addCleanup(self.root_owned.stop)
+
+    def test_nothing_without_the_desktop_app(self):
+        self.assertEqual(doctor.check_1password(Path("/usr/lib64/nulavio/nulavio")), [])
+
+    def test_a_name_that_is_not_plain_gets_no_command(self):
+        # The command is pasted into a root shell: a file name with shell characters never goes into it.
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/opt/x/nulavio;rm -rf ~"))
+        self.assertEqual(check.status, "warn")
+        self.assertNotIn("sudo", check.detail)
+
+    def test_firefox_needs_no_step(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/firefox/firefox"))
+        self.assertEqual(check.status, "ok")
+
+    def test_the_nulavio_build_gets_the_exact_command_and_the_file_is_never_written(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "info")
+        self.assertIn(f"sudo install -d -m 0755 {self.allowed.parent} && echo nulavio | sudo tee -a {self.allowed}", check.detail)
+        self.assertFalse(self.allowed.exists(), "doctor wrote 1Password's file")
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`echo nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_text("librewolf\nnulavio\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "ok")
+        self.assertEqual(self.allowed.read_text(encoding="utf-8"), "librewolf\nnulavio\n")
+
+    def test_a_list_without_a_final_line_break_and_one_that_is_not_utf8(self):
+        """CodeRabbit on #478: the command keeps the names apart; a file that is not UTF-8 is a warning, not a crash."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`printf '\\n%s\\n' nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_bytes(b"librewolf\n\xff\n")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "warn")
+        self.assertIn("cannot read", check.detail)
+
+    def test_an_engine_the_user_can_replace_gets_no_command(self):
+        """Review of #478: the line trusts a name; it is not offered for a tarball or a home-folder engine."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        engine = self.tmp / "nulavio" / "nulavio"
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        # The user's own files, whoever runs the test.
+        users = mock.Mock(st_uid=1000, st_mode=0o100755)
+        with (
+            mock.patch.object(doctor.os, "stat", return_value=users),
+            mock.patch.object(Path, "resolve", lambda p, strict=False: p),
+        ):
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertNotIn("sudo", check.detail)
+            self.assertIn("can be changed without root", check.detail)
+            # Already in 1Password's list: still said, not "ok".
+            self.allowed.parent.mkdir(parents=True)
+            self.allowed.write_text("nulavio\n", encoding="utf-8")
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertIn("is in", check.detail)
+
+    def test_root_owned_needs_root_and_no_group_or_other_write_up_to_the_root(self):
+        engine = self.tmp / "nulavio"
+        engine.touch()
+        # Resolved before os.stat is replaced: resolving calls it (on some Python versions), and the fake must not.
+        real, tmp = engine.resolve(), self.tmp.resolve()
+
+        def fake(owner_of, mode_of):
+            def stat_of(path):
+                return mock.Mock(st_uid=owner_of(Path(path)), st_mode=mode_of(Path(path)))
+
+            return stat_of
+
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o100755)):
+            self.assertTrue(doctor._root_owned(engine))
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 1000 if p == real else 0, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(engine), "the engine is the user's")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == tmp else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it anyone can write")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o42775 if p == tmp else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it a group can write")
+        link = self.tmp / "link"
+        link.symlink_to(engine)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0 if p != real else 1000, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(link), "a link to the user's file is judged by the file")
+        self.assertFalse(doctor._root_owned(self.tmp / "missing"))
 
 
 if __name__ == "__main__":

@@ -179,7 +179,13 @@ class PasswordsTest(unittest.TestCase):
         rows = settings_page.wait_rows(self.m, "nulavio-passwords-providers", len, "moz-box-item.nulavio-provider")
         self.assertEqual(
             [[row["data"]["provider"], row["data"]["inUse"]] for row in rows],
-            [["builtin", "true"], ["proton-pass", "false"], ["keepassxc", "false"], ["bitwarden", "false"]],
+            [
+                ["builtin", "true"],
+                ["proton-pass", "false"],
+                ["keepassxc", "false"],
+                ["bitwarden", "false"],
+                ["1password", "false"],
+            ],
         )
         self.assertIn("1 login", settings_page.wait_control(self.m, "nulavio-passwords-logins")["label"])
         settings_page.shoot(self.m, self.shots, "settings")

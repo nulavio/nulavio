@@ -273,7 +273,7 @@ class ConfigFilesTest(unittest.TestCase):
                     self.assertIn(provider["extension"], lock)
                 self.assertIn("signon.rememberSignons", provider["prefs"])
         self.assertTrue(data["providers"]["builtin"]["prefs"]["signon.rememberSignons"])
-        for key in ("proton-pass", "keepassxc", "bitwarden"):
+        for key in ("proton-pass", "keepassxc", "bitwarden", "1password"):
             self.assertFalse(data["providers"][key]["prefs"]["signon.rememberSignons"])
 
     def test_config_dir_layout(self):

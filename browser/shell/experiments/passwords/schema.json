@@ -6,7 +6,7 @@
       { "name": "state", "type": "function", "async": true, "parameters": [] },
       {
         "name": "choose", "type": "function", "async": true,
-        "parameters": [{ "name": "key", "type": "string", "enum": ["builtin", "proton-pass", "keepassxc", "bitwarden"] }]
+        "parameters": [{ "name": "key", "type": "string", "enum": ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"] }]
       },
       {
         "name": "dismiss", "type": "function", "async": true,
