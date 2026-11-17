@@ -811,10 +811,20 @@ class PackagingTest(unittest.TestCase):
             {"area": "media", "name": "codec library", "status": "ok", "detail": "libavcodec.so.62"},
         ]
         self.assertEqual(run(good).returncode, 0, run(good).stdout)
-        firefox = [dict(good[0], detail="Mozilla Firefox 160.0 at /usr/lib64/firefox/firefox"), *good[1:]]
-        unowned = [good[0], dict(good[1], status="warn"), good[2]]
-        for bad in (firefox, unowned, good[:2]):
-            self.assertEqual(run(bad).returncode, 1)
+        engine, owner, codecs = good
+        bad = {
+            "another directory": [dict(engine, detail="Nulavio 160.0 at /opt/nulavio/nulavio"), owner, codecs],
+            "not Nulavio": [dict(engine, detail="Mozilla Firefox 160.0 at /usr/lib64/nulavio/nulavio"), owner, codecs],
+            "unowned": [engine, dict(owner, status="warn"), codecs],
+            "another package": [engine, dict(owner, detail="package other-1.0 (nulavio in its files): x"), codecs],
+            "a sentence that names nulavio": [engine, dict(owner, detail="package o arquivo /usr/lib64/nulavio/x"), codecs],
+            "no codec check": [engine, owner],
+        }
+        deb = [engine, dict(owner, detail="package nulavio 160.0-0.7: x"), codecs]  # dpkg's form
+        self.assertEqual(run(deb).returncode, 0)
+        for name, checks in bad.items():
+            with self.subTest(name):
+                self.assertEqual(run(checks).returncode, 1)
 
     def test_one_build_reads_the_system_directory_the_distribution_has(self):
         series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")

@@ -18,7 +18,8 @@ def main() -> int:
     checks = {(c["area"], c["name"]): c for c in json.load(sys.stdin)}
     wanted = {
         ("engine", "binary"): lambda c: c["status"] == "ok" and engine_dir in c["detail"] and "Nulavio" in c["detail"],
-        ("engine", "updates"): lambda c: c["status"] == "ok" and "nulavio" in c["detail"],
+        # Owned by the nulavio package itself: "package nulavio-<v>-<r>.<arch>" (rpm) or "package nulavio <v>" (dpkg).
+        ("engine", "updates"): lambda c: c["status"] == "ok" and c["detail"].startswith(("package nulavio-", "package nulavio ")),
         ("media", "codec library"): lambda c: c["status"] == "ok",
     }
     for key, holds in wanted.items():
