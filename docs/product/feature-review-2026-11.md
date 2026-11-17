@@ -35,7 +35,7 @@ Each item's evidence separates:
 
 ## Summary
 
-The recommendations that are not "Keep" come first in each group of the [evidence](#evidence-shipped). An ID is stable: the issues opened after the decisions will name it.
+In each table, the recommendations other than "Keep" come first; the [evidence](#evidence-shipped) follows them. An ID is stable: the issues opened after the decisions will name it.
 
 ### Shipped
 
