@@ -904,11 +904,12 @@ Done on 2026-11-17, in the pull request that carries this document:
 2. Every decision other than "Keep" on a shipped feature has an issue: #458 to #470, linked in the **Issue** column, each with the release-notes line people need. Planned items carry the decision as a comment on their own issue.
 3. ADRs 0001, 0004 and 0007 carry their amendments; the roadmap's wave 4b and 4c rows say what moved.
 
-Left to the maintainer, whose acts these are ([issues](../process/issues.md#rules-for-coding-agents)):
+Then, at the maintainer's word on 2026-11-17 ("pode vc mesmo fazer"), applied by an agent and recorded on each issue:
 
-- move the milestone of #95, #119, #153, #154, #159, #164, #165, #168, #169, #171, #216, #217 and #218 to After 1.0, and give #242 that milestone;
-- close #155, #162, #163, #166, #316, #317 and #347 without building them;
-- set the board's Wave for #458 to #470, and their milestone.
+- #95, #119, #153, #154, #159, #164, #165, #168, #169, #171, #216, #217, #218 and #242 are in the After 1.0 milestone, with their wave cleared on the board;
+- #155, #162, #163, #166, #316, #317 and #347 are closed as not planned;
+- #458 to #470 are in the 1.0 milestone and wave 4b;
+- #453 is closed.
 
 ## How this was done
 
