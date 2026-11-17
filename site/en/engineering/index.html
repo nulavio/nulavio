@@ -138,7 +138,7 @@
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Partly</span></p>
-<p class="item"><strong>Packages for Fedora and Ubuntu</strong> <span>The RPM, the .deb and a Flatpak bundle come from the same build. Fedora installs from a dnf repository and Ubuntu from an APT repository, both signed with the release key; after each upload, both are installed in clean Fedora and Ubuntu containers with their signature checks on. Still missing: the APT path walked on a real Ubuntu machine, and Flathub.</span></p>
+<p class="item"><strong>Packages for Fedora and Ubuntu</strong> <span>The RPM and the .deb come from the same build; the Flatpak is built and checked with each release, and ships through Flathub, not as a bundle, since a bundle never updates itself. Fedora installs from a dnf repository and Ubuntu from an APT repository, both signed with the release key; after each upload, both are installed in clean Fedora and Ubuntu containers with their signature checks on. Still missing: the APT path walked on a real Ubuntu machine, and Flathub.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">scripts/release/check_rpm.sh</code></li><li><code class="ref" translate="no">scripts/release/check_deb.sh</code></li><li><code class="ref" translate="no">docs/product/release-criteria.md (item 5)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R46</code></li></ul>
 </li>
 <li class="ledger-row is-partly">
