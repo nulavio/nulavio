@@ -451,3 +451,167 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Recommendation: After 1.0, for offering pairing.** Keep the code and the pref as they are. Offer pairing when F-Droid accepts the Companion (#207) and #227 has passed. **Reverses** the 2026-11-10 scope decision: the release criteria and the roadmap's Phase 2c need the amendment.
 - **For people who use it today:** nobody can pair from the browser today, so nothing changes in the browser. The README ("comes with the next release") and the landing page ("Coming soon") need new words, and so does the Companion's place in the release (the signed APK keeps being built, or stops until then: a decision for the issue).
 
+### Interface
+
+#### U9 Page-loading line
+
+- **Code:** `NulavioLoadLine.sys.mjs` (129 lines) and its styles in `window-band.css`. Started for every window by the layout experiment; no switch (verified: no pref in the module; `experiments/layout/parent.js` calls `watch()`).
+- **What it shows:** always the indeterminate state, because the engine's progress for a web page was found unreliable (verified: the module's header, "measured on 160.0").
+- **Tests:** `test_load_line` (5).
+- **Failures:** #436 (P1, open): test 04, under reduced motion, fails on a build of `main` in the first rehearsal. #397 (After 1.0): its frame cost is not measured.
+- **Decided by:** #318, asked for by the maintainer in the experience review; built in wave 4a.
+- **The engine already:** the selected tab shows the engine's loading indicator, and the reload button turns into stop.
+- **Fit and cost:** it says "loading" a second time, without progress, on every page of every window. Small code, but a listener per window, a failing test and an unmeasured frame cost, for a cue the engine already gives.
+- **Recommendation: Off by default**, with a switch in Settings → Aparência. The alternative is **Remove**; the maintainer asked for it, so the softer step is proposed.
+- **For people who use it today:** the line disappears after the update unless they turn it on; one line in the release notes.
+
+#### U10 Edit the page's text
+
+- **Code:** 219 lines (`NulavioPageEdit.sys.mjs` and its child), an item in the page menu and Ctrl+Alt+E.
+- **Seams:** a window actor for the top frame of every http, https and file page.
+- **Tests:** `test_page_edit` (6).
+- **Decided by:** #161 (from Orion's list, #172).
+- **The engine already:** `document.designMode = "on"` in the web console does the same, by hand.
+- **Fit and cost:** an occasional tool (screenshots, mock-ups). It needs no privilege: an extension's content script can set `designMode`.
+- **Recommendation: Optional component, as an extension from AMO** that the documentation names (Nulavio ships none of its own and bundles none). What is lost: the native menu item, the key and the bar that says the page is editable.
+- **For people who use it today:** the menu item and Ctrl+Alt+E go away; the release notes name the replacement.
+
+#### U12 Keep above other windows, on KDE
+
+- **Code:** `NulavioKeepAbove.sys.mjs` (286 lines): a KWin script loaded over the session bus, an item in the window's menu and Ctrl+Alt+K.
+- **Boundaries and risks:** TB10; R77 (it trusts whatever answers as `org.kde.KWin`).
+- **Tests:** `test_keep_above` (4).
+- **Decided by:** #170.
+- **The desktop already:** KWin offers "Keep Above Others" in every window's menu (Alt+F3) and a configurable shortcut, "Keep Window Above Others" (verified: both strings in `libkwin.so.6` on Fedora 44 KDE, this machine). GNOME has "Always on Top" in the window menu (inferred).
+- **Fit and cost:** principle 7 ("Linux-native") is better served by the desktop's own control. The browser's version adds a D-Bus trust for something every window already has.
+- **Recommendation: Remove.** Replacement: the desktop's window menu or shortcut.
+- **For people who use it today:** Ctrl+Alt+K stops working; the release notes say where KDE's control is.
+
+#### U1 One settings page inside the engine's
+
+- **Code:** 1,332 lines and about 575 lines of `panes.mjs`:
+  - the registry plumbing, the page order, the policy line and the navigation;
+  - `NulavioSettings.sys.mjs`;
+  - what is left of the Shell's own settings page, for the agents and the integrations;
+  - the Fluent strings.
+- **Seams:** the settings registry, the riskiest seam ([table](#the-engines-seams)).
+- **Boundaries and risks:** TB11; R66 (the "managed by your organisation" line hidden while only Nulavio's own policies are in effect).
+- **Tests:** `test_settings_native` (14), `test_settings_ui` (10), `test_settings_reflow` (2), `test_settings_policies` (4), `test_settings_layout` (3).
+- **Failures:** #108, #128 (closed).
+- **Decided by:** ADRs 0008 and 0011.
+- **Fit and cost:** "read in one place exactly what Nulavio changed and why" (the vision's success). An engine change to the registry removes every Nulavio group at once, visibly, rather than breaking one.
+- **Recommendation: Keep.**
+
+#### U2 The identity band and the Shell's pages named "Nulavio"
+
+- **Code:** 2,338 lines: `NulavioWindow.sys.mjs` (1,610, also carrying U4's window part, U13 and U16's quick actions) and `window-band.css` (728).
+- **Seams:** the identity-handler wrap; the early window category; the engine's `gBrowser`, `gNotificationBox`, `CustomizableUI` and quick actions.
+- **Boundaries and risks:** R64 (in Imersivo the band names the site), R65 (the Shell's pages named as the browser's own).
+- **Tests:** `test_window_band` (15), `test_window_frame` (9), `test_window_title` (5); unit `test_window_band_sheet`, `test_frame_scene`.
+- **Decided by:** ADRs 0009, 0010, 0011; UX3A.
+- **The engine already:** no row that only the browser can draw and that names the profile.
+- **Fit and cost:** it is how a person sees which profile a window belongs to, and what keeps the site on screen in Imersivo.
+- **Recommendation: Keep.**
+
+#### U3 Layouts: Lateral, Abas no topo, Foco
+
+- **Code:** 959 lines (`NulavioLayout.sys.mjs` 811, its experiment) and about 71 lines of Settings.
+- **Seams:** `SidebarController._state`, `BrowserGlue._beforeUIStartup`, `CustomizableUI`. The 160.0 bump changed this module.
+- **Tests:** `test_layout_presets` (23), `test_sidebar_focus` (1).
+- **Failures:** #403 (nine tests, closed).
+- **The engine already:** owns vertical tabs and the sidebar (verified: `sidebar.revamp`, `sidebar.verticalTabs` in `firefox.js`); the layouts are presets over them.
+- **Recommendation: Keep.**
+
+#### U4 Imersivo
+
+- **Code:** inside U3 and U2 (the switch, the holds, the band's role), about 25 lines of Settings, Ctrl+Alt+I and a View menu item.
+- **Default:** off (verified: ADR 0009 decision 1; `NulavioLayout.sys.mjs`).
+- **Boundaries and risks:** R64.
+- **Tests:** `test_immersive` (24 tests, 1,199 lines).
+- **Failures:** #238, #239, #344, #376 (test 21) closed; #398 open.
+- **Decided by:** ADR 0009; its style family (#345 to #348) is After 1.0.
+- **Fit and cost:** an opt-in that costs mostly in tests: pointer journeys and frame traces are the flakiest kind.
+- **Recommendation: Keep, off by default as today.** The planned styles are reviewed in N345 to N348.
+
+#### U5 Appearance: density, accent, more contrast, ambience, less transparency
+
+- **Code:** 299 lines (`NulavioPersonalise.sys.mjs`, its experiment, a helper) and about 62 lines of Settings.
+- **Tests:** `test_appearance` (14); unit `test_personalisation`.
+- **Failures:** #284, #368 (closed).
+- **Decided by:** UX6.
+- **Fit and cost:** small; "Mais contraste" and "Reduzir transparência" serve accessibility (NFR-01).
+- **Recommendation: Keep.**
+
+#### U6 New tab and first run
+
+- **Code:** 1,223 lines (`newtab.js` 901, `newtab.html`).
+- **Tests:** `test_newtab_ui` (8), `test_firstrun_stage` (13).
+- **Decided by:** FR-08, FR-17; ADR 0010. Open: a brand-new profile's first start loses a link given on the command line (FR-17, execution plan K3).
+- **The engine already:** has its own new tab, with sponsored content Nulavio turns off.
+- **Recommendation: Keep.**
+
+#### U7 Horizon window theme and the Shell's styles
+
+- **Code:** 3,493 lines:
+  - the window theme (`horizon.css` 721, `tokens.css` 258);
+  - the Shell's shared styles (`components.css` 743, `pages.css` 715 and others);
+  - `ui.js` and the component gallery;
+  - patch 0003 (24 lines), which links the theme.
+- **Tests:** `test_horizon` (15), `test_horizon_groups` (11), `test_motion` (5), `test_component_gallery` (2); unit `test_horizon_theme`, `test_tokens_v2`, `test_motion_sheet`.
+- **Failures:** #409 (motion, closed).
+- **Decided by:** release criterion 9 (no Mozilla marks) and the design system.
+- **Fit and cost:** needed for the identity and for accessibility (AA tokens). The 160.0 bump touched the theme.
+- **Recommendation: Keep.**
+
+#### U8 What's new in this version
+
+- **Code:** 689 lines (`NulavioWhatsNew.sys.mjs` 311, its page and experiment, the per-version records in `packaging/whats-new/`) and about 36 lines of Settings.
+- **Tests:** `test_whats_new_browser` (14); unit `test_whats_new`.
+- **Failures:** #306 (0.5's start-up failure: an engine module moved), #376 (closed).
+- **Decided by:** #198.
+- **The engine already:** opens Mozilla's "what's new" page from the network after an update (off in Nulavio).
+- **Fit and cost:** local, and its bar is turned off in Settings. #306 shows the engine-module path is a seam.
+- **Recommendation: Keep.**
+
+#### U11 Allow copy and paste on a site
+
+- **Code:** 238 lines (`NulavioAllowCopy.sys.mjs` and its child).
+- **Seams:** a window actor in every http and https frame, at `DOMWindowCreated`.
+- **Boundaries and risks:** R76 (the site's own handlers no longer run where it is on).
+- **Tests:** `test_allow_copy` (5).
+- **Failures:** #445 (a race in the test, fixed).
+- **Decided by:** #160.
+- **The engine already:** only a global pref that turns clipboard events off for every site (inferred: `dom.event.clipboardevents.enabled`).
+- **Fit and cost:** a per-site choice the person makes. It lets a password manager's paste work where a site forbids pasting, which serves principle 4.
+- **Recommendation: Keep.**
+
+#### U13 Hide the page title from the window title
+
+- **Code:** a few lines in `NulavioWindow.sys.mjs` and a switch in Aparência, over the engine's `privacy.exposeContentTitleInWindow` and `.pbm` (verified in 160.0's `firefox.js`).
+- **Tests:** `test_window_title` (5).
+- **Decided by:** #322 (D-UX17).
+- **Recommendation: Keep.**
+
+#### U14 Split view
+
+- **Code:** the engine's (verified: `browser.tabs.splitView.enabled` true in 160.0). Nulavio adds words in its menus and documents it.
+- **Tests:** `test_split_view` (5).
+- **Failures:** #436 (open, all five fail on a build of `main`).
+- **Decided by:** #315.
+- **Recommendation: Keep.** The engine maintains it; Nulavio keeps the tests.
+
+#### U15 Tab groups
+
+- **Code:** the engine's (verified: `browser.tabs.groups.enabled` true in 160.0); the engine's AI grouping is off (P2).
+- **Tests:** `test_tab_groups` (7).
+- **Decided by:** #323.
+- **Recommendation: Keep.**
+
+#### U16 Nulavio's keys and address-bar quick actions
+
+- **Code:** seven commands in `manifest.json`, three quick actions in `NulavioWindow.sys.mjs`, and about 284 lines of Settings (Atalhos).
+- **Tests:** `test_shortcuts` (14).
+- **The engine already:** owns the commands and their remapping view; Nulavio's Atalhos group reads them.
+- **Fit and cost:** each feature that leaves (U10, U12) takes its key with it.
+- **Recommendation: Keep.**
+
