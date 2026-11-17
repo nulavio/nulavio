@@ -1,7 +1,9 @@
 # Nulavio engine security fast path, local side (opt-in; not installed by anything).
 # Every run: check Mozilla's Firefox releases (signatures verified), notify, and
-# pre-build a release as soon as it is staged or published. It never commits,
-# pushes, signs or publishes. See docs/architecture/update-policy.md ("Local timer").
+# pre-check a release as soon as it is staged or published: build the variant this
+# machine can build, read its Rust library for the engine's networking check, run the
+# tests. It makes no package, and never commits, pushes, signs or publishes.
+# See docs/architecture/update-policy.md ("Local timer").
 #
 # Needs ~/.config/nulavio-build/autobuild.env with one line:
 #   NULAVIO_REPO=/path/to/your/nulavio/clone
@@ -11,14 +13,15 @@
 #   systemctl --user enable --now nulavio-upstream.timer
 
 [Unit]
-Description=Nulavio: check Firefox releases and pre-build security updates
+Description=Nulavio: check Firefox releases and pre-check security updates
 After=network-online.target
 
 [Service]
 Type=oneshot
 EnvironmentFile=%h/.config/nulavio-build/autobuild.env
 ExecStart=/usr/bin/python3 -I ${NULAVIO_REPO}/scripts/release/autobuild.py --notify
-# 10 = ready to sign (not a failure). Other non-zero codes leave the unit
+# 10 = pre-checked and published by Mozilla: ready to release from main (not a failure).
+# Other non-zero codes leave the unit
 # "failed" on purpose, so `systemctl --user status` shows the problem.
 SuccessExitStatus=10
 Nice=10

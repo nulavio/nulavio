@@ -97,6 +97,64 @@ class MozconfigTest(unittest.TestCase):
         self.assertEqual(offenders, [], "Google API key material committed")
 
 
+class NetworkingCheckRecordTest(unittest.TestCase):
+    """#430: the engine pin may only name a release whose Rust code passed the engine's networking check.
+
+    A cross-language or sanitised build skips that check (Rust code must import no networking function), so
+    it is made on a build that can be read, the mozconfig.no-lto variant, by scripts/build/networking_check.py,
+    which writes this record. A pull request that moves the pin fails here until the record names the new
+    release: run `scripts/release/rehearse_release.sh --precheck <version>` (autobuild.py does it by itself)."""
+
+    def setUp(self):
+        build = MOZCONFIG.parent
+        self.engine = json.loads((build / "engine.json").read_text())
+        self.record = json.loads((build / "networking-check.json").read_text())
+
+    def test_the_record_names_the_pinned_release(self):
+        how_to = (
+            f"Firefox {self.engine['firefox']} is pinned, but browser/build/networking-check.json is about "
+            f"{self.record.get('firefox')}: run scripts/release/rehearse_release.sh --precheck {self.engine['firefox']} "
+            "(it builds the variant, reads the Rust library and writes the record)"
+        )
+        self.assertEqual(
+            (self.record.get("firefox"), self.record.get("source_sha256")),
+            (self.engine["firefox"], self.engine["source_sha256"]),
+            how_to,
+        )
+
+    def test_the_record_was_read_with_this_trees_mozconfig_and_patch_stack(self):
+        # A patch added or changed, or a configure option, can change which Rust code is compiled: the record
+        # is good only for the inputs it was read with. Changing one of them needs a new reading, by
+        # `rehearse_release.sh --precheck`, or by networking_check.py --write after a build of the variant. A
+        # record the maintainer accepted without a reading is bound the same way: it was accepted for these inputs.
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import networking_check
+
+        self.assertEqual(
+            self.record.get("built_with"),
+            networking_check.repository_inputs(ROOT),
+            "browser/build/mozconfig, mozconfig.no-lto or the patch stack changed since networking-check.json was written",
+        )
+
+    def test_the_record_is_a_result_or_the_maintainers_word(self):
+        self.assertIn(self.record.get("result"), ("passed", "accepted"))
+        self.assertRegex(self.record.get("checked", ""), r"^\d{4}-\d{2}-\d{2}$")
+        self.assertGreater(len(self.record.get("how", "")), 20)
+        if self.record["result"] == "accepted":  # not run: only on the maintainer's recorded word
+            self.assertRegex(self.record.get("accepted_in", ""), r"^#\d+$")
+        else:
+            # The script's own wording and what it read. Still a statement by whoever ran it (R79): what CI
+            # checks is that it names the pinned release, and the review of its pull request is the control.
+            self.assertIn("networking_check.py", self.record["how"])
+            self.assertRegex(self.record.get("library_sha256", ""), r"^[0-9a-f]{64}$")
+
+    def test_the_variant_that_can_be_read_stays_readable(self):
+        variant = active_lines((MOZCONFIG.parent / "mozconfig.no-lto").read_text())
+        self.assertIn("ac_add_options --disable-lto", variant)  # no cross-language LTO: Rust keeps its own
+        self.assertIn('mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"', variant)
+        self.assertFalse([line for line in variant if "sanitizer" in line or "--enable-debug" in line], variant)
+
+
 class BrandingPrefsTest(unittest.TestCase):
     def test_restores_official_devtools_defaults(self):
         # Without MOZILLA_OFFICIAL the engine enables the privileged Browser Console and
@@ -172,6 +230,25 @@ class LocalizationTest(unittest.TestCase):
         self.assertIn("package-multi-locale --locales en-US", script)
 
 
+# Rust code, and the build files that decide which Rust code is compiled, how it is linked and
+# whether the engine's networking check runs.
+RUST_PATH = re.compile(
+    r"(\.rs|(^|/)Cargo\.(toml|lock)|(^|/)\.cargo/.*)$|^third_party/rust/|^toolkit/library/rust/|^build/rust/"
+    r"|^build/moz\.configure/(rust|lto-pgo)\.configure$|^config/makefiles/rust\.mk$|^build/mozconfig\.rust$"
+    r"|^python/mozbuild/mozbuild/(rust_commands\.py|frontend/emitter\.py|action/(run_cargo|check_binary)\.py)$"
+)
+
+
+def patch_paths(text: str) -> set[str]:
+    """Every path a patch names, whatever its first component is called (git apply -p1 strips any):
+    the ---/+++ lines, git's "diff --git" line, and its rename and copy headers."""
+    paths = set(re.findall(r'(?m)^(?:---|\+\+\+) "?(?!/dev/null)[^/\s"]+/([^\s"]+)', text))
+    for old, new in re.findall(r'(?m)^diff --git "?[^/\s"]+/([^\s"]+)"? "?[^/\s"]+/([^\s"]+)"?$', text):
+        paths |= {old, new}
+    paths |= set(re.findall(r'(?m)^(?:rename|copy) (?:from|to) "?([^\s"]+)"?$', text))
+    return paths
+
+
 class PatchStackTest(unittest.TestCase):
     def test_series_is_documented(self):
         # No cap on the count: ADR 0001 follows Release past ten patches (decided 2026-11-14).
@@ -185,6 +262,41 @@ class PatchStackTest(unittest.TestCase):
                 self.assertRegex(text, r"(?m)^Upstream: ")
                 self.assertRegex(patch_file.name, r"^\d{4}-[a-z0-9-]+\.patch$")
                 self.assertNotRegex(text, r"(?m)^[-+].*(security\.sandbox|MOZ_DISABLE_.*SANDBOX|xpinstall\.signatures)")
+
+    def test_no_patch_touches_rust_code(self):
+        # The networking check's record (#430) is about Mozilla's Rust code at the pinned release. It only
+        # covers what ships if Nulavio's patches change none of it, nor the build files that decide which Rust
+        # code is compiled and whether the check can run. A patch that needs Rust: say so in
+        # docs/security/residual-risks.md, and have the pre-check read a build with the patch, before changing this.
+        for patch_file in apply_patches.series():
+            with self.subTest(patch=patch_file.name):
+                text = patch_file.read_text()
+                touched = patch_paths(text)
+                self.assertTrue(touched, "no path read from the patch")
+                self.assertEqual(sorted(path for path in touched if RUST_PATH.search(path)), [])
+                # A rename, a copy or a binary hunk can carry a file past a reading of the path lines.
+                self.assertNotRegex(text, r"(?m)^(rename|copy) (from|to) |^GIT binary patch$|^Binary files .* differ$")
+
+    def test_the_rust_guard_reads_every_kind_of_patch_header(self):
+        self.assertEqual(patch_paths("--- a/dom/x.cpp\n+++ b/dom/x.cpp\n"), {"dom/x.cpp"})
+        self.assertEqual(patch_paths("--- /dev/null\n+++ b/servo/new.rs\n"), {"servo/new.rs"})
+        self.assertEqual(patch_paths("--- old/servo/lib.rs\n+++ new/servo/lib.rs\n"), {"servo/lib.rs"})  # not a/ and b/
+        quoted = '--- "a/servo/components/style/lib.rs"\n+++ "b/servo/components/style/lib.rs"\n'  # as git quotes a path
+        self.assertEqual(patch_paths(quoted), {"servo/components/style/lib.rs"})
+        self.assertEqual(patch_paths('diff --git "a/Cargo.lock" "b/Cargo.lock"\n'), {"Cargo.lock"})
+        self.assertRegex("python/mozbuild/mozbuild/frontend/emitter.py", RUST_PATH)  # it picks the Rust features
+        git = "diff --git a/old/lib.rs b/new/lib.txt\nsimilarity index 100%\nrename from old/lib.rs\nrename to new/lib.txt\n"
+        self.assertEqual(patch_paths(git), {"old/lib.rs", "new/lib.txt"})
+        self.assertEqual(patch_paths("diff --git x/Cargo.lock y/Cargo.lock\nGIT binary patch\n"), {"Cargo.lock"})
+        for path in ("servo/components/style/lib.rs", "Cargo.lock", "toolkit/library/rust/Cargo.toml",
+                     "third_party/rust/x/y.c", ".cargo/config.toml.in", "build/rust/x/build.rs",
+                     "toolkit/library/rust/gkrust-features.mozbuild", "build/moz.configure/rust.configure",
+                     "build/moz.configure/lto-pgo.configure", "config/makefiles/rust.mk",
+                     "python/mozbuild/mozbuild/action/run_cargo.py", "python/mozbuild/mozbuild/action/check_binary.py",
+                     "python/mozbuild/mozbuild/rust_commands.py"):  # fmt: skip
+            self.assertRegex(path, RUST_PATH)
+        for path in ("dom/base/nsFoo.cpp", "browser/Cargo.tomlx", "docs/a.rst", "third_party/rustx/a.c", "browser/moz.configure"):
+            self.assertNotRegex(path, RUST_PATH)
 
 
 CONF = 'line1\nvendor = "Mozilla"\nappid = "x"\ndevtools = "all"\n'

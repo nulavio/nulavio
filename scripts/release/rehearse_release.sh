@@ -2,16 +2,32 @@
 # Rehearse a security release end to end and time each step (update SLA).
 #
 #   scripts/release/rehearse_release.sh <firefox-version> [out-dir]
+#   scripts/release/rehearse_release.sh --precheck <firefox-version> [out-dir]
 #
 # Steps: verify Mozilla's signed checksums, build (scripts/build/build_nulavio.sh,
 # incremental when the tree is already there), install the tree, unit and
 # integration tests, RPM and .deb with their clean-container checks, the
 # signed-repository check (throwaway key), SBOMs. Writes <out>/rehearsal.md.
 # Publishing is not rehearsed: it needs the release key and the host.
+#
+# --precheck (#430) is not a rehearsal of a release: it is what a machine that cannot make
+# the release build does with a new engine version before the pin moves. It builds the
+# mozconfig.no-lto variant, reads that build's Rust library for the engine's networking
+# check (scripts/build/networking_check.py, which writes browser/build/networking-check.json:
+# a cross-language release build, which #371 proposes, cannot be read for it), then runs the
+# unit and the integration tests. It makes no package and no manifest.json, only
+# <out>/precheck.json, so nothing it leaves can be signed or published. autobuild.py runs it.
 set -euo pipefail
 
-version=${1:?usage: rehearse_release.sh <firefox-version> [out-dir]}
+precheck=0
+if [[ ${1:-} == --precheck ]]; then
+    precheck=1
+    shift
+fi
+version=${1:?usage: rehearse_release.sh [--precheck] <firefox-version> [out-dir]}
 [[ -z ${NULAVIO_MOZCONFIG_EXTRA:-} ]] || { echo "rehearse_release: unset NULAVIO_MOZCONFIG_EXTRA: a variant build is never a release" >&2; exit 2; }
+# The one variant a pre-check builds, chosen here and never by the caller (a sanitised build stays refused above).
+if (( precheck )); then export NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto; fi
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 work=${NULAVIO_BUILD_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-build}
 install="$work/install/nulavio"
@@ -21,11 +37,20 @@ export NULAVIO_INSTALL_DIR="$install"
 # dnf upgrades the people who installed it (release_manifest.py verify refuses less).
 NULAVIO_RELEASE=${NULAVIO_RELEASE:-$(python3 -I "$repo/scripts/release/release_manifest.py" next-release "$version")}
 export NULAVIO_RELEASE
-out=$(mkdir -p "${2:-$repo/dist/rehearsal-$version}" && cd "${2:-$repo/dist/rehearsal-$version}" && pwd)
-mkdir -p "$out/logs" "$out/packages"
+kind=rehearsal
+if (( precheck )); then kind=precheck; fi
+out=$(mkdir -p "${2:-$repo/dist/$kind-$version}" && cd "${2:-$repo/dist/$kind-$version}" && pwd)
+mkdir -p "$out/logs"
 report="$out/rehearsal.md"
 start=$(date +%s)
-printf '# Release rehearsal: Firefox %s\n\nStarted %s.\n\n| Step | Time | Result |\n|---|---|---|\n' "$version" "$(date -u +%FT%TZ)" > "$report"
+if (( precheck )); then
+    # Nothing a release run could take for its own: no manifest, no packages, and a report that says so.
+    rm -f "$out/manifest.json" "$out/precheck.json"
+    printf '# Engine pre-check: Firefox %s\n\nNot a release: the mozconfig.no-lto variant, no packages, nothing to sign.\nStarted %s.\n\n| Step | Time | Result |\n|---|---|---|\n' "$version" "$(date -u +%FT%TZ)" > "$report"
+else
+    mkdir -p "$out/packages"
+    printf '# Release rehearsal: Firefox %s\n\nStarted %s.\n\n| Step | Time | Result |\n|---|---|---|\n' "$version" "$(date -u +%FT%TZ)" > "$report"
+fi
 
 step() {
     local name=$1 t0 status
@@ -70,11 +95,53 @@ sbom() {
     done
 }
 
+# <out>/precheck.json: what the pre-check built and read. Not a manifest: release_manifest.py takes none of it.
+precheck_result() {
+    python3 -I - "$out" "$version" "$repo" "$work/firefox-$version" <<'EOF'
+import datetime
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+out, version, repo, tree = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), Path(sys.argv[4])
+record = json.loads((repo / "browser" / "build" / "networking-check.json").read_text(encoding="utf-8"))
+built = (tree / ".nulavio-source-sha256").read_text(encoding="ascii").strip()
+if (record.get("firefox"), record.get("source_sha256"), record.get("result")) != (version, built, "passed"):
+    sys.exit("precheck: networking-check.json is not this build's passing record")
+head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True).stdout.decode().strip()
+result = {
+    "precheck": "ok",
+    "signable": False,
+    "firefox": version,
+    "source_sha256": built,
+    "variant": "mozconfig.no-lto",
+    "networking_check": {"result": record["result"], "checked": record["checked"], "how": record["how"]},
+    "nulavio_base_commit": head,
+    "finished_at": datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+}
+(out / "precheck.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+print("precheck: built, read and tested; nothing here is a release")
+EOF
+}
+
 step verify-source python3 -I "$repo/scripts/upstream/verify_firefox_release.py" "$version"
 step build "$repo/scripts/build/build_nulavio.sh" "$version"
+if (( precheck )); then
+    # Right after the build, before the unit tests: they compare the record with the pin (test_track_b).
+    step networking-check python3 -I "$repo/scripts/build/networking_check.py" "$version" --work "$work" --write
+fi
 step install install_tree
 step unit-tests python3 -I "$repo/tests/run.py" unit
 step integration-tests "$repo/scripts/release/run_integration.sh" "$install"
+if (( precheck )); then
+    step precheck-result precheck_result
+    total=$(( $(date +%s) - start ))
+    printf '\nTotal: %d h %02d min. A pre-check, not a release: the release is built from main by release.yml.\n' \
+        $((total / 3600)) $(( (total % 3600) / 60 )) >> "$report"
+    cat "$report"
+    exit 0
+fi
 step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"
 # shellcheck disable=SC2016 # the inner bash expands $0 and $1 (the checker and the package directory)
 step check-rpm bash -c '"$0" "$1"/x86_64/nulavio-*.rpm' "$repo/scripts/release/check_rpm.sh" "$out/packages"
