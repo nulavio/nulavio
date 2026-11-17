@@ -30,6 +30,10 @@ nulavio-hide-page-title =
     .label = Esconder o título da página na barra da janela
     .description = A barra da janela, a barra de tarefas, o Alt+Tab e quem escolhe uma janela para compartilhar a tela veem só "Nulavio" e o nome do perfil, nunca a página. Isso não esconde os títulos nas abas, dentro da janela, nem a página em si.
 
+nulavio-load-line =
+    .label = Mostrar uma linha de carregamento no topo da página
+    .description = Uma linha fina no topo da página enquanto ela carrega. Ela não diz quanto já carregou; a aba mostra o sinal de carregamento do próprio navegador de qualquer jeito.
+
 nulavio-look-group =
     .label = Cores do Nulavio
     .description = Só a aparência das janelas e páginas do Nulavio. Nada aqui muda uma proteção.
