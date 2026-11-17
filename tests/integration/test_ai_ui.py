@@ -177,7 +177,7 @@ class AiUiTest(unittest.TestCase):
         dialog = self.open_dialog()
         self.assert_critical_consent(dialog, self.msg("aiFullControlTitle", "Total"), self.msg("aiFullControlBody", "Total"))
         self.assertNotIn(policy.FULL_CONTROL_WARNING, dialog["body"])  # never the tools' English text
-        self.assertIn("automação bruta", dialog["body"])  # says what is not included (pt-BR UI)
+        self.assertIn("páginas internas do navegador", dialog["body"])  # says what is not included (pt-BR UI)
         self.shoot("full-control-warning", "ai")
         self.click("dialog[open] button[value=cancel]")
         time.sleep(1)

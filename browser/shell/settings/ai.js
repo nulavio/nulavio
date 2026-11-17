@@ -119,7 +119,7 @@ function rawRemovedNote(agent) {
       class: "button button--quiet",
       type: "button",
       text: t("aiRawRemovedOk"),
-      "data-focus-key": `raw-removed-${agent.id}`,
+      "data-focus-key": `notice-raw-removed-${agent.id}`,
       onclick: () => run(() => ai.change(agent.id, "forget-raw-automation").then(renderAgents)),
     })
   );
