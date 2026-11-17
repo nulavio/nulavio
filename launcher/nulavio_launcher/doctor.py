@@ -302,17 +302,29 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
         allowed = set()
     except OSError as exc:
         return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
+    root_only = _root_owned(Path(engine_path))
     if name in allowed:
+        if not root_only:
+            return [
+                Check(
+                    "passwords",
+                    "1Password desktop app",
+                    "warn",
+                    f"'{name}' is in {ONEPASSWORD_ALLOWED}, but the engine ({engine_path}) can be changed without root: "
+                    "the line lets any program with that name ask 1Password's app to unlock.",
+                )
+            ]
         return [Check("passwords", "1Password desktop app", "ok", f"'{name}' is in {ONEPASSWORD_ALLOWED}")]
-    if not _root_owned(Path(engine_path)):
+    if not root_only:
         return [
             Check(
                 "passwords",
                 "1Password desktop app",
                 "warn",
-                f"the engine ({engine_path}) is not root's alone: adding '{name}' to {ONEPASSWORD_ALLOWED} would let "
-                "any program with that name ask 1Password's app to unlock, so no command is given. Install Nulavio "
-                "from its RPM or DEB package for this step; without it, the extension works with a sign-in in the browser.",
+                f"the engine ({engine_path}) can be changed without root: adding '{name}' to {ONEPASSWORD_ALLOWED} would "
+                "let any program with that name ask 1Password's app to unlock, so no command is given. It is given for "
+                "an engine root alone can change (the RPM or DEB package, or the archive unpacked as root, e.g. under "
+                "/opt); without it, the extension works with a sign-in in the browser.",
             )
         ]
     allowed_file = shlex.quote(str(ONEPASSWORD_ALLOWED))

@@ -524,15 +524,25 @@ class OnePasswordDoctorTest(unittest.TestCase):
         """Review of #478: the line trusts a name; it is not offered for a tarball or a home-folder engine."""
         self.app.parent.mkdir(parents=True)
         self.app.touch()
-        self.root_owned.stop()
         engine = self.tmp / "nulavio" / "nulavio"
-        engine.parent.mkdir()
-        engine.touch()
-        (check,) = doctor.check_1password(engine)
-        self.assertEqual(check.status, "warn")
-        self.assertNotIn("sudo", check.detail)
-        self.assertIn("RPM or DEB", check.detail)
-        self.root_owned.start()
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        # The user's own files, whoever runs the test.
+        users = mock.Mock(st_uid=1000, st_mode=0o100755)
+        with (
+            mock.patch.object(doctor.os, "stat", return_value=users),
+            mock.patch.object(Path, "resolve", lambda p, strict=False: p),
+        ):
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertNotIn("sudo", check.detail)
+            self.assertIn("can be changed without root", check.detail)
+            # Already in 1Password's list: still said, not "ok".
+            self.allowed.parent.mkdir(parents=True)
+            self.allowed.write_text("nulavio\n", encoding="utf-8")
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertIn("is in", check.detail)
 
     def test_root_owned_needs_root_and_no_group_or_other_write_up_to_the_root(self):
         engine = self.tmp / "nulavio"
@@ -552,6 +562,12 @@ class OnePasswordDoctorTest(unittest.TestCase):
             self.assertFalse(doctor._root_owned(engine), "the engine is the user's")
         with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == self.tmp.resolve() else 0o40755)):
             self.assertFalse(doctor._root_owned(engine), "a folder above it anyone can write")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o42775 if p == self.tmp.resolve() else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it a group can write")
+        link = self.tmp / "link"
+        link.symlink_to(engine)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0 if p != engine.resolve() else 1000, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(link), "a link to the user's file is judged by the file")
         self.assertFalse(doctor._root_owned(self.tmp / "missing"))
 
 
