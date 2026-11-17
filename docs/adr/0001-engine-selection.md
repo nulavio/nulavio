@@ -136,6 +136,12 @@ Reopen this ADR if **any** of these holds:
 7. ~~Google Safe Browsing key for Track B~~ **Resolved (E19).** Remaining: Google quota review before a public release, and download protection (residual risk R15).
 8. Brand and domain status are tracked in [brand strategy](../brand/strategy.md#trademark-and-availability-status); trademark matters are handled privately by the maintainer.
 
+## Amendment 2026-11-17: Track A stops being a way to use Nulavio (#453)
+
+The maintainer decided on 2026-11-17, in the [feature review](../product/feature-review-2026-11.md#l1-track-a-preview) (rows L1 and L4), that the Track A preview is no longer offered: the signed RPM and APT packages replaced it. Its chrome theme (`browser/theme/userChrome.css`), its start page and `nulavio desktop install` leave with it; the residual risks only Track A carried (R1, R4, R5, R12, R13, R17, R19) close when that lands (#464, #465).
+
+What stays: the engine choice of this ADR is unchanged, and running the distribution's Firefox stays as the integration harness's engine in pull-request CI, which is a test arrangement, not a product.
+
 ## References
 
 - Firefox Linux build: <https://firefox-source-docs.mozilla.org/setup/linux_build.html>

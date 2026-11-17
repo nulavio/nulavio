@@ -15,9 +15,11 @@ The work is ordered in waves, recorded in the board's `Wave` field ([issues](../
 | 2 Release and process | Signed APK and APT, the release scripts' tests, release notes, the install journey, Flathub's build, instructions per area | #88, #89, #97, #120, #179, #180, #181, #189, #193, #198, #205, #215, #223, #227, #228 |
 | 3 Quality evidence | Fingerprinting, performance, fuzzing, compatibility with Google, calls and DRM, the independent review, Proton Pass, the UX DoD | #79, #80, #118, #149, #157, #158, #220, #221, #222, #224, #225, #226 |
 | 4a Features, small | | #116, #160, #161, #167, #170 |
-| 4b Features, medium | | #81, #119, #151, #152, #154, #155, #156, #159, #162, #163, #164, #165, #166, #171, #218 |
-| 4c Features, large | Tor and network routes, web apps, low power, two spikes; the parent issues #172 and #219 close with their sub-issues | #95, #153, #168, #169, #172, #216, #217, #219 |
+| 4b Features, medium | After the [feature review](feature-review-2026-11.md) of 2026-11-17: #119, #154, #159, #164, #165, #171 and #218 moved After 1.0; #155, #162, #163 and #166 are not built | #81, #151, #152 (its generic part), #156 |
+| 4c Features, large | Tor and network routes, web apps, low power, two spikes; the parent issues #172 and #219 close with their sub-issues. After the feature review: #95, #153, #168, #169, #216 and #217 moved After 1.0 | #172, #219 (they close with what 1.0 keeps) |
 | 5 Brand and launch | Decided early (#175), built during the release candidate so the site and the material show what ships | #173, #175, #176, #199, #202 |
+
+The [feature review](feature-review-2026-11.md) (#453, decided 2026-11-17) also changes features already shipped: its issues #458 to #470 land before the feature freeze; their wave is the maintainer's to set.
 
 ### Stable release plan
 
