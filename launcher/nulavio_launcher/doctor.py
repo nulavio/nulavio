@@ -1,4 +1,4 @@
-"""`nulavio doctor`: local environment and profile health checks.
+"""`nulavio doctor` (`nulavio-doctor` from a package, #470): local environment and profile health checks.
 
 Read-only. Reports facts the user can act on; never phones home.
 """
@@ -72,6 +72,37 @@ def _dbus_name_owner(name: str) -> str | None:
     return fields.get("Comm") or fields.get("Exe") or "unknown process"
 
 
+def _answer(cmd: list[str]) -> str:
+    """stdout of a package query that succeeded, or "": by its exit status, in the C locale, never by its wording
+    (rpm says "not owned" in the person's language, on stdout, review of #507)."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5.0, check=False,
+                                env={**os.environ, "LC_ALL": "C", "LANGUAGE": "C"})  # fmt: skip
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+_DPKG_OWNER = re.compile(r"^([a-z0-9][a-z0-9+.-]*)(?::[a-z0-9-]+)?: (/.*)$")
+
+
+def package_of(path: Path) -> str:
+    """The package that owns `path`, from rpm or dpkg (#470: the .deb's engine has no rpm to ask), or ""."""
+    if shutil.which("rpm"):
+        owner = _answer(["rpm", "-qf", "--queryformat", "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\\n", str(path)])
+        if owner:
+            return owner.splitlines()[0]
+    if shutil.which("dpkg-query"):
+        for line in _answer(["dpkg-query", "-S", str(path)]).splitlines():
+            # "nulavio: /usr/lib/nulavio/nulavio" (or "pkg:arch: …"); a diversion's lines ("diversion by …") are not owners.
+            match = _DPKG_OWNER.match(line)
+            if match and match.group(2) == str(path):
+                name = match.group(1)
+                version = _answer(["dpkg-query", "-W", "-f=${Version}", name])
+                return f"{name} {version}".strip()
+    return ""
+
+
 def check_engine() -> list[Check]:
     try:
         eng = engine_mod.find_engine()
@@ -83,9 +114,11 @@ def check_engine() -> list[Check]:
         checks.append(Check("engine", "version floor", "ok", f">= {engine_mod.MIN_ENGINE_MAJOR}"))
     except engine_mod.EngineError as exc:
         checks.append(Check("engine", "version floor", "fail", str(exc)))
-    owner = _run(["rpm", "-qf", str(eng.path)]) if shutil.which("rpm") else ""
-    if owner and "not owned" not in owner:
-        checks.append(Check("engine", "updates", "ok", f"package {owner}: security updates via the distribution"))
+    owner = package_of(eng.path)
+    if owner:
+        checks.append(
+            Check("engine", "updates", "ok", f"package {owner}: updates through the package manager, from its repository")
+        )
     else:
         checks.append(Check("engine", "updates", "warn", "engine not owned by a package; make sure it auto-updates"))
     st = os.stat(eng.path)
@@ -399,7 +432,9 @@ def check_profiles() -> list[Check]:
                 Check("extensions", f"{prof.name}: {ext['name']}", "info", f"{ext['version'] or '?'} - {state} - {origin}")
             )
     if not checks:
-        checks.append(Check("profile", "profiles", "info", "no Nulavio profile yet (run `nulavio setup`)"))
+        checks.append(
+            Check("profile", "profiles", "info", "no launcher profile; the browser's own profiles are not read by this check")
+        )
     return checks
 
 
