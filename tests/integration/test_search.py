@@ -589,11 +589,11 @@ class SearchPrivacyTest(unittest.TestCase):
             self.assertIn([searx, True, True], both)
             # Refused: no target, two targets, an unknown provider, suggestions from one that has none.
             for body, code in (
-                ("return S.choose({});", "invalid-choice"),
-                ("return S.choose({provider: 'brave', id: args[0]});", "invalid-choice"),
+                ("return S.choose({});", "invalid-search-choice"),
+                ("return S.choose({provider: 'brave', id: args[0]});", "invalid-search-choice"),
                 ("return S.choose({provider: 'nope'});", "unknown-provider"),
                 ("return S.choose({id: args[1], suggest: true});", "no-suggestions"),
-                ("return S.choose({provider: 'brave', suggest: 'yes'});", "invalid-choice"),
+                ("return S.choose({provider: 'brave', suggest: 'yes'});", "invalid-search-choice"),
             ):
                 with self.subTest(code=code, body=body):
                     self.assertEqual(self.search_error(body, searx, mojeek), code)

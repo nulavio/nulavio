@@ -98,7 +98,7 @@
   "chooseSuggestNote": {"message": "Ticked, what you type in the address bar goes to the suggestions address of the provider you choose now, before you search; on choosing, the message names it. It counts for that choice only."},
   "chooseDone": {"message": "$NAME$ is this profile's search in normal windows.", "placeholders": {"name": {"content": "$1"}}},
   "chooseDoneBoth": {"message": "$NAME$ is this profile's search in normal and private windows.", "placeholders": {"name": {"content": "$1"}}},
-  "err_invalid_choice": {"message": "That choice could not be made. The list was refreshed."},
+  "err_invalid_search_choice": {"message": "That choice could not be made. The list was refreshed."},
   "addSearxngLabel": {"message": "Address of the instance"},
   "addSearxngNote": {"message": "Use an instance you run or trust. Nulavio never picks a public instance for you."},
   "addSearxngButton": {"message": "Add SearXNG"},

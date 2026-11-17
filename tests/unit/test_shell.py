@@ -610,6 +610,17 @@ class GuardModuleTest(unittest.TestCase):
         self.assertEqual(review.count("guard.resolve("), 1)
 
 
+class LocaleKeysTest(unittest.TestCase):
+    def test_no_message_is_defined_twice(self):
+        """A key given twice keeps only the last one, so one feature shows another's words (#486: two features'
+        `err_invalid_choice`)."""
+        for name in ("pt_BR", "en"):
+            with self.subTest(locale=name):
+                text = (SHELL / "_locales" / name / "messages.json").read_text(encoding="utf-8")
+                keys = [key for key, _ in json.loads(text, object_pairs_hook=lambda pairs: pairs)]
+                self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
+
+
 class PasswordsTest(unittest.TestCase):
     """Flows B and D: pinned providers, and a content script that never reads what is typed."""
 
