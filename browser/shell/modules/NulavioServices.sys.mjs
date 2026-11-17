@@ -245,6 +245,12 @@ class NulavioServicesClass {
     }
   }
 
+  /** The stored list, or none when the preference holds anything but a list (a hand edit). */
+  #readList() {
+    const stored = this.#readJSON(PREF_TRANSLATE, []);
+    return Array.isArray(stored) ? stored : [];
+  }
+
   /** The translation services added, each checked again on reading: a hand-edited entry that fails is dropped. */
   translators() {
     const added = this.#readJSON(PREF_TRANSLATE, []);
@@ -330,7 +336,7 @@ class NulavioServicesClass {
     } else if (described.base) {
       entry = { key: described.key, base: described.base };
     }
-    const entries = this.#readJSON(PREF_TRANSLATE, []).filter(each => {
+    const entries = this.#readList().filter(each => {
       try {
         return this.#describe(each).id !== described.id;
       } catch {
@@ -345,7 +351,7 @@ class NulavioServicesClass {
   }
 
   removeTranslator(id) {
-    const entries = this.#readJSON(PREF_TRANSLATE, []);
+    const entries = this.#readList();
     const kept = entries.filter(each => {
       try {
         return this.#describe(each).id !== id;
@@ -423,7 +429,9 @@ class NulavioServicesClass {
     if (target) {
       target = withoutFragment(target); // checked public above, so a URL
     }
-    const [use, id] = itemId.split("|");
+    // At the first "|" only: a service's own id may hold one (a custom name, an instance's path).
+    const cut = String(itemId).indexOf("|");
+    const [use, id] = cut < 0 ? [itemId, ""] : [itemId.slice(0, cut), itemId.slice(cut + 1)];
     const lang = this.language();
     if (use === "translate-selection" || use === "translate-page") {
       const t = this.translators().find(each => each.id === id) ?? fail("not-found");

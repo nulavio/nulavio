@@ -369,6 +369,7 @@ if (browser.nulavioAI && browser.omnibox) {
 const SERVICE_MENU = "nulavio-svc-";
 const serviceItems = new Map(); // menu id -> the module's item
 const serviceStates = new Map(); // menu id -> what the item shows now ({visible, enabled, title})
+let serviceDrawings = 0;
 
 function serviceTitle(item, reason = null) {
   const key = { "translate-selection": "menuTranslateSelection", "translate-page": "menuTranslatePage" }[item.use];
@@ -383,8 +384,11 @@ async function drawServiceMenus() {
   }
   serviceItems.clear();
   serviceStates.clear();
+  serviceDrawings += 1;
   for (const [index, item] of items.entries()) {
-    const id = `${SERVICE_MENU}${index}`; // the item's own id stays in the map: menu ids become element ids
+    // Menu ids become element ids, so they are short; the drawing's number makes an item of an earlier drawing (a
+    // menu still open while the list changed) find nothing, never the service now in its place (#491).
+    const id = `${SERVICE_MENU}${serviceDrawings}-${index}`;
     serviceItems.set(id, item);
     serviceStates.set(id, { visible: true, enabled: true, title: serviceTitle(item) });
     browser.menus.create({ id, title: serviceTitle(item), contexts: item.contexts }, () => void browser.runtime.lastError);

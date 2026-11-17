@@ -308,6 +308,16 @@ class WebServicesTest(unittest.TestCase):
             "[{key: 'custom', name: 'X', selection: 'http://evil.example/?q={text}'}, {key: 'deepl'}]));"
         )
         self.assertEqual([t["id"] for t in self.ok(S + "return S.translators();")], ["deepl"])
+        # A preference that holds no list at all: read as none, and a service can still be added.
+        self.m.chrome("Services.prefs.setStringPref('nulavio.services.translate', '{}');")
+        self.assertEqual(self.ok(S + "return S.translators();"), [])
+        self.ok(S + "return S.addTranslator({key: 'deepl'});")
+        # A name with "|" in it: the item's id is cut at its first "|" only, so the click opens that service.
+        self.ok(S + "return S.addTranslator({key: 'custom', name: 'Tradutor|B', selection: 'https://tr.example.net/?q={text}'});")
+        self.assertEqual(
+            self.ok(build, "translate-selection|custom:Tradutor|B", text, page),
+            {"open": f"https://tr.example.net/?q={enc(text)}"},
+        )
 
     def test_04_a_menu_item_opens_its_address_and_nothing_goes_before_the_click(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")

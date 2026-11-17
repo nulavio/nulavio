@@ -112,6 +112,7 @@
   "err_bad_placeholder": {"message": "Só {text}, {url} e {lang} podem ir entre chaves, cada um onde cabe."},
   "err_service_needs_https": {"message": "Use um endereço https://."},
   "err_invalid_service": {"message": "Esse serviço não pôde ser lido. A lista foi atualizada."},
+  "err_services_failed": {"message": "Isso não funcionou. Tente de novo; se continuar, o console do navegador diz por quê."},
   "err_unknown_service": {"message": "Esse serviço não é oferecido."},
   "err_too_many": {"message": "Já há serviços demais. Remova um antes."},
   "err_unknown_language": {"message": "Esse idioma não é oferecido."},

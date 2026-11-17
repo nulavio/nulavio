@@ -112,6 +112,7 @@
   "err_bad_placeholder": {"message": "Only {text}, {url} and {lang} may go in braces, each where it fits."},
   "err_service_needs_https": {"message": "Use an https:// address."},
   "err_invalid_service": {"message": "That service could not be read. The list was refreshed."},
+  "err_services_failed": {"message": "That did not work. Try again; if it keeps failing, the browser console says why."},
   "err_unknown_service": {"message": "That service is not offered."},
   "err_too_many": {"message": "There are too many services already. Remove one first."},
   "err_unknown_language": {"message": "That language is not offered."},
