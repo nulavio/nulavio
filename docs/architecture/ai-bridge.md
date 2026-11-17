@@ -46,7 +46,7 @@ What each level can and cannot technically do, beyond the preset table in ADR 00
 |---|---|---|
 | Restricted | Read pages, open public http(s) addresses, take screenshots in its own workspace | Act on pages without a yes in the dialog; reach the local network; run scripts |
 | Assisted | Click and type; with a yes: submit, files, signed-in sessions, purchases | Run scripts, reach the local network, see other profiles |
-| Autonomous | Complete multi-step tasks, submit forms, use files and signed-in sessions without asking | Purchases and account changes, scripts, local network, other profiles: ask until granted; cookies/storage: blocked until granted; raw automation: only through its own opt-in |
+| Autonomous | Complete multi-step tasks, submit forms, use files and signed-in sessions without asking | Purchases and account changes, scripts, local network, other profiles: ask until granted; cookies/storage: blocked until granted; the browser's internal pages: never (raw automation was removed, #463) |
 | Full control | Everything without asking: actions on pages, purchases and payments, account changes, private tabs, the profiles in its list, scripts | The browser's internal pages (offered to no agent since raw automation was removed, [ADR 0007 amendment of 2026-11-17](../adr/0007-ai-bridge.md#amendment-2026-11-17-raw-automation-is-removed-453)); open a **locked** profile (needs the Vault key, never a permission); stop pages from doing what pages do; restrict what the agent process itself does outside the bridge |
 
 ## Assistant stream contract (UX5)
