@@ -331,9 +331,15 @@ class Container:
                 os.close(volume_fd)
         generation = int(vault.meta.get("generation", 0))
         flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-        with contextlib.suppress(FileExistsError):
-            os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
-        state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
+        try:
+            state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
+        except FileNotFoundError:
+            # No directory, so no record. Refuse before anything is written: a mount that is about to
+            # be refused leaves the volume as it found it (#412).
+            self._refuse_missing(vault, new_volume=new_volume)
+            with contextlib.suppress(FileExistsError):
+                os.mkdir(STATE_DIR, 0o700, dir_fd=volume_fd)
+            state_dir = os.open(STATE_DIR, os.O_RDONLY | os.O_DIRECTORY | flags, dir_fd=volume_fd)
         try:
             self._refuse_older(vault, state_dir, new_volume=new_volume)
             # Its own name: the profile's mount and a maintenance mount are two views of one directory.
@@ -350,22 +356,28 @@ class Container:
             os.close(state_dir)
 
     @staticmethod
-    def _refuse_older(vault: Vault, state_dir: int, *, new_volume: bool = False) -> None:
-        """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
-        vault that is another profile's, or older than the record, or one whose record is missing.
+    def _refuse_missing(vault: Vault, *, new_volume: bool = False) -> None:
+        """The volume has no record: refuse a vault that says it had one.
 
-        Missing: every volume has its record from its first mount, and every key file saved since this
-        check exists says `recorded` (core.py), so a missing record is refused (threat model U-T21). Only
+        Every volume has its record from its first mount, and every key file saved since this check
+        exists says `recorded` (core.py), so a missing record is refused (threat model U-T21). Only
         the first mount of a volume this very object made (`new_volume`) has none yet: the volume's own
         content cannot say so, since gocryptfs leaves out of a listing the names it cannot decrypt, which
         anyone who can write the encrypted files can arrange. A key file saved before has no `recorded`
         and is still let in."""
+        if vault.meta.get("recorded") is True and not new_volume:
+            raise StorageError("record-missing", "the profile's record of its key file is missing")
+
+    @staticmethod
+    def _refuse_older(vault: Vault, state_dir: int, *, new_volume: bool = False) -> None:
+        """Read the record in the volume (`state_dir`: an open handle on its directory) and refuse a
+        vault that is another profile's, or older than the record, or one whose record is missing
+        (`_refuse_missing`)."""
         flags = os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
         try:
             fd = os.open("state.json", os.O_RDONLY | flags, dir_fd=state_dir)
         except FileNotFoundError:
-            if vault.meta.get("recorded") is True and not new_volume:
-                raise StorageError("record-missing", "the profile's record of its key file is missing") from None
+            Container._refuse_missing(vault, new_volume=new_volume)
             return
         with os.fdopen(fd, encoding="utf-8") as handle:
             state = json.load(handle)
@@ -619,19 +631,34 @@ def encrypt_existing(path: Path, vault: Vault) -> Container:
     The plaintext originals are deleted afterwards; on SSDs and in backups, fragments may remain.
     An interruption the clean-up below cannot catch (SIGKILL, power loss) is finished or
     undone by recover_interrupted() the next time the profile is used.
+
+    `vault` is new and not saved yet: its key file is written here, once the profile's files are in
+    staging (#411). Saved by the caller beforehand, a stop between the two left a key file with no
+    volume: the profile then said it was protected and could not be opened, with its files in the
+    clear. From the rename on, every stop is one recover_interrupted() undoes or finishes; before
+    it, nothing is on disk.
     """
     path = Path(path)
-    if not path.is_dir():
-        raise StorageError("missing", str(path))  # the caller checks that no engine is using it
     staging = path.with_name(path.name + ".plaintext-migrating")
-    if staging.exists():
-        raise StorageError("exists", str(staging))
     fd = _migration_lock(path, wait=True)
     try:
+        # Under the lock: a second run that waited for it must see what the first one made. Checked
+        # before, both passed; the second then wrote its key file over the first's and, when making
+        # the volume failed, removed the folder that held the only copy of the profile's files.
+        if staging.exists():
+            raise StorageError("exists", str(staging))
+        if Container(path).vault_path.exists():
+            raise StorageError("exists", str(Container(path).vault_path))  # a key file here is not this vault's to replace
+        if not path.is_dir():
+            raise StorageError("missing", str(path))  # the caller checks that no engine is using it
         with _signals_as_exceptions():
             os.rename(path, staging)
             container = Container(path)
             try:
+                # On disk before the key file is: a power cut must not keep the key file and lose the
+                # rename, which would be the very state this order exists to rule out.
+                _fsync_dir(path.parent)
+                vault.save()
                 container.init(vault)
                 container.mount(vault)
                 for item in staging.iterdir():

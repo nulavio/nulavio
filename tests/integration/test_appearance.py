@@ -103,7 +103,7 @@ class AppearanceTest(unittest.TestCase):
     def shell_page(self) -> None:
         """A page of the Shell, to see what reaches them (what is left of its own settings page)."""
         self.m.navigate(self.base + "settings/settings.html#integrations")
-        ready = "return document.documentElement.dataset.ready === 'true';"
+        ready = "return document.documentElement?.dataset.ready === 'true';"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
 
     def switch(self, control: str) -> None:

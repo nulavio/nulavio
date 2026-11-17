@@ -146,8 +146,7 @@ class LockedGroupProfileTest(unittest.TestCase):
         box.root.mkdir(mode=0o700)
         vault = Vault.create(box.vault_path)
         vault.add_password(PASSWORD, {"ops": 1, "mem": 8 * 1024 * 1024})
-        vault.save()
-        storage.encrypt_existing(cls.path, vault)
+        storage.encrypt_existing(cls.path, vault)  # saves the key file itself (#411)
         vault.lock()
         cls.box = box
 

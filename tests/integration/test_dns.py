@@ -74,7 +74,7 @@ class DnsChoiceTest(unittest.TestCase):
     def open(self, page: str) -> None:
         self.m.navigate(self.base + page)
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 15)
         )
 
     def shoot(self, name: str) -> None:

@@ -7,6 +7,7 @@
 # (docs/process/pull-requests.md, "If the plan changes").
 
 /.github/                          @caiolombello
+/browser/build/                    @caiolombello
 /browser/patches/                  @caiolombello
 /launcher/nulavio_launcher/vault/  @caiolombello
 /launcher/nulavio_launcher/ai/     @caiolombello

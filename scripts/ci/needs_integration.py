@@ -36,6 +36,7 @@ from collections.abc import Callable
 
 SHA = re.compile(r"[0-9a-f]{40}")
 REPO = re.compile(r"[\w.-]+/[\w.-]+")
+WORKFLOW = re.compile(r"[\w-]+\.yml")
 
 
 def needs_integration(changed: list[str] | None) -> bool:
@@ -56,17 +57,24 @@ def _git(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
 
 
-def last_green(repo: str, gh: Callable[[list[str]], str | None] = _gh) -> str | None:
-    """Head of the newest successful ci run on main from a push or the schedule, in this repository."""
-    if not REPO.fullmatch(repo):
+def last_green(
+    repo: str,
+    gh: Callable[[list[str]], str | None] = _gh,
+    workflow: str = "ci.yml",
+    events: tuple[str, ...] = ("push", "schedule"),
+) -> str | None:
+    """Head of the newest successful run of the workflow on main, started by one of the events, in this repository.
+
+    The default is ci.yml from a push or the schedule; rehearsal_needed.py asks for the nightly rehearsal's."""
+    if not REPO.fullmatch(repo) or not WORKFLOW.fullmatch(workflow):
         return None
-    out = gh(["api", f"repos/{repo}/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=30"])
+    out = gh(["api", f"repos/{repo}/actions/workflows/{workflow}/runs?branch=main&status=success&per_page=30"])
     try:
         runs = json.loads(out or "")["workflow_runs"]
     except (ValueError, KeyError, TypeError):
         return None
     for run in runs if isinstance(runs, list) else []:
-        if not isinstance(run, dict) or run.get("event") not in ("push", "schedule"):
+        if not isinstance(run, dict) or run.get("event") not in events:
             continue
         if (run.get("head_repository") or {}).get("full_name") != repo or run.get("head_branch") != "main":
             continue  # a pull request from a fork's own "main" branch is not this repository's main
@@ -75,13 +83,18 @@ def last_green(repo: str, gh: Callable[[list[str]], str | None] = _gh) -> str | 
     return None
 
 
-def base_for(event: str, pr_base: str, repo: str, gh: Callable[[list[str]], str | None] = _gh) -> str | None:
-    ref = {"pull_request": lambda: pr_base, "push": lambda: last_green(repo, gh)}.get(event, lambda: None)() or ""
+def usable(ref: str | None) -> str | None:
+    """The commit, when changes can be counted from it: a full hash that is an ancestor of HEAD in this clone."""
+    ref = ref or ""
     if not SHA.fullmatch(ref) or set(ref) == {"0"}:
         return None
     if _git(["merge-base", "--is-ancestor", ref, "HEAD"]).returncode != 0:
         return None  # not in this clone, or main was rewritten: run everything
     return ref
+
+
+def base_for(event: str, pr_base: str, repo: str, gh: Callable[[list[str]], str | None] = _gh) -> str | None:
+    return usable({"pull_request": lambda: pr_base, "push": lambda: last_green(repo, gh)}.get(event, lambda: None)())
 
 
 def changed_files(base: str | None) -> list[str] | None:

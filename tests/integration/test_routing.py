@@ -393,7 +393,7 @@ class RoutingTest(unittest.TestCase):
             work.switch_to(handle)
             if "/routing/ask.html" in work.current_url():
                 break
-        harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+        harness.wait_until(lambda: work.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
         self.assertIn("/page/asked", work.execute("return document.getElementById('url').textContent;"))
         # UX4 (SPA-07/24): here → there, both named; "remember" above the buttons it changes; why.
         page = work.execute(
@@ -472,7 +472,7 @@ class RoutingTest(unittest.TestCase):
             work.switch_to(handle)
             if "/routing/blocked.html" in work.current_url():
                 break
-        harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+        harness.wait_until(lambda: work.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
         # Opening it here is the user's explicit choice.
         work.send("WebDriver:ElementClick", {"id": work.find_element("#actions .button--secondary")})
         self.assertTrue(harness.wait_until(lambda: self.hits("/page/orphan"), timeout=20))
@@ -562,7 +562,7 @@ class RoutingTest(unittest.TestCase):
                 self.m.switch_to(handle)
                 if "/routing/ask.html" in self.m.current_url():
                     break
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
             self.assertIn("127.0.0.1", self.m.execute("return document.getElementById('explain').textContent;"))
             # "Open in this profile" is the user's explicit choice: it loads here.
             self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#actions .button--secondary")})
@@ -990,7 +990,7 @@ class RoutingTest(unittest.TestCase):
                 work.switch_to(handle)
                 if "by=default" in work.current_url():
                     break
-            harness.wait_until(lambda: work.execute("return document.documentElement.dataset.ready === 'true';"), timeout=10)
+            harness.wait_until(lambda: work.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
             self.assertIn(
                 "perfil escolhido para esses links", work.execute("return document.getElementById('explain').textContent;")
             )

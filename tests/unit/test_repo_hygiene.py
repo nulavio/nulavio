@@ -28,6 +28,7 @@ EXECUTABLES = {"bin/nulavio", "android/gradlew"}
 WRITE_PERMISSIONS = {
     ("ai-review.yml", "publish", "pull-requests"): "one advisory comment, posted by scripts/ci/post_ai_review.py",
     ("upstream.yml", "firefox-release", "issues"): "one issue per newer Firefox release (scripts/release/upstream_issue.py)",
+    ("rehearsal.yml", "report", "issues"): "one issue while the nightly rehearsal of main fails (scripts/ci/rehearsal_issue.py)",
     ("scorecard.yml", "analysis", "security-events"): "uploads Scorecard's SARIF to the Security tab",
     ("scorecard.yml", "analysis", "id-token"): "signs the published result for scorecard.dev (publish_results)",
     ("release-signing-check.yml", "sign", "id-token"): "OIDC to AWS: the role only the release environment may assume (ci/aws/)",

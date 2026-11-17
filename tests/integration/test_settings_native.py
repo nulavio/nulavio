@@ -703,7 +703,7 @@ class NativeSettingsTest(unittest.TestCase):
             self.m.switch_to(handle)
             if self.m.current_url().endswith(detail):
                 break
-        ready = "return document.documentElement.dataset.ready === 'true';"
+        ready = "return document.documentElement?.dataset.ready === 'true';"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 20))
         rail = self.m.execute(
             "return [...document.querySelectorAll('.settings-nav a[data-section]')].map(a => a.dataset.section);"

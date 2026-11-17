@@ -136,7 +136,7 @@ class GuardTest(unittest.TestCase):
     def open_review(self) -> None:
         self.m.navigate(self.shell_url() + "guard/review.html")
         self.assertTrue(
-            harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready === 'true';"), 15)
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready === 'true';"), 15)
         )
 
     def cards(self) -> dict:

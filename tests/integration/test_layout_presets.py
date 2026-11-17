@@ -71,7 +71,9 @@ class LayoutPresetsTest(unittest.TestCase):
 
     def newtab(self):
         self.m.navigate(self.shell_url("newtab/newtab.html"))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
+        )
 
     def selected(self):
         return settings_page.control(self.m, PICKER)["value"] or "custom"
@@ -761,7 +763,7 @@ class LayoutPresetsTest(unittest.TestCase):
                 self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.choicePending', true);")
                 self.m.navigate(self.shell_url(page))
                 self.assertTrue(
-                    harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                    harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
                 )
                 # Navigate away so pagehide detaches, wrap onChanged.addListener to throw once
                 # on bfcache restore (pageshow persisted) AND also verify fresh setUpLayout/showLayoutChoice.
@@ -1057,7 +1059,7 @@ class LayoutPresetsTest(unittest.TestCase):
         m2 = fresh.start()
         base2 = m2.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
         m2.navigate(base2 + "newtab/newtab.html")
-        self.assertTrue(harness.wait_until(lambda: m2.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(harness.wait_until(lambda: m2.execute("return document.documentElement?.dataset.ready==='true';"), 15))
         self.assertFalse(m2.execute("return document.getElementById('layout-choice').hidden;"))
         m2.send("WebDriver:ElementClick", {"id": m2.find_element("#layout-choice-done")})
         self.assertTrue(harness.wait_until(lambda: m2.execute("return document.getElementById('layout-choice').hidden;"), 10))
@@ -1076,7 +1078,9 @@ class LayoutPresetsTest(unittest.TestCase):
             notice: !!PopupNotifications.getNotification('extension-new-tab-notification')};
         """
         self.assertEqual(self.m.chrome(chrome_state), {"tabs": 1, "back": False, "urlbar": "", "notice": False})
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
+        )
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
         # Ctrl+T opens the same page, without the notice: the Shell, and only the Shell, carries
         # the confirmation the notice's own "Keep changes" button records.
@@ -1126,7 +1130,9 @@ class LayoutPresetsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
         self.m.send("WebDriver:SetWindowRect", {"width": 1280, "height": 800})
         self.assertTrue(self.m.chrome("return document.getElementById('PersonalToolbar').collapsed;"))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
+        )
         self.assertTrue(harness.wait_until(lambda: self.newtab_ui_ready("lateral"), 10))
         card = self.m.execute("""
           const done = document.getElementById('layout-choice-done').getBoundingClientRect();
@@ -1295,7 +1301,7 @@ class LayoutPresetsTest(unittest.TestCase):
                     base = m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
                     m.navigate(base + "newtab/newtab.html")
                     self.assertTrue(
-                        harness.wait_until(lambda m=m: m.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                        harness.wait_until(lambda m=m: m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
                     )
                     card_hidden = m.execute("return document.getElementById('layout-choice').hidden;")
                     runs.append({"state": st, "prefs": prefs, "cardHidden": card_hidden})
@@ -1422,7 +1428,7 @@ class LayoutPresetsTest(unittest.TestCase):
             base_u = m_new.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
             m_new.navigate(base_u + "newtab/newtab.html")
             self.assertTrue(
-                harness.wait_until(lambda: m_new.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                harness.wait_until(lambda: m_new.execute("return document.documentElement?.dataset.ready==='true';"), 15)
             )
             self.assertTrue(m_new.execute("return document.getElementById('layout-choice').hidden;"))
             (self.artifacts / "upgrade-5a98bd7-to-ux3e.json").write_text(
@@ -1478,7 +1484,7 @@ class LayoutPresetsTest(unittest.TestCase):
             base_c = m_custom.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
             m_custom.navigate(base_c + "newtab/newtab.html")
             self.assertTrue(
-                harness.wait_until(lambda: m_custom.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                harness.wait_until(lambda: m_custom.execute("return document.documentElement?.dataset.ready==='true';"), 15)
             )
             self.assertTrue(m_custom.execute("return document.getElementById('layout-choice').hidden;"))
             m_custom.quit()
@@ -1520,7 +1526,7 @@ class LayoutPresetsTest(unittest.TestCase):
             base_ai = m_ai.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
             m_ai.navigate(base_ai + "newtab/newtab.html")
             self.assertTrue(
-                harness.wait_until(lambda: m_ai.execute("return document.documentElement.dataset.ready==='true';"), 15)
+                harness.wait_until(lambda: m_ai.execute("return document.documentElement?.dataset.ready==='true';"), 15)
             )
             self.assertTrue(m_ai.execute("return document.getElementById('layout-choice').hidden;"))
             m_ai.quit()
@@ -1537,7 +1543,9 @@ class LayoutPresetsTest(unittest.TestCase):
         url = self.shell_url("newtab/newtab.html")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.currentURI.spec;") == url, 15))
         self.assertTrue(self.m.chrome("return Services.prefs.getBoolPref('nulavio.startpage.shellFirstTab', false);"))
-        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.documentElement.dataset.ready==='true';"), 15))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute("return document.documentElement?.dataset.ready==='true';"), 15)
+        )
         self.assertFalse(self.m.execute("return document.getElementById('layout-choice').hidden;"))
 
     def test_profile_upgraded_from_5a98bd7_keeps_about_home_as_first_tab(self):

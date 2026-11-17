@@ -9,6 +9,8 @@ encrypted profile is in tests/integration/test_vault_profiles.py.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -253,6 +255,36 @@ class ContainerTest(StorageCase):
             self.assertIn("err_record_missing", messages, lang)
         self.assertFalse(box.mounted())
 
+    def test_a_refused_unlock_writes_nothing_into_the_volume(self):
+        # #412: the record's directory was made before the record was read, so a mount refused for a
+        # missing record left an empty directory in a volume it was about to refuse.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("user_pref('x', 1);")
+        box.record_generation(vault)
+        shutil.rmtree(box.mountpoint / storage.STATE_DIR)  # the record and its directory are gone
+        box.unmount()
+
+        def listing() -> list[tuple[str, int]]:
+            return sorted((str(path.relative_to(box.cipher)), path.stat().st_size) for path in box.cipher.rglob("*"))
+
+        before = listing()
+        again = Vault.load(box.vault_path)
+        again.unlock_password(PASSWORD)
+        for _ in range(2):  # the refusal holds at the next try, and that try writes nothing either
+            with self.assertRaises(storage.StorageError) as ctx:
+                storage.Container(box.mountpoint).mount(again)
+            self.assertEqual(ctx.exception.code, "record-missing")
+            self.assertFalse(box.mounted())
+            self.assertEqual(listing(), before)
+
+    def test_the_first_mount_of_a_new_volume_still_makes_its_record(self):
+        box, vault = self.new_container()  # init() makes the volume; nothing is mounted yet
+        box.mount(vault)
+        self.assertEqual(json.loads(box.state_path.read_text())["generation"], int(vault.meta["generation"]))
+        self.assertEqual(os.stat(box.mountpoint / storage.STATE_DIR).st_mode & 0o777, 0o700)
+        box.unmount()
+
     def test_a_key_file_saved_before_the_record_was_required_still_opens(self):
         # Key files saved by 160.0-0.5 and earlier have no `recorded`: their volumes stay usable, and
         # their next save adds it.
@@ -309,8 +341,7 @@ class ContainerTest(StorageCase):
         box.root.mkdir(mode=0o700)
         vault = Vault.create(box.vault_path)
         vault.add_password(PASSWORD, FAST)
-        vault.save()
-        storage.encrypt_existing(plain, vault)
+        storage.encrypt_existing(plain, vault)  # saves the key file itself (#411)
         self.assertEqual(list(plain.iterdir()), [])
         self.assertFalse((self.tmp / "old.plaintext-migrating").exists())
         self.assertFalse(contains(box.root, MARKER.encode()))
@@ -327,7 +358,6 @@ class ContainerTest(StorageCase):
         box.root.mkdir(mode=0o700)
         vault = Vault.create(box.vault_path)
         vault.add_password(PASSWORD, FAST)
-        vault.save()
         with mock.patch.object(storage.shutil, "copy2", side_effect=OSError("disk full")), self.assertRaises(OSError):
             storage.encrypt_existing(plain, vault)
         self.assertEqual((plain / "places.sqlite").read_text(), "data")
@@ -344,9 +374,23 @@ from nulavio_launcher.vault.core import Vault
 path, how, password = Path(sys.argv[2]), sys.argv[3], sys.argv[4]
 vault = Vault.create(storage.Container(path).vault_path)
 vault.add_password(password, {"ops": 1, "mem": 8 * 1024 * 1024})
-vault.save()
 copied = []
-real_copy, real_rmtree = shutil.copy2, shutil.rmtree
+real_copy, real_rmtree, real_rename, real_init = shutil.copy2, shutil.rmtree, os.rename, storage.Container.init
+def rename(source, target, *args, **kwargs):
+    if how == "kill-before-rename" and str(target).endswith(".plaintext-migrating"):
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_rename(source, target, *args, **kwargs)
+def init(self, vault):
+    if how == "kill-before-volume":  # the key file is saved, the volume is not made yet (#411)
+        os.kill(os.getpid(), signal.SIGKILL)
+    return real_init(self, vault)
+os.rename, storage.Container.init = rename, init
+if len(sys.argv) > 5:  # two runs at once: say "ready", then wait for the parent's word
+    import time
+    go = Path(sys.argv[5])
+    go.with_name(f"{go.name}.{os.getpid()}").write_text("")
+    while not go.exists():
+        time.sleep(0.01)
 def copy(*args, **kwargs):
     copied.append(args[0])
     if len(copied) == 3 and how in ("kill-mid-copy", "term-mid-copy"):
@@ -396,6 +440,110 @@ class InterruptedMigrationTest(StorageCase):
         self.assertFalse(self.staging(path).exists())
         self.assertFalse(storage.Container(path).mounted())
         self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+
+    def test_a_stop_between_the_key_file_and_the_volume_is_undone_the_next_time(self):
+        # #411: the key file was saved before the migration began, so a stop here left a key file with no
+        # volume: a profile that said it was protected, could not be opened, and had its files in the clear.
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-before-volume").returncode, -signal.SIGKILL)
+        box = storage.Container(path)
+        self.assertTrue(box.vault_path.exists())  # the state the stop leaves: a key file,
+        self.assertFalse(box.cipher.exists())  # no volume,
+        self.assertTrue(self.staging(path).exists())  # and the files in staging, which is what makes it recoverable
+        prof = profile.Profile(name="work", path=path)
+        said = io.StringIO()
+        with contextlib.redirect_stderr(said):
+            self.assertFalse(profiles.is_encrypted(prof))
+        self.assertIn("back as it was, not protected", said.getvalue())
+        self.assertFalse(box.root.exists())  # the key file is gone with it
+        self.assertFalse(self.staging(path).exists())
+        self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+        self.assertTrue(os.access(path, os.W_OK))
+        again = self.interrupt(path, "none")  # and it can be protected again
+        self.assertEqual(again.returncode, 0, again.stderr)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertTrue(profiles.is_encrypted(prof))
+
+    def test_the_move_into_staging_is_on_disk_before_the_key_file_is_written(self):
+        # A power cut must not keep the key file and lose the rename (the state #411 rules out).
+        path = self.plain_profile()
+        box = storage.Container(path)
+        vault = Vault.create(box.vault_path)
+        vault.add_password(PASSWORD, FAST)
+        order: list[str] = []
+        real_fsync_dir, real_save = storage._fsync_dir, Vault.save
+
+        def fsync_dir(target):
+            order.append(f"fsync {Path(target).name}")
+            return real_fsync_dir(target)
+
+        def save(self, **kwargs):
+            order.append("save" if self.path == box.vault_path else "other save")
+            return real_save(self, **kwargs)
+
+        with mock.patch.object(storage, "_fsync_dir", fsync_dir), mock.patch.object(Vault, "save", save):
+            storage.encrypt_existing(path, vault)
+        self.assertIn("save", order)
+        self.assertEqual(order[: order.index("save")], [f"fsync {path.parent.name}"])
+        vault.lock()
+
+    def test_two_runs_at_once_protect_the_profile_once(self):
+        # Both runs pass every check made before the lock. The one that waits for the lock must then
+        # find the other's key file and stop: it used to write its own key file over it and, when making
+        # the volume failed, remove the folder with the only copy of the profile's files.
+        path = self.plain_profile()
+        script = self.tmp / "migrate.py"
+        script.write_text(INTERRUPTED_MIGRATION)
+        go = self.tmp / "go"
+        args = [sys.executable, str(script), str(ROOT / "launcher"), str(path), "none", PASSWORD, str(go)]
+        runs = [subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        try:
+            wait_for(lambda: len(list(self.tmp.glob("go.*"))) == 2)  # both have their new vault in hand
+            go.write_text("")
+            errors = [run.communicate(timeout=120)[1] for run in runs]
+        finally:
+            for run in runs:
+                if run.poll() is None:
+                    run.kill()
+        codes = [run.returncode for run in runs]
+        self.assertEqual(sorted(code != 0 for code in codes), [False, True], errors)
+        self.assertIn("exists", errors[codes.index(next(code for code in codes if code != 0))])
+        box = storage.Container(path)
+        self.assertTrue(box.exists())
+        self.assertFalse(self.staging(path).exists())
+        vault = Vault.load(box.vault_path)
+        vault.unlock_password(PASSWORD)
+        box.mount(vault)  # the key file on disk is the one the volume was made with
+        self.assertEqual(
+            sorted(p.name for p in path.iterdir() if p.name != storage.STATE_DIR), [f"file{i}.txt" for i in range(10)]
+        )
+        box.unmount()
+        vault.lock()
+
+    def test_a_stop_before_the_files_are_moved_leaves_no_key_file(self):
+        path = self.plain_profile()
+        self.assertEqual(self.interrupt(path, "kill-before-rename").returncode, -signal.SIGKILL)
+        box = storage.Container(path)
+        self.assertFalse(box.vault_path.exists())
+        self.assertFalse(self.staging(path).exists())
+        prof = profile.Profile(name="work", path=path)
+        self.assertFalse(profiles.is_encrypted(prof))
+        self.assertEqual(sorted(p.name for p in path.iterdir()), [f"file{i}.txt" for i in range(10)])
+
+    def test_a_key_file_already_there_is_not_replaced(self):
+        path = self.plain_profile()
+        box = storage.Container(path)
+        other = Vault.create(box.vault_path)
+        other.add_password(PASSWORD, FAST)
+        other.save()
+        before = box.vault_path.read_bytes()
+        vault = Vault.create(self.tmp / "elsewhere" / "vault.json")
+        vault.add_password(PASSWORD, FAST)
+        with self.assertRaises(storage.StorageError) as ctx:
+            storage.encrypt_existing(path, vault)
+        self.assertEqual(ctx.exception.code, "exists")
+        self.assertEqual(box.vault_path.read_bytes(), before)
+        self.assertEqual(len(list(path.iterdir())), 10)  # nothing was moved
 
     def test_a_complete_copy_is_finished_the_next_time(self):
         path = self.plain_profile()

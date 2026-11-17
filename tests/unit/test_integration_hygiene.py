@@ -59,6 +59,20 @@ class IntegrationHygieneTest(unittest.TestCase):
                 leaving.append(module.name)
         self.assertEqual(leaving, [], "these start an engine session and never call its cleanup()")
 
+    def test_a_wait_for_a_page_reads_the_document_only_when_it_is_there(self):
+        # While a page is being replaced the document has no root element for a moment, and
+        # `document.documentElement.dataset` then throws instead of answering "not yet": the wait ends
+        # in an error on a fast machine (the first nightly rehearsal of main, test_vault_ui 05).
+        racy = re.compile(r"return document\.documentElement\.dataset\.ready")
+        found = []
+        for module in sorted((ROOT / "tests").rglob("*.py")):
+            if module == Path(__file__).resolve():
+                continue
+            for number, line in enumerate(module.read_text(encoding="utf-8").splitlines(), 1):
+                if racy.search(line):
+                    found.append(f"{module.relative_to(ROOT)}:{number}")
+        self.assertEqual(found, [], "write document.documentElement?.dataset.ready")
+
     def test_a_protection_is_switched_off_only_where_that_is_what_the_test_shows(self):
         """I1: no test weakens a protection to get a page loaded or a step done. The one exception is a test whose
         subject is the browser's own answer to a protection that is off; those are named here, each on its

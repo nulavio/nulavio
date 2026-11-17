@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-build a Nulavio security update as soon as Mozilla stages or publishes a Firefox release.
+"""Pre-check a Nulavio security update as soon as Mozilla stages or publishes a Firefox release.
 
 Run by the systemd user timer in contrib/systemd/ (every 30 minutes, opt-in) or by hand:
 
@@ -13,19 +13,24 @@ or published, and lets decide() choose what to do. To build, it creates a
 separate git worktree of the local `main` under the work directory (no fetch or
 pull: only code already in the clone runs), pins the release there with
 bump_engine.py (which verifies Mozilla's signature again), and runs
-rehearse_release.sh in it while inhibiting sleep. It refuses to build on battery,
-with less than 30 GiB free, without the Google Safe Browsing key (the file
-build_nulavio.sh reads), or while another build or rehearsal is running. Once
-Mozilla has published the release and its signed digest equals the one built, it
-says READY TO SIGN; a different digest means a rebuild.
+`rehearse_release.sh --precheck` in it while inhibiting sleep: the mozconfig.no-lto
+variant is built, its Rust library is read for the engine's networking check (the
+record lands in the worktree's browser/build/networking-check.json), and the unit
+and integration tests run (#430). It refuses to build on battery, with less than
+30 GiB free, without the Google Safe Browsing key (the file build_nulavio.sh
+reads), or while another build or rehearsal is running. Once Mozilla has published
+the release and its signed digest equals the one checked, it says READY TO RELEASE;
+a different digest means a new pre-check.
 
-It never builds without a successful signature verification, never commits,
-pushes, signs or publishes: the diff waits in the worktree for review.
+What it leaves is a worktree whose diff (the pin and the check's record) waits for
+review and a pull request. It makes no package and nothing that can be signed: the
+release is built from main by release.yml. It never builds without a successful
+signature verification, and never commits, pushes, signs or publishes.
 Notifications (--notify) go to the desktop (notify-send or D-Bus) and always to
 the journal; each one is sent once.
 
-Exit status: 0 nothing to do, waiting, or built ahead of publication; 10 ready to
-sign now; 1 the build or its tests failed; 2 release data unavailable;
+Exit status: 0 nothing to do, waiting, or checked ahead of publication; 10 ready to
+release now; 1 the build, the networking check or the tests failed; 2 release data unavailable;
 3 a signature did not verify (nothing is built); 4 a precondition is missing
 (power, disk, Safe Browsing key, another build running). Output: one JSON object.
 """
@@ -49,6 +54,11 @@ sys.path.insert(0, str(HERE))
 import watch_upstream  # noqa: E402
 
 EXIT_READY = 10
+# The phase of a release that is pre-checked and published. "ready-to-sign" is what a state file written
+# before #430 says, when this tool made packages; it is read, and never written.
+READY = ("ready-to-release", "ready-to-sign")
+# What a person does next. This tool made no package: the release is built from main.
+NEXT = "Review the worktree's diff (the pin and the networking check's record), open the pull request, then run release.yml."
 UNAVAILABLE_NOTICE_AFTER = _dt.timedelta(hours=6)
 MAX_NOTIFIED = 200
 DEFAULT_MIN_FREE_GIB = 30.0
@@ -167,7 +177,10 @@ def blockers(facts: Facts, options: Options) -> list[tuple[str, str]]:
 
 
 def _built(record: dict | None, digest: str) -> bool:
-    return bool(record) and record.get("source_sha256") == digest and record.get("phase") in ("built", "ready-to-sign")
+    # Only a pre-check counts: a record from before #430 (a release rehearsal, with a manifest and no reading
+    # of the Rust library) is checked again, whatever its phase says.
+    checked = bool(record) and bool(record.get("precheck"))
+    return checked and record.get("source_sha256") == digest and record.get("phase") in ("built", *READY)
 
 
 def decide(state: dict, report: dict, facts: Facts, options: Options, now: _dt.datetime) -> Decision:
@@ -221,11 +234,11 @@ def decide(state: dict, report: dict, facts: Facts, options: Options, now: _dt.d
                     reason = "built from the staged release; waiting for Mozilla to publish it"
                     return Decision("wait", version, reason, 0, digest, False, tuple(notices))
                 continue
-            if record["phase"] == "ready-to-sign":
+            if record["phase"] in READY:
                 continue  # done; look at a newer staged release
-            body = f"Built and tested from Mozilla's signed source ({digest[:12]}…). {_clock(target)}."
+            body = f"Pre-checked from Mozilla's signed source ({digest[:12]}…). {_clock(target)}. {NEXT}"
             notices.append(
-                Notice(f"ready:{version}:{digest}", "critical", f"READY TO SIGN: Nulavio with Firefox {version}", body)
+                Notice(f"ready:{version}:{digest}", "critical", f"READY TO RELEASE: Nulavio with Firefox {version}", body)
             )
             return Decision("ready", version, "the published release matches the build", EXIT_READY, digest, True, tuple(notices))
         if record and record.get("phase") == "failed" and record.get("source_sha256") == digest and not options.retry:
@@ -248,7 +261,7 @@ def decide(state: dict, report: dict, facts: Facts, options: Options, now: _dt.d
         return Decision("build", version, reason, 0, digest, shipped, tuple(notices))
     last = order[-1]
     return Decision(
-        "idle", last["version"], "ready to sign; nothing newer to build", 0, last["source_sha256"], True, tuple(notices)
+        "idle", last["version"], "ready to release; nothing newer to check", 0, last["source_sha256"], True, tuple(notices)
     )
 
 
@@ -422,7 +435,7 @@ class Autobuild:
         return result.stdout
 
     def build(self, version: str, digest: str, now: _dt.datetime, record: dict) -> None:
-        """Worktree, verified bump, rehearsal, manifest check. Fills `record`; raises Failure."""
+        """Worktree, verified bump, pre-check, its result. Fills `record`; raises Failure."""
         if not watch_upstream.RELEASE_RE.match(version):
             raise Failure(1, f"refusing to build {version!r}")
         tree = self.work / "worktrees" / f"firefox-{version}"
@@ -459,10 +472,9 @@ class Autobuild:
         if out.exists():
             shutil.rmtree(out)
         env = {k: v for k, v in self.env.items() if k != "NULAVIO_ALLOW_NO_SAFEBROWSING_KEY"}  # release builds only
-        # This worktree pins a release that main does not pin yet. The unit test that ties the pin to the
-        # networking check's record (R79, networking-check.json) is for the pull request that moves the pin.
-        env["NULAVIO_PREBUILD"] = "1"
-        command = [str(tree / "scripts" / "release" / "rehearse_release.sh"), version, str(out)]
+        # A pre-check, never a release rehearsal: the variant this machine can build, whose Rust library can be
+        # read for the networking check, and no package or manifest that could be signed (#430).
+        command = [str(tree / "scripts" / "release" / "rehearse_release.sh"), "--precheck", version, str(out)]
         if self.which("systemd-inhibit"):
             command = [
                 "systemd-inhibit",
@@ -475,15 +487,23 @@ class Autobuild:
         with open(log, "w", encoding="utf-8") as handle:
             status = self.run(command, check=False, stdout=handle, stderr=subprocess.STDOUT, env=env, cwd=str(tree)).returncode
         if status != 0:
-            raise Failure(1, f"rehearsal failed (exit {status}); log {log}", failed_step(out / "rehearsal.md"))
-        manifest = out / "manifest.json"
+            raise Failure(1, f"pre-check failed (exit {status}); log {log}", failed_step(out / "rehearsal.md"))
+        result = out / "precheck.json"
         try:
-            data = json.loads(manifest.read_text(encoding="utf-8"))
+            data = json.loads(result.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            raise Failure(1, f"no readable manifest.json after the rehearsal: {exc}", "manifest") from exc
-        if data.get("firefox") != version or data.get("source_sha256") != digest or data.get("rehearsal") != "ok":
-            raise Failure(1, "manifest.json does not match the verified release", "manifest")
-        record.update(phase="built", manifest=str(manifest), report=str(out / "rehearsal.md"))
+            raise Failure(1, f"no readable precheck.json after the pre-check: {exc}", "precheck-result") from exc
+        checked = (data.get("networking_check") or {}).get("result")
+        if (
+            data.get("firefox") != version
+            or data.get("source_sha256") != digest
+            or data.get("precheck") != "ok"
+            or checked != "passed"
+        ):
+            raise Failure(1, "precheck.json does not match the verified release", "precheck-result")
+        if (out / "manifest.json").exists():  # a pre-check leaves nothing a release run could take for its own
+            raise Failure(1, "the pre-check left a manifest.json: it must not", "precheck-result")
+        record.update(phase="built", precheck=str(result), report=str(out / "rehearsal.md"))
 
     # -- one run --
 
@@ -510,7 +530,7 @@ class Autobuild:
         code = decision.exit_code
         record = state["builds"].get(decision.version or "", {})
         if decision.action == "ready" and not self.dry_run:
-            record.update(phase="ready-to-sign", ready_at=watch_upstream._stamp(now))
+            record.update(phase=READY[0], ready_at=watch_upstream._stamp(now))
         elif decision.action == "build" and not self.dry_run:
             version, digest = decision.version, decision.digest
             self.tell(state, [Notice(f"building:{version}:{digest}", "normal", f"Building Firefox {version}", decision.reason)])
@@ -521,7 +541,7 @@ class Autobuild:
             if record["phase"] == "failed":
                 result["reason"] = record["error"]
         result.update(
-            phase=record.get("phase", decision.action), **{k: record.get(k) for k in ("worktree", "report", "manifest", "log")}
+            phase=record.get("phase", decision.action), **{k: record.get(k) for k in ("worktree", "report", "precheck", "log")}
         )
         self.save_state(state)
         return result, code
@@ -546,14 +566,15 @@ class Autobuild:
             return exc.code
         record["finished_at"] = watch_upstream._stamp(self.clock())
         if decision.shipped:
-            record.update(phase="ready-to-sign", ready_at=record["finished_at"])
-            body = f"Built and tested ({digest[:12]}…); worktree {record['worktree']}."
+            record.update(phase=READY[0], ready_at=record["finished_at"])
+            body = f"Pre-checked ({digest[:12]}…); worktree {record['worktree']}. {NEXT}"
             self.tell(
-                state, [Notice(f"ready:{version}:{digest}", "critical", f"READY TO SIGN: Nulavio with Firefox {version}", body)]
+                state,
+                [Notice(f"ready:{version}:{digest}", "critical", f"READY TO RELEASE: Nulavio with Firefox {version}", body)],
             )
             return EXIT_READY
-        body = f"Built from the staged release; ready to sign once Mozilla publishes. Worktree {record['worktree']}."
-        self.tell(state, [Notice(f"built:{version}:{digest}", "normal", f"Firefox {version} pre-built", body)])
+        body = f"Pre-checked from the staged release; ready to release once Mozilla publishes. Worktree {record['worktree']}."
+        self.tell(state, [Notice(f"built:{version}:{digest}", "normal", f"Firefox {version} pre-checked", body)])
         return 0
 
     def prune(self, pinned: str) -> list[str]:
