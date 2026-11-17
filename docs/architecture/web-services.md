@@ -32,6 +32,8 @@ that carries an IPv4 one (mapped, compatible, NAT64, 6to4), a name ending in a l
 `http(s)` page. The menu item stays, unusable, and says why. Private windows show none of these items unless the person
 ticks "Oferecer estes serviços também nas janelas privadas"; then the service opens in a private tab.
 
+When the page menu has more than one of the Shell's items (two translation services, or one and "Perguntar ao assistente" on a selection), the engine puts them in a submenu named after the Shell, "Nulavio Shell"; with one, it stays at the top level (#483).
+
 Names are judged by their form, not resolved: a local host with a name that looks public is not recognised (S23).
 
 What is left, written as residual risk R80: a page's address can still carry a secret in its query (a token a site

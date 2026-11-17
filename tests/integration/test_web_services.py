@@ -55,13 +55,19 @@ ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
   .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
 // The drawn one: after a refresh of the menu the engine may keep a hidden copy of an item next to the new one.
-// An item the background page has just drawn again (menus.refresh) is not laid out yet: false until it is.
-const menu = d.getElementById('contentAreaContextMenu');
+// With more than one item of the Shell in the menu, the engine puts them in a submenu named after the Shell (as a
+// person sees it): open that submenu first, then click the item. False until the item can be clicked.
 const item = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
   .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && !i.disabled);
 if (!item) return false;
+const popup = item.parentNode;
+const submenu = popup.parentNode?.localName === 'menu' ? popup.parentNode : null;
+if (submenu && popup.state !== 'open') {
+  submenu.openMenu(true);
+  return false;
+}
 try {
-  menu.activateItem(item);
+  popup.activateItem(item);
 } catch (e) {
   return false;
 }
