@@ -8,8 +8,8 @@ name: networking-check
 # (scripts/build/networking_check.py, docs/architecture/build.md).
 #
 # This workflow builds that variant from main, reads its Rust library, writes the claim
-# "this Firefox release, built with this mozconfig, variant and patch stack, passed" and
-# attests it. release.yml's signing job writes the same claim from the release's manifest and
+# "this Firefox release, built with this mozconfig, variant, patch stack and Rust compiler,
+# passed" and attests it. release.yml's signing job writes the same claim from the release's manifest and
 # base commit and requires an attestation of exactly those bytes by this workflow on main:
 # no release is signed on the strength of the record in the repository alone, which is a
 # statement by whoever wrote it (residual risk R79, threat model S22).
@@ -122,9 +122,12 @@ jobs:
       - name: The claim the reading made is the one this commit needs (the same bytes, or nothing is attested)
         run: |
           # Written here from this job's own checkout. What the build job handed over is only compared with it:
-          # this job attests bytes it made itself, and the build job's word is that the reading passed.
+          # this job attests bytes it made itself, and the build job's word is that the reading passed and which
+          # Rust compiler its build used (#472): that one value is taken from its claim, in a checked form, since
+          # only a build knows it.
           firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
-          python3 -I scripts/build/networking_check.py "$firefox" --expected-claim > "$RUNNER_TEMP/expected.json"
+          python3 -I scripts/build/networking_check.py "$firefox" --expected-claim \
+            --compiler-from "$RUNNER_TEMP/claim/networking-claim.json" > "$RUNNER_TEMP/expected.json"
           cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

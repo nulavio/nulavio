@@ -19,9 +19,9 @@ the RPM), the RPMs, the .debs, the portable archives, the SBOMs.
 
 ``networking-claim`` prints, as bytes, the claim that the rehearsal's Firefox release
 passed the Rust networking reading with the base commit's mozconfig, variant and patch
-stack. The signing job asks for an attestation of exactly those bytes by
-networking-check.yml on main before it signs (#455); the record in the repository
-is not part of it.
+stack, and with the Rust compiler the manifest says built the release (#472). The
+signing job asks for an attestation of exactly those bytes by networking-check.yml on
+main before it signs (#455); the record in the repository is not part of it.
 
 ``packages`` refuses a packages directory holding any Nulavio RPM or .deb that
 the manifest does not list with the same SHA-256. sign_repo.sh and sign_apt_repo.sh
@@ -146,8 +146,9 @@ def inputs_at(repo: Path, commit: str) -> dict:
 def networking_claim(out: Path, repo: Path) -> bytes:
     """The claim an attestation must exist for before this rehearsal is signed (#455).
 
-    Made from the manifest (the Firefox release and source digest that were built) and from the base commit
-    (its mozconfig, variant and patch stack). The record in the repository is not read: a record is a
+    Made from the manifest (the Firefox release and source digest that were built, and the Rust compiler
+    that built them) and from the base commit (its mozconfig, variant and patch stack, and what makes the
+    reading). The record in the repository is not read: a record is a
     statement, and "accepted" is one too. The signing job asks GitHub for an attestation of these bytes by
     networking-check.yml on main; that workflow wrote the same bytes after building and reading for itself."""
     manifest = load(out / "manifest.json")
@@ -162,7 +163,16 @@ def networking_claim(out: Path, repo: Path) -> bytes:
         read_with = module.reader(at_commit)
     except subprocess.CalledProcessError:
         raise ManifestError(f"the reader, the build script or the workflow cannot be read at {commit[:12]}") from None
-    return module.claim(manifest["firefox"], manifest["source_sha256"], current, read_with)
+    # Which Rust compiler built the release (#472): the manifest step read it from the release build's own
+    # configuration. The reading's claim names the compiler of the build that was read, so a release built
+    # with another one finds no attestation.
+    try:
+        compiled_with = module.checked_compiler(manifest.get("compiled_with"))
+    except ValueError as error:
+        raise ManifestError(
+            f"the manifest: {error} (a rehearsal made before #472 has no compiler in it: rehearse again)"
+        ) from None
+    return module.claim(manifest["firefox"], manifest["source_sha256"], current, read_with, compiled_with)
 
 
 def check_networking(manifest: dict, repo: Path) -> None:
