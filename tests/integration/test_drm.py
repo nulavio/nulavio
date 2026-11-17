@@ -51,9 +51,14 @@ class EmeServer(harness.FixtureServer):
 
 
 # Plays one stream through MSE + EME with ClearKey; resolves with what the page saw.
+# Seconds the stream may take to reach 1.5 s once it is told to play, and the script's own limit: above the sum
+# of its steps (eight of 20 s at most, then that wait), so that the step that is late is the one reported.
+PLAY_WAIT = 30
+PLAY_LIMIT = 8 * 20 + PLAY_WAIT + 10
 PLAY = """
-const [url, type, kind, license, kid] = arguments;
+const [url, type, kind, license, kid, wait] = arguments;
 const done = arguments[arguments.length - 1];
+const began = Date.now();
 (async () => {
   const media = document.createElement(kind);
   media.muted = true;
@@ -62,9 +67,14 @@ const done = arguments[arguments.length - 1];
   media.addEventListener("error", () => errors.push(`media ${media.error?.code}: ${media.error?.message}`));
   const config = [{ initDataTypes: ["cenc", "keyids"],
                     [kind === "video" ? "videoCapabilities" : "audioCapabilities"]: [{ contentType: type }] }];
-  const access = await navigator.requestMediaKeySystemAccess("org.w3.clearkey", config);
-  const keys = await access.createMediaKeys();
-  await media.setMediaKeys(keys);
+  // Every step has a name and a limit, so that a step that never ends is reported by name and not as the
+  // script's own timeout. The first use of a key system starts the engine's plugin process, which took more
+  // than the old 30 s for the whole script once on the build machine (the nightly rehearsal of 2026-11-17).
+  const step = (what, promise, seconds = 20) =>
+    Promise.race([promise, new Promise((_, no) => setTimeout(() => no(`${what}: not done in ${seconds} s`), seconds * 1000))]);
+  const access = await step("requestMediaKeySystemAccess", navigator.requestMediaKeySystemAccess("org.w3.clearkey", config));
+  const keys = await step("createMediaKeys", access.createMediaKeys());
+  await step("setMediaKeys", media.setMediaKeys(keys));
   // The fixtures carry no pssh box (ffmpeg writes none), so no "encrypted" event comes: the session asks for
   // the key by its id ("keyids" init data, which ClearKey takes) before the media is appended.
   let licensed = false, encrypted = 0;
@@ -74,25 +84,24 @@ const done = arguments[arguments.length - 1];
     session.update(new TextEncoder().encode(license)).then(() => { licensed = true; resolve(); },
                                                            e => { errors.push(`update: ${e}`); resolve(); });
   }, { once: true }));
-  await session.generateRequest("keyids", new TextEncoder().encode(JSON.stringify({ kids: [kid] })));
-  await answered;
+  await step("generateRequest", session.generateRequest("keyids", new TextEncoder().encode(JSON.stringify({ kids: [kid] }))));
+  await step("the key request and its answer", answered);
   const source = new MediaSource();
   media.src = URL.createObjectURL(source);
-  const step = (what, promise) => Promise.race([promise, new Promise((_, no) => setTimeout(() => no(what), 8000))]);
   await step("sourceopen", new Promise(r => source.addEventListener("sourceopen", r, { once: true })));
   const buffer = source.addSourceBuffer(type);
-  buffer.appendBuffer(await (await fetch(url)).arrayBuffer());
+  buffer.appendBuffer(await step("the fixture", fetch(url).then(answer => answer.arrayBuffer())));
   await step("updateend", new Promise(r => buffer.addEventListener("updateend", r, { once: true })));
   source.endOfStream();
   // Not awaited: play() settles only once playback starts, which an unusable key would hold off for ever.
   media.play().catch(e => errors.push(`play: ${e}`));
   const started = Date.now();
-  while (Date.now() - started < 12000 && !media.ended && media.currentTime < 1.5 && !errors.length) {
+  while (Date.now() - started < wait * 1000 && !media.ended && media.currentTime < 1.5 && !errors.length) {
     await new Promise(r => setTimeout(r, 100));
   }
   const frames = kind === "video" ? media.getVideoPlaybackQuality().totalVideoFrames : null;
   return { licensed, encrypted, currentTime: media.currentTime, readyState: media.readyState, frames, errors,
-           keySystem: access.keySystem };
+           keySystem: access.keySystem, seconds: Math.round((Date.now() - began) / 100) / 10 };
 })().then(done, e => done({ error: String(e) }));
 """
 
@@ -157,7 +166,8 @@ class ProtectedMediaTest(unittest.TestCase):
             for kind, (name, mime) in STREAMS.items():
                 with self.subTest(kind=kind):
                     self.m.navigate(self.server.url(f"/page/eme-{kind}"))
-                    result = self.m.execute_async(PLAY, [self.server.url(f"/eme/{name}"), mime, kind, self.license, b64url(KID)])
+                    stream = [self.server.url(f"/eme/{name}"), mime, kind, self.license, b64url(KID), PLAY_WAIT]
+                    result = self.long_async(PLAY, stream, PLAY_LIMIT)
                     print(f"{kind}: {result}", file=sys.stderr)
                     self.assertNotIn("error", result, result)
                     self.assertEqual(result["errors"], [], result)
@@ -175,9 +185,13 @@ class ProtectedMediaTest(unittest.TestCase):
         try:
             name, mime = STREAMS["video"]
             self.m.navigate(self.server.url("/page/eme-wrong-key"))
-            result = self.m.execute_async(PLAY, [self.server.url(f"/eme/{name}"), mime, "video", wrong, b64url(KID)])
+            # The wait for playback is the short one: with a wrong key nothing plays, and it runs to its end.
+            result = self.long_async(PLAY, [self.server.url(f"/eme/{name}"), mime, "video", wrong, b64url(KID), 12], PLAY_LIMIT)
             print(f"wrong key: {result}", file=sys.stderr)
-            self.assertLess(result.get("currentTime", 0), 1.0, f"a stream played with a wrong key: {result}")
+            # The control must have got as far as playing: a step that failed or never ended plays nothing either.
+            self.assertNotIn("error", result, result)
+            self.assertTrue(result["licensed"], f"the wrong key was not even taken: {result}")
+            self.assertLess(result["currentTime"], 1.0, f"a stream played with a wrong key: {result}")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('media.eme.enabled');")
 
@@ -263,7 +277,8 @@ class ProtectedMediaTest(unittest.TestCase):
     )
     def test_04_with_drm_on_widevine_installs_and_a_public_test_stream_plays(self):
         """#222, item 2: DRM turned on as Settings does, the engine installs Widevine from Mozilla's list, and the
-        Shaka Player demo's Widevine stream ("Angel One", H.264 in fragmented MP4, Google's test licence server) plays."""
+        Shaka Player demo's Widevine stream ("Angel One", H.264 in fragmented MP4, Google's test licence server) plays
+        past its clear start with a licence, and stops there without one."""
         self.m.chrome("Services.prefs.setBoolPref('media.eme.enabled', true);")
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('media.eme.enabled');")
         self.m.set_context("chrome")
@@ -275,15 +290,26 @@ class ProtectedMediaTest(unittest.TestCase):
         self.assertNotIn("error", installed, installed)
         version = lambda: self.m.chrome("return Services.prefs.getStringPref('media.gmp-widevinecdm.version', '');")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: version(), 120), "Widevine was not installed")
+        codec = 'video/mp4; codecs="avc1.42c01e"'
+        # The control: the stream's first seconds are not encrypted (the packager's "clear lead"), so playing them
+        # proves nothing about Widevine. Without a licence the film plays that start and then waits for a key.
         self.m.navigate(self.server.url("/page/eme-widevine"))
-        result = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, 'video/mp4; codecs="avc1.42c01e"', WIDEVINE_LICENCE], 120)
+        without = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, codec, WIDEVINE_LICENCE, False, WIDEVINE_PAST_CLEAR], 120)
+        print(f"Widevine {version()}, no licence: {without}", file=sys.stderr)
+        self.assertNotIn("error", without, without)
+        self.assertFalse(without["licensed"])
+        self.assertTrue(without["waitedForKey"], f"the stream never waited for a key: is it encrypted? {without}")
+        self.assertLess(without["currentTime"], WIDEVINE_PAST_CLEAR, f"the stream played without a licence: {without}")
+
+        self.m.navigate(self.server.url("/page/eme-widevine"))
+        result = self.long_async(WIDEVINE_PLAY, [WIDEVINE_STREAM, codec, WIDEVINE_LICENCE, True, WIDEVINE_PAST_CLEAR], 180)
         print(f"Widevine {version()}: {result}", file=sys.stderr)
         self.assertNotIn("error", result, result)
         self.assertEqual(result["keySystem"], "com.widevine.alpha")
         self.assertEqual(result["errors"], [], result)
         self.assertTrue(result["licensed"], f"no licence reached the CDM: {result}")
-        self.assertGreaterEqual(result["currentTime"], 1.5, f"the stream did not play: {result}")
-        self.assertGreater(result["frames"], 0, result)
+        self.assertGreaterEqual(result["currentTime"], WIDEVINE_PAST_CLEAR, f"the encrypted part did not play: {result}")
+        self.assertGreater(result["frames"], without["frames"], result)
 
 
 # #222, item 2: Widevine from the engine's own list (what turning DRM on starts), installed now instead of at the
@@ -304,8 +330,10 @@ const done = arguments[arguments.length - 1];
 # fragmented MP4 (the CDM decodes it itself), its first part.
 WIDEVINE_STREAM = "https://storage.googleapis.com/shaka-demo-assets/angel-one-widevine/v-0144p-0100k-libx264.mp4"
 WIDEVINE_LICENCE = "https://cwip-shaka-proxy.appspot.com/no_auth"
+# Seconds of the film that must play: past its clear start (measured: without a licence it stops at 7.8 s).
+WIDEVINE_PAST_CLEAR = 12
 WIDEVINE_PLAY = """
-const [url, type, licence] = arguments;
+const [url, type, licence, answer, until] = arguments;
 const done = arguments[arguments.length - 1];
 (async () => {
   const media = document.createElement("video");
@@ -318,10 +346,13 @@ const done = arguments[arguments.length - 1];
   const keys = await access.createMediaKeys();
   await media.setMediaKeys(keys);
   let licensed = false;
+  let waitedForKey = false;
+  media.addEventListener("waitingforkey", () => { waitedForKey = true; });
   // The stream carries its key id: the engine says "encrypted", and the licence comes from the server.
   media.addEventListener("encrypted", event => {
     const session = keys.createSession();
     session.addEventListener("message", async message => {
+      if (!answer) return;  // the control: the CDM's request is never sent, so it gets no key
       let status = "no answer";
       try {
         const answer = await fetch(licence, { method: "POST", body: message.message });
@@ -342,11 +373,15 @@ const done = arguments[arguments.length - 1];
   buffer.appendBuffer(await (await fetch(url, { headers: { Range: "bytes=0-399999" } })).arrayBuffer());
   await new Promise(r => buffer.addEventListener("updateend", r, { once: true }));
   media.play().catch(e => errors.push(`play: ${e}`));
+  // Until it has played `until` seconds, or stopped moving for eight (waiting for a key), or 90 s.
   const started = Date.now();
-  while (Date.now() - started < 60000 && media.currentTime < 1.5 && !errors.length) {
+  let last = -1, moved = Date.now();
+  while (Date.now() - started < 90000 && media.currentTime < until && !errors.length) {
+    if (media.currentTime !== last) { last = media.currentTime; moved = Date.now(); }
+    else if (Date.now() - moved > 8000) break;
     await new Promise(r => setTimeout(r, 200));
   }
-  return { licensed, currentTime: media.currentTime, readyState: media.readyState,
+  return { licensed, waitedForKey, currentTime: media.currentTime, readyState: media.readyState,
            frames: media.getVideoPlaybackQuality().totalVideoFrames, errors, keySystem: access.keySystem };
 })().then(done, e => done({ error: String(e) }));
 """

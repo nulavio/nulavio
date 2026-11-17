@@ -585,7 +585,7 @@
       return { state, show, watch, act, bar };
     };
     // The profiles' own: the row being edited and its unsaved values, and the new profile being typed.
-    const profileBench = workbench({ editing: null, draft: null, original: null, fresh: { name: "", template: "", suggested: "" } }, profileList);
+    const profileBench = workbench({ editing: null, draft: null, original: null, fresh: { name: "", template: "", suggested: "", search: "" } }, profileList);
     const { state: view, show, watch: viewWatch, act } = profileBench;
     /** After the list is drawn again, the keyboard goes where the person's action left off (never lost to the page). */
     const focusWhenDrawn = selector => {
@@ -727,6 +727,7 @@
       items: [
         { id: "nulavio-profile-new-name", control: "moz-input-text" },
         { id: "nulavio-profile-new-template", control: "moz-select" },
+        { id: "nulavio-profile-new-search", control: "moz-select" },
         { id: "nulavio-profile-new-create", control: "moz-button" },
       ],
     });
@@ -947,6 +948,28 @@
         options: [choice("", msg("profilesTemplateNone")), ...options.templates.map(template => choice(template.id, msg(TEMPLATE_NAMES[template.id])))],
       }),
     });
+    // #151: the new profile's search, from the same list as Settings › Search, alphabetical; "" keeps Nulavio's default.
+    const searchChoices = source(() => shell.NulavioSearch.state().then(state => state.providers));
+    setting({
+      id: "nulavio-profile-new-search",
+      setup(emitChange, stops) {
+        viewWatch(emitChange, stops);
+        stops.push(searchChoices.listen(emitChange));
+        searchChoices.refresh();
+      },
+      get: () => view.fresh.search ?? "",
+      set(value) {
+        show({ fresh: { ...view.fresh, search: value } });
+      },
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("profilesSearch"), description: msg("profilesSearchNote") },
+        options: [
+          choice("", msg("profilesSearchDefault")),
+          ...(searchChoices.state.ready ? (searchChoices.state.value ?? []) : []).map(provider => choice(provider.key, provider.name)),
+        ],
+      }),
+    });
     setting({
       id: "nulavio-profile-new-name",
       setup: viewWatch,
@@ -964,10 +987,18 @@
       id: "nulavio-profile-new-create",
       async onUserClick(event) {
         event.preventDefault();
-        const { name, template } = view.fresh;
-        const created = await act(() => shell.NulavioProfiles.create({ name, ...(template ? { templateId: template } : {}) }), msg("profilesCreated"));
+        const { name, template, search: provider } = view.fresh;
+        const created = await act(
+          () =>
+            shell.NulavioProfiles.create({
+              name,
+              ...(template ? { templateId: template } : {}),
+              ...(provider ? { search: { provider } } : {}),
+            }),
+          msg("profilesCreated")
+        );
         if (created) {
-          show({ fresh: { name: "", template: "", suggested: "" } });
+          show({ fresh: { name: "", template: "", suggested: "", search: "" } });
         }
       },
       setup: viewWatch,
@@ -1423,7 +1454,9 @@
     // -- search: what Nulavio adds to the engine's own Search pane. Which engines may receive what the person
     // types (suggestions, engine by engine: NulavioSearch keeps that list and the engine's patch reads it), and
     // the engines Nulavio knows how to add. Default engine, aliases and removal are the engine's own controls. --
-    const search = source(() => shell.NulavioSearch.state());
+    // The sign-in state (#151) is read here, by the settings page, and is not part of state(): Shell pages that ask the
+    // search experiment for its state do not get anything read from cookies.
+    const search = source(async () => ({ ...(await shell.NulavioSearch.state()), accounts: shell.NulavioSearch.accounts() }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
     const searchSetup = (emitChange, stops) => {
@@ -1529,6 +1562,148 @@
         }
       },
     });
+    // -- #151: choose the profile's search provider in one step. Every engine the profile has and every provider
+    // Nulavio knows, by name in alphabetical order, none marked: "Usar" adds it when missing and makes it the default,
+    // for private windows too unless the box says otherwise, and sends typed text to it only when that box is on.
+    // A provider with accounts says whether this profile is signed in (the presence of its session cookie). --
+    const chooseBench = workbench({ privateToo: true, suggest: false }, search);
+    const chooseSetup = (emitChange, stops) => {
+      stops.push(search.listen(emitChange));
+      chooseBench.watch(emitChange, stops);
+    };
+    const choices = () => {
+      const engines = enginesNow();
+      const curated = search.state.value?.providers ?? [];
+      const ofProvider = new Map(engines.filter(engine => engine.provider && engine.provider !== "searxng").map(engine => [engine.provider, engine]));
+      const rows = curated.map(provider => ({
+        key: `provider-${provider.key}`,
+        name: provider.name,
+        provider: provider.key,
+        engine: ofProvider.get(provider.key) ?? null,
+        account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
+        suggests: provider.suggests,
+      }));
+      const curatedKeys = new Set(curated.map(provider => provider.key));
+      for (const engine of engines) {
+        if (!curatedKeys.has(engine.provider)) {
+          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest });
+        }
+      }
+      return rows.sort((a, b) => a.name.localeCompare(b.name));
+    };
+    const choiceWords = row => {
+      const words = [];
+      if (row.engine?.isDefault) {
+        words.push(msg(row.engine.isDefaultPrivate ? "chooseInUseBoth" : "chooseInUse"));
+      } else if (row.engine?.isDefaultPrivate) {
+        words.push(msg("chooseInUsePrivate"));
+      } else if (!row.engine) {
+        words.push(msg("chooseNotAdded"));
+      }
+      if (row.account) {
+        words.push(
+          row.account.signedIn === true
+            ? msg("chooseSignedIn", row.account.host)
+            : row.account.signedIn === false
+              ? msg("chooseSignedOut", row.account.host)
+              : msg("chooseSignedUnknown", row.account.host)
+        );
+      }
+      return words.join(" ");
+    };
+    setting({
+      id: "nulavio-search-choose",
+      setup(emitChange, stops) {
+        chooseSetup(emitChange, stops);
+        search.refresh();
+      },
+      visible: () => search.state.ready,
+      getControlConfig: config => ({
+        ...config,
+        options: choices().flatMap(row => stacked({
+          key: row.key,
+          control: "moz-box-item",
+          controlAttrs: { label: row.name, description: choiceWords(row), class: "nulavio-search-choice", "data-choice": row.key },
+          options: [
+            ...(row.account?.signedIn === false
+              ? [
+                  {
+                    key: `signin-${row.key}`,
+                    control: "moz-button",
+                    slot: "actions",
+                    controlAttrs: { label: msg("chooseSignIn"), "data-action": "signin", "data-choice": row.key },
+                  },
+                ]
+              : []),
+            {
+              key: `use-${row.key}`,
+              control: "moz-button",
+              slot: "actions",
+              disabled: chooseBench.state.busy,
+              controlAttrs: {
+                label: msg("chooseUse"),
+                "aria-label": msg("chooseUseNamed", row.name),
+                "data-action": "choose",
+                "data-choice": row.key,
+              },
+            },
+          ],
+        })),
+      }),
+      onUserClick(event) {
+        const button = event.target.closest?.("[data-action]");
+        const row = choices().find(each => each.key === button?.dataset.choice);
+        if (!row) {
+          return;
+        }
+        if (button.dataset.action === "signin" && row.account?.signIn) {
+          top().openTrustedLinkIn(row.account.signIn, "tab");
+          return;
+        }
+        if (button.dataset.action !== "choose") {
+          return;
+        }
+        const target = row.provider ? { provider: row.provider } : { id: row.engine.id };
+        // The box speaks for this provider only when it can receive typed text at all.
+        const suggest = row.suggests ? Boolean(chooseBench.state.suggest) : undefined;
+        // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
+        // chosen engine's own (an engine of the person's with a curated provider's name may send elsewhere).
+        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
+        const said = id => {
+          const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
+          return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
+        };
+        chooseBench.act(
+          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
+          said
+        );
+        // Consent is given for one provider at a time: the box is clear again for the next choice.
+        chooseBench.show({ suggest: false });
+      },
+    });
+    for (const [name, words] of [
+      ["privateToo", "choosePrivateToo"],
+      ["suggest", "chooseSuggest"],
+    ]) {
+      setting({
+        id: `nulavio-search-choose-${name}`,
+        setup: chooseSetup,
+        visible: () => search.state.ready,
+        get: () => Boolean(chooseBench.state[name]),
+        set(value) {
+          chooseBench.show({ [name]: Boolean(value) });
+        },
+        disabled: () => chooseBench.state.busy,
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(`${words}Label`), description: msg(`${words}Note`) },
+        }),
+      });
+    }
+    const chooseBars = [
+      chooseBench.bar("nulavio-search-choose-error", "error", () => chooseBench.state.error, () => Boolean(chooseBench.state.error)),
+      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said)),
+    ];
     // An instance of the person's own, or a site's own description: an address typed here, added by the module's rules.
     const addByAddress = (name, add, words) => {
       setting({
@@ -2499,6 +2674,17 @@
           { id: "nulavio-filter-trusted", control: "moz-box-button" },
         ],
       },
+      nulavioSearchChoose: {
+        l10nId: "nulavio-search-choose-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-search-choose-failed", search),
+          ...chooseBars,
+          { id: "nulavio-search-choose-privateToo", control: "moz-checkbox" },
+          { id: "nulavio-search-choose-suggest", control: "moz-checkbox" },
+          { id: "nulavio-search-choose", control: "moz-box-group" },
+        ],
+      },
       nulavioSearch: {
         l10nId: "nulavio-search-group",
         headingLevel: 2,
@@ -2621,7 +2807,10 @@
       // group, and the engines Nulavio adds after its list of engines.
       search: config => ({
         ...config,
-        groupIds: after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
+        groupIds: [
+          "nulavioSearchChoose",
+          ...after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
+        ],
       }),
       tabsBrowsing: config => ({
         ...config,

@@ -44,6 +44,11 @@ return {
   searxng: shown(el("nulavio-search-searxng-url")) ? el("nulavio-search-searxng-url").value : null,
   opensearch: shown(el("nulavio-search-opensearch-url")) ? el("nulavio-search-opensearch-url").value : null,
   said: bar("nulavio-search-said"), error: bar("nulavio-search-error"),
+  choices: rows("nulavio-search-choose", "nulavio-search-choice").map(row => ({ key: row.dataset.choice, name: row.label,
+    says: row.description, buttons: [...row.querySelectorAll("moz-button")].map(b => [b.dataset.action, b.label]) })),
+  privateToo: shown(el("nulavio-search-choose-privateToo")) ? el("nulavio-search-choose-privateToo").checked : null,
+  suggest: shown(el("nulavio-search-choose-suggest")) ? el("nulavio-search-choose-suggest").checked : null,
+  chose: bar("nulavio-search-choose-said"), choseError: bar("nulavio-search-choose-error"),
 };
 """
 )
@@ -173,6 +178,92 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertEqual(failed["error"], "Não foi possível ler essa descrição.")
         self.assertEqual(failed["opensearch"], "https://example.org/opensearch.xml")
         self.assertEqual(self.m.chrome("return window.__asked;"), ["https://example.org/opensearch.xml"])
+
+    def test_03_a_provider_is_chosen_in_one_step(self):
+        """#151: every engine and every provider Nulavio knows, by name in alphabetical order, none marked; "Usar"
+        makes one the profile's search, for private windows too unless that box is unticked; a provider with accounts
+        says whether the profile is signed in and offers to sign in."""
+        self.open()
+        now = self.seen(lambda n: n["choices"])
+        names = [row["name"] for row in now["choices"]]
+        self.assertEqual(names, sorted(names))
+        self.assertTrue({"Brave Search", "DuckDuckGo", "Ecosia", "Kagi", "Mojeek", "Qwant", "Startpage"} <= set(names), names)
+        self.assertEqual((now["privateToo"], now["suggest"]), (True, False))
+        kagi = next(row for row in now["choices"] if row["name"] == "Kagi")
+        self.assertEqual(
+            kagi["says"],
+            "Ainda não está neste perfil: entra quando você escolher."
+            " Precisa de conta. Este perfil não está conectado em kagi.com.",
+        )
+        self.assertEqual(kagi["buttons"], [["signin", "Entrar"], ["choose", "Usar"]])
+        in_use = [row["name"] for row in now["choices"] if row["says"].startswith("Em uso")]
+        self.assertEqual(len(in_use), 1, now["choices"])
+        # Mojeek for normal windows only: the box unticked, then "Usar".
+        self.m.chrome(CLICK, ["#nulavio-search-choose-privateToo"])
+        self.seen(lambda n: n["privateToo"] is False)
+        mojeek = next(row for row in now["choices"] if row["name"] == "Mojeek")
+        self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{mojeek["key"]}"]'])
+        # The message comes before the list is read again: wait for both.
+        done = self.seen(
+            lambda n: (
+                n["chose"]
+                and any(row["name"] == "Mojeek" and row["says"] == "Em uso nas janelas normais." for row in n["choices"])
+            )
+        )
+        self.assertEqual(done["chose"], "Mojeek é a pesquisa deste perfil nas janelas normais.")
+        self.assertEqual(next(row for row in done["choices"] if row["name"] == "Mojeek")["says"], "Em uso nas janelas normais.")
+        defaults = self.m.chrome(
+            S + "return S.list().then(list => [list.find(e => e.isDefault).name, list.find(e => e.isDefaultPrivate).name]);"
+        )
+        self.assertEqual(defaults[0], "Mojeek")
+        self.assertNotEqual(defaults[1], "Mojeek")
+        self.assertEqual(self.state()["optIn"], [], "choosing is not consent to send typed text")
+        # With the suggestions box ticked: the message names the host that now receives what is typed, and the box is
+        # clear again for the next choice (consent is for one provider at a time).
+        self.m.chrome(CLICK, ["#nulavio-search-choose-suggest"])
+        self.seen(lambda n: n["suggest"] is True)
+        brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
+        self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
+        told = self.seen(lambda n: (n["chose"] or "").startswith("Brave Search") and n["suggest"] is False)
+        self.assertEqual(
+            told["chose"],
+            "Brave Search é a pesquisa deste perfil nas janelas normais."
+            " Ligado: o que você digita é enviado a search.brave.com enquanto você digita.",
+        )
+        self.assertIs(told["suggest"], False)
+        self.assertEqual(len(self.state()["optIn"]), 1)
+
+    def run_async(self, body: str, *args):
+        """Privileged async JS in the window; returns its value, or the error's text."""
+        self.m.set_context("chrome")
+        try:
+            script = "const done = arguments[arguments.length - 1]; const args = Array.from(arguments).slice(0, -1);"
+            return self.m.execute_async(script + "(async () => {" + body + "})().then(done, e => done(String(e)));", list(args))
+        finally:
+            self.m.set_context("content")
+
+    def test_04_a_new_profile_starts_with_the_search_chosen_for_it(self):
+        """#151: a new profile can be created with its search, in a file its own Shell applies at its first start
+        (test_search 16); without a choice it gets none, and an unknown provider is refused before any profile is made."""
+        P = 'const P = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;'
+        create = (
+            P
+            + "await P.create({name: args[0], ...(args[1] ? {search: args[1]} : {})});"
+            + ("return (await P.list()).profiles.find(p => p.name === args[0]);")
+        )
+        pending = "return IOUtils.readJSON(PathUtils.join(args[0], 'nulavio-search-choice.json')).catch(e => e.name);"
+        work = self.run_async(create, "Trabalho", {"provider": "qwant"})
+        study = self.run_async(create, "Estudo", None)
+        self.assertIsInstance(work, dict, work)
+        self.assertIsInstance(study, dict, study)
+        self.assertEqual(self.run_async(pending, work["path"]), {"provider": "qwant", "privateToo": True})
+        mode = "return (await IOUtils.stat(PathUtils.join(args[0], 'nulavio-search-choice.json'))).permissions;"
+        self.assertEqual(self.run_async(mode, work["path"]), 0o600, "the choice file is the owner's only")
+        self.assertEqual(self.run_async(pending, study["path"]), "NotFoundError", "no choice: ADR 0002's default")
+        # A provider Nulavio does not offer is refused before any profile is made.
+        refused = self.run_async(P + "return P.create({name: 'Outro', search: {provider: 'nope'}}).catch(e => e.code);")
+        self.assertEqual(refused, "unknown-provider")
+        self.assertNotIn("Outro", [p["name"] for p in self.run_async(P + "return (await P.list()).profiles;")])
 
 
 if __name__ == "__main__":

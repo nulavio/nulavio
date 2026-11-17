@@ -111,6 +111,25 @@ jobs:
             --repository "$GH_REPOSITORY" --fingerprint 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 \
             --run-url "$RUN_URL" > "$RUNNER_TEMP/rehearsal/release-notes.md"
           cat "$RUNNER_TEMP/rehearsal/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Is the Rust networking reading attested for this build and its Rust compiler (a notice; signing requires it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Never a failure here: a rehearsal (publish: false) stops before signing, and this is where it says
+          # whether a release of this build could be signed. The claim names the Rust compiler this build used,
+          # which only the build knows, so the question cannot be asked before it (#472). A new engine pin starts
+          # the networking-check workflow by itself when it lands on main.
+          if ! python3 -I scripts/release/release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/networking-claim.json"; then
+            echo "::warning title=Rust networking reading::the claim for this build could not be written: the signing job will refuse this release"
+            exit 0
+          fi
+          if gh attestation verify "$RUNNER_TEMP/networking-claim.json" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main \
+              --deny-self-hosted-runners >/dev/null 2>&1; then
+            echo "The Rust networking reading for this build (pin, inputs and Rust compiler) is attested."
+          else
+            echo "::warning title=Rust networking reading::not attested for this build's pin, mozconfig, variant, patch stack and Rust compiler: run the networking-check workflow on main, or the signing job will refuse this release"
+          fi
       - name: Remove the Safe Browsing key
         if: always()
         run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
@@ -301,6 +320,21 @@ jobs:
               --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --source-ref refs/heads/main >/dev/null
             echo "provenance ok: ${file#"$RUNNER_TEMP"/}"
           done
+      - name: The Rust networking reading for this release was made and attested by networking-check.yml (#455)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Not the record in the repository, which is a statement (R79): the claim is written again here, from the
+          # manifest and its base commit, and GitHub must hold an attestation of exactly those bytes by that workflow
+          # on main. No escape for a record that says "accepted": an urgent release costs one more runner hour.
+          python3 -I scripts/release/release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/networking-claim.json"
+          if ! gh attestation verify "$RUNNER_TEMP/networking-claim.json" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main \
+              --deny-self-hosted-runners >/dev/null; then
+            echo "::error title=Rust networking reading::no attestation for this release's Firefox source, mozconfig, variant and patch stack: run the networking-check workflow on main, then run this job again"
+            exit 1
+          fi
+          echo "networking reading attested: $(sha256sum "$RUNNER_TEMP/networking-claim.json" | cut -d' ' -f1)"
       - name: Only the Flatpak bundle the check accepted goes into the release (#324)
         env:
           ACCEPTED: ${{ needs.flatpak-check.outputs.bundle-sha256 }}

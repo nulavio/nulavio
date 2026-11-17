@@ -493,11 +493,126 @@ class PrecheckTest(unittest.TestCase):
                 self.assertIn("not this build's passing record", done.stderr)
                 self.assertFalse((out / "precheck.json").exists())
 
-    def test_no_workflow_runs_a_precheck(self):
+    def test_no_workflow_runs_a_precheck_and_one_builds_the_variant_to_read_it(self):
+        # networking-check.yml builds the variant so that the reading is a workflow's and can be attested (#455).
+        # Nothing else may: a variant is never a release, and nothing that packages, signs or publishes builds one.
         for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
             text = workflow.read_text(encoding="utf-8")
             self.assertNotIn("--precheck", text, workflow.name)
-            self.assertNotIn("mozconfig.no-lto", text, workflow.name)
+            if workflow.name != "networking-check.yml":
+                self.assertNotIn("mozconfig.no-lto", text, workflow.name)
+
+
+class NetworkingAttestationTest(unittest.TestCase):
+    """#455: a release is signed only when a workflow, not a committed record, says the Rust code was read."""
+
+    @classmethod
+    def setUpClass(cls):
+        workflows = ROOT / ".github" / "workflows"
+        cls.check = (workflows / "networking-check.yml").read_text(encoding="utf-8")
+        cls.release = (workflows / "release.yml").read_text(encoding="utf-8")
+        body = cls.release.split("\njobs:\n", 1)[1]
+        cls.jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+        cls.verify = '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main'
+        # Only an attestation made on a GitHub-hosted runner counts: the attesting job, never the build machine.
+        cls.hosted = re.compile(re.escape(cls.verify) + r" \\\n +--deny-self-hosted-runners ")
+
+    def test_the_workflow_reads_its_own_build_and_attests_only_the_claim(self):
+        text = self.check
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA: mozconfig.no-lto", text)
+        self.assertIn("if: github.ref == 'refs/heads/main'", text)
+        self.assertRegex(
+            text,
+            r"(?m)^  push:\n    branches: \[main\]\n    paths:\n      - \"browser/build/\*\*\"\n      - \"browser/patches/\*\*\"",
+        )
+        steps = [text.index(part) for part in (
+            'scripts/build/build_nulavio.sh "$firefox"',
+            'scripts/build/networking_check.py "$firefox" --claim-out "$RUNNER_TEMP/claim/networking-claim.json"',
+            'scripts/build/networking_check.py "$firefox" --expected-claim \\\n',
+            '--compiler-from "$RUNNER_TEMP/claim/networking-claim.json" > "$RUNNER_TEMP/expected.json"',
+            'cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"',
+            "actions/attest-build-provenance@",
+            'gh attestation verify "$RUNNER_TEMP/expected.json"',
+        )]  # fmt: skip
+        self.assertEqual(steps, sorted(steps))
+        self.assertIn("subject-path: ${{ runner.temp }}/expected.json", text)  # bytes the attesting job made itself
+        self.assertIn('      - "scripts/build/**"', text)  # what makes the reading is in the claim, so it starts a run too
+        self.assertIn('      - ".github/workflows/networking-check.yml"', text)
+        self.assertIn('      - "ci/containers/fedora-build.Containerfile"', text)
+        # Every file whose digest is in the claim starts a run when it changes on main.
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import networking_check
+
+        watched = re.findall(r'(?m)^      - "([^"]+)"', text.split("\n  workflow_dispatch:", 1)[0])
+        for path in networking_check.READ_WITH:
+            self.assertTrue(any(path == w or (w.endswith("/**") and path.startswith(w[:-2])) for w in watched), path)
+        for path in (networking_check.MOZCONFIG, networking_check.VARIANT, networking_check.SERIES):
+            self.assertTrue(any(w.endswith("/**") and path.startswith(w[:-2]) for w in watched), path)
+        self.assertEqual(text.count("subject-path:"), 1)  # the claim, and nothing else
+        # The job that runs the build cannot sign; the job that signs builds nothing.
+        body = text.split("\njobs:\n", 1)[1]
+        jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+        self.assertEqual(sorted(jobs), ["attest", "read"])
+        self.assertNotIn("id-token", jobs["read"])
+        self.assertNotIn("attestations", jobs["read"])
+        self.assertIn("blacksmith-16vcpu-ubuntu-2404", jobs["read"])
+        self.assertIn("needs: read", jobs["attest"])
+        self.assertIn("runs-on: ubuntu-24.04", jobs["attest"])
+        for word in ("build_nulavio", "secrets.", "environment:", "podman"):
+            self.assertNotIn(word, jobs["attest"], word)
+        for name, job in jobs.items():
+            self.assertIn("if: github.ref == 'refs/heads/main'", job, name)
+        self.assertRegex(text, self.hosted)  # found here as the signing job will look for it
+        commands = "\n".join(line for line in text.split("\njobs:\n", 1)[1].splitlines() if not line.lstrip().startswith("#"))
+        self.assertNotIn("--write", commands)  # it changes nothing in the checkout
+        self.assertNotIn("networking-check.json", commands)  # nor reads the committed record
+        # Nothing a release could use leaves this workflow.
+        for word in (
+            "rehearse_release",
+            "make_rpm",
+            "make_deb",
+            "make_archive",
+            "publish_release",
+            "sign_repo",
+            "R2_",
+            "AWS_",
+            "manifest.json",
+        ):
+            self.assertNotIn(word, text, word)
+
+    def test_no_other_workflow_shares_the_signer_workflows_name(self):
+        # `gh attestation verify --signer-workflow` matches by prefix: another file whose name starts the same
+        # way could sign a claim the release would take.
+        names = [path.name for path in (ROOT / ".github" / "workflows").iterdir()]
+        self.assertEqual([name for name in names if name.startswith("networking-check")], ["networking-check.yml"])
+
+    def test_the_signing_job_requires_the_attestation_before_it_signs(self):
+        sign = self.jobs["sign"]
+        gate = sign.index(
+            'release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/networking-claim.json"'
+        )
+        verify = sign.index('gh attestation verify "$RUNNER_TEMP/networking-claim.json"')
+        role = sign.index("aws-actions/configure-aws-credentials@")
+        self.assertLess(gate, verify)
+        self.assertLess(verify, role)  # before the signing role is taken
+        step = sign[gate : sign.index("- name:", gate)]  # this step alone
+        self.assertRegex(step, self.hosted)
+        self.assertIn("exit 1", step)
+        self.assertNotIn("|| true", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("accepted", step.replace('says "accepted"', ""))  # no way round it for an accepted record
+
+    def test_the_build_job_only_gives_notice(self):
+        build = self.jobs["build"]
+        start = build.index("Is the Rust networking reading attested")
+        step = build[start : build.index("- name:", start + 10)]
+        # After the build: the claim names the Rust compiler the build used (#472), which nothing knows before it.
+        self.assertLess(build.index('scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"'), start)
+        self.assertIn('release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo .', step)
+        self.assertRegex(step, self.hosted)
+        self.assertIn("::warning", step)
+        self.assertNotIn("exit 1", step)  # a rehearsal is not stopped by it; the signing job is where it is required
+        self.assertNotIn("--expected-claim", build)  # nothing asks before the build, when the compiler is not known
 
     def test_the_prebuild_tool_only_ever_prechecks(self):
         tool = (RELEASE / "autobuild.py").read_text(encoding="utf-8")

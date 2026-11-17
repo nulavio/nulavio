@@ -52,10 +52,17 @@ defines = {   'ACCESSIBILITY': '1'}
 substs = {   'ACCESSIBILITY': '1',
     'OS_ARCH': 'Linux',
     'OS_TARGET': OS('GNU'),
+    'RUSTC': '/usr/bin/rustc',
+    'RUSTC_COMMIT': 'b940084d7eb6a299eb4bfeb8e34901bc051e7ac4',
+    'RUSTC_VERSION': '1.99.0',
     'RUST_LTO_CFLAGS': [],
     'RUST_LTO_ELIGIBLE': '1',%s
     'top_srcdir': '/src'}
 """
+
+
+# The compiler the fixture's config.status names.
+COMPILER = {"rustc_version": "1.99.0", "rustc_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"}
 
 
 def readelf_text(*imports: str, undefined: int = 1500, defined_at_zero: tuple[str, ...] = ()) -> str:
@@ -287,6 +294,9 @@ class MainTest(TreeCase):
         record = self.tmp / "networking-check.json"
         engine = self.tmp / "engine.json"
         engine.write_text(json.dumps(ENGINE))
+        for path in nc.READ_WITH:  # what makes the reading, where main() looks for it (ROOT is this directory here)
+            (self.tmp / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.tmp / path).write_text(f"# {path}\n")
         real_check = nc.check
         with (
             mock.patch.object(nc, "RECORD", record),
@@ -316,6 +326,104 @@ class MainTest(TreeCase):
         self.assertEqual((code, out), (1, ""))
         self.assertIn("FAILED: the Rust library imports recv", err)
         self.assertFalse((self.tmp / "networking-check.json").exists())
+
+    def test_the_claim_is_the_same_bytes_from_a_reading_and_from_the_checkout(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        code, _out, _err = self.main("--claim-out", str(claim_file))
+        self.assertEqual(code, 0)
+        from_reading = claim_file.read_bytes()
+        read_with = nc.repository_reader(self.tmp)  # the reader, the build script and the workflow main() saw
+        expected = nc.claim(VERSION, DIGEST, nc.repository_inputs(self.repo), read_with, COMPILER)
+        self.assertEqual(from_reading, expected)
+        self.assertTrue(from_reading.endswith(b"\n"))
+        statement = json.loads(from_reading)
+        self.assertEqual(
+            sorted(statement), ["built_with", "claim", "compiled_with", "firefox", "read_with", "result", "source_sha256"]
+        )
+        self.assertEqual(sorted(statement["read_with"]), sorted(nc.READ_WITH))
+        self.assertEqual(statement["compiled_with"], COMPILER)  # the compiler the build's own configuration names
+        self.assertEqual((statement["claim"], statement["result"]), ("nulavio-rust-networking-check/v2", "passed"))
+        # Nothing a second build of the same inputs would change: no date, no library digest, no counts.
+        for word in (b"checked", b"library_sha256", b"how", b"symbols"):
+            self.assertNotIn(word, from_reading)
+        # Any other release, source or input is another claim.
+        inputs = nc.repository_inputs(self.repo)
+        self.assertNotEqual(nc.claim("200.0", DIGEST, inputs, read_with, COMPILER), expected)
+        self.assertNotEqual(nc.claim(VERSION, "cd" * 32, inputs, read_with, COMPILER), expected)
+        self.assertNotEqual(nc.claim(VERSION, DIGEST, {**inputs, "patch_stack_sha256": "0" * 64}, read_with, COMPILER), expected)
+        # A reader, a build script or a workflow that changed is another claim: an older attestation does not fit.
+        for path in nc.READ_WITH:
+            self.assertNotEqual(nc.claim(VERSION, DIGEST, inputs, {**read_with, path: "0" * 64}, COMPILER), expected, path)
+        # Another Rust compiler is another claim (#472): the next version, or the same version from another commit.
+        for other in ({**COMPILER, "rustc_version": "1.99.1"}, {**COMPILER, "rustc_commit": "0" * 40}):
+            self.assertNotEqual(nc.claim(VERSION, DIGEST, inputs, read_with, other), expected, other)
+        # The record the reading prints or writes says nothing of the compiler: it belongs to a machine and a day.
+        self.assertNotIn("compiled_with", json.loads(self.main()[1]))
+
+    def test_the_expected_claim_takes_only_the_compiler_from_the_file_it_is_given(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 0)
+        made = claim_file.read_bytes()
+        # Without a build: everything from the checkout, the compiler from a claim or a manifest.
+        code, _out, err = self.main("--expected-claim")
+        self.assertEqual(code, 2)
+        self.assertIn("--compiler-from", err)
+        handed = self.tmp / "handed.json"
+        # A file that says more than the compiler: another release, another result. None of it is taken.
+        handed.write_text(json.dumps({"compiled_with": COMPILER, "firefox": "1.0", "result": "failed", "read_with": {}}))
+        out = io.BytesIO()
+        with (
+            mock.patch.object(nc, "ENGINE", self.tmp / "engine.json"),
+            mock.patch.object(nc, "ROOT", self.tmp),
+            mock.patch.object(nc, "repository_inputs", lambda _root: nc.inputs(lambda path: (self.repo / path).read_bytes())),
+            mock.patch.object(sys, "stdout", SimpleNamespace(buffer=out)),
+        ):
+            self.assertEqual(nc.main([VERSION, "--expected-claim", "--compiler-from", str(handed)]), 0)
+        self.assertEqual(out.getvalue(), made)
+        self.assertEqual(self.calls[1:], [])  # one reading, for --claim-out; none for the expected claim
+        # A compiler in a form rustc does not report is refused, whatever else the file says.
+        for bad in (
+            {"rustc_version": "1.99.0; rm -rf /", "rustc_commit": COMPILER["rustc_commit"]},
+            {"rustc_version": "1.99.0", "rustc_commit": "b940084"},
+            {"rustc_version": "1.99.0"},
+            {"rustc_version": 1.99, "rustc_commit": COMPILER["rustc_commit"]},
+            "rustc 1.99.0",
+            None,
+        ):
+            with self.subTest(compiled_with=bad):
+                handed.write_text(json.dumps({"compiled_with": bad}))
+                code, out_text, err = self.main("--expected-claim", "--compiler-from", str(handed))
+                self.assertEqual((code, out_text), (2, ""))
+                self.assertIn("Rust compiler", err)
+        handed.write_text("not json")
+        self.assertEqual(self.main("--expected-claim", "--compiler-from", str(handed))[0], 2)
+
+    def test_a_build_that_does_not_name_its_compiler_is_not_read(self):
+        # The engine's configure writes both values; a tree without them is not a build this can vouch for.
+        for line in ("    'RUSTC_VERSION': '1.99.0',\n", "    'RUSTC_COMMIT': 'b940084d7eb6a299eb4bfeb8e34901bc051e7ac4',\n"):
+            with self.subTest(missing=line.strip()):
+                self.config.write_text((CONFIG % "").replace(line, ""))
+                code, out, err = self.main("--write")
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("Rust compiler", err)
+                self.assertFalse((self.tmp / "networking-check.json").exists())
+        # A distribution's rustc that reports no commit: the engine's configure writes "unknown", and that is kept.
+        self.config.write_text((CONFIG % "").replace("b940084d7eb6a299eb4bfeb8e34901bc051e7ac4", "unknown"))
+        claim_file = self.tmp / "out" / "claim.json"
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 0)
+        self.assertEqual(
+            json.loads(claim_file.read_text())["compiled_with"], {"rustc_version": "1.99.0", "rustc_commit": "unknown"}
+        )
+
+    def test_a_reading_that_fails_or_cannot_be_made_writes_no_claim(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        self.output = readelf_text("recv")
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 1)
+        self.assertFalse(claim_file.exists())
+        self.output = readelf_text()
+        self.library.unlink()
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 2)
+        self.assertFalse(claim_file.exists())
 
     def test_inputs_prints_what_an_accepted_record_must_carry_without_a_build(self):
         out = io.StringIO()

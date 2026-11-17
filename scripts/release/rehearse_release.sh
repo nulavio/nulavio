@@ -14,7 +14,7 @@
 # the release build does with a new engine version before the pin moves. It builds the
 # mozconfig.no-lto variant, reads that build's Rust library for the engine's networking
 # check (scripts/build/networking_check.py, which writes browser/build/networking-check.json:
-# a cross-language release build, which #371 proposes, cannot be read for it), then runs the
+# the release build is cross-language since #364 and cannot be read for it), then runs the
 # unit and the integration tests. It makes no package and no manifest.json, only
 # <out>/precheck.json, so nothing it leaves can be signed or published. autobuild.py runs it.
 set -euo pipefail
@@ -183,6 +183,17 @@ if not re.fullmatch(r"[0-9a-f]{64}", built):
 if built != digest.group(1):
     sys.exit(f"manifest: {tree} was extracted from {built}, Mozilla signed {digest.group(1)}: refusing")
 
+# Which Rust compiler built this release (#472), from the build's own configuration, read as text. The
+# networking reading's claim names the compiler of the build that was read; signing asks for an attestation
+# of the claim with this one in it (release_manifest.py networking-claim).
+sys.path.insert(0, str(Path(repo) / "scripts" / "build"))
+import networking_check
+
+try:
+    compiled_with = networking_check.compiler(networking_check.substs(tree / "obj-nulavio" / "config.status"))
+except networking_check.CannotCheck as error:
+    sys.exit(f"manifest: which Rust compiler built this release cannot be said ({error}): refusing")
+
 
 def sha256(path):
     hashed = hashlib.sha256()
@@ -211,6 +222,7 @@ manifest = {
     "firefox": version,
     "source_sha256": built,
     "signing_subkey": subkey.group(1),
+    "compiled_with": compiled_with,
     "engine_json": {"firefox": engine.get("firefox"), "source_sha256": engine.get("source_sha256")},
     "nulavio_base_commit": git("rev-parse", "HEAD").decode().strip(),
     "worktree_diff_sha256": hashlib.sha256(git("diff", "HEAD", "--binary")).hexdigest(),

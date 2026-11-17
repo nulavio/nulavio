@@ -66,8 +66,8 @@ What the numbers say:
 - **0.5 against 0.4:** no change told apart from noise. Every interval holds 0.
 - **Nulavio against Firefox:** startup is about 47 % slower, memory with 10 tabs about 29 % higher, and Speedometer about a third lower.
   - The two diagnoses below point at the build: Mozilla's builds use PGO and full cross-language LTO, and Nulavio's uses thin LTO for Rust only.
-  - The decision is open in #364.
-  - Until it is taken, NFR-02 ("comparable to the engine") is not met.
+  - The maintainer decided for C++ LTO first, then PGO (#364, 2026-11-15). The first part is measured [below](#cross-language-lto-2026-11-17): it closes little of the distance.
+  - NFR-02 ("comparable to the engine") is not met.
 
 Two diagnoses, both Speedometer with 3 iterations:
 
@@ -77,3 +77,28 @@ Two diagnoses, both Speedometer with 3 iterations:
 | Firefox 160.0 with Nulavio's preferences (`baseline.js`: ETP Strict, the fingerprinting overrides) | 18.6 |
 | Nulavio 160.0-0.5 | 12.1 |
 | Nulavio 160.0-0.5 with uBlock Origin turned off | 12.9 |
+
+## Cross-language LTO, 2026-11-17
+
+The release build is linked with link-time optimisation across C++ and Rust since #364 (`--enable-lto=cross`, thin). This is its first build, measured before any release carries it: the archive of the rehearsal of `main` at 43a41674 (`release.yml` with `publish: false`, run 44025025108), against 160.0-0.6 from its GitHub release (signature and SHA-256 checked), which has no C++ LTO, and Mozilla's Firefox 160.0.
+
+- Machine: the same as the baseline's. 5 runs a side, Speedometer included.
+- Raw results: [evidence](../research/evidence/perf-cross-lto-2026-11-17/).
+
+| measure | with cross-language LTO | 160.0-0.6 | against 0.6 (95 % interval) | Firefox 160.0 |
+|---|---|---|---|---|
+| startup, first start | 950 ms | 997 ms | −4.7 % (−15.7 … −2.4) | 685 ms |
+| startup, second start | 500 ms | 502 ms | −0.4 % (−7.9 … +8.8) | 347 ms |
+| memory, 1 tab (PSS) | 544 MiB | 549 MiB | −1.0 % (−1.1 … +8.4) | 420 MiB |
+| memory, 10 tabs (PSS) | 593 MiB | 599 MiB | −0.9 % (−1.0 … +7.7) | 446 MiB |
+| processes, 10 tabs | 11 | 11 | | 11 |
+| Speedometer 3.1 | 13.1 | 12.7 | +3.3 % (+2.0 … +4.5) | 19.1 |
+
+What the numbers say:
+
+- **It is faster, by little.** Speedometer gains 3.3 % and the first start is 4.7 % shorter; both intervals exclude 0. The second start and memory do not move. `libxul.so` is 2.7 % smaller (187.0 MB against 192.2 MB).
+- **The distance to Firefox is almost all still there:** the first start is 39 % slower (it was 46 % for 0.6 in this run), Speedometer 32 % lower (34 %), memory with 10 tabs 33 % higher (34 %). NFR-02 is still not met.
+- **So the missing C++ LTO was a small part of the difference.** The baseline's guess named two things Mozilla's builds have and Nulavio's did not; this one accounts for about two points of Speedometer's 34. What is left has not been diagnosed. Profile-guided optimisation is the other thing named, and the next to try (#364); that it explains the rest is a guess until a build with it is measured.
+- **Nulavio's LTO is not Mozilla's.** Both are cross-language; Mozilla's Linux x86_64 release builds are full LTO with PGO, and Nulavio's is thin without PGO. The engine's configure chooses: `--enable-lto=cross` alone becomes full only in a PGO build in Mozilla's automation, where its comment says the pair is what pays on Speedometer (`build/moz.configure/lto-pgo.configure`). Full LTO without PGO was not tried here; it needs more memory at the link than thin.
+- **What it cost:** the build takes 20 min 26 s on the build machine where it took 17 min 49 s, with the same room in memory; and the engine's own networking check no longer runs in the build that ships, with Nulavio's reading and its attestation in its place ([build](build.md#the-networking-check-on-rust-code), [R79](../security/residual-risks.md)).
+- Not measured here: frame time, JetStream and MotionMark.

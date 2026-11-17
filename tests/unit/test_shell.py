@@ -282,14 +282,17 @@ class SearchProvidersTest(unittest.TestCase):
 
     def setUp(self):
         self.text = module_text("NulavioSearch.sys.mjs")
-        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export class SearchSettingsError")]
+        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export const ACCOUNTS")]
         self.providers = {
             key: dict(re.findall(r'(\w+): ("[^"]*"|null|true|false)', body))
             for key, body in re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S)
         }
 
     def test_curated_providers(self):
-        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi"})
+        # The first-run three, then the ones offered on request (#151 added Ecosia, Qwant and Startpage, checked
+        # 2026-11-16 in docs/research/search-providers.md).
+        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi", "ecosia", "qwant", "startpage"})
+        self.assertEqual({key for key, p in self.providers.items() if p["firstRun"] == "true"}, {"duckduckgo", "brave", "mojeek"})
         for key, p in self.providers.items():
             with self.subTest(provider=key):
                 self.assertRegex(p["search"], r'^"https://[a-z0-9.-]+/[^"]*\{searchTerms\}')
@@ -306,6 +309,29 @@ class SearchProvidersTest(unittest.TestCase):
 
     def test_no_nulavio_endpoint(self):
         self.assertIsNone(re.search(r"nulavio\.net|nulavio\.(com|org|io)", self.text), "a Nulavio endpoint")
+
+    def test_a_new_profiles_search_choice_is_applied_at_its_first_start_only(self):
+        """#151 (and #453's decision): the choice file is read only at a profile's first start; later it is removed
+        unread, so a file left in a profile that has run cannot change its search."""
+        start = self.text[self.text.index("  startup() {") : self.text.index("  /** A choice file in a profile")]
+        self.assertIn("const firstStart = Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION;", start)
+        self.assertLess(start.index("const firstStart"), start.index("await this.migrate()"), "read before the migration")
+        self.assertRegex(
+            start, r"if \(firstStart\) \{\s*await this\.applyPending\(\);\s*\} else \{\s*await this\.#dropPending\(\);"
+        )
+        for name in ("carryable", "carrySearch", "nulavio-search-carry"):
+            self.assertNotIn(name, self.text, "taking a search to other profiles was left out (#453)")
+
+    def test_a_sign_in_is_read_from_a_cookies_name_never_its_value(self):
+        """#151: providers with accounts name their session cookie; the module reads only whether it is there."""
+        block = self.text[self.text.index("export const ACCOUNTS") : self.text.index("export class SearchSettingsError")]
+        accounts = dict(re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S))
+        self.assertEqual(set(accounts), {"kagi"})
+        self.assertIn('cookie: "kagi_session"', accounts["kagi"])
+        self.assertIn('signIn: "https://kagi.com/signin"', accounts["kagi"])
+        body = self.text[self.text.index("  accounts() {") : self.text.index("  async choose(")]
+        self.assertIn("cookie.name === account.cookie", body)
+        self.assertNotIn(".value", body, "a cookie's value is read")
 
     def test_baseline_turns_remote_suggestions_and_trending_off(self):
         baseline = (ROOT / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8")

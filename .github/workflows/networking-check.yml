@@ -1,0 +1,144 @@
+name: networking-check
+
+# The engine's Rust networking check, made by a workflow and attested (#455). The release
+# build is cross-language (#364) and skips the engine's own check that its Rust library
+# imports no networking function (recv, send, the resolver families: its guard against Rust
+# code that talks to the network around the engine's own stack, and so around a proxy).
+# Nulavio makes that reading on a build that can be read, the mozconfig.no-lto variant
+# (scripts/build/networking_check.py, docs/architecture/build.md).
+#
+# This workflow builds that variant from main, reads its Rust library, writes the claim
+# "this Firefox release, built with this mozconfig, variant, patch stack and Rust compiler,
+# passed" and attests it. release.yml's signing job writes the same claim from the release's manifest and
+# base commit and requires an attestation of exactly those bytes by this workflow on main:
+# no release is signed on the strength of the record in the repository alone, which is a
+# statement by whoever wrote it (residual risk R79, threat model S22).
+#
+# It runs when what the claim is about changes on main (the build configuration, the pin,
+# the patch stack, and what makes the reading: the reader, the build script, this file), and
+# by hand. Cost: a build on the 16-processor Blacksmith runner, about
+# US$1 to US$3 a run (20 minutes with the runner's cache warm, an hour without).
+#
+# It is the only workflow that builds the variant, and it makes nothing a release could use:
+# no package, no manifest, no signing, no upload. Only the claim leaves the build job, which
+# holds the `build` environment for the Google Safe Browsing key, as every engine build does,
+# and no token that can sign. A second job, which builds nothing, writes the claim again from
+# its own checkout, requires the two to be the same bytes, and attests. Both run from main only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "browser/build/**"
+      - "browser/patches/**"
+      - "scripts/build/**" # the reader and the build script: their digests are in the claim
+      - "ci/containers/fedora-build.Containerfile" # the build container, which installs the Rust toolchain
+      - ".github/workflows/networking-check.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: networking-check # its own group: a release is never queued behind it
+  cancel-in-progress: false
+
+jobs:
+  read:
+    name: build the variant and read the Rust library (Blacksmith)
+    if: github.ref == 'refs/heads/main'
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    environment: build
+    timeout-minutes: 300
+    permissions:
+      contents: read # nothing more: the job that runs the build cannot sign or store an attestation
+    env:
+      NULAVIO_BUILD_PROFILE: runner
+      NULAVIO_MOZCONFIG_EXTRA: mozconfig.no-lto
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Google Safe Browsing key (the build is otherwise the release configuration)
+        env:
+          KEY: ${{ secrets.GOOGLE_SAFEBROWSING_API_KEY }}
+        run: |
+          [ -n "$KEY" ] || { echo "::error::the build environment has no GOOGLE_SAFEBROWSING_API_KEY"; exit 1; }
+          umask 077
+          mkdir -p "$HOME/.config/nulavio-build"
+          printf '%s' "$KEY" > "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Build the variant whose Rust library can be read
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          scripts/build/build_nulavio.sh "$firefox"
+      - name: Remove the Safe Browsing key
+        if: always()
+        run: rm -f "$HOME/.config/nulavio-build/google-safebrowsing.key"
+      - name: Read the Rust library and write the claim (from this build, never from the record in the repository)
+        run: |
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          mkdir -p "$RUNNER_TEMP/claim"
+          # No --write: this job changes nothing in the checkout. The reading refuses a tree that is not the pinned
+          # release, a mozconfig that is not this commit's, a patch stack that is not applied, and an empty reading.
+          python3 -I scripts/build/networking_check.py "$firefox" --claim-out "$RUNNER_TEMP/claim/networking-claim.json" \
+            > "$RUNNER_TEMP/claim/reading.json"
+          {
+            echo "### The Rust networking reading passed"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/claim/reading.json"
+            echo '```'
+            echo
+            echo "Claim (sha256 $(sha256sum "$RUNNER_TEMP/claim/networking-claim.json" | cut -d' ' -f1)):"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/claim/networking-claim.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: networking-claim
+          path: ${{ runner.temp }}/claim/
+          if-no-files-found: error
+          retention-days: 30
+
+  attest:
+    name: attest the claim (GitHub-hosted, no build)
+    needs: read
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # signs the attestation of the claim (Sigstore)
+      attestations: write # stores it with the repository, where release.yml's signing job looks for it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: networking-claim
+          path: ${{ runner.temp }}/claim
+      - name: The claim the reading made is the one this commit needs (the same bytes, or nothing is attested)
+        run: |
+          # Written here from this job's own checkout. What the build job handed over is only compared with it:
+          # this job attests bytes it made itself, and the build job's word is that the reading passed and which
+          # Rust compiler its build used (#472): that one value is taken from its claim, in a checked form, since
+          # only a build knows it.
+          firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
+          python3 -I scripts/build/networking_check.py "$firefox" --expected-claim \
+            --compiler-from "$RUNNER_TEMP/claim/networking-claim.json" > "$RUNNER_TEMP/expected.json"
+          cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/expected.json
+      - name: The attestation is found the way the signing job will look for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The same command as release.yml's signing job, on the claim this commit needs. Run here so that the
+          # first time it runs is not during a release (a rehearsal with publish: false never reaches signing).
+          gh attestation verify "$RUNNER_TEMP/expected.json" --repo "$GITHUB_REPOSITORY" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main \
+            --deny-self-hosted-runners >/dev/null
+          echo "attested: a release of this commit's pin and inputs can be signed"
