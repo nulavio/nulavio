@@ -1,0 +1,12 @@
+# The build without cross-language link-time optimisation, appended to mozconfig by
+# build_nulavio.sh when NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto. For a machine that
+# cannot fit the release build's link (the build laptop is capped at 16 GiB and 2
+# processors) and for trying a change to the engine quickly. Never packaged or
+# published (rehearse_release.sh refuses a variant): it is slower than a release.
+# It is the build as it was before #364: no C++ LTO, and thin Rust LTO in place of
+# the release default's fat pass over gkrust, which needed more than 17 GiB
+# (docs/research/evidence/release-rehearsal-2026-11-04.md). The build system appends
+# CARGO_RUSTCFLAGS after its own -Clto and rustc keeps the last value; only "export"
+# lines reach the makefiles that run Cargo.
+ac_add_options --disable-lto
+mk_add_options "export CARGO_RUSTCFLAGS=-Clto=thin"
