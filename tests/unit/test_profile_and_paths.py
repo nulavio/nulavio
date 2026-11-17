@@ -520,6 +520,19 @@ class OnePasswordDoctorTest(unittest.TestCase):
         self.assertEqual(check.status, "ok")
         self.assertEqual(self.allowed.read_text(encoding="utf-8"), "librewolf\nnulavio\n")
 
+    def test_a_list_without_a_final_line_break_and_one_that_is_not_utf8(self):
+        """CodeRabbit on #478: the command keeps the names apart; a file that is not UTF-8 is a warning, not a crash."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`printf '\\n%s\\n' nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_bytes(b"librewolf\n\xff\n")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "warn")
+        self.assertIn("cannot read", check.detail)
+
     def test_an_engine_the_user_can_replace_gets_no_command(self):
         """Review of #478: the line trusts a name; it is not offered for a tarball or a home-folder engine."""
         self.app.parent.mkdir(parents=True)

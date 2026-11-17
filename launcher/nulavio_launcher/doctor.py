@@ -297,11 +297,12 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
     if name in ONEPASSWORD_KNOWN:
         return [Check("passwords", "1Password desktop app", "ok", f"{app}; it knows the engine ({name}) by itself")]
     try:
-        allowed = {line.strip() for line in ONEPASSWORD_ALLOWED.read_text(encoding="utf-8").splitlines()}
+        listed = ONEPASSWORD_ALLOWED.read_text(encoding="utf-8")
     except FileNotFoundError:
-        allowed = set()
-    except OSError as exc:
+        listed = ""
+    except (OSError, UnicodeDecodeError) as exc:
         return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
+    allowed = {line.strip() for line in listed.splitlines()}
     root_only = _root_owned(Path(engine_path))
     if name in allowed:
         if not root_only:
@@ -328,7 +329,9 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
             )
         ]
     allowed_file = shlex.quote(str(ONEPASSWORD_ALLOWED))
-    command = f"echo {shlex.quote(name)} | sudo tee -a {allowed_file}"
+    # A file whose last line has no line break would join the two names: one is put before ours then.
+    command = f"printf '\\n%s\\n' {shlex.quote(name)}" if listed and not listed.endswith("\n") else f"echo {shlex.quote(name)}"
+    command = f"{command} | sudo tee -a {allowed_file}"
     if not ONEPASSWORD_ALLOWED.parent.is_dir():
         command = f"sudo install -d -m 0755 {shlex.quote(str(ONEPASSWORD_ALLOWED.parent))} && {command}"
     return [
