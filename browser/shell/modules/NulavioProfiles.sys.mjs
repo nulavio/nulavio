@@ -18,6 +18,9 @@ ChromeUtils.defineESModuleGetters(lazy, {
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
+  PENDING_FILE: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
+  validatePending: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
+  isLink: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
@@ -92,6 +95,24 @@ export const SENSITIVE_PREFS = Object.freeze({
 function userJs(prefs, title) {
   const lines = Object.entries(prefs).map(([k, v]) => `user_pref(${JSON.stringify(k)}, ${JSON.stringify(v)});`);
   return `// ${title}\n// Written by Nulavio when this profile was created. Deleting this file turns these settings off.\n${lines.join("\n")}\n`;
+}
+
+/** #151: a new profile's search choice, written into its folder: owner-only, atomically, never through a link. */
+async function writeSearchChoice(folder, choice) {
+  const path = PathUtils.join(folder, lazy.PENDING_FILE);
+  if (lazy.isLink(path)) {
+    fail("unsafe-file");
+  }
+  // A temporary file of a random name, created new (never an existing file or link), owner-only before it is
+  // renamed into place; and the result checked before its mode is set again.
+  const tmp = `${path}.${Services.uuid.generateUUID().toString().slice(1, 9)}.tmp`;
+  await IOUtils.writeJSON(tmp, choice, { mode: "create" });
+  await IOUtils.setPermissions(tmp, 0o600);
+  await IOUtils.move(tmp, path);
+  if (lazy.isLink(path)) {
+    fail("unsafe-file");
+  }
+  await IOUtils.setPermissions(path, 0o600);
 }
 
 export class ProfilesError extends Error {
@@ -776,12 +797,14 @@ class NulavioProfilesClass {
    * Create a profile (not launched). `name` is the template's name in the
    * user's language, as shown in the UI.
    */
-  async create({ name, avatar, color, templateId = null } = {}) {
+  async create({ name, avatar, color, templateId = null, search = null } = {}) {
     this.#requireAvailable();
     const template = templateId === null ? null : TEMPLATES.find(t => t.id === templateId);
     if (templateId !== null && !template) {
       fail("unknown-template");
     }
+    // #151: the new profile's search, applied at its first start (NulavioSearch's PENDING_FILE); none keeps ADR 0002's.
+    const searchChoice = search === null ? null : lazy.validatePending(search);
     name = normalizeProfileName(name);
     avatar = checkAvatar(avatar ?? template?.avatar ?? AVATARS[0]);
     color = checkColor(color ?? template?.color ?? COLORS[0]);
@@ -801,6 +824,9 @@ class NulavioProfilesClass {
     if (template?.id === "sensitive") {
       // Before its first start, so the settings apply from the first page.
       await IOUtils.writeUTF8(PathUtils.join(profile.path, "user.js"), userJs(SENSITIVE_PREFS, "Nulavio: sensitive sites profile"));
+    }
+    if (searchChoice) {
+      await writeSearchChoice(profile.path, searchChoice);
     }
     await profile.setNameAsync(name);
     await profile.setAvatar(avatar);

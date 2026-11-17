@@ -191,6 +191,9 @@ nulavio-confirmed-group =
 
 ## Pesquisa
 
+nulavio-search-choose-group =
+    .label = Escolher o provedor de pesquisa deste perfil
+    .description = Um clique em "Usar" faz dele a pesquisa deste perfil: entra na lista se faltar e vira o padrão. A ordem é alfabética e nenhum vem marcado; o Nulavio não tem parceria com nenhum. Provedores com conta dizem se este perfil está conectado. Um perfil temporário esquece o login quando fecha.
 nulavio-search-group =
     .label = Sugestões: quem recebe o que você digita
     .description = Com as sugestões ligadas, o que você digita na barra de endereço vai ao mecanismo antes de você pesquisar. No Nulavio, só os mecanismos ligados aqui recebem.
