@@ -91,6 +91,8 @@ Change the version, URL and SHA-256 in `scripts/security/fetch_tools.sh` togethe
 
 The `asan` workflow (`.github/workflows/asan.yml`) builds the pinned Firefox with Nulavio's patches and AddressSanitizer (`browser/build/mozconfig.asan`, appended through `NULAVIO_MOZCONFIG_EXTRA`) on a Blacksmith runner, monthly and by hand (after an engine update), and runs the whole integration suite against it. AddressSanitizer stops the process at the first memory error in C or C++ (out-of-bounds access, use after free, double free) and writes a report; the job fails on any report or failing test and puts the first lines of each report in the summary. Leak detection is off, as in Mozilla's own ASan builds.
 
+The engine builds without its sandbox under AddressSanitizer on Linux (its configure's default: LeakSanitizer conflicts with it), so the integration test that checks the content processes' sandbox (`test_engine_slice` 04) is skipped in that run, and only there; every other integration run, the release's included, checks it.
+
 When it fails with a report: download the `asan-reports` artifact, find the first frame in Nulavio's code (patches 0006 and 0010 are the C++ Nulavio adds) or in Gecko. A frame in a Nulavio patch is our bug: fix it, with a test. One only in Gecko goes to Mozilla privately (Bugzilla, security group); record it in [residual risks](residual-risks.md) until a Firefox release fixes it. The variant is never packaged: `rehearse_release.sh` refuses to run with `NULAVIO_MOZCONFIG_EXTRA` set.
 
 ## Fuzzing
