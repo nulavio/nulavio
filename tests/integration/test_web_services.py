@@ -117,16 +117,23 @@ class WebServicesTest(unittest.TestCase):
     def error(self, body: str, *args):
         return self.sv(body, *args).get("error")
 
-    def open_menu_on_text(self, path: str = "/service-links") -> list[dict]:
+    def open_menu_on_text(self, path: str = "/service-links", expect: str | None = None) -> list[dict]:
+        """The menu on the selected text. With `expect`, the item with that label: the background page draws its
+        items a moment after the settings change (one drawing for several changes), so a menu opened before that is
+        closed and opened again, a few times."""
         self.m.navigate(self.server.url(path))
         self.m.execute(
             "const p = document.getElementById('text'); const r = document.createRange(); r.selectNodeContents(p);"
             "getSelection().removeAllRanges(); getSelection().addRange(r);"
         )
-        self.m.context_click("#text")
-        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
         self.addCleanup(self.m.chrome, CLOSE_MENU)
-        harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
+        for _ in range(5):
+            self.m.context_click("#text")
+            self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+            harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
+            if expect is None or harness.wait_until(lambda: any(i["label"] == expect for i in self.m.chrome(MENU) or []), 2):
+                break
+            self.m.chrome(CLOSE_MENU)
         return self.m.chrome(MENU)
 
     def open_menu_on_page(self, path: str = "/service-links") -> list[dict]:
@@ -280,7 +287,7 @@ class WebServicesTest(unittest.TestCase):
         self.m.chrome(GUARD_START, [list(WATCHED)])
         self.addCleanup(self.m.chrome, GUARD_STOP)
         tabs = self.m.chrome("return gBrowser.tabs.length;")
-        items = self.open_menu_on_text()
+        items = self.open_menu_on_text(expect="Traduzir seleção com DeepL")
         by_label = {item["label"]: item for item in items}
         self.assertIn("Traduzir seleção com DeepL", by_label, items)
         self.assertTrue(
@@ -309,13 +316,32 @@ class WebServicesTest(unittest.TestCase):
         google = [url for url in self.m.chrome(GUARD_SEEN) if urlsplit(url).hostname == "translate.google.com"]
         self.assertEqual(google, [], "the page went to a service without a click")
 
-    def test_06_private_windows_offer_them_only_when_allowed(self):
-        self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
+    def menu_until(self, wanted, tries: int = 5) -> list[dict]:
+        """Open the menu on the selected text until what it shows satisfies `wanted` (the background page draws again a
+        moment after a setting changes), and return what it showed last."""
+        for _ in range(tries):
+            self.m.context_click("#text")
+            self.assertTrue(harness.wait_until(self.m.menu_open, 10))
+            if harness.wait_until(lambda: wanted(self.m.chrome(MENU) or []), 2):
+                return self.m.chrome(MENU)
+            self.m.chrome(CLOSE_MENU)
+        return self.m.chrome(MENU) or []
+
+    def private_window(self) -> list[str]:
+        """A private window, Marionette switched to it; returns the handles before it."""
         handles = self.m.window_handles()
         self.m.chrome("OpenBrowserWindow({private: true});")
         self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
-        private = next(h for h in self.m.window_handles() if h not in handles)
-        self.m.switch_to(private)
+        self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
+        return handles
+
+    def test_06_private_windows_offer_them_only_when_allowed(self):
+        self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
+        label = "Traduzir seleção com DeepL"
+        # Drawn first, as a normal window shows: what follows is about private windows, not about a late drawing.
+        self.assertIn(label, [i["label"] for i in self.open_menu_on_text(expect=label)])
+        self.m.chrome(CLOSE_MENU)
+        handles = self.private_window()
         self.addCleanup(self.m.switch_to, handles[0])
         self.addCleanup(self.m.chrome, "window.close();")
         self.open_menu_on_text()
@@ -325,25 +351,24 @@ class WebServicesTest(unittest.TestCase):
         )
         self.m.chrome(CLOSE_MENU)
         self.ok("return SV.NulavioServices.setPrivateToo(true);")
-        self.m.context_click("#text")
-        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
-        self.assertTrue(harness.wait_until(lambda: any(i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or []), 5))
+        shown = self.menu_until(lambda items: any(i["label"] == label and i["shown"] and not i["disabled"] for i in items))
+        self.assertTrue(any(i["label"] == label and i["shown"] for i in shown), shown)
 
     def test_06b_an_item_hidden_in_a_private_window_is_back_in_a_normal_one(self):
         """The engine draws no item that is not visible: one hidden in a private window (test 06) is drawn again in a
         normal window's menu."""
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
-        handles = self.m.window_handles()
-        self.m.chrome("OpenBrowserWindow({private: true});")
-        self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
-        self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
+        label = "Traduzir seleção com DeepL"
+        self.assertIn(label, [i["label"] for i in self.open_menu_on_text(expect=label)])
+        self.m.chrome(CLOSE_MENU)
+        handles = self.private_window()
         self.open_menu_on_text()
         self.assertTrue(harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5))
         self.m.chrome(CLOSE_MENU)
         self.m.chrome("window.close();")
         self.m.switch_to(handles[0])
         self.open_menu_on_text()
-        shown = lambda: any(i["label"] == "Traduzir seleção com DeepL" and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
+        shown = lambda: any(i["label"] == label and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
         self.assertTrue(harness.wait_until(shown, 5), self.m.chrome(MENU))
 
     def test_07_the_settings_page_adds_and_removes(self):
