@@ -237,7 +237,7 @@ class PrivilegedApiTest(unittest.TestCase):
         for name in ("toggleFocus", "copyLinkToHighlight", "setKeepAbove"):  # the tab the key was pressed in, nothing else (#157)
             fn = next(f for f in schema["functions"] if f["name"] == name)
             self.assertEqual(fn["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
-        self.assertEqual(self.manifest["commands"]["copy-link-to-highlight"]["suggested_key"]["default"], "Ctrl+Shift+L")
+        self.assertEqual(self.manifest["commands"]["copy-link-to-highlight"]["suggested_key"]["default"], "Ctrl+Alt+C")
         for name in ("state", "dismissChoice"):
             fn = next(f for f in schema["functions"] if f["name"] == name)
             self.assertEqual(fn["parameters"], [])
