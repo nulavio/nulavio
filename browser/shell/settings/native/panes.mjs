@@ -958,14 +958,19 @@
       set(value) {
         show({ fresh: { ...view.fresh, search: value } });
       },
-      getControlConfig: config => ({
-        ...config,
-        controlAttrs: { ...config.controlAttrs, label: msg("profilesSearch"), description: msg("profilesSearchNote") },
-        options: [
-          choice("", msg("profilesSearchDefault")),
-          ...(searchChoices.state.ready ? (searchChoices.state.value ?? []) : []).map(provider => choice(provider.key, provider.name)),
-        ],
-      }),
+      getControlConfig: config => {
+        const providers = searchChoices.state.ready ? (searchChoices.state.value ?? []) : [];
+        // #152 (review of #484): said here too, before a provider with accounts is picked for the new profile.
+        const named = account => providers.filter(provider => Boolean(provider.account) === account).map(provider => provider.name);
+        const note = named(true).length
+          ? `${msg("profilesSearchNote")} ${msg("profilesSearchAccounts", named(true).join(", "), named(false).join(", "))}`
+          : msg("profilesSearchNote");
+        return {
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg("profilesSearch"), description: note },
+          options: [choice("", msg("profilesSearchDefault")), ...providers.map(provider => choice(provider.key, provider.name))],
+        };
+      },
     });
     setting({
       id: "nulavio-profile-new-name",

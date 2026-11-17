@@ -160,6 +160,12 @@ function isLoopback(hostname) {
    Link: `token`) and the common names for the same thing. */
 const SESSION_PARAMS = new Set(["token", "session", "session_token", "sessiontoken", "sessionid", "session_id", "auth_token", "access_token"]);
 
+/** Whether an address has a session parameter in its query or fragment. */
+export function carriesSession(url) {
+  const keys = [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()];
+  return keys.some(key => SESSION_PARAMS.has(key.toLowerCase()));
+}
+
 export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (typeof raw !== "string") {
     fail("invalid-url");
@@ -180,10 +186,8 @@ export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (url.username || url.password) {
     fail("credentials-in-url");
   }
-  for (const key of [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()]) {
-    if (SESSION_PARAMS.has(key.toLowerCase())) {
-      fail("session-in-template");
-    }
+  if (carriesSession(url)) {
+    fail("session-in-template");
   }
   if (!url.hostname) {
     fail("invalid-url");
@@ -483,13 +487,23 @@ class NulavioSearchClass {
   async addOpenSearch({ url }) {
     await lazy.SearchService.init();
     const description = validateTemplate(url, { requireTerms: false });
+    let engine;
     try {
-      const engine = await lazy.SearchService.addOpenSearchEngine(description, null);
-      return engine.id;
+      engine = await lazy.SearchService.addOpenSearchEngine(description, null);
     } catch (e) {
       fail("opensearch-failed", String(e?.message ?? e));
     }
-    return null;
+    // The description declares its own search and suggestion addresses, which only the engine's parser reads (#484
+    // review): checked as soon as the engine has them, and the engine removed again when one carries a session.
+    const declared = [engine.getSubmission("nulavio")];
+    if (engine.supportsResponseType(SUGGEST_TYPE)) {
+      declared.push(engine.getSubmission("nulavio", SUGGEST_TYPE));
+    }
+    if (declared.some(submission => submission?.uri && carriesSession(new URL(submission.uri.spec)))) {
+      await lazy.SearchService.removeEngine(engine, lazy.SearchService.CHANGE_REASON.USER);
+      fail("session-in-template");
+    }
+    return engine.id;
   }
 
   async remove(id) {

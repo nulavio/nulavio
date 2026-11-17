@@ -267,6 +267,17 @@ class SettingsSearchTest(unittest.TestCase):
         refused = self.run_async(P + "return P.create({name: 'Outro', search: {provider: 'nope'}}).catch(e => e.code);")
         self.assertEqual(refused, "unknown-provider")
         self.assertNotIn("Outro", [p["name"] for p in self.run_async(P + "return (await P.list()).profiles;")])
+        # #152, review of #484: the new profile's picker says it too, before anything is picked.
+        self.m.navigate("about:preferences#nulavioProfiles")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(READY), 20))
+        note = DOC + 'return d.getElementById("nulavio-profile-new-search")?.description ?? null;'
+        harness.wait_until(lambda: "Kagi" in (self.m.chrome(note) or ""), 15)
+        self.assertEqual(
+            self.m.chrome(note),
+            "O mecanismo do novo perfil. Pode mudar depois em Configurações › Pesquisa."
+            " Com conta: Kagi. Nas janelas privadas e nos perfis temporários o perfil não estará conectado a eles."
+            " Sem conta: Brave Search, DuckDuckGo, Ecosia, Mojeek, Qwant, Startpage.",
+        )
 
 
 if __name__ == "__main__":

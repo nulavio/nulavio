@@ -88,9 +88,10 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
 
 The maintainer's decision of 2026-11-14 on #152, as narrowed by the feature review on 2026-11-17 (#453): the generic part is in 1.0; the Kagi-specific part (its Privacy Pass extension, and its own extension with a Session Link) is After 1.0, with #153.
 
-- **Any provider with accounts:** its row in Settings › Pesquisa says, before it is chosen, that private windows and temporary profiles will not be signed in, and names the providers that need no account.
+- **Any provider with accounts:** its row in Settings › Pesquisa says, before it is chosen, that private windows and temporary profiles will not be signed in, and names the providers that need no account. The new profile's search picker (Settings › Perfis) says the same, naming the providers with accounts.
 - **Refused:** a search address that carries a session. `validateTemplate` refuses a template with a query or fragment parameter named `token`, `session`, `session_token`, `sessiontoken`, `sessionid`, `session_id`, `auth_token` or `access_token` (error `session-in-template`), which covers Kagi's Session Link and the same idea elsewhere. The token would otherwise end up in the engine list, the history and anything that copies the address.
-- Not covered: the engine's own "Add search engine" dialog in Settings, which does not go through `validateTemplate` (as for its plain-`http` addresses, `test_search` 05d); and the search addresses inside a site's OpenSearch description, added with `addOpenSearch`: only the description's own address is checked, not the addresses it declares.
+- The search and suggestion addresses an OpenSearch description declares, added with `addOpenSearch`, are checked once the engine has read them (it is the engine that fetches and parses the description): an engine whose GET address carries a session is removed again and the same error is given. For the moment it is in the engine's list, it sends nothing.
+- Not covered: the engine's own "Add search engine" dialog in Settings, which does not go through `validateTemplate` (as for its plain-`http` addresses, `test_search` 05d); and a POST address's body parameters, which only the engine sees.
 
 ## Consequences and risks
 

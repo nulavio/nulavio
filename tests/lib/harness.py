@@ -267,6 +267,21 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/opensearch.xml":
+            # OpenSearch fixture (test_search 19): a description whose search address, or suggestion address, adds the
+            # parameter named in `search` or `suggest` (with a stand-in value) to its own.
+            base = f"http://127.0.0.1:{self.port}"
+            extra = {k: f"&amp;{query[k]}=stand-in" if query.get(k) else "" for k in ("search", "suggest")}
+            xml = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">'
+                f"<ShortName>{query.get('name', 'Fixture OpenSearch')}</ShortName>"
+                f'<Url type="text/html" method="get" template="{base}/search-os?q={{searchTerms}}{extra["search"]}"/>'
+                '<Url type="application/x-suggestions+json" method="get"'
+                f' template="{base}/suggest-os?q={{searchTerms}}{extra["suggest"]}"/>'
+                "</OpenSearchDescription>"
+            )
+            return xml.encode(), "application/opensearchdescription+xml", {}
         if path == "/edit-page":
             # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
             # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
