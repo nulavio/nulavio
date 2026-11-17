@@ -1,7 +1,7 @@
 [
   {
     "namespace": "nulavioServices",
-    "description": "Web services used on a click, translation (#156) and summaries (#154): the menu items they offer and the address one opens. Built-in Shell only. Logic in browser/shell/modules/NulavioServices.sys.mjs.",
+    "description": "Web services used on a click for translation (#156): the menu items they offer and the address one opens. Built-in Shell only. Logic in browser/shell/modules/NulavioServices.sys.mjs.",
     "functions": [
       { "name": "menu", "type": "function", "async": true, "parameters": [] },
       {

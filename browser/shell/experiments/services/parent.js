@@ -42,14 +42,6 @@ this.nulavioServices = class extends ExtensionAPI {
           const isPrivate = services.isPrivate(tab.linkedBrowser);
           const built = services.build(itemId, { text: clicked.text ?? "", target: clicked.target ?? "", isPrivate });
           const win = tab.ownerGlobal;
-          if (built.assistant) {
-            // The page goes into the assistant's panel as an item, with the question written: nothing is sent
-            // until Send, and only to the agent the person connected (ADR 0007).
-            const { NulavioAI } = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs");
-            await NulavioAI.assistantOffer({ kind: "page" }, tabId);
-            await NulavioAI.assistantOffer({ kind: "draft", text: context.extension.localizeMessage("summaryAssistantDraft") }, tabId);
-            return { done: true };
-          }
           // A new tab next to this one, in the same window, so a private window's service opens privately.
           win.openTrustedLinkIn(built.open, "tab", { relatedToCurrent: true, inBackground: false });
           return { done: true };

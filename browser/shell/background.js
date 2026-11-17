@@ -359,7 +359,7 @@ if (browser.nulavioAI && browser.omnibox) {
   });
 }
 
-// -- Web services on a click: translation (#156) and summaries (#154) ---------
+// -- Web services on a click: translation (#156) -------------------------------
 // One item per service and use, named after the service ("Traduzir seleção com DeepL"), only for services the
 // person added in Settings. Each time a menu opens, the module says whether an item may be used there: hidden in a
 // private window unless the person allowed it, and shown but unusable, with the reason in its words, for an address
@@ -370,13 +370,8 @@ const SERVICE_MENU = "nulavio-svc-";
 const serviceItems = new Map(); // menu id -> the module's item
 
 function serviceTitle(item, reason = null) {
-  const key = {
-    "translate-selection": "menuTranslateSelection",
-    "translate-page": "menuTranslatePage",
-    "summary-page": "menuSummarizePage",
-    "summary-link": "menuSummarizeLink",
-  }[item.use];
-  const title = item.name ? t(key, item.name) : t(`${key}Assistant`);
+  const key = { "translate-selection": "menuTranslateSelection", "translate-page": "menuTranslatePage" }[item.use];
+  const title = t(key, item.name);
   return reason ? t("menuServiceRefused", [title, t(`menuServiceReason_${reason.replaceAll("-", "_")}`)]) : title;
 }
 
@@ -417,7 +412,7 @@ if (browser.nulavioServices && browser.menus) {
     }
     for (const id of shown) {
       const item = serviceItems.get(id);
-      const target = item.use === "summary-link" ? (info.linkUrl ?? "") : (info.pageUrl ?? "");
+      const target = info.pageUrl ?? "";
       const verdict = await browser.nulavioServices.check(item.id, target, tab.id).catch(() => ({ usable: false, reason: "not-found", hidden: true }));
       await browser.menus.update(id, {
         visible: !verdict.hidden,
@@ -433,7 +428,7 @@ if (browser.nulavioServices && browser.menus) {
     if (!item || !tab) {
       return;
     }
-    const target = item.use === "summary-link" ? (info.linkUrl ?? "") : (info.pageUrl ?? "");
+    const target = info.pageUrl ?? "";
     browser.nulavioServices.open(item.id, { text: info.selectionText ?? "", target }, tab.id).catch(console.error);
   });
 }

@@ -1581,11 +1581,11 @@
       searchBench.bar("nulavio-search-said", "success", () => searchBench.state.said, () => Boolean(searchBench.state.said)),
     ];
 
-    // -- #156 and #154: web services used on a click, for translation and summaries. Translation stays on the device
-    // (the engine's own group, above); a web service is used only after the person adds it here, only from a menu
-    // item that names it. Summaries are off until a service is chosen. Listed by name, alphabetically, none marked. --
+    // -- #156: web services used on a click, for translation. Translation stays on the device (the engine's own group,
+    // above); a web service is used only after the person adds it here, only from a menu item that names it. Listed by
+    // name, alphabetically, none marked. --
     const services = source(() => shell.NulavioServices.state());
-    const servicesBench = workbench({ fresh: { instance: "", name: "", selection: "", page: "", summaryName: "", summary: "" } }, services);
+    const servicesBench = workbench({ fresh: { instance: "", name: "", selection: "", page: "" } }, services);
     const servicesSetup = (emitChange, stops) => {
       stops.push(services.listen(emitChange));
       servicesBench.watch(emitChange, stops);
@@ -1758,77 +1758,6 @@
         ...config,
         controlAttrs: { ...config.controlAttrs, label: msg("servicesPrivateLabel"), description: msg("servicesPrivateNote") },
       }),
-    });
-    // Summaries: one service or none. What it receives is said under the choice.
-    const summaryValue = () => {
-      const chosen = servicesNow()?.summarizer;
-      return chosen ? (chosen.kind === "assistant" ? "assistant" : chosen.id === "custom" ? "custom-saved" : chosen.id) : "";
-    };
-    setting({
-      id: "nulavio-summary-service",
-      setup(emitChange, stops) {
-        servicesSetup(emitChange, stops);
-        services.refresh();
-      },
-      visible: () => Boolean(servicesNow()),
-      get: () => (servicesBench.state.fresh.summaryChoice ?? summaryValue()),
-      set(value) {
-        if (value === "custom") {
-          servicesBench.show({ fresh: { ...servicesBench.state.fresh, summaryChoice: "custom" } });
-          return;
-        }
-        if (value === "custom-saved") {
-          servicesBench.show({ fresh: { ...servicesBench.state.fresh, summaryChoice: undefined } }); // already in use
-          return;
-        }
-        servicesBench.show({ fresh: { ...servicesBench.state.fresh, summaryChoice: undefined } });
-        const choice = value === "" ? null : value === "assistant" ? { kind: "assistant" } : { kind: "web", key: value };
-        servicesBench.act(() => shell.NulavioServices.setSummarizer(choice), msg("doneSaved"));
-      },
-      getControlConfig(config) {
-        const chosen = servicesBench.state.fresh.summaryChoice ?? summaryValue();
-        const web = (servicesNow()?.known ?? []).filter(service => service.summary);
-        const now = servicesNow()?.summarizer;
-        const says = chosen === ""
-          ? msg("summaryOff")
-          : chosen === "assistant"
-            ? msg("summarySendsAssistant")
-            : chosen === "custom"
-              ? msg("summaryCustomNote")
-              : msg("summarySendsAddress", web.find(service => service.key === chosen)?.name ?? now?.name ?? "");
-        return {
-          ...config,
-          controlAttrs: { ...config.controlAttrs, label: msg("summaryLabel"), description: says },
-          options: [
-            { value: "", controlAttrs: { label: msg("summaryNone") } },
-            { value: "assistant", controlAttrs: { label: msg("summaryAssistant") } },
-            ...web.map(service => ({ value: service.key, controlAttrs: { label: service.account ? msg("summaryNeedsAccount", service.name) : service.name } })),
-            ...(now?.id === "custom" ? [{ value: "custom-saved", controlAttrs: { label: now.name } }] : []),
-            { value: "custom", controlAttrs: { label: msg("summaryCustom") } },
-          ],
-        };
-      },
-    });
-    const customSummary = () => servicesBench.state.fresh.summaryChoice === "custom";
-    for (const [id, field, words] of [
-      ["nulavio-summary-custom-name", "summaryName", { label: "translateCustomName" }],
-      ["nulavio-summary-custom-address", "summary", { label: "summaryCustomAddress", note: "summaryCustomAddressNote", placeholder: "https://summary.example.org/?url={url}" }],
-    ]) {
-      servicesField(id, field, words, customSummary);
-    }
-    setting({
-      id: "nulavio-summary-custom-use",
-      setup: servicesSetup,
-      visible: customSummary,
-      disabled: () => servicesBench.state.busy,
-      async onUserClick(event) {
-        event.preventDefault();
-        const fresh = servicesBench.state.fresh;
-        if (await servicesBench.act(() => shell.NulavioServices.setSummarizer({ kind: "web", key: "custom", name: fresh.summaryName, summary: fresh.summary }), msg("doneSaved"))) {
-          servicesBench.show({ fresh: { ...fresh, summaryName: "", summary: "", summaryChoice: undefined } });
-        }
-      },
-      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg("summaryCustomUse") } }),
     });
     const servicesBars = prefix => [
       servicesBench.bar(`nulavio-${prefix}-error`, "error", () => servicesBench.state.error, () => Boolean(servicesBench.state.error)),
@@ -2604,17 +2533,6 @@
           { id: "nulavio-translate-custom-add", control: "moz-button" },
         ],
       },
-      nulavioSummaries: {
-        l10nId: "nulavio-summaries-group",
-        headingLevel: 2,
-        items: [
-          ...servicesBars("summary"),
-          { id: "nulavio-summary-service", control: "moz-select" },
-          { id: "nulavio-summary-custom-name", control: "moz-input-text" },
-          { id: "nulavio-summary-custom-address", control: "moz-input-text" },
-          { id: "nulavio-summary-custom-use", control: "moz-button" },
-        ],
-      },
       nulavioAssistantEntry: {
         l10nId: "nulavio-assistant-group",
         headingLevel: 2,
@@ -2688,7 +2606,7 @@
         const edited = {
           ...config,
           l10nId: "nulavio-pane-assistant",
-          groupIds: ["nulavioAssistantEntry", "nulavioSummaries", ...config.groupIds.filter(id => id !== "aiControlsDescription")],
+          groupIds: ["nulavioAssistantEntry", ...config.groupIds.filter(id => id !== "aiControlsDescription")],
         };
         document.getElementById("category-ai-features")?.setAttribute("data-l10n-id", "nulavio-pane-assistant-nav");
         return edited;
