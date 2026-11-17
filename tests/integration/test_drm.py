@@ -188,7 +188,10 @@ class ProtectedMediaTest(unittest.TestCase):
             # The wait for playback is the short one: with a wrong key nothing plays, and it runs to its end.
             result = self.long_async(PLAY, [self.server.url(f"/eme/{name}"), mime, "video", wrong, b64url(KID), 12], PLAY_LIMIT)
             print(f"wrong key: {result}", file=sys.stderr)
-            self.assertLess(result.get("currentTime", 0), 1.0, f"a stream played with a wrong key: {result}")
+            # The control must have got as far as playing: a step that failed or never ended plays nothing either.
+            self.assertNotIn("error", result, result)
+            self.assertTrue(result["licensed"], f"the wrong key was not even taken: {result}")
+            self.assertLess(result["currentTime"], 1.0, f"a stream played with a wrong key: {result}")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('media.eme.enabled');")
 
