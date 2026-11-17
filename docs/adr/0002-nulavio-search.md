@@ -90,7 +90,7 @@ The maintainer's decision of 2026-11-14 on #152, as narrowed by the feature revi
 
 - **Any provider with accounts:** its row in Settings › Pesquisa says, before it is chosen, that private windows and temporary profiles will not be signed in, and names the providers that need no account.
 - **Refused:** a search address that carries a session. `validateTemplate` refuses a template with a query or fragment parameter named `token`, `session`, `session_token`, `sessiontoken`, `sessionid`, `session_id`, `auth_token` or `access_token` (error `session-in-template`), which covers Kagi's Session Link and the same idea elsewhere. The token would otherwise end up in the engine list, the history and anything that copies the address.
-- Not covered: the engine's own "Add search engine" dialog in Settings, which does not go through `validateTemplate` (as for its plain-`http` addresses, `test_search` 05d).
+- Not covered: the engine's own "Add search engine" dialog in Settings, which does not go through `validateTemplate` (as for its plain-`http` addresses, `test_search` 05d); and the search addresses inside a site's OpenSearch description, added with `addOpenSearch`: only the description's own address is checked, not the addresses it declares.
 
 ## Consequences and risks
 
