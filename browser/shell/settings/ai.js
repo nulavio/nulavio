@@ -43,23 +43,14 @@ async function acceptFullControl(name) {
   });
 }
 
-async function acceptRawAutomation(name) {
-  return confirmDialog({
-    title: t("aiRawTitle", [name]),
-    body: t("aiRawBody", [name]),
-    confirm: t("aiRawConfirm"),
-    danger: true,
-    critical: true,
-  });
-}
-
 /** A localised name for an id from the tools (tool, event, client), or the id itself: never a raw locale key. */
 function named(prefix, id) {
   return (id && browser.i18n.getMessage(`${prefix}${String(id).replace(/[^a-z0-9_]/gi, "_")}`)) || String(id ?? "");
 }
 
-function rawCapability() {
-  return state?.rawCapability ?? "debugging";
+/* The browser's internal pages: offered to no agent since raw automation was removed (#463), so not a row here. */
+function internalCapability() {
+  return state?.internalCapability ?? "debugging";
 }
 
 function when(iso) {
@@ -114,29 +105,23 @@ function capabilityRow(agent, capability) {
   );
 }
 
-/* Raw automation: not part of any level; a separate switch per agent with its own critical confirmation.
-   Off again needs no confirmation; on again shows the warning again. */
-function rawAutomationRow(agent) {
-  const on = Boolean(agent.raw_automation_accepted);
-  const input = h("input", { type: "checkbox", role: "switch", checked: on, "data-focus-key": `raw-${agent.id}` });
-  input.addEventListener("change", async () => {
-    const enabled = input.checked;
-    if (enabled && !(await acceptRawAutomation(agent.name))) {
-      input.checked = false;
-      return;
-    }
-    await run(() => ai.change(agent.id, "raw-automation", { enabled, acceptRawAutomation: enabled }).then(renderAgents), t("doneSaved"));
-  });
+/* An agent that had raw automation on before it was removed (#463): said once, until the person acknowledges it.
+   The opt-in grants nothing since the update; acknowledging only removes it from the record. */
+function rawRemovedNote(agent) {
+  if (!agent.raw_automation_removed) {
+    return null;
+  }
   return h(
-    "label",
-    { class: "check check--switch", dataset: { rawAutomation: agent.id } },
-    input,
-    h(
-      "span",
-      {},
-      h("span", { text: t("aiRawLabel") }),
-      h("span", { class: "hint", text: on ? t("aiRawHintOn", [when(agent.raw_automation_accepted)]) : t("aiRawHintOff") })
-    )
+    "div",
+    { class: "inline-form", dataset: { rawRemoved: agent.id } },
+    h("p", { class: "row__note", text: t("aiRawRemoved") }),
+    h("button", {
+      class: "button button--quiet",
+      type: "button",
+      text: t("aiRawRemovedOk"),
+      "data-focus-key": `notice-raw-removed-${agent.id}`,
+      onclick: () => run(() => ai.change(agent.id, "forget-raw-automation").then(renderAgents)),
+    })
   );
 }
 
@@ -297,7 +282,8 @@ function agentRow(agent) {
       h("p", { class: "row__title" }, h("span", { text: agent.name }), ...badges),
       ...meta.map(note =>
         typeof note === "string" ? h("p", { class: "row__note", text: note }) : h("p", { class: "row__note form-error", text: note.text })
-      )
+      ),
+      rawRemovedNote(agent)
     ),
     h("div", { class: "row__end" }, pause, revoke),
     h(
@@ -315,10 +301,9 @@ function agentRow(agent) {
         "ul",
         { class: "list" },
         ...Object.keys(state.capabilities)
-          .filter(c => c !== rawCapability())
+          .filter(c => c !== internalCapability())
           .map(c => capabilityRow(agent, c))
       ),
-      agent.client === "nulavio-assistant" ? null : rawAutomationRow(agent),
       h("div", { class: "actions" }, rotate, remove)
     )
   );

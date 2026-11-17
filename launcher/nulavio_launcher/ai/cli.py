@@ -85,20 +85,19 @@ def _agents(args) -> int:
         sites = ", ".join(a.get("domains") or []) or "any site"
         _out(f"{a['id']}  {a['name']:<20} {a['client']:<12} {state:<13} {sites}  workspace: {a['workspace']}")
         for cap, g in sorted(a.get("grants", {}).items()):
+            if cap == policy.INTERNAL_CAPABILITY:
+                continue  # an earlier version's grant: it grants nothing (#463), said below
             scope = f" until {g['until']}" if g.get("until") else " this session" if g.get("session") else ""
             _out(f"      {cap}: {g['mode']}{scope}")
-        if a.get("raw_automation_accepted"):
-            _out(f"      raw automation: on since {a['raw_automation_accepted']} (Nulavio does not check or log it)")
+        if a.get("raw_automation_accepted") or policy.INTERNAL_CAPABILITY in a.get("grants", {}):
+            _out("      raw automation: removed from Nulavio; the opt-in this agent had grants nothing")
     if registry.stopped():
         _out("\nEMERGENCY STOP is on: every agent is blocked (`nulavio ai resume` to lift it).")
     return 0
 
 
 def _grant(args) -> int:
-    if args.capability == policy.RAW_CAPABILITY and args.mode != "block":
-        print(policy.RAW_AUTOMATION_WARNING, file=sys.stderr)
-    entry = registry.grant(args.agent, args.capability, args.mode, minutes=args.minutes,
-                           accept_raw_automation=args.accept_raw_automation)  # fmt: skip
+    entry = registry.grant(args.agent, args.capability, args.mode, minutes=args.minutes)
     until = f" until {entry['until']}" if entry["until"] else ""
     _out(f"{args.agent}: {args.capability} = {args.mode}{until}")
     return 0
@@ -239,7 +238,9 @@ API_LIMIT = 64 * 1024
 
 def _public(agent: dict, active: dict | None = None) -> dict:
     """What the UI may see: never the token hash."""
-    view = {k: v for k, v in agent.items() if k != "token_sha256"}
+    view = {k: v for k, v in agent.items() if k not in ("token_sha256", "raw_automation_accepted")}
+    # An agent that had raw automation on before it was removed (#463): the agents' page says so once.
+    view["raw_automation_removed"] = bool(agent.get("raw_automation_accepted"))
     view["modes"] = {c: policy.effective_mode(agent, c, "")[0] for c in policy.CAPABILITIES}
     view["active_sessions"] = (active or {}).get(agent["id"], [])
     return view
@@ -272,7 +273,7 @@ def api_request(request: dict) -> dict:
             "presets": policy.PRESETS,
             "levels": list(LEVELS.values()),
             # The consent texts are the browser's own (locale keys), never English from here.
-            "rawCapability": policy.RAW_CAPABILITY,
+            "internalCapability": policy.INTERNAL_CAPABILITY,
             "requests": registry.pending_requests(),
         }
     if op == "add":
@@ -290,10 +291,9 @@ def api_request(request: dict) -> dict:
     elif op == "grant":
         minutes = request.get("minutes")
         registry.grant(str(agent_id), str(request.get("capability")), str(request.get("mode")),
-                       minutes=int(minutes) if minutes else None,
-                       accept_raw_automation=bool(request.get("acceptRawAutomation")))  # fmt: skip
-    elif op == "raw-automation":
-        registry.set_raw_automation(str(agent_id), bool(request.get("enabled")), bool(request.get("acceptRawAutomation")))
+                       minutes=int(minutes) if minutes else None)  # fmt: skip
+    elif op == "forget-raw-automation":
+        registry.forget_raw_automation(str(agent_id))
     elif op == "clear-grant":
         registry.clear_grant(str(agent_id), str(request.get("capability")))
     elif op == "domains":
@@ -505,8 +505,6 @@ def add_parser(sub) -> None:
     q.add_argument("capability", choices=list(policy.CAPABILITIES))
     q.add_argument("mode", choices=policy.MODES)
     q.add_argument("--minutes", type=int, help="only for this many minutes")
-    q.add_argument("--accept-raw-automation", action="store_true",
-                   help=f"required to allow or ask for {policy.RAW_CAPABILITY} (raw automation)")  # fmt: skip
     q = asub.add_parser("autonomy", help="change an agent's autonomy level")
     q.add_argument("agent")
     q.add_argument("level", choices=list(LEVELS))

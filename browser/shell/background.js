@@ -165,7 +165,7 @@ if (browser.nulavioProfiles && browser.nulavioRouting && browser.menus) {
 // In the user's windows, requests from the AI Bridge open a request page. In a
 // window an agent drives (its AI Workspace, or one of the user's profiles) none
 // are shown; a bar that cannot be closed says who drives it, at which level and
-// where, with "Parar agente"; raw automation gets its own critical bar.
+// where, with "Parar agente".
 
 async function setUpAI() {
   const agent = await browser.nulavioAI.workspaceAgent();

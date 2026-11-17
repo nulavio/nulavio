@@ -237,7 +237,7 @@ export async function lockCurrentProfile(name) {
 }
 
 /** Ask for confirmation with a native modal <dialog>. Resolves true when confirmed.
-    `critical`: a consent that raises what an agent may do (full control, raw automation): a critical
+    `critical`: a consent that raises what an agent may do (full control): a critical
     icon in the title, the body in primary text, announced as an alert dialog.
     Critical/destructive confirmations keep Cancel focused, first and visually primary. */
 export function confirmDialog({ title, body, confirm, danger = false, critical = false }) {
