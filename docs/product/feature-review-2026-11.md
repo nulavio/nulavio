@@ -29,7 +29,7 @@ Each item's evidence separates:
 - **Verified**: read in the code at the commit above, or the output of a command, with the path or the command.
 - **Inferred**: a judgement or a fact not checked here; said as such.
 
-**Use.** Nulavio has no telemetry, so nobody knows how many people use a feature. Every item says "Use: unknown, the maintainer's judgment and public feedback", and no recommendation rests on a guess about use.
+**Use.** Nulavio has no telemetry, so nobody knows how many people use any of these features. Use is the maintainer's judgment and public feedback, for every item; no recommendation below rests on a guess about it, and the items do not repeat this.
 
 **Sizes.** Lines of whole files (`wc -l`, comments and blank lines included), counted at the commit above with a feature-to-files map that leaves no Shell file, launcher module, patch or integration test module unclaimed. Two files are shared by many features and are split by their section comments: `browser/shell/settings/native/panes.mjs` (2,677 lines) and `browser/shell/modules/NulavioWindow.sys.mjs` (1,610 lines). Their shares are marked `~` and are approximate. Locale strings are not counted.
 
@@ -54,7 +54,7 @@ The recommendations that are not "Keep" come first in each group of the [evidenc
 | L3 | Confined mode (`--confined`) | **After 1.0** | Reachable only from the preview launcher (#283), refuses on Ubuntu (R46), partial; out of the 1.0 promise until a package can start it | | |
 | L4 | `nulavio desktop install` | **Remove** (with L1) | Packages install the menu entry; only the preview needed it | | |
 | P8 | Fingerprinting additions | **Keep, change** | Keep; once a release carries patch 0012, remove the Shell's per-tab screen fallback where the engine decides, so there is one mechanism | | |
-| P14 | Copy Link to Highlight shortcut (#157) | **Keep, change** | Keep the engine's item; decide the key: Ctrl+Shift+L is also 1Password's default (#81) | | |
+| P14 | Copy Link to Highlight shortcut (#157) | **Keep, change** | Keep the engine's menu item; choose another key: Ctrl+Shift+L is the autofill key of password-manager extensions Nulavio supports (Bitwarden; inferred, not checked) | | |
 | P1 | Hardened baseline: prefs, policies, ETP Strict, HTTPS-Only, GPC, telemetry off | Keep | The product's first promise | | |
 | P2 | Mozilla's AI features, account, Pocket and promotions off | Keep | "Nothing phones home"; costs a list of prefs and one test module | | |
 | P3 | Guard at run time | Keep | The vision's "hope none of it silently regresses"; detection only, and said so (R38) | | |
@@ -192,4 +192,169 @@ Of the 79 residual risks in [residual risks](../security/residual-risks.md), the
 | L3 Confined mode | R46 |
 | L6 Flatpak bundle | R75 |
 | I2 KRunner | R44 |
+
+## Evidence: shipped
+
+Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tests and failures**, **decided by** and open issues, **the engine already** (what Firefox 160.0 offers; checked in its source where it says "verified"), **fit and cost**, and the **recommendation** with what changes for people who use it today. The trust boundaries are in [trust boundaries](../architecture/trust-boundaries.md), the risks in [residual risks](../security/residual-risks.md).
+
+### Protection and privacy
+
+#### P1 Hardened baseline
+
+- **Code:** 674 lines: `browser/config/prefs/baseline.js` (44 prefs, all `@mode seed`: 30 privacy, 7 network, 5 interface, 1 HTTPS, 1 tracking), `seed-history.json`, `guard-rules.json` (19 rules), the launcher's `prefs.py` and `guard.py`, and the build's own policies (`own-policies.json`: telemetry, studies, extension settings).
+- **Seams:** prefs and policies only.
+- **Boundaries and risks:** TB5, TB8; R63, R78.
+- **Tests:** `test_engine_slice` (15), `test_privacy` (4), `test_new_profile_connections` (1); unit `test_prefs_and_guard`.
+- **Decided by:** SEC-01 to SEC-09, [hardening](../security/hardening.md).
+- **The engine already:** offers each setting. Nulavio's work is choosing them, explaining them (`@why`, `@tradeoff`) and checking that none weakens a protection.
+- **Fit and cost:** the vision's first sentence. Cheap per update: an unknown pref fails an integration test.
+- **Recommendation: Keep.**
+
+#### P2 Mozilla's AI features, account, Pocket and promotions off
+
+- **Code:** about 16 prefs inside `baseline.js` (`browser.ml.*`, `browser.ai.control.*`, sponsored suggestions, the sidebar chatbot); the branding prefs.
+- **Tests:** `test_mozilla_features` (8).
+- **Decided by:** D-UX7, D-UX8.
+- **Fit and cost:** principle 5. A new Mozilla feature needs a new pref each release (inferred from the list's growth).
+- **Recommendation: Keep.**
+
+#### P3 Guard at run time
+
+- **Code:** 1,383 lines (`NulavioGuard.sys.mjs` 994, the review page, the experiment) and about 34 lines of Settings.
+- **Seams:** engine modules `SessionStore`, `AddonManager`, `AsyncShutdown`; no private member.
+- **Boundaries and risks:** R38 (detection, kept in the profile).
+- **Tests:** `test_guard` (6); unit `test_prefs_and_guard`.
+- **Failures:** bugs #136, #337, #351 (closed); #387 and #421 open.
+- **Decided by:** SEC-18; [hardening](../security/hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed).
+- **The engine already:** nothing comparable. Enterprise policies can lock prefs; nothing reports a change made outside the browser.
+- **Fit and cost:** answers the vision's problem ("hope none of it silently regresses") and states its limit. Each new protection Nulavio writes (the fingerprinting set, #421) has to be taught to the Guard.
+- **Recommendation: Keep.**
+
+#### P4 Content filter: uBlock Origin pinned, with the extra lists
+
+- **Code:** no code of its own beyond the build:
+  - `extensions.lock.json` (pins and hashes);
+  - `content-filter.json` (the default lists);
+  - a copy of uBlock Origin's list registry (`assets.json`, 970 lines of data);
+  - `filter-lists.json`;
+  - the policy `make_distribution.py` writes;
+  - about 34 lines of Settings, which read whether a cookie-notice list is on.
+- **Seams:** none in the engine. The extension's registry format is one: #114 asks uBlock Origin for a supported way.
+- **Boundaries and risks:** TB3; R6, R39.
+- **Tests:** `test_content_filter` (5), `test_engine_slice` 08.
+- **Failures:** #246 (intermittent, open). #415 (P1, open): the pinned first-install version is behind a fixed upstream advisory; #416 pins 1.76.4.
+- **Decided by:** FR-09; ADR 0012 stays Proposed (#95).
+- **The engine already:** ETP blocks trackers, not ads.
+- **Fit and cost:** the vision's "blocks ads and trackers from the first launch". Its Speedometer cost was inside the noise of one run.
+- **Recommendation: Keep.** The native filter stays After 1.0 (N95).
+
+#### P5 Site exceptions in one place
+
+- **Code:** `NulavioPrivacy.sys.mjs` (413 lines, shared with P6 and P4's reading), its experiment, about 108 lines of Settings.
+- **Seams:** the engine's permission store, read; uBlock Origin's own page opened, never edited.
+- **Boundaries and risks:** R39.
+- **Tests:** `test_settings_exceptions` (3), `test_privacy` (4).
+- **Decided by:** FR-18; flow C.
+- **The engine already:** each permission type has its own exceptions dialog in Settings (inferred from Firefox's interface, not checked in the source).
+- **Fit and cost:** the vision's success sentence ("undo any breakage per site in two clicks"). Small.
+- **Recommendation: Keep.**
+
+#### P6 DNS choice
+
+- **Code:** inside `NulavioPrivacy.sys.mjs` (three resolvers, `setDns`), about 145 lines of Settings, a card in the new tab.
+- **Boundaries and risks:** R40.
+- **Tests:** `test_dns` (5, with a local DoH resolver), `test_settings_dns` (4).
+- **Decided by:** FR-29.
+- **The engine already:** DNS over HTTPS with four modes. Nulavio's group says the same in three plain choices and leaves the engine's screen behind a button (verified: the comment above the group in `panes.mjs`).
+- **Fit and cost:** small. Asking at first run is a question more; that is FR-17's design, not changed here.
+- **Recommendation: Keep.**
+
+#### P7 Search: providers and per-engine suggestion consent
+
+- **Code:** 723 lines (`NulavioSearch.sys.mjs` 516, its experiment, `providers.json`, patch 0004 of 68 lines) and about 161 lines of Settings.
+- **Seams:** patch 0004 in `SearchSuggestionController`; engine modules `SearchService`, `ConfigSearchEngine`, `UserSearchEngine`.
+- **Boundaries and risks:** TB12; R17 (Track A), R20, R72.
+- **Tests:** `test_search` (16), `test_settings_search` (2).
+- **Decided by:** ADR 0002; SEC-14; FR-21.
+- **The engine already:** one switch for suggestions from every engine (R17); adding engines by hand.
+- **Fit and cost:** "nothing typed leaves without consent" needs the patch: the engine has no per-engine switch.
+- **Recommendation: Keep.** #151 changes it (N151).
+
+#### P8 Fingerprinting additions
+
+- **Code:** 843 lines (`NulavioFingerprinting.sys.mjs` 502, `NulavioFingerprintingChild.sys.mjs` 112, patch 0012 of 229 lines in `nsScreen`, `nsMediaFeatures` and `AudioDestinationNode`) and about 25 lines of Settings.
+- **Seams:** patch 0012 (C++); a window actor in every web frame; the engine's `RFPTargetConstants`.
+- **Boundaries and risks:** R56.
+- **Tests:** `test_fingerprinting` (16), `test_privacytests` (3, PrivacyTests' probes, 25 of 25 on a build with the patch); unit `test_fingerprinting_shell`, `test_privacytests_fixture`; workflow `privacytests.yml`.
+- **Decided by:** ADRs 0016 to 0019 (accepted 2026-11-14, #79).
+- **Open issues:** #406, #419, #420, #421 (all small).
+- **The engine already:** fingerprinting protection and its per-target override list. Patch 0012 adds two targets the engine lacks: audio noise per site, and one screen size per document.
+- **Fit and cost:** privacy by default, decided four days ago. The cost is the C++ patch at each update, and two mechanisms for the screen while releases without the patch exist. The Shell's per-tab path runs only where the engine lacks the target or the set leaves it out (verified: `engineDecides()` and `turnsOn()` in the child).
+- **Recommendation: Keep, change.** After a release that carries patch 0012 (the next one; 160.0-0.6 was built before #402 merged), remove the Shell's screen fallback, so one mechanism remains. Whether anything still needs it after #400 (launcher-seeded sets) is inferred, not checked.
+- **For people who use it today:** nothing visible; the same screen size, from the engine.
+
+#### P9 Firefox's name in the User-Agent, font lists on every Fedora
+
+- **Code:** patches 0009 (32 lines) and 0010 (59 lines).
+- **Tests:** none of their own was found by the inventory. The font lists are exercised by the fingerprinting and window tests (inferred from where `font.visibility` and the tiny font appear).
+- **Fit and cost:** compatibility (sites that sniff "Firefox") and the font part of fingerprinting. Small.
+- **Recommendation: Keep.**
+
+#### P10 Look-alike login warning
+
+- **Code:** 164 lines (two actor modules, the warning page) and about 55 lines of Settings (the sites the person chose to continue on).
+- **Seams:** a window actor; the engine's login manager, read.
+- **Boundaries and risks:** R41 (only the browser's own manager's logins).
+- **Tests:** `test_passwords` 01 to 03 and 06.
+- **Decided by:** flow D; SEC-10.
+- **The engine already:** shows punycode for some confusable names; it has no warning before typing a password on a near-copy (inferred).
+- **Fit and cost:** small. It does nothing for people whose passwords live in an extension (P0 providers), and says so.
+- **Recommendation: Keep.**
+
+#### P11 Programs never opened from the downloads UI
+
+- **Code:** 431 lines (patch 0007 of 249 lines, the second largest; the warning page).
+- **Seams:** the patch, in the downloads panel and its commands.
+- **Boundaries and risks:** compensates R15 (no download protection with Nulavio's Safe Browsing key).
+- **Tests:** `test_downloads_indicator` (9), `test_shell` 03 to 05, `test_security_moments` (1).
+- **Decided by:** flow E; D9 (R15 accepted for the alpha and 1.0).
+- **The engine already:** offers "Open" and "Always open similar files" for any file.
+- **Fit and cost:** the compensating control of an accepted risk. The patch is large for what it does: the cost of keeping it is in the update times, not in risk.
+- **Recommendation: Keep.**
+
+#### P12 Routing rules offered on a sign-in
+
+- **Code:** `NulavioAccountRules.sys.mjs` (161 lines).
+- **Boundaries and risks:** R73 (what Google still sees).
+- **Tests:** `test_account_rules` (4).
+- **Decided by:** #220, decision 3.
+- **Fit and cost:** small, ties P-group privacy to profiles.
+- **Recommendation: Keep.**
+
+#### P13 Copy Clean Link with Nulavio's extra parameters
+
+- **Code:** one pref (`privacy.query_stripping.strip_list`), with its sources in [clean links](../research/clean-links.md).
+- **Tests:** `test_clean_links` (3, unit and integration).
+- **Failures:** #381 (a race in the test, fixed).
+- **The engine already:** offers Copy Clean Link; Nulavio adds parameters to its list.
+- **Recommendation: Keep.**
+
+#### P14 Copy Link to Highlight shortcut
+
+- **Code:** one command in `manifest.json` (Ctrl+Shift+L) on top of the engine's menu item.
+- **Tests:** `test_text_fragments` (6), `test_shortcuts`.
+- **Decided by:** #157 (closed).
+- **The engine already:** has the item in the context menu.
+- **Fit and cost:** the key is the cost. Ctrl+Shift+L is the autofill key of Bitwarden's extension (FR-12) and of other password managers (inferred from their documentation, not checked here). When an extension and a built-in command claim one key, which wins was not checked.
+- **Recommendation: Keep, change:** keep the item; change or drop the key.
+- **For people who use it today:** the key changes; say so in the release notes.
+
+#### P15 DRM off in a new profile, WebRTC address limit, codecs
+
+- **Code:** prefs (`media.gmp-widevinecdm.*`, `media.peerconnection.ice.default_address_only`), the packages' codec recommendation (#377).
+- **Boundaries and risks:** R74.
+- **Tests:** `test_drm` (6), `test_webrtc` (3), `test_media_codecs` (1).
+- **Failures:** #376 (`test_drm` audio in the release container, fixed).
+- **Decided by:** #221, #222.
+- **Recommendation: Keep.**
 
