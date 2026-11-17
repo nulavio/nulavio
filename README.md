@@ -85,11 +85,11 @@ The script checks Mozilla's signed checksums before it builds anything, applies 
 
 The preview, which ran Nulavio's profile on your distribution's Firefox (`bin/nulavio setup` and `run`), is no longer offered: install the [package](#install) instead. `bin/nulavio setup` and `run` now refuse an engine that is not the Nulavio build. Nothing is deleted: the preview's profiles stay in `~/.local/share/nulavio/profiles/`, and the packaged browser does not open them. To bring a profile's bookmarks and saved passwords along:
 
-1. Open the preview profile in the distribution's Firefox: `firefox --profile ~/.local/share/nulavio/profiles/default` (another profile's name instead of `default`).
+1. Open the preview profile in the distribution's Firefox, with that Firefox closed: `firefox --new-instance --profile ~/.local/share/nulavio/profiles/default` (another profile's name instead of `default`). An encrypted profile (`nulavio vault`) is unlocked first with `bin/nulavio vault unlock default`, and locked again afterwards with `bin/nulavio vault lock default`.
 2. Bookmarks: Bookmarks → Manage Bookmarks → Import and Backup → Export Bookmarks to HTML. Passwords: Passwords (`about:logins`) → ⋯ → Export Passwords. That file is not encrypted: keep it out of shared folders.
 3. In Nulavio: Bookmarks → Manage Bookmarks → Import and Backup → Import Bookmarks from HTML; Passwords → ⋯ → Import from a File. Then delete the exported password file.
 
-A password manager's extension (Proton Pass, Bitwarden, KeePassXC) keeps its vault in its own account or database: sign in again in Nulavio, nothing to export. When you no longer need the preview's profiles, delete `~/.local/share/nulavio/profiles/`.
+A password manager's extension (Proton Pass, Bitwarden, KeePassXC) keeps its vault in its own account or database: sign in again in Nulavio, nothing to export. If you ran `bin/nulavio desktop install`, remove its menu entry with `bin/nulavio desktop uninstall`: it starts the preview, which now refuses to open. When you no longer need the preview's profiles, delete `~/.local/share/nulavio/profiles/`.
 
 ## Tests
 

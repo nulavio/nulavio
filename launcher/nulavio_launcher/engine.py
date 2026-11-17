@@ -97,14 +97,14 @@ def _candidates() -> list[Path]:
 def find_engine() -> Engine:
     candidates = _candidates()
     if not candidates:
-        raise EngineError("no Gecko engine found: install the distribution 'firefox' package or set NULAVIO_ENGINE")
+        raise EngineError("no Gecko engine found: install the Nulavio package, or set NULAVIO_ENGINE to a Nulavio build")
     path = None
     for candidate in candidates:
         resolved = candidate.resolve()
         if "/snap/" in str(resolved):
             raise EngineError(
                 "the Snap Firefox cannot read profiles under hidden directories such as ~/.local/share; "
-                "install Firefox from the Mozilla APT repository or set NULAVIO_ENGINE"
+                "install the Nulavio package, or set NULAVIO_ENGINE to a Nulavio build"
             )
         if resolved.exists() and not _is_script(resolved):
             path = resolved
