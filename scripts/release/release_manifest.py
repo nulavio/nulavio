@@ -47,6 +47,7 @@ EMPTY_DIFF = hashlib.sha256(b"").hexdigest()
 ARCHIVE_SUFFIX = ".linux-x86_64.tar.xz"
 RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-z0-9_]+\.x86_64\.rpm$")
 DEB = re.compile(r"^nulavio_(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)_amd64\.deb$")
+COMMIT = re.compile(r"[0-9a-f]{40}")
 RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
 # The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
 NETWORKING_RECORD = "browser/build/networking-check.json"
@@ -73,6 +74,10 @@ def load(path: Path) -> dict:
                 "untracked", "packages", "sboms", "rehearsal"):  # fmt: skip
         if key not in manifest:
             raise ManifestError(f"{path}: no {key!r}: not a complete rehearsal manifest")
+    # The manifest comes from the build machine. Its base commit is handed to git as a revision: only a full
+    # commit hash, never something git could read as an option or as another kind of revision.
+    if not isinstance(manifest["nulavio_base_commit"], str) or not COMMIT.fullmatch(manifest["nulavio_base_commit"]):
+        raise ManifestError(f"{path}: the base commit is not a full commit hash")
     return manifest
 
 

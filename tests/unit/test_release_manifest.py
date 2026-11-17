@@ -192,6 +192,16 @@ class ReleaseManifestTest(unittest.TestCase):
             (self.repo / path).write_text(text + path + "\n")
         self.commit_record(json.loads(self.record.read_text()))
 
+    def test_a_base_commit_that_is_not_a_full_hash_is_refused_before_git_sees_it(self):
+        for value in ("--output=/tmp/x", "main", "HEAD~1", self.base[:12], "", None, 7):
+            with self.subTest(value=value):
+                self.manifest["nulavio_base_commit"] = value
+                self.write()
+                self.refused("not a full commit hash")
+                with self.assertRaises(release_manifest.ManifestError) as caught:
+                    release_manifest.networking_claim(self.out, self.repo)
+                self.assertIn("not a full commit hash", str(caught.exception))
+
     def test_a_base_commit_without_the_reader_gives_no_claim(self):
         with self.assertRaises(release_manifest.ManifestError) as caught:
             release_manifest.networking_claim(self.out, self.repo)
