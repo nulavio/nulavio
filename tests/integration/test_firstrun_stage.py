@@ -306,8 +306,10 @@ class FirstRunStageTest(unittest.TestCase):
             "return [...document.querySelectorAll('#firstrun-providers li')].map(li =>"
             " [li.dataset.provider, li.dataset.inUse, Boolean(li.querySelector('.button'))]);"
         )
-        harness.wait_until(lambda: len(self.m.execute(rows)) == 4, 10)
-        self.assertEqual([row[0] for row in self.m.execute(rows)], ["builtin", "proton-pass", "keepassxc", "bitwarden"])
+        harness.wait_until(lambda: len(self.m.execute(rows)) == 5, 10)
+        self.assertEqual(
+            [row[0] for row in self.m.execute(rows)], ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"]
+        )
         self.assertEqual({row[1] for row in self.m.execute(rows)}, {"false"}, self.m.execute(rows))
         self.click('[data-provider="builtin"] .button')
         self.assertTrue(harness.wait_until(lambda: self.m.execute(rows)[0][1:] == ["true", False], 10), self.m.execute(rows))

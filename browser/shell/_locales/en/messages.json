@@ -1320,7 +1320,7 @@
   "firstrunProviderProton": {"message": "Official extension. The vault lives in your Proton account."},
   "firstrunProviderKeepass": {"message": "The vault is a file of yours on this computer. Needs the KeePassXC app."},
   "firstrunProviderBitwarden": {"message": "Official extension, in testing in Nulavio. The vault lives in your Bitwarden account."},
-  "firstrunProvider1Password": {"message": "Official extension, in testing in Nulavio. The vault stays in your 1Password account; the desktop app unlocks the extension only after an administrator step (nulavio doctor shows the command)."},
+  "firstrunProvider1Password": {"message": "Official extension, in testing in Nulavio. The vault stays in your 1Password account."},
   "firstrunProviderUse": {"message": "Use $NAME$", "placeholders": {"name": {"content": "$1"}}},
   "firstrunDefaultCaption": {"message": "You can undo it later in Settings, under Integrations."},
   "firstrunProfileTitle": {"message": "Want a profile with a password?"},
