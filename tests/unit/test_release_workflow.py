@@ -361,7 +361,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # covered by SHA256SUMS.
         script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
         signing = script.index('"$repo/scripts/release/sign_repo.sh"')
-        self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), signing)
+        self.assertLess(script.index("if [[ -n ${NULAVIO_FLATPAK_BUNDLE_SHA256"), signing)  # the compare, not a comment
         self.assertLess(script.index("check_flatpak_bundle.py"), signing)
         self.assertIn("GITHUB_ACTIONS", script)
         self.assertLess(script.index('cp "$bundle" "$stage/github/"'), script.index("sha256sum -- * >SHA256SUMS"))
