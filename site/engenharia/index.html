@@ -138,7 +138,7 @@
 </li>
 <li class="ledger-row is-partly">
 <p class="state"><svg class="icon" aria-hidden="true" focusable="false"><use href="#i-partly"/></svg><span>Em parte</span></p>
-<p class="item"><strong>Pacotes para Fedora e Ubuntu</strong> <span>O RPM, o .deb e um pacote Flatpak saem do mesmo build. O Fedora instala de um repositório dnf e o Ubuntu de um repositório APT, os dois assinados com a chave de lançamento; depois de cada envio, os dois são instalados em contêineres limpos do Fedora e do Ubuntu com as verificações de assinatura ligadas. Faltam o caminho do APT percorrido num Ubuntu de verdade e o Flathub.</span></p>
+<p class="item"><strong>Pacotes para Fedora e Ubuntu</strong> <span>O RPM e o .deb saem do mesmo build; o Flatpak é montado e conferido a cada versão e vai sair pelo Flathub, não como pacote avulso, que nunca se atualiza sozinho. O Fedora instala de um repositório dnf e o Ubuntu de um repositório APT, os dois assinados com a chave de lançamento; depois de cada envio, os dois são instalados em contêineres limpos do Fedora e do Ubuntu com as verificações de assinatura ligadas. Faltam o caminho do APT percorrido num Ubuntu de verdade e o Flathub.</span></p>
 <ul class="refs"><li><code class="ref" translate="no">scripts/release/check_rpm.sh</code></li><li><code class="ref" translate="no">scripts/release/check_deb.sh</code></li><li><code class="ref" translate="no">docs/product/release-criteria.md (item 5)</code></li><li><code class="ref" translate="no">docs/security/residual-risks.md › R46</code></li></ul>
 </li>
 <li class="ledger-row is-partly">

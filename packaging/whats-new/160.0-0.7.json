@@ -23,7 +23,8 @@
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
     ],
     "action": [
-      "Se você usava a prévia, que rodava o perfil do Nulavio sobre o Firefox da distribuição: ela não é mais oferecida. Instale o pacote. Os perfis da prévia ficam em ~/.local/share/nulavio/profiles, e o README do projeto diz como trazer os favoritos e as senhas."
+      "Se você usava a prévia, que rodava o perfil do Nulavio sobre o Firefox da distribuição: ela não é mais oferecida. Instale o pacote. Os perfis da prévia ficam em ~/.local/share/nulavio/profiles, e o README do projeto diz como trazer os favoritos e as senhas.",
+      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. No Fedora ou no Ubuntu, instale o pacote RPM ou APT, exporte favoritos e senhas no Flatpak e importe-os; depois remova o Flatpak. Em outra distribuição, remova-o e espere o Flathub."
     ]
   },
   "en-US": {
@@ -46,7 +47,8 @@
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
     ],
     "action": [
-      "If you used the preview, which ran Nulavio's profile on the distribution's Firefox: it is no longer offered. Install the package. The preview's profiles stay in ~/.local/share/nulavio/profiles, and the project's README says how to bring their bookmarks and passwords along."
+      "If you used the preview, which ran Nulavio's profile on the distribution's Firefox: it is no longer offered. Install the package. The preview's profiles stay in ~/.local/share/nulavio/profiles, and the project's README says how to bring their bookmarks and passwords along.",
+      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. On Fedora or Ubuntu, install the RPM or APT package, export bookmarks and passwords in the Flatpak and import them, then remove it. Elsewhere, remove it and wait for Flathub."
     ]
   }
 }

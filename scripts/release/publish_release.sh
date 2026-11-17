@@ -20,8 +20,9 @@
 #    its detached signature (assets of the GitHub release).
 # 4. stage/NEXT.md: the upload, tag and release commands for this version.
 #
-# NULAVIO_FLATPAK_BUNDLE: nulavio-<version>.x86_64.flatpak, built by the release workflow's
-# flatpak job from this rehearsal's portable archive (optional; SHA256SUMS covers it).
+# NULAVIO_FLATPAK_BUNDLE: nulavio-<version>.x86_64.flatpak, for a run by hand only (optional;
+# SHA256SUMS covers it). release.yml no longer passes one: releases offer no bundle until
+# Flathub (#467).
 #
 # NULAVIO_COMPANION_APK: nulavio-companion-<version>.apk, signed and checked by
 # sign_companion.sh, with <apk>.cdx.json beside it. Required when the build offers phone
