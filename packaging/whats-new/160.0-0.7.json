@@ -17,10 +17,11 @@
       "Esconder o título da página na barra da janela, em Configurações, Aparência: a barra de título, a barra de tarefas e os seletores de compartilhamento de tela mostram Nulavio, e não o título da página.",
       "O Imersivo está no menu Exibir, ao lado de Tela inteira, e a primeira execução o oferece quando as abas ficam na lateral.",
       "No KDE Plasma, Manter acima das outras janelas no menu Exibir, ou Ctrl+Alt+K.",
-      "Uma linha fina no topo da página enquanto ela carrega, desligada por padrão: ligue em Configurações, Aparência, Mostrar uma linha de carregamento no topo da página."
+      "Uma linha fina no topo da página enquanto ela carrega, desligada por padrão: ligue em Configurações, Aparência, Mostrar uma linha de carregamento no topo da página.",
+      "Diagnóstico pelo terminal numa instalação por pacote: nulavio-doctor confere o motor do pacote, os codecs, o chaveiro do sistema e a ligação com os gerenciadores de senha. O comando nulavio continua abrindo o navegador."
     ],
     "fixed": [
-      "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando doctor avisa quando ela falta e o que instalar.",
+      "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando nulavio-doctor avisa quando ela falta e o que instalar.",
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
     ],
     "action": [
@@ -44,10 +45,11 @@
       "Hide the page title in the window title, in Settings, Appearance: the title bar, the taskbar and screen-sharing pickers show Nulavio, not the page's title.",
       "Immersive is in the View menu, next to Full Screen, and the first run offers it when the tabs are in the side list.",
       "On KDE Plasma, Keep Above Other Windows in the View menu, or Ctrl+Alt+K.",
-      "A thin line along the top of the page while it loads, off by default: turn it on in Settings, Appearance, Show a loading line at the top of the page."
+      "A thin line along the top of the page while it loads, off by default: turn it on in Settings, Appearance, Show a loading line at the top of the page.",
+      "Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser."
     ],
     "fixed": [
-      "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the doctor command says when it is missing and what to install.",
+      "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the nulavio-doctor command says when it is missing and what to install.",
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
     ],
     "action": [

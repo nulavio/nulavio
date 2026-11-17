@@ -774,6 +774,58 @@ class PackagingTest(unittest.TestCase):
             self.assertRegex(calls[0], r"^apparmor_parser -(r -T -W|R) /etc/apparmor\.d/nulavio")
             self.assertNotRegex(script, r"\b(curl|wget|rm|chmod|chown|useradd|systemctl)\b")
 
+    def test_both_packages_offer_the_doctor_without_changing_what_nulavio_does(self):
+        # #470: `nulavio` alone stays the browser; `nulavio-doctor` runs the doctor of the tools the package carries,
+        # for the package's own engine, and the package checks run it in a clean container.
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
+        self.assertIn('exec %{nulavio_dir}/nulavio "$@"', spec)
+        doctor = spec.split("%{buildroot}%{_bindir}/nulavio-doctor <<'SH'\n", 1)[1].split("\nSH\n", 1)[0]
+        self.assertEqual(
+            doctor.splitlines(),
+            ["#!/bin/sh", "NULAVIO_ENGINE=%{nulavio_dir}/nulavio", "export NULAVIO_ENGINE",
+             'exec %{nulavio_dir}/nulavio-tools/bin/nulavio doctor "$@"'],
+        )  # fmt: skip
+        self.assertIn("%{_bindir}/nulavio-doctor\n", spec.split("%files", 1)[1])
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        self.assertIn('printf \'#!/bin/sh\\nexec /usr/lib/nulavio/nulavio "$@"\\n\' > "$pkg/usr/bin/nulavio"', deb)
+        self.assertIn(
+            "printf '#!/bin/sh\\nNULAVIO_ENGINE=/usr/lib/nulavio/nulavio\\nexport NULAVIO_ENGINE\\n"
+            'exec /usr/lib/nulavio/nulavio-tools/bin/nulavio doctor "$@"\\n\' > "$pkg/usr/bin/nulavio-doctor"',
+            deb,
+        )
+        for check, directory in (("check_rpm.sh", "/usr/lib64/nulavio"), ("check_deb.sh", "/usr/lib/nulavio")):
+            text = (ROOT / "scripts" / "release" / check).read_text(encoding="utf-8")
+            self.assertIn('su tester -c "nulavio-doctor --json" > /tmp/doctor.json', text)
+            self.assertIn(f"python3 -I /checks/doctor_probe.py {directory} < /tmp/doctor.json", text)
+
+    def test_the_doctor_probe_wants_the_packages_engine_owned_by_the_package(self):
+        probe = ROOT / "scripts" / "release" / "doctor_probe.py"
+
+        def run(checks):
+            return subprocess.run([sys.executable, "-I", str(probe), "/usr/lib64/nulavio"], input=json.dumps(checks),
+                                  capture_output=True, text=True, check=False)  # fmt: skip
+
+        good = [
+            {"area": "engine", "name": "binary", "status": "ok", "detail": "Nulavio 160.0 at /usr/lib64/nulavio/nulavio"},
+            {"area": "engine", "name": "updates", "status": "ok", "detail": "package nulavio-160.0-0.7.fc44.x86_64: x"},
+            {"area": "media", "name": "codec library", "status": "ok", "detail": "libavcodec.so.62"},
+        ]
+        self.assertEqual(run(good).returncode, 0, run(good).stdout)
+        engine, owner, codecs = good
+        bad = {
+            "another directory": [dict(engine, detail="Nulavio 160.0 at /opt/nulavio/nulavio"), owner, codecs],
+            "not Nulavio": [dict(engine, detail="Mozilla Firefox 160.0 at /usr/lib64/nulavio/nulavio"), owner, codecs],
+            "unowned": [engine, dict(owner, status="warn"), codecs],
+            "another package": [engine, dict(owner, detail="package other-1.0 (nulavio in its files): x"), codecs],
+            "a sentence that names nulavio": [engine, dict(owner, detail="package o arquivo /usr/lib64/nulavio/x"), codecs],
+            "no codec check": [engine, owner],
+        }
+        deb = [engine, dict(owner, detail="package nulavio 160.0-0.7: x"), codecs]  # dpkg's form
+        self.assertEqual(run(deb).returncode, 0)
+        for name, checks in bad.items():
+            with self.subTest(name):
+                self.assertEqual(run(checks).returncode, 1)
+
     def test_one_build_reads_the_system_directory_the_distribution_has(self):
         series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")
         self.assertIn("0006-xre-use-the-system-mozilla-directory-the-distribution-has.patch", series)
