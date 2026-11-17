@@ -526,14 +526,27 @@ class NetworkingAttestationTest(unittest.TestCase):
         steps = [text.index(part) for part in (
             'scripts/build/build_nulavio.sh "$firefox"',
             'scripts/build/networking_check.py "$firefox" --claim-out "$RUNNER_TEMP/claim/networking-claim.json"',
-            'scripts/build/networking_check.py "$firefox" --expected-claim > "$RUNNER_TEMP/claim/expected.json"',
-            'cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/claim/expected.json"',
+            'scripts/build/networking_check.py "$firefox" --expected-claim > "$RUNNER_TEMP/expected.json"',
+            'cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"',
             "actions/attest-build-provenance@",
-            'gh attestation verify "$RUNNER_TEMP/claim/expected.json"',
+            'gh attestation verify "$RUNNER_TEMP/expected.json"',
         )]  # fmt: skip
         self.assertEqual(steps, sorted(steps))
-        self.assertIn("subject-path: ${{ runner.temp }}/claim/networking-claim.json", text)
+        self.assertIn("subject-path: ${{ runner.temp }}/expected.json", text)  # bytes the attesting job made itself
         self.assertEqual(text.count("subject-path:"), 1)  # the claim, and nothing else
+        # The job that runs the build cannot sign; the job that signs builds nothing.
+        body = text.split("\njobs:\n", 1)[1]
+        jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+        self.assertEqual(sorted(jobs), ["attest", "read"])
+        self.assertNotIn("id-token", jobs["read"])
+        self.assertNotIn("attestations", jobs["read"])
+        self.assertIn("blacksmith-16vcpu-ubuntu-2404", jobs["read"])
+        self.assertIn("needs: read", jobs["attest"])
+        self.assertIn("runs-on: ubuntu-24.04", jobs["attest"])
+        for word in ("build_nulavio", "secrets.", "environment:", "podman"):
+            self.assertNotIn(word, jobs["attest"], word)
+        for name, job in jobs.items():
+            self.assertIn("if: github.ref == 'refs/heads/main'", job, name)
         self.assertIn(self.verify, text)  # found here as the signing job will look for it
         commands = "\n".join(line for line in text.split("\njobs:\n", 1)[1].splitlines() if not line.lstrip().startswith("#"))
         self.assertNotIn("--write", commands)  # it changes nothing in the checkout
