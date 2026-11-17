@@ -139,7 +139,7 @@ def module_text(name: str) -> str:
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
 API_NAMES += ("nulavioLayout", "nulavioPersonalise", "nulavioWhatsNew")
-API_NAMES += ("nulavioServices",)  # web services on a click, translation and summaries (#156, #154)
+API_NAMES += ("nulavioServices",)  # web services on a click, for translation (#156)
 
 
 class PrivilegedApiTest(unittest.TestCase):

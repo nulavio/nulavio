@@ -140,13 +140,11 @@ PREF_WRITERS = {
         "setStringPref(RULES_PREF)": 1,
     },
     "NulavioSearch.sys.mjs": {"setBoolPref(pref)": 1, "setIntPref(PREF_MIGRATION)": 1, "setStringPref(PREF_OPTIN)": 1},
-    # the web services the person added for translation, the target language, the one summary service, and whether
-    # private windows offer them (#156, #154): never a protection, only what the person chose in Settings
+    # the web services the person added for translation, the target language, and whether private windows offer
+    # them (#156): never a protection, only what the person chose in Settings
     "NulavioServices.sys.mjs": {
         "setStringPref(PREF_TRANSLATE)": 1,
         "setStringPref(PREF_LANGUAGE)": 1,
-        "setStringPref(PREF_SUMMARY)": 1,
-        "clearUserPref(PREF_SUMMARY)": 1,
         "setBoolPref(PREF_PRIVATE)": 1,
     },
     # What's new (#198): the newest version this profile was told about, and the bar's own switch; no protection.

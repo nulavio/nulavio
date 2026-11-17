@@ -1,7 +1,7 @@
-"""#156 and #154: web services used on a click, for translation and summaries.
+"""#156: web services used on a click, for translation.
 
 Translation stays on the device by default; a web service is used only after the person adds it, from a menu item
-that names it, and only on that click. Summaries are off until a service is chosen. The tests check the addresses
+that names it, and only on that click (page summaries, #154, are After 1.0). The tests check the addresses
 each known service gets, what is refused, that the menu offers nothing before a service is added and sends nothing
 before the click, private windows, and the settings page. Every request that is not to the local fixture server is
 recorded and cancelled, so nothing reaches a real service. On-device translation needs the engine's models from
@@ -92,7 +92,7 @@ class WebServicesTest(unittest.TestCase):
         self.addCleanup(
             self.m.chrome,
             "for (const p of ['nulavio.services.translate', 'nulavio.services.translate.language',"
-            " 'nulavio.services.summary', 'nulavio.services.private']) Services.prefs.clearUserPref(p);",
+            " 'nulavio.services.private']) Services.prefs.clearUserPref(p);",
         )
 
     def sv(self, body: str, *args):
@@ -157,7 +157,7 @@ class WebServicesTest(unittest.TestCase):
 
     def test_01_nothing_is_offered_before_a_service_is_chosen(self):
         state = self.ok("return SV.NulavioServices.state();")
-        self.assertEqual((state["translators"], state["summarizer"], state["privateToo"]), ([], None, False))
+        self.assertEqual((state["translators"], state["privateToo"]), ([], False))
         names = [service["name"] for service in state["known"]]
         self.assertEqual(names, sorted(names))
         self.assertEqual(self.open_menu_on_text(), [])
@@ -201,14 +201,13 @@ class WebServicesTest(unittest.TestCase):
             ("https://t.example.org/?q={text}&to={lang}", "selection", None),
             ("https://t.example.org/?q=%s", "selection", None),
             ("https://t.example.org/page?u={url}", "page", None),
-            ("https://s.example.org/?url={url}", "summary", None),
             ("http://t.example.org/?q={text}", "selection", "service-needs-https"),
             ("https://u:p@t.example.org/?q={text}", "selection", "credentials-in-url"),
             ("https://t.example.org/?q=", "selection", "missing-text"),
             ("https://t.example.org/?u=", "page", "missing-url"),
             ("https://t.example.org/?q={text}&u={url}", "selection", "bad-placeholder"),
             ("https://t.example.org/?q={text}&x={other}", "selection", "bad-placeholder"),
-            ("https://s.example.org/?url={url}&l={lang}", "summary", "bad-placeholder"),
+            ("https://s.example.org/?url={url}", "summary", "invalid-kind"),
             ("https://{url}", "page", "invalid-url"),
             ("https://t.example.org/ {text}", "selection", "invalid-url"),
             ("not a url {text}", "selection", "invalid-url"),
@@ -268,17 +267,6 @@ class WebServicesTest(unittest.TestCase):
         # A page this computer or a local network serves is never handed to a service that fetches it.
         self.assertEqual(self.error(build, "translate-page|google", "", "http://192.168.0.10/doc"), "private-address")
         self.assertEqual(self.error(build, "translate-selection|deepl", "   ", page), "nothing-selected")
-        # Summaries: one service; a web one gets the address only.
-        self.ok(S + "return S.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
-        summary = self.ok(build, "summary-page|kagi-summarizer", "", page)
-        self.assertEqual(summary, {"open": f"https://kagi.com/summarizer?url={enc(sent)}"})
-        self.assertEqual(self.error(S + "return S.setSummarizer({kind: 'web', key: 'deepl'});"), "unknown-service")
-        self.ok(
-            S + "return S.setSummarizer({kind: 'web', key: 'custom', name: 'Resumo', summary: 'https://r.example.net/?u={url}'});"
-        )
-        self.assertEqual(self.ok(build, "summary-page|custom", "", page), {"open": f"https://r.example.net/?u={enc(sent)}"})
-        self.ok(S + "return S.setSummarizer(null);")
-        self.assertEqual([item for item in self.ok(S + "return S.menu();") if item["use"].startswith("summary")], [])
         # A hand-edited entry that the module would not have written is dropped, never used.
         self.m.chrome(
             "Services.prefs.setStringPref('nulavio.services.translate', JSON.stringify("
@@ -288,7 +276,7 @@ class WebServicesTest(unittest.TestCase):
 
     def test_04_a_menu_item_opens_its_address_and_nothing_goes_before_the_click(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
-        self.ok("return SV.NulavioServices.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
+        self.ok("return SV.NulavioServices.addTranslator({key: 'google'});")
         self.m.chrome(GUARD_START, [list(WATCHED)])
         self.addCleanup(self.m.chrome, GUARD_STOP)
         tabs = self.m.chrome("return gBrowser.tabs.length;")
@@ -310,47 +298,16 @@ class WebServicesTest(unittest.TestCase):
         self.assertIn(opened[0], (want, "about:blank"), opened)
         self.assertEqual(opened[1], 1, "the service's tab opens next to the page's")
         self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
-        # The page is on this computer: its summary is offered and refused, with the reason in its words.
+        # The page is on this computer: its translation by address is offered and refused, with the reason in its words.
         self.m.chrome(CLOSE_MENU)
         self.open_menu_on_page()
-        refused = "Resumir página com Kagi Universal Summarizer — não para endereços deste computador ou da rede local"
+        refused = "Traduzir página com Google Translate — não para endereços deste computador ou da rede local"
         self.assertTrue(
             harness.wait_until(lambda: any(i["label"] == refused for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
         )
         self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
-        self.assertFalse(
-            any(urlsplit(url).hostname == "kagi.com" for url in self.m.chrome(GUARD_SEEN)), "the summary left without a click"
-        )
-        # A link to a public page: its summary goes to the service with the link's address.
-        self.m.chrome(CLOSE_MENU)
-        self.m.context_click("#out")
-        self.assertTrue(harness.wait_until(self.m.menu_open, 10))
-        label = "Resumir o link com Kagi Universal Summarizer"
-        self.assertTrue(
-            harness.wait_until(lambda: any(i["label"] == label and not i["disabled"] for i in self.m.chrome(MENU) or []), 5)
-        )
-        self.assertTrue(self.m.chrome(ACTIVATE, [label]))
-        summary = f"https://kagi.com/summarizer?url={enc('https://example.org/artigo?x=1')}"
-        self.assertTrue(harness.wait_until(lambda: summary in self.m.chrome(GUARD_SEEN), 10), self.m.chrome(GUARD_SEEN))
-        self.assertNotIn(
-            "https://example.org/artigo?x=1", self.m.chrome(GUARD_SEEN), "the browser fetched the linked page itself"
-        )
-        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
-
-    def test_05_the_assistant_gets_the_page_in_its_panel_and_nothing_is_sent(self):
-        self.ok("return SV.NulavioServices.setSummarizer({kind: 'assistant'});")
-        self.m.chrome(GUARD_START, [list(WATCHED)])
-        self.addCleanup(self.m.chrome, GUARD_STOP)
-        self.addCleanup(self.m.chrome, "SidebarController.hide();")
-        self.open_menu_on_page()
-        label = "Resumir página com o assistente"
-        offered = lambda: any(i["label"] == label and i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or [])  # noqa: E731
-        self.assertTrue(harness.wait_until(offered, 5), self.m.chrome(MENU))
-        self.activate(label, self.open_menu_on_page)
-        sidebar = "return SidebarController.isOpen ? SidebarController.currentID : null;"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(sidebar), 10))
-        self.assertIn("nulavio", self.m.chrome(sidebar))
-        self.assertEqual(self.m.chrome(GUARD_SEEN), [])
+        google = [url for url in self.m.chrome(GUARD_SEEN) if urlsplit(url).hostname == "translate.google.com"]
+        self.assertEqual(google, [], "the page went to a service without a click")
 
     def test_06_private_windows_offer_them_only_when_allowed(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
@@ -372,17 +329,6 @@ class WebServicesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.m.menu_open, 10))
         self.assertTrue(harness.wait_until(lambda: any(i["shown"] and not i["disabled"] for i in self.m.chrome(MENU) or []), 5))
 
-    def test_06a_the_assistant_is_never_offered_in_a_private_window(self):
-        """ADR 0007: the assistant refuses a private window, so its summary item is hidden there even when web
-        services are allowed in private windows."""
-        self.ok("return SV.NulavioServices.setSummarizer({kind: 'assistant'});")
-        self.ok("return SV.NulavioServices.setPrivateToo(true);")
-        check = "return SV.NulavioServices.check('summary-page|assistant', {target: args[0], isPrivate: args[1]});"
-        self.assertEqual(
-            self.ok(check, "https://example.org/", True), {"usable": False, "reason": "private-window", "hidden": True}
-        )
-        self.assertEqual(self.ok(check, "https://example.org/", False), {"usable": True, "reason": None})
-
     def test_06b_an_item_hidden_in_a_private_window_is_back_in_a_normal_one(self):
         """The engine draws no item that is not visible: one hidden in a private window (test 06) is drawn again in a
         normal window's menu."""
@@ -400,7 +346,7 @@ class WebServicesTest(unittest.TestCase):
         shown = lambda: any(i["label"] == "Traduzir seleção com DeepL" and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
         self.assertTrue(harness.wait_until(shown, 5), self.m.chrome(MENU))
 
-    def test_07_the_settings_page_adds_removes_and_chooses(self):
+    def test_07_the_settings_page_adds_and_removes(self):
         DOC = "const d = gBrowser.selectedBrowser.contentDocument;"
         self.m.navigate("about:preferences#languages")
         rows = DOC + (
@@ -424,15 +370,6 @@ class WebServicesTest(unittest.TestCase):
         self.assertEqual([t["id"] for t in self.ok("return SV.NulavioServices.translators();")], ["google"])
         self.assertTrue(self.m.chrome(click, ['#nulavio-translate-added moz-button[data-service="google"]']))
         self.assertTrue(harness.wait_until(lambda: self.ok("return SV.NulavioServices.translators();") == [], 10))
-        # The summary choice, in the assistant's pane.
-        self.m.navigate("about:preferences#ai")
-        summary = DOC + "const s = d.getElementById('nulavio-summary-service');"
-        select = summary + "return s && s.getBoundingClientRect().height ? s.value : null;"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(select) == "", 20), self.m.chrome(select))
-        self.m.chrome(summary + "s.value = 'assistant'; s.dispatchEvent(new Event('change', {bubbles: true}));")
-        self.assertTrue(
-            harness.wait_until(lambda: (self.ok("return SV.NulavioServices.summarizer();") or {}).get("kind") == "assistant", 10)
-        )
 
 
 @unittest.skipUnless(
