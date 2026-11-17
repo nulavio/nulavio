@@ -187,8 +187,8 @@ class TextFragmentsTest(unittest.TestCase):
         """The text directives the page shows, as the engine's own menu reads them (a chrome-only API)."""
         return self.m.execute("return document.fragmentDirective.getTextDirectiveRanges().length;", sandbox="system")
 
-    def press_ctrl_shift_l(self) -> str | None:
-        """Ctrl+Shift+L through the widget (nsITextInputProcessor), as typing does (test_shortcuts' way).
+    def press_ctrl_alt_c(self) -> str | None:
+        """Ctrl+Alt+C (#469) through the widget (nsITextInputProcessor), as typing does (test_shortcuts' way).
         Returns what the window announced when the command finished (its outcome), or None."""
         # A11yUtils.announce puts the message in the aria-label of a <label> it adds to this alert.
         self.m.chrome("document.getElementById('a11y-announcement')?.replaceChildren();")
@@ -196,28 +196,28 @@ class TextFragmentsTest(unittest.TestCase):
             "const tip = Cc['@mozilla.org/text-input-processor;1'].createInstance(Ci.nsITextInputProcessor);"
             "if (!tip.beginInputTransactionForTests(window)) throw new Error('no input transaction');"
             "const ctrl = new KeyboardEvent('', {key: 'Control', code: 'ControlLeft', keyCode: 17});"
-            "const shift = new KeyboardEvent('', {key: 'Shift', code: 'ShiftLeft', keyCode: 16});"
-            "const letter = new KeyboardEvent('', {key: 'L', code: 'KeyL', keyCode: 76});"
-            "tip.keydown(ctrl); tip.keydown(shift); tip.keydown(letter); tip.keyup(letter); tip.keyup(shift); tip.keyup(ctrl);"
+            "const alt = new KeyboardEvent('', {key: 'Alt', code: 'AltLeft', keyCode: 18});"
+            "const letter = new KeyboardEvent('', {key: 'c', code: 'KeyC', keyCode: 67});"
+            "tip.keydown(ctrl); tip.keydown(alt); tip.keydown(letter); tip.keyup(letter); tip.keyup(alt); tip.keyup(ctrl);"
         )
         said = "return document.getElementById('a11y-announcement')?.firstChild?.getAttribute('aria-label') || null;"
         return harness.wait_until(lambda: self.m.chrome(said), 10)
 
-    def test_02b_ctrl_shift_l_copies_the_link_to_the_selected_text(self):
+    def test_02b_ctrl_alt_c_copies_the_link_to_the_selected_text(self):
         """#157: the shortcut the maintainer accepted gives the link the page menu gives; nothing selected, nothing copied."""
         self.m.navigate(self.page)
         self.m.chrome("Services.clipboard.emptyClipboard(Ci.nsIClipboard.kGlobalClipboard);")
         self.m.execute("getSelection().removeAllRanges(); document.body.focus();")
-        said = self.press_ctrl_shift_l()
+        said = self.press_ctrl_alt_c()
         self.assertIn(said, NOTHING, "the shortcut did not say there was nothing to copy")
         self.assertIsNone(self.m.chrome(CLIPBOARD), "a link was copied with nothing selected")
         self.m.execute(
             "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
             "getSelection().removeAllRanges(); getSelection().addRange(r);"
         )
-        self.press_ctrl_shift_l()
+        self.press_ctrl_alt_c()
         copied = harness.wait_until(lambda: self.m.chrome(CLIPBOARD) or None, 10)
-        self.assertTrue(copied, "Ctrl+Shift+L copied nothing")
+        self.assertTrue(copied, "Ctrl+Alt+C copied nothing")
         base, _, fragment = copied.partition("#")
         # The page's own address: its path and id=7 (the engine may already have dropped utm_ from this second visit).
         self.assertTrue(base.startswith(self.server.url("/highlight?id=7")), copied)
@@ -232,14 +232,14 @@ class TextFragmentsTest(unittest.TestCase):
             "const r = document.createRange(); r.selectNodeContents(document.getElementById('target'));"
             "getSelection().removeAllRanges(); getSelection().addRange(r);"
         )
-        said = self.press_ctrl_shift_l()
+        said = self.press_ctrl_alt_c()
         copied = harness.wait_until(lambda: self.m.chrome(CLIPBOARD) or None, 10)
-        self.assertTrue(copied, f"Ctrl+Shift+L copied nothing; it said {said!r}")
+        self.assertTrue(copied, f"Ctrl+Alt+C copied nothing; it said {said!r}")
         self.assertIn("#intro:~:text=", copied)
 
     def test_02d_in_the_pdf_viewer_nothing_is_copied(self):
         """The engine offers no link to a highlight in its PDF viewer (its text layer would give a link the viewer does
-        not follow); Ctrl+Shift+L does not copy one either (independent review of #329)."""
+        not follow); Ctrl+Alt+C does not copy one either (independent review of #329)."""
         self.m.navigate(self.server.url("/text.pdf"))
         layer = "return [...document.querySelectorAll('.textLayer span')].some(s => s.textContent.includes('frase'));"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(layer), 20), "the PDF viewer drew no text layer")
@@ -250,7 +250,7 @@ class TextFragmentsTest(unittest.TestCase):
             "getSelection().removeAllRanges(); getSelection().addRange(r);"
         )
         self.assertIn("frase", self.m.execute("return getSelection().toString();"))
-        said = self.press_ctrl_shift_l()
+        said = self.press_ctrl_alt_c()
         self.assertIn(said, NOTHING, "the shortcut did not say there was nothing to copy")
         self.assertIsNone(self.m.chrome(CLIPBOARD), "a link was copied from the PDF viewer")
 

@@ -56,7 +56,7 @@
     },
     "copy-link-to-highlight": {
       "suggested_key": {
-        "default": "Ctrl+Shift+L"
+        "default": "Ctrl+Alt+C"
       },
       "description": "__MSG_commandCopyLinkToHighlight__"
     },

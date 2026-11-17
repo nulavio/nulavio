@@ -68,7 +68,7 @@ this.nulavioLayout = class extends ExtensionAPI {
           const say = key => win.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
           return layout.toggleFocus(win, say);
         }),
-        // #157: Ctrl+Shift+L, from the background page, in the tab the key was pressed in.
+        // #157, #469: Ctrl+Alt+C, from the background page, in the tab the key was pressed in.
         copyLinkToHighlight: call(tabId => {
           // A tab being moved to another window has no wrapper for that moment: nothing to copy from.
           const tab = context.extension.tabManager.get(tabId);
