@@ -398,7 +398,7 @@ class NulavioServicesClass {
       return { usable: false, reason: "not-found" };
     }
     if (isPrivate && !Services.prefs.getBoolPref(PREF_PRIVATE, false)) {
-      return { usable: false, reason: "private-window", hidden: true };
+      return { usable: false, reason: "off-in-private", hidden: true };
     }
     if (item.sends === "url") {
       const reason = refusedAddress(String(target ?? ""));
