@@ -683,7 +683,10 @@ class AiBridgeTest(unittest.TestCase):
         wa, wb = a.workspace, b.workspace
         self.chrome(window, "document.querySelector('#nulavio-band .nv-band-stop').click()")
         self.assertTrue(harness.wait_until(registry.stopped, 20))
-        self.assertIn("emergency stop", b.call("tabs_list", {})["content"][0]["text"])
+        # Each bridge ends its AI Workspace at its next call (raw automation's watcher, which ended a handed-over
+        # workspace by itself, went with it in #463).
+        for bridge in (a, b):
+            self.assertIn("emergency stop", bridge.call("tabs_list", {})["content"][0]["text"])
         self.assertTrue(harness.wait_until(lambda: wa.process is None and wb.process is None, 30))
 
     def test_25_a_redirect_never_reaches_this_computer_without_local_resources(self):
