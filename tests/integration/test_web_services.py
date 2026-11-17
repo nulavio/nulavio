@@ -17,7 +17,6 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import harness
-from marionette import MarionetteError
 
 SV = 'const SV = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs");'
 # The services' hosts and the linked page's: what a click could send to. The engine's own background traffic
@@ -56,10 +55,16 @@ ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
   .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
 // The drawn one: after a refresh of the menu the engine may keep a hidden copy of an item next to the new one.
+// The menu is drawn again after the background page updates it (menus.refresh): only an item laid out on screen can
+// be activated, so this answers false until there is one.
 const item = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
-  .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && d.defaultView.getComputedStyle(i).display !== 'none');
+  .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && i.getBoundingClientRect().height > 0);
 if (!item) return false;
-d.getElementById('contentAreaContextMenu').activateItem(item);
+try {
+  d.getElementById('contentAreaContextMenu').activateItem(item);
+} catch (e) {
+  return false;
+}
 return true;
 """
 CLOSE_MENU = (
@@ -152,16 +157,14 @@ class WebServicesTest(unittest.TestCase):
         """Click the item with this label in the open menu. The background page draws its items again a moment after
         the settings change; if that happened while the menu was open, the item is gone from it: open it again once."""
         for attempt in (1, 2):
-            try:
-                self.assertTrue(self.m.chrome(ACTIVATE, [label]))
+            if harness.wait_until(lambda: self.m.chrome(ACTIVATE, [label]), 5):
                 return
-            except MarionetteError as e:
-                if attempt == 2 or "hidden" not in str(e):
-                    raise
-                self.m.chrome(CLOSE_MENU)
-                reopen()
-                ready = lambda: any(i["label"] == label and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
-                self.assertTrue(harness.wait_until(ready, 5), self.m.chrome(MENU))
+            if attempt == 2:
+                self.fail(f"{label!r} could not be activated: {self.m.chrome(MENU)}")
+            self.m.chrome(CLOSE_MENU)
+            reopen()
+            ready = lambda: any(i["label"] == label and i["shown"] for i in self.m.chrome(MENU) or [])  # noqa: E731
+            self.assertTrue(harness.wait_until(ready, 5), self.m.chrome(MENU))
 
     def test_01_nothing_is_offered_before_a_service_is_chosen(self):
         state = self.ok("return SV.NulavioServices.state();")
