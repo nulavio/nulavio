@@ -745,7 +745,7 @@ class SearchPrivacyTest(unittest.TestCase):
 
     def test_19_an_opensearch_description_that_declares_a_session_is_not_kept(self):
         """#152, review of #484: the addresses an OpenSearch description declares go through the session check once
-        the engine has read them; an engine whose search or suggestion address carries one is removed again."""
+        the engine has read them; an engine whose search, suggestion or search-form address carries one is removed again."""
         self.require_nulavio()
         names = "return (await S.state()).engines.map(e => e.name);"
         for name, param in (("Fixture OS busca", "search"), ("Fixture OS sugestao", "suggest"), ("Fixture OS form", "form")):
