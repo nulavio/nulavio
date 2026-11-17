@@ -40,6 +40,8 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Fixes**:
 
+- Content filter: a new profile installed uBlock Origin 1.75.0, which has the element-picker flaw of [GHSA-cmqw-9r2w-6wv2](https://github.com/gorhill/uBlock/security/advisories/GHSA-cmqw-9r2w-6wv2) (high: a site could add a trusted filter that runs script on any site), and kept it until its first add-on update check (#415). The pin is now 1.76.4, past the fix in 1.75.4.
+
 - Distribution Firefox with the launcher (Track A): a profile the launcher made before a fingerprinting protection was added did not get it, with no message (#384). The launcher wrote the set of protections into a profile once. It now follows the baseline in a profile where nobody changed it, at the profile's next launch; a set the person wrote themselves is kept, and `nulavio doctor` names it with the value to set ([R78](residual-risks.md)). The Nulavio build was not affected: there the set is the build's default, or the one the Shell writes while "let sites see my motion and contrast preferences" is on, and the launcher leaves both alone.
 
 - A site with "Usar meu fuso horário neste site" on kept the earlier set of fingerprinting protections until the browser restarted, when the set changed while it was open: turning "Deixar os sites verem minhas preferências de movimento e contraste" on or off did not reach that site (#405). The engine works out each site's own set when the per-site list is set, and not again; the Shell now hands it the list again after the general set changes.
