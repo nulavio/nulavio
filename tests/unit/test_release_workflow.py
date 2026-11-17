@@ -533,6 +533,8 @@ class NetworkingAttestationTest(unittest.TestCase):
         )]  # fmt: skip
         self.assertEqual(steps, sorted(steps))
         self.assertIn("subject-path: ${{ runner.temp }}/expected.json", text)  # bytes the attesting job made itself
+        self.assertIn('      - "scripts/build/**"', text)  # what makes the reading is in the claim, so it starts a run too
+        self.assertIn('      - ".github/workflows/networking-check.yml"', text)
         self.assertEqual(text.count("subject-path:"), 1)  # the claim, and nothing else
         # The job that runs the build cannot sign; the job that signs builds nothing.
         body = text.split("\njobs:\n", 1)[1]

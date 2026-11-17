@@ -103,9 +103,23 @@ def inputs(read) -> dict:
 # What a workflow attests and a release recomputes (#455). The same bytes from both sides, or no match:
 # a fixed shape, sorted keys, no date, no counts, nothing a second build of the same inputs would change.
 CLAIM = "nulavio-rust-networking-check/v1"
+# What makes the reading: the reader, the build script and the workflow that runs them. Their digests are in
+# the claim, so an attestation made before one of them changed (a reader that was tightened, say) is not the
+# one a later release asks for. They are not in the record's "built_with": a change to them needs a new run of
+# the workflow, which it starts by itself, not a new build on someone's machine.
+READ_WITH = ("scripts/build/networking_check.py", "scripts/build/build_nulavio.sh", ".github/workflows/networking-check.yml")
 
 
-def claim(firefox: str, source_sha256: str, built_with: dict) -> bytes:
+def reader(read) -> dict:
+    """The digests of what makes the reading. `read(path)` gives a repository file's bytes, as for inputs()."""
+    return {path: hashlib.sha256(read(path)).hexdigest() for path in READ_WITH}
+
+
+def repository_reader(repo: Path = ROOT) -> dict:
+    return reader(lambda path: (repo / path).read_bytes())
+
+
+def claim(firefox: str, source_sha256: str, built_with: dict, read_with: dict) -> bytes:
     """The statement "this Firefox release, built with these inputs, passed the reading", as bytes.
 
     networking-check.yml writes it from its own build and reading and attests the file. The release's
@@ -117,6 +131,7 @@ def claim(firefox: str, source_sha256: str, built_with: dict) -> bytes:
         "firefox": firefox,
         "source_sha256": source_sha256,
         "built_with": {key: built_with[key] for key in ("mozconfig_sha256", "variant_sha256", "patch_stack_sha256")},
+        "read_with": {path: read_with[path] for path in READ_WITH},
         "result": "passed",
     }
     return (json.dumps(statement, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -338,7 +353,8 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
     if args.expected_claim:
         try:
             engine = json.loads(ENGINE.read_text(encoding="utf-8"))
-            sys.stdout.buffer.write(claim(engine["firefox"], engine["source_sha256"], repository_inputs(ROOT)))
+            expected = claim(engine["firefox"], engine["source_sha256"], repository_inputs(ROOT), repository_reader(ROOT))
+            sys.stdout.buffer.write(expected)
         except (OSError, ValueError, KeyError) as error:
             print(
                 f"networking-check: the pin, the mozconfig, its variant or the patch stack cannot be read ({error})",
@@ -370,7 +386,8 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
     if args.claim_out:
         # From this reading's own values: the release it read and the inputs it found the tree to have.
         args.claim_out.parent.mkdir(parents=True, exist_ok=True)
-        args.claim_out.write_bytes(claim(record["firefox"], record["source_sha256"], record["built_with"]))
+        made = claim(record["firefox"], record["source_sha256"], record["built_with"], repository_reader(ROOT))
+        args.claim_out.write_bytes(made)
     text = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
     if args.write:
         RECORD.write_text(text, encoding="utf-8")

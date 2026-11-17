@@ -185,11 +185,27 @@ class ReleaseManifestTest(unittest.TestCase):
         self.commit_record(accepted)  # a patch changed since it was accepted
         self.refused(said)
 
+    def commit_reader(self, text: str) -> None:
+        """The reader, the build script and the workflow at the base commit (what the claim's read_with names)."""
+        for path in networking_fixture.networking_check.READ_WITH:
+            (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / path).write_text(text + path + "\n")
+        self.commit_record(json.loads(self.record.read_text()))
+
+    def test_a_base_commit_without_the_reader_gives_no_claim(self):
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.networking_claim(self.out, self.repo)
+        self.assertIn("cannot be read at", str(caught.exception))
+
     def test_the_claim_comes_from_the_manifest_and_the_base_commit_never_from_the_record(self):
-        expected = networking_fixture.networking_check.claim(
-            "159.0.1", SOURCE, networking_fixture.networking_check.repository_inputs(self.repo)
-        )
+        nc = networking_fixture.networking_check
+        self.commit_reader("# the reader\n")
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
         self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A reader changed at the base commit is another claim.
+        self.commit_reader("# the reader, tightened\n")
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
         # A record that says "accepted", or names another release, changes nothing in the claim.
         self.commit_record({"firefox": "1.0", "source_sha256": "0" * 64, "result": "accepted", "accepted_in": "#1"})
         self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)

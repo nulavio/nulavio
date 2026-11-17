@@ -15,7 +15,8 @@ name: networking-check
 # statement by whoever wrote it (residual risk R79, threat model S22).
 #
 # It runs when what the claim is about changes on main (the build configuration, the pin,
-# the patch stack), and by hand. Cost: a build on the 16-processor Blacksmith runner, about
+# the patch stack, and what makes the reading: the reader, the build script, this file), and
+# by hand. Cost: a build on the 16-processor Blacksmith runner, about
 # US$1 to US$3 a run (20 minutes with the runner's cache warm, an hour without).
 #
 # It is the only workflow that builds the variant, and it makes nothing a release could use:
@@ -30,6 +31,8 @@ on:
     paths:
       - "browser/build/**"
       - "browser/patches/**"
+      - "scripts/build/**" # the reader and the build script: their digests are in the claim
+      - ".github/workflows/networking-check.yml"
   workflow_dispatch:
 
 permissions: {}

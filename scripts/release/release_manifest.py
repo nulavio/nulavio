@@ -142,8 +142,18 @@ def networking_claim(out: Path, repo: Path) -> bytes:
     statement, and "accepted" is one too. The signing job asks GitHub for an attestation of these bytes by
     networking-check.yml on main; that workflow wrote the same bytes after building and reading for itself."""
     manifest = load(out / "manifest.json")
-    current = inputs_at(repo, manifest["nulavio_base_commit"])
-    return _networking_module().claim(manifest["firefox"], manifest["source_sha256"], current)
+    commit = manifest["nulavio_base_commit"]
+    current = inputs_at(repo, commit)
+
+    def at_commit(path: str) -> bytes:
+        return subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{path}"], capture_output=True, check=True).stdout
+
+    module = _networking_module()
+    try:
+        read_with = module.reader(at_commit)
+    except subprocess.CalledProcessError:
+        raise ManifestError(f"the reader, the build script or the workflow cannot be read at {commit[:12]}") from None
+    return module.claim(manifest["firefox"], manifest["source_sha256"], current, read_with)
 
 
 def check_networking(manifest: dict, repo: Path) -> None:
