@@ -39,7 +39,7 @@ return {
              named: toggle?.ariaLabel ?? null };
   }),
   providers: rows("nulavio-search-providers", "nulavio-search-provider").map(row => [row.dataset.provider, row.label,
-    row.querySelector("moz-button")?.label ?? null]),
+    row.querySelector("moz-button")?.label ?? null, row.querySelector("moz-button")?.getAttribute("aria-label") ?? null]),
   none: el("nulavio-search-providers")?.querySelector("moz-box-item.nulavio-search-provider-none")?.label ?? null,
   searxng: shown(el("nulavio-search-searxng-url")) ? el("nulavio-search-searxng-url").value : null,
   opensearch: shown(el("nulavio-search-opensearch-url")) ? el("nulavio-search-opensearch-url").value : null,
@@ -143,8 +143,10 @@ class SettingsSearchTest(unittest.TestCase):
         missing = [key for key in before["providers"] if key not in have]
         self.assertEqual([row[0] for row in now["providers"]], missing)
         self.assertTrue(missing, "a new profile should not have every provider yet")
-        key, name, button = now["providers"][0]
-        self.assertEqual(button, f"Adicionar {name}")
+        key, name, button, named = now["providers"][0]
+        # The button says "Adicionar"; its accessible name says which (#486: the full words broke the row's name).
+        self.assertEqual(button, "Adicionar")
+        self.assertEqual(named, f"Adicionar {name}")
         # A known provider, one click: it joins the engine's own list and leaves this one.
         self.m.chrome(CLICK, [f'#nulavio-search-providers moz-button[data-provider="{key}"]'])
         added = self.seen(lambda n: n["said"] and key not in [row[0] for row in n["providers"]])

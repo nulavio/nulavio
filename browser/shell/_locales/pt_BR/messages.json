@@ -75,6 +75,7 @@
   "engineRemove": {"message": "Remover"},
   "confirmCancel": {"message": "Cancelar"},
   "addProviderButton": {"message": "Adicionar $NAME$", "placeholders": {"name": {"content": "$1"}}},
+  "addProviderShort": {"message": "Adicionar"},
   "addProvidersNone": {"message": "Todos já estão na sua lista."},
   "addProviderKagiNote": {"message": "O Kagi é pago; você entra na sua conta em kagi.com."},
   "err_unsafe_file": {"message": "O arquivo da escolha nesse perfil é um link, e o Nulavio não escreve através de um link."},
