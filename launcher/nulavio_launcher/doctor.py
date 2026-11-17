@@ -8,6 +8,8 @@ from __future__ import annotations
 import ctypes.util
 import json
 import os
+import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -265,6 +267,16 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
         except engine_mod.EngineError:
             return []
     name = Path(engine_path).name
+    # The command below is pasted into a root shell: only a plain file name goes into it, and quoted.
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        return [
+            Check(
+                "passwords",
+                "1Password desktop app",
+                "warn",
+                f"the engine's file name {name!r} is not a plain name; no command given",
+            )
+        ]
     if name in ONEPASSWORD_KNOWN:
         return [Check("passwords", "1Password desktop app", "ok", f"{app}; it knows the engine ({name}) by itself")]
     try:
@@ -275,9 +287,10 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
         return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
     if name in allowed:
         return [Check("passwords", "1Password desktop app", "ok", f"'{name}' is in {ONEPASSWORD_ALLOWED}")]
-    command = f"echo {name} | sudo tee -a {ONEPASSWORD_ALLOWED}"
+    allowed_file = shlex.quote(str(ONEPASSWORD_ALLOWED))
+    command = f"echo {shlex.quote(name)} | sudo tee -a {allowed_file}"
     if not ONEPASSWORD_ALLOWED.parent.is_dir():
-        command = f"sudo install -d -m 0755 {ONEPASSWORD_ALLOWED.parent} && {command}"
+        command = f"sudo install -d -m 0755 {shlex.quote(str(ONEPASSWORD_ALLOWED.parent))} && {command}"
     return [
         Check(
             "passwords",

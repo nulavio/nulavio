@@ -487,6 +487,14 @@ class OnePasswordDoctorTest(unittest.TestCase):
     def test_nothing_without_the_desktop_app(self):
         self.assertEqual(doctor.check_1password(Path("/usr/lib64/nulavio/nulavio")), [])
 
+    def test_a_name_that_is_not_plain_gets_no_command(self):
+        # The command is pasted into a root shell: a file name with shell characters never goes into it.
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/opt/x/nulavio;rm -rf ~"))
+        self.assertEqual(check.status, "warn")
+        self.assertNotIn("sudo", check.detail)
+
     def test_firefox_needs_no_step(self):
         self.app.parent.mkdir(parents=True)
         self.app.touch()
