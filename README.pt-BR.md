@@ -83,11 +83,12 @@ O script confere os checksums assinados pela Mozilla antes de compilar qualquer 
 
 ### Se você usava a prévia
 
-A prévia, que rodava o perfil do Nulavio sobre o Firefox da sua distribuição (`bin/nulavio setup` e `run`), não é mais oferecida: instale o [pacote](#instalar). `bin/nulavio setup` e `run` agora recusam um motor que não seja o build do Nulavio. Nada é apagado: os perfis da prévia ficam em `~/.local/share/nulavio/profiles/`, e o navegador do pacote não os abre. Para trazer os favoritos e as senhas salvas de um perfil:
+A prévia, que rodava o perfil do Nulavio sobre o Firefox da sua distribuição (`bin/nulavio setup` e `run`), não é mais oferecida: instale o [pacote](#instalar). `bin/nulavio setup` e `run` agora recusam um motor que não seja o build do Nulavio. Nada é apagado: os perfis da prévia ficam em `~/.local/share/nulavio/profiles/`, e o navegador do pacote não os abre (os perfis dele ficam em `~/.config/nulavio/nulavio`). Para trazer os favoritos e as senhas salvas de um perfil:
 
-1. Abra o perfil da prévia no Firefox da distribuição, com esse Firefox fechado: `firefox --new-instance --profile ~/.local/share/nulavio/profiles/default` (o nome de outro perfil no lugar de `default`). Um perfil criptografado (`nulavio vault`) é destravado antes com `bin/nulavio vault unlock default` e travado de novo depois com `bin/nulavio vault lock default`.
-2. Favoritos: Favoritos → Gerenciar favoritos → Importar e backup → Exportar favoritos para HTML. Senhas: Senhas (`about:logins`) → ⋯ → Exportar senhas. Esse arquivo não é criptografado: deixe-o fora de pastas compartilhadas.
-3. No Nulavio: Favoritos → Gerenciar favoritos → Importar e backup → Importar favoritos de HTML; Senhas → ⋯ → Importar de um arquivo. Depois apague o arquivo de senhas exportado.
+1. Ache a pasta do perfil: `bin/nulavio profile path default` mostra onde ela está (o nome de outro perfil no lugar de `default`; ela muda do caminho abaixo se você definiu `XDG_DATA_HOME` ou `NULAVIO_HOME`).
+2. Abra o perfil da prévia no Firefox da distribuição, com esse Firefox fechado: `firefox --new-instance --profile ~/.local/share/nulavio/profiles/default` (o nome de outro perfil no lugar de `default`). Um perfil criptografado (`nulavio vault`) é destravado antes com `bin/nulavio vault unlock default` e travado de novo depois com `bin/nulavio vault lock default`.
+3. Favoritos: Favoritos → Gerenciar favoritos → Importar e backup → Exportar favoritos para HTML. Senhas: Senhas (`about:logins`) → ⋯ → Exportar senhas. Esse arquivo não é criptografado: deixe-o fora de pastas compartilhadas.
+4. No Nulavio: Favoritos → Gerenciar favoritos → Importar e backup → Importar favoritos de HTML; Senhas → ⋯ → Importar de um arquivo. Depois apague o arquivo de senhas exportado.
 
 A extensão de um gerenciador de senhas (Proton Pass, Bitwarden, KeePassXC) guarda o cofre na própria conta ou no próprio banco de dados: entre de novo no Nulavio, não há o que exportar. Se você rodou `bin/nulavio desktop install`, remova a entrada do menu com `bin/nulavio desktop uninstall`: ela abre a prévia, que agora se recusa a abrir. Quando não precisar mais dos perfis da prévia, apague `~/.local/share/nulavio/profiles/`.
 

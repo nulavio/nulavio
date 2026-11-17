@@ -48,7 +48,7 @@ What Nulavio applies today, how each item is verified (the Track A preview it wa
 ## User recommendations (shown in docs and onboarding)
 
 1. Prefer an external manager that locks (KeePassXC, Proton Pass, Bitwarden) over engine-stored passwords. If you keep engine passwords, set a **Primary Password**.
-2. Keep the system updated (`dnf upgrade` or `apt upgrade`): Nulavio's security releases come from its repository.
+2. Keep the system updated (`dnf upgrade` or `apt upgrade`): Nulavio's security releases come from its repository. The Flatpak bundle that came with 160.0-0.4 to 0.6 has no update channel (R75): move to the package.
 3. Review extensions with "access your data for all websites" next to a password manager.
 4. Use a separate Nulavio profile for work (flow G).
 
