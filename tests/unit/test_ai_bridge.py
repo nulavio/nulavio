@@ -774,9 +774,8 @@ class AuditTest(Home):
                 self.assertEqual(entry["reason"], "internal-pages-off")
         self.assertEqual(approver.asked, [], "nothing is asked for an internal page")
         self.assertNotIn("local_resources", registry.get(agent["id"]).get("session_grants", {}))
-        # A tab that is already there (a redirect, the page's own navigation): the site list still goes first, then
-        # the internal page is refused.
-        for url, reason in ((outside, "out-of-scope"), (inside, "internal-pages-off")):
+        # A tab that is already there (a redirect, the page's own navigation): refused too, inside the sites or not.
+        for url, reason in ((outside, "internal-pages-off"), (inside, "internal-pages-off")):
             page = {"text": "<html>", "url": url, "title": ""}
             with (
                 self.subTest(url=url),
@@ -787,6 +786,19 @@ class AuditTest(Home):
                 self.assertTrue(bridge.call("page_read", {"tab": "t1"})["isError"])
                 self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], reason)
         self.assertEqual(approver.asked, [])
+        # The tool's own question is not asked either for a tab already at an internal page: a Restricted agent's
+        # dialog would ask for interact, an Autonomous one's evaluate for execute_js (independent review of #504).
+        reader = "about:reader?url=https://docs.example.org/a"
+        for level, tool, args in (("restricted", "dialog", {"tab": "t1", "accept": True}),
+                                  ("autonomous", "evaluate", {"tab": "t1", "expression": "1"})):  # fmt: skip
+            other, _ = registry.add(level, "other", level)
+            asks = Approve("session")
+            with self.subTest(tool=tool), mock.patch.object(tools.Bridge, "_url_of", return_value=reader):
+                result = tools.Bridge(other["id"], "s-2", approver=asks).call(tool, args)
+                self.assertTrue(result["isError"])
+                self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], "internal-pages-off")
+                self.assertEqual(asks.asked, [])
+                self.assertEqual(registry.get(other["id"]).get("session_grants", {}), {})
         tabs = [{"context": "t1", "profile": "AI Workspace", "url": outside}]
         with mock.patch.object(tools.Bridge, "_tabs", return_value=tabs), mock.patch.object(tools.Bridge, "_title") as title:
             listed = bridge.call("tabs_list", {})["structuredContent"]["tabs"]

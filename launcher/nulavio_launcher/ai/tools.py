@@ -473,6 +473,9 @@ class Bridge:
             self.require(capability, url, checked=checked)
 
     def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
+        if url:  # an internal page is refused before the tool's own question (independent review of #504)
+            with contextlib.suppress(policy.UrlRefused):
+                self._refuse_internal(policy.classify_url(url), url, checked)
         self.require(capability, url, checked=checked)
         self.require_needs(url, checked=checked)
 
