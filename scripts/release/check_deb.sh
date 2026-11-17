@@ -12,7 +12,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 lib=$(cd "$here/../../tests/lib" && pwd)
 image=${NULAVIO_CHECK_DEB_IMAGE:-$("$here/base_image.sh" ubuntu-itest)}
 
-podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$deb:/pkg/nulavio.deb:ro" "$image" bash -euc '
+podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$here/doctor_probe.py:/checks/doctor_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$deb:/pkg/nulavio.deb:ro" "$image" bash -euc '
     export DEBIAN_FRONTEND=noninteractive
     { apt-get -qq update && apt-get -qq install -y -o APT::Install-Recommends=true /pkg/nulavio.deb; } >/dev/null 2>&1 || { echo "apt install failed"; exit 1; }
     echo "installed: $(dpkg-query -W -f="\${Package} \${Version}" nulavio)"
@@ -37,4 +37,7 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     [ "$sysdir" = "/usr/lib/mozilla" ] && echo "system Mozilla directory read: $sysdir" || { echo "reads $sysdir, expected /usr/lib/mozilla"; exit 1; }
     answer=$(su tester -c "printf %s \"{}\" | /usr/lib/nulavio/nulavio-tools/bin/nulavio temporary api")
     [ "$answer" = "{\"error\": \"bad-request\"}" ] && echo "nulavio-tools: answer" || { echo "nulavio-tools: $answer"; exit 1; }
+    # The diagnostics a package install can run (#470): its own engine, owned by the package, the codecs it recommends.
+    su tester -c "nulavio-doctor --json" > /tmp/doctor.json || true
+    python3 -I /checks/doctor_probe.py /usr/lib/nulavio < /tmp/doctor.json
 '
