@@ -44,13 +44,13 @@ The recommendations that are not "Keep" come first in each group of the [evidenc
 | U9 | Page-loading line (#318) | **Off by default** | Always indeterminate (the engine's progress was unreliable), repeats the tab's own loading indicator, has no switch, and its tests fail on a build of `main` (#436) | | |
 | U10 | Edit the page's text (#161) | **Optional component** (AMO extension) | `document.designMode` needs no privilege; a built-in window actor and a key for an occasional tool | | |
 | U12 | Keep above other windows, on KDE (#170) | **Remove** | KWin already offers it for every window (window menu "Keep Above Others", and a shortcut); Nulavio's version adds a D-Bus trust (R77) | | |
-| I1 | Integrations status page (Connect P0) | **Keep, change** | Keep "make Nulavio the default browser"; move the status of portals, Secret Service and Plasma into `nulavio doctor` and drop the Settings pane | | |
-| I2 | KRunner plugin | **Remove** | KDE's own runners open addresses and searches in the default browser; the plugin is a service any program can call (R44) | | |
-| I3 | KDE Connect "send link to device" | **Remove** | Plasma Browser Integration, which Nulavio already detects, has its own KDE Connect plugin | | |
+| I1 | Integrations status page (Connect P0) | **Keep, change** | Keep "make Nulavio the default browser"; move the status of portals, Secret Service and Plasma into `nulavio doctor` and drop the Settings pane. **Amends** ADR 0004 (P0's Settings → Integrations) | | |
+| I2 | KRunner plugin | **Remove** | KDE's own runners open addresses and searches in the default browser; the plugin is a service any program can call (R44). **Amends** ADR 0004 (P1) | | |
+| I3 | KDE Connect "send link to device" | **Remove** | Plasma Browser Integration, which Nulavio already detects, has its own KDE Connect plugin. **Amends** ADR 0004 (P1) | | |
 | A2 | Raw automation (WebDriver BiDi endpoint) | **Remove** | The one agent path outside Nulavio's per-call policy and its activity record (R42); agents keep the MCP tools. **Amends** ADR 0007 (decision 1, A13) | | |
 | R8 | Phone unlock and the Android Companion | **After 1.0** (offering pairing) | Pairing is already hidden behind a pref; verified on one phone (R48); 1.0 took it back "with the Companion on F-Droid", which now waits until 2027 (#207). **Reverses** the 2026-11-10 scope decision | | |
 | L6 | Flatpak bundle attached to releases | **After 1.0** | The bundle never updates itself (R75): a browser that does not update; ship it with Flathub (#88 to #91). **Reverses** #274 (D3) | | |
-| L1 | Track A preview (distribution Firefox with Nulavio's profile, chrome theme and start page) | **Remove** (the user-facing preview) | Signed packages replaced it; it alone carries R1, R4, R5, R13, R17, R19. The launcher stays as the packaged tools and the test harness | | |
+| L1 | Track A preview (distribution Firefox with Nulavio's profile, chrome theme and start page) | **Remove** (the user-facing preview) | Signed packages replaced it; it alone carries R1, R4, R5, R12, R13, R17, R19. The launcher stays as the packaged tools and the test harness. **Amends** ADR 0001 (Track A) | | |
 | L3 | Confined mode (`--confined`) | **After 1.0** | Reachable only from the preview launcher (#283), refuses on Ubuntu (R46), partial; out of the 1.0 promise until a package can start it | | |
 | L4 | `nulavio desktop install` | **Remove** (with L1) | Packages install the menu entry; only the preview needed it | | |
 | P8 | Fingerprinting additions | **Keep, change** | Keep; once a release carries patch 0012, remove the Shell's per-tab screen fallback where the engine decides, so there is one mechanism | | |
@@ -368,7 +368,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Tests:** `test_profiles` (15), `test_profile_colors` (5), `test_profile_initialization` (6), `test_settings_profiles` (9).
 - **Failures:** #209, #280, #368, #409 (closed).
 - **Decided by:** ADR 0003; FR-06; SEC-15.
-- **The engine already:** has profiles with a selector, avatars and colours since 2025 (verified: `browser.profiles.enabled` is true in 160.0's `firefox.js`). Nulavio adds the templates, the glyphs, the toolbar button and what the Vault needs (a protected profile is never the start-up one, the last unprotected profile).
+- **The engine already:** has profiles with a selector, avatars and colours (verified: `browser.profiles.enabled` is true in 160.0's `firefox.js`). Nulavio adds the templates, the glyphs, the toolbar button and what the Vault needs (a protected profile is never the start-up one, the last unprotected profile).
 - **Fit and cost:** the second promise of the README. The method replacements are the cost at each update.
 - **Recommendation: Keep.**
 
@@ -641,7 +641,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Decided by:** ADR 0004, P1.
 - **The desktop already:** KDE's own runners open a typed address or a web-search keyword in the default browser (inferred; not checked on this machine).
 - **Recommendation: Remove.** Replacement: KDE's runners, with Nulavio as the default browser.
-- **For people who use it today:** the plugin's files are removed (the release notes say how, if the package did not install them).
+- **For people who use it today:** "Add to KRunner" wrote two files under `~/.local/share` (ADR 0004); the update does not remove files in a home folder, so the release notes give the two paths to delete.
 
 #### I3 KDE Connect "send link to device"
 
@@ -873,3 +873,42 @@ Each item: what the issue asks, its milestone, the maintainer's recorded decisio
 - #398 follows U4.
 - #440 follows N151 and N152.
 
+## Decisions and documents a recommendation reverses or amends
+
+Where the maintainer accepts one of these, the issue for it carries the amendment:
+
+| ID | Recommendation | Reverses or amends |
+|---|---|---|
+| A2 | Remove raw automation | ADR 0007: decision 1 ("A as an explicit raw automation option") and the amendment of 2026-10-28; FR-26; R42 closes |
+| I1, I2, I3 | Integrations status into `doctor`; remove KRunner and KDE Connect | ADR 0004 (P0's Settings pane, P1's KRunner and KDE Connect); FR-23; R44 closes |
+| L1, L4 | Remove the Track A preview and `nulavio desktop` | ADR 0001 (Track A as the preview); README, FR-20; R1, R4, R5, R12, R13, R17, R19 close |
+| L3 | Confined mode After 1.0 | SEC-19 in the requirements |
+| L6 | Flatpak bundle After 1.0 | #274's decision of 2026-11-14 (D3); the download pages; R75 |
+| R8 | Phone pairing After 1.0 | [Scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) (phone unlock back in on 2026-11-10); the roadmap's Phase 2c; FR-25; README and landing page |
+| N155 | Do not build | #155's decision of 2026-11-14 |
+| N171 | Do not build | #171's decision of 2026-11-16 |
+| N216, N217, N218 | After 1.0 | #216's and #217's decisions stay as they are; only the milestone moves |
+| N95, N119, N153, N159, N164, N165, N168, N169 | After 1.0 | Only the milestone (the roadmap's wave 4b and 4c lists) |
+
+No recommendation reverses an accepted ADR other than ADR 0001, 0004 and 0007, as amendments. ADRs 0008, 0009 and 0011 stand: U1, U2 and U4 are kept as they are.
+
+## After the decisions
+
+1. The maintainer fills in **Decision** for each row.
+2. For every decision other than "Keep" (and "Keep (… as set)"), an issue: the change, what replaces it, what the release notes tell people, and the amendment where the table above names one. Its number goes in the **Issue** column.
+3. Planned items moved After 1.0 change milestone; items not to be built are closed with the reason, by the maintainer.
+4. The roadmap's wave lists for 4b and 4c are updated in the same pull request as this table's decisions.
+
+## How this was done
+
+- **Worktree:** `origin/main` at `68ec0575`, without the design screenshots.
+- **Inventory:** a feature-to-files map over the Shell (modules, experiments, pages, shared styles), the launcher, the patches, the configuration, the packaging and all 71 integration test modules. It fails on any file or module no feature claims; none was left. Sizes with `wc -l`; test counts are `def test_` per module.
+- **Seams:** a search of the Shell for engine modules (`resource:///modules/…`, `resource://gre/modules/…`, `moz-src:///…`), members with a leading `_` on engine objects, engine methods assigned at run time, and `registerWindowActor`.
+- **Engine updates:** `git log -- browser/build/engine.json`, and the files each bump touched.
+- **Failures:**
+  - the 96 failed `ci` runs since 2026-10-25 (`gh run list --workflow ci --status failure`, then `gh run view --log-failed`);
+  - the failed `release`, `rehearsal` and `asan` runs (their failed steps, and the issues and pull requests that fixed them: #376, #381, #403, #436);
+  - the 47 issues with the label `bug`.
+- **Decisions:** the comments of every planned issue ("Maintainer's decision, …"), the ADRs' status lines, the requirements and the release criteria.
+- **The engine:** Firefox 160.0's source as Nulavio builds it, read-only, for the prefs and pages named "verified"; the desktop facts on this machine (Fedora 44 KDE) where marked.
+- **Not done:** no build, no test run (nothing here needed the integration machine), no reading of the other session's branches beyond the two pull requests, no use data (there is none).
