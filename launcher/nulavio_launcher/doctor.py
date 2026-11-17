@@ -254,6 +254,23 @@ ONEPASSWORD_APP = (Path("/opt/1Password/1password"), Path("/usr/bin/1password"))
 ONEPASSWORD_KNOWN = frozenset({"firefox", "firefox-bin", "firefox-esr"})
 
 
+def _root_owned(path: Path) -> bool:
+    """Whether the file and every folder above it belong to root and only root can change them (review of #478):
+    the line 1Password's app is given trusts a name, so it is only offered for an engine nobody else can replace."""
+    try:
+        resolved = Path(path).resolve(strict=True)
+    except OSError:
+        return False
+    for each in (resolved, *resolved.parents):
+        try:
+            info = os.stat(each)
+        except OSError:
+            return False
+        if info.st_uid != 0 or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return False
+    return True
+
+
 def check_1password(engine_path: Path | None = None) -> list[Check]:
     """When 1Password's desktop app is installed and the engine is a browser it does not know (the Nulavio build),
     whether its binary name is in custom_allowed_browsers, with the command that adds it. Nothing when the app is
@@ -287,6 +304,17 @@ def check_1password(engine_path: Path | None = None) -> list[Check]:
         return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
     if name in allowed:
         return [Check("passwords", "1Password desktop app", "ok", f"'{name}' is in {ONEPASSWORD_ALLOWED}")]
+    if not _root_owned(Path(engine_path)):
+        return [
+            Check(
+                "passwords",
+                "1Password desktop app",
+                "warn",
+                f"the engine ({engine_path}) is not root's alone: adding '{name}' to {ONEPASSWORD_ALLOWED} would let "
+                "any program with that name ask 1Password's app to unlock, so no command is given. Install Nulavio "
+                "from its RPM or DEB package for this step; without it, the extension works with a sign-in in the browser.",
+            )
+        ]
     allowed_file = shlex.quote(str(ONEPASSWORD_ALLOWED))
     command = f"echo {shlex.quote(name)} | sudo tee -a {allowed_file}"
     if not ONEPASSWORD_ALLOWED.parent.is_dir():

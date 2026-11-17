@@ -483,6 +483,9 @@ class OnePasswordDoctorTest(unittest.TestCase):
             patcher = mock.patch.object(doctor, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
+        self.root_owned = mock.patch.object(doctor, "_root_owned", return_value=True)
+        self.root_owned.start()
+        self.addCleanup(self.root_owned.stop)
 
     def test_nothing_without_the_desktop_app(self):
         self.assertEqual(doctor.check_1password(Path("/usr/lib64/nulavio/nulavio")), [])
@@ -516,6 +519,40 @@ class OnePasswordDoctorTest(unittest.TestCase):
         (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
         self.assertEqual(check.status, "ok")
         self.assertEqual(self.allowed.read_text(encoding="utf-8"), "librewolf\nnulavio\n")
+
+    def test_an_engine_the_user_can_replace_gets_no_command(self):
+        """Review of #478: the line trusts a name; it is not offered for a tarball or a home-folder engine."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        self.root_owned.stop()
+        engine = self.tmp / "nulavio" / "nulavio"
+        engine.parent.mkdir()
+        engine.touch()
+        (check,) = doctor.check_1password(engine)
+        self.assertEqual(check.status, "warn")
+        self.assertNotIn("sudo", check.detail)
+        self.assertIn("RPM or DEB", check.detail)
+        self.root_owned.start()
+
+    def test_root_owned_needs_root_and_no_group_or_other_write_up_to_the_root(self):
+        engine = self.tmp / "nulavio"
+        engine.touch()
+
+        def fake(owner_of, mode_of):
+            def stat_of(path):
+                return mock.Mock(st_uid=owner_of(Path(path)), st_mode=mode_of(Path(path)))
+
+            return stat_of
+
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o100755)):
+            self.assertTrue(doctor._root_owned(engine))
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 1000 if p == engine.resolve() else 0, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(engine), "the engine is the user's")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == self.tmp.resolve() else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it anyone can write")
+        self.assertFalse(doctor._root_owned(self.tmp / "missing"))
 
 
 if __name__ == "__main__":
