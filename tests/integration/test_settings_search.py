@@ -39,7 +39,7 @@ return {
              named: toggle?.ariaLabel ?? null };
   }),
   providers: rows("nulavio-search-providers", "nulavio-search-provider").map(row => [row.dataset.provider, row.label,
-    row.querySelector("moz-button")?.label ?? null, row.querySelector("moz-button")?.getAttribute("aria-label") ?? null]),
+    row.querySelector("moz-button")?.label ?? null, row.querySelector("moz-button")?.shadowRoot?.querySelector("button")?.getAttribute("aria-label") ?? null]),
   none: el("nulavio-search-providers")?.querySelector("moz-box-item.nulavio-search-provider-none")?.label ?? null,
   searxng: shown(el("nulavio-search-searxng-url")) ? el("nulavio-search-searxng-url").value : null,
   opensearch: shown(el("nulavio-search-opensearch-url")) ? el("nulavio-search-opensearch-url").value : null,
