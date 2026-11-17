@@ -287,6 +287,9 @@ class MainTest(TreeCase):
         record = self.tmp / "networking-check.json"
         engine = self.tmp / "engine.json"
         engine.write_text(json.dumps(ENGINE))
+        for path in nc.READ_WITH:  # what makes the reading, where main() looks for it (ROOT is this directory here)
+            (self.tmp / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.tmp / path).write_text(f"# {path}\n")
         real_check = nc.check
         with (
             mock.patch.object(nc, "RECORD", record),
@@ -316,6 +319,41 @@ class MainTest(TreeCase):
         self.assertEqual((code, out), (1, ""))
         self.assertIn("FAILED: the Rust library imports recv", err)
         self.assertFalse((self.tmp / "networking-check.json").exists())
+
+    def test_the_claim_is_the_same_bytes_from_a_reading_and_from_the_checkout(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        code, _out, _err = self.main("--claim-out", str(claim_file))
+        self.assertEqual(code, 0)
+        from_reading = claim_file.read_bytes()
+        read_with = nc.repository_reader(self.tmp)  # the reader, the build script and the workflow main() saw
+        expected = nc.claim(VERSION, DIGEST, nc.repository_inputs(self.repo), read_with)
+        self.assertEqual(from_reading, expected)
+        self.assertTrue(from_reading.endswith(b"\n"))
+        statement = json.loads(from_reading)
+        self.assertEqual(sorted(statement), ["built_with", "claim", "firefox", "read_with", "result", "source_sha256"])
+        self.assertEqual(sorted(statement["read_with"]), sorted(nc.READ_WITH))
+        self.assertEqual((statement["claim"], statement["result"]), ("nulavio-rust-networking-check/v1", "passed"))
+        # Nothing a second build of the same inputs would change: no date, no library digest, no counts.
+        for word in (b"checked", b"library_sha256", b"how", b"symbols"):
+            self.assertNotIn(word, from_reading)
+        # Any other release, source or input is another claim.
+        inputs = nc.repository_inputs(self.repo)
+        self.assertNotEqual(nc.claim("200.0", DIGEST, inputs, read_with), expected)
+        self.assertNotEqual(nc.claim(VERSION, "cd" * 32, inputs, read_with), expected)
+        self.assertNotEqual(nc.claim(VERSION, DIGEST, {**inputs, "patch_stack_sha256": "0" * 64}, read_with), expected)
+        # A reader, a build script or a workflow that changed is another claim: an older attestation does not fit.
+        for path in nc.READ_WITH:
+            self.assertNotEqual(nc.claim(VERSION, DIGEST, inputs, {**read_with, path: "0" * 64}), expected, path)
+
+    def test_a_reading_that_fails_or_cannot_be_made_writes_no_claim(self):
+        claim_file = self.tmp / "out" / "claim.json"
+        self.output = readelf_text("recv")
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 1)
+        self.assertFalse(claim_file.exists())
+        self.output = readelf_text()
+        self.library.unlink()
+        self.assertEqual(self.main("--claim-out", str(claim_file))[0], 2)
+        self.assertFalse(claim_file.exists())
 
     def test_inputs_prints_what_an_accepted_record_must_carry_without_a_build(self):
         out = io.StringIO()

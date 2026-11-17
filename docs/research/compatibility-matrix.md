@@ -53,7 +53,17 @@ By hand, on each engine release, with throwaway or family accounts and never in 
 | YouTube (paid films) | ⬜ | | | | |
 | The same in the Flatpak (`net.nulavio.Nulavio`) | ⬜ | | | | the plugin folder must be writable and the plugin process start inside the sandbox |
 
-Widevine on Linux is the software level (L3); services usually limit it to 720p or lower. Not run either: the Widevine network test (`NULAVIO_NETWORK_TESTS=1`) that installs Widevine from Mozilla's list and plays a public test stream.
+Widevine on Linux is the software level (L3); services usually limit it to 720p or lower.
+
+The Widevine network test (`test_drm` test 04 with `NULAVIO_NETWORK_TESTS=1`; never in CI, it downloads Widevine from Mozilla's list and plays from Google's test servers), run by hand on 2026-11-17 on a build of `main` at 68ec0575 (Firefox 160.0; not a released package), on the Fedora 44 host, three times:
+
+| Check | Result |
+|---|---|
+| DRM on: Widevine from the engine's own list | ✅ 4.10.3112.0 installed |
+| The Shaka Player demo's Widevine stream ("Angel One", H.264), **without** a licence | plays its clear start and stops at 7.8 s, waiting for a key: the rest is encrypted |
+| The same stream with a licence from Google's test licence server | ✅ plays past the clear start (12 s, 304 frames) |
+
+It says that Widevine installs, gets a licence and decrypts in the Nulavio build. It says nothing about a service: each one adds its own checks (the table above), and the Flatpak is not covered by it.
 
 ## Environments
 

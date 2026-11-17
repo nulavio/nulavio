@@ -78,6 +78,18 @@ const done = arguments[arguments.length - 1];
 })().then(done, error => done({error: String(error)}));
 """
 
+# In uBlock Origin's own page: keep what uBlock Origin tells its pages, on the channel its pages listen to
+# (js/broadcast.js). "staticFilteringDataChanged" is its word that every list is loaded again, with the lists
+# it loaded; "assetsUpdated" is the end of an update, after which it loads every list again by itself.
+LISTEN = """
+if (!window.nulavioHeard) {
+  window.nulavioHeard = [];
+  window.nulavioChannel = new BroadcastChannel("uBO");
+  window.nulavioChannel.onmessage = event => window.nulavioHeard.push(
+    {what: String(event.data?.what), lists: event.data?.listKeys ?? null});
+}
+"""
+
 BANNERS = """
 const shown = id => { const el = document.getElementById(id); return !!el && getComputedStyle(el).display !== "none"; };
 return {title: document.title, content: shown("content"), onetrust: shown("onetrust-banner-sdk"), banner: shown("cookie-banner")};
@@ -158,6 +170,22 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         drawn = "return !!document.querySelector('.listEntry[data-key=\"easylist\"]');"
         ready = harness.wait_until(lambda: self.m.execute(drawn), timeout=30)
         self.assertTrue(ready, "uBlock Origin's list page did not draw its lists")
+        self.m.execute(LISTEN)
+
+    def heard(self) -> list[dict]:
+        """What uBlock Origin told its pages since the list page was opened (the page must still be open)."""
+        return self.m.execute("return window.nulavioHeard;")
+
+    def loaded_again(self, after: str | None = None, without: frozenset[str] = frozenset()) -> bool:
+        """uBlock Origin said it loaded every list again: after the message `after`, and with none of `without`."""
+        heard = self.heard()
+        if after is not None:
+            names = [message["what"] for message in heard]
+            if after not in names:
+                return False
+            heard = heard[names.index(after) + 1 :]
+        # A report that names no list says nothing about which ones were loaded: it does not count.
+        return any(m["what"] == "staticFilteringDataChanged" and m["lists"] and not (without & set(m["lists"])) for m in heard)
 
     def test_01_a_new_profile_has_the_cookie_notice_lists_beside_the_stock_ones(self):
         state = self.state()
@@ -200,7 +228,14 @@ class ContentFilterDefaultsTest(unittest.TestCase):
 
         # The registry in the package says `false` for these lists; upstream's says `true` (off by default).
         self.assertTrue(harness.wait_until(upstream, timeout=120, interval=2.0), "upstream's registry did not arrive")
+        # uBlock Origin ends an update by loading every list again, which takes as long as the lists are large.
+        # Wait for it as a person waits for the page to stop updating. It is also what makes the next test's
+        # change take effect: a reload asked for while one is running joins that one (µb.loadFilterLists returns
+        # the promise in flight), and the one in flight read the selection before the person changed it.
+        loaded = harness.wait_until(lambda: self.loaded_again(after="assetsUpdated"), timeout=300, interval=1.0)
+        self.assertTrue(loaded, f"uBlock Origin did not load its lists again after the update: {self.heard()}")
         self.assertTrue(set(self.state()["selected"]) >= DEFAULT_ON, "the registry update switched the lists off")
+        self.assertFalse(self.notice()["onetrust"], "the cookie notice shows after the registry update")
 
     def test_02b_googles_analytics_tag_manager_and_ad_tags_on_another_site_are_blocked(self):
         """#220 item 3: on a site that is not Google's, Analytics, Tag Manager, DoubleClick and AdSense load nothing
@@ -290,7 +325,11 @@ class ContentFilterDefaultsTest(unittest.TestCase):
         self.m.execute("document.getElementById('buttonApply').click();")
         gone = harness.wait_until(lambda: not (DEFAULT_ON & set(self.state()["selected"])), timeout=30)
         self.assertTrue(gone, "uBlock Origin did not take the person's choice")
-        shown = harness.wait_until(lambda: self.notice()["onetrust"] is True, timeout=120, interval=1.0)
+        # "Apply changes" loads every list again, and the page is busy until then. The test leaves the page only
+        # after uBlock Origin said it loaded them without the ones switched off: the notice cannot show before.
+        loaded = harness.wait_until(lambda: self.loaded_again(without=frozenset(DEFAULT_ON)), timeout=300, interval=1.0)
+        self.assertTrue(loaded, f"uBlock Origin did not load its lists again without the ones switched off: {self.heard()}")
+        shown = harness.wait_until(lambda: self.notice()["onetrust"] is True, timeout=60, interval=1.0)
         self.assertTrue(shown, "the notice is still hidden with the lists off: something else hides it")
         (self.artifacts / "cookie-notice-shown.png").write_bytes(self.m.screenshot_png())
 
