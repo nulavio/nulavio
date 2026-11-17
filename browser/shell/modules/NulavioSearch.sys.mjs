@@ -111,19 +111,19 @@ export function isLink(path) {
   }
 }
 
-/** The checked form of a carried choice, or the error "invalid-choice" / "unknown-provider". */
+/** The checked form of a carried choice, or the error "invalid-search-choice" / "unknown-provider". */
 export function validatePending(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    fail("invalid-choice");
+    fail("invalid-search-choice");
   }
   if (Object.keys(raw).some(key => key !== "provider" && key !== "privateToo")) {
-    fail("invalid-choice");
+    fail("invalid-search-choice");
   }
   if (typeof raw.provider !== "string" || !Object.hasOwn(PROVIDERS, raw.provider)) {
     fail("unknown-provider");
   }
   if (raw.privateToo !== undefined && typeof raw.privateToo !== "boolean") {
-    fail("invalid-choice");
+    fail("invalid-search-choice");
   }
   return { provider: raw.provider, privateToo: raw.privateToo !== false };
 }
@@ -402,7 +402,7 @@ class NulavioSearchClass {
   async choose({ provider = null, id = null, privateToo = true, suggest = undefined } = {}) {
     await lazy.SearchService.init();
     if ((provider === null) === (id === null) || (suggest !== undefined && typeof suggest !== "boolean")) {
-      fail("invalid-choice");
+      fail("invalid-search-choice");
     }
     if (provider !== null && !Object.hasOwn(PROVIDERS, provider)) {
       fail("unknown-provider");

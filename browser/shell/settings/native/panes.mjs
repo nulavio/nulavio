@@ -1550,7 +1550,14 @@
               control: "moz-button",
               slot: "actions",
               disabled: searchBench.state.busy,
-              controlAttrs: { label: msg("addProviderButton", provider.name), "data-action": "add", "data-provider": provider.key },
+              // The name is in the button's accessible name only: beside the row's name at 200 % text, "Adicionar
+              // Startpage" left the name too little room and broke it inside the word (#486).
+              controlAttrs: {
+                label: msg("addProviderShort"),
+                "aria-label": msg("addProviderButton", provider.name),
+                "data-action": "add",
+                "data-provider": provider.key,
+              },
             },
           ],
         }));
