@@ -203,7 +203,13 @@ class SettingsSearchTest(unittest.TestCase):
         self.seen(lambda n: n["privateToo"] is False)
         mojeek = next(row for row in now["choices"] if row["name"] == "Mojeek")
         self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{mojeek["key"]}"]'])
-        done = self.seen(lambda n: n["chose"])
+        # The message comes before the list is read again: wait for both.
+        done = self.seen(
+            lambda n: (
+                n["chose"]
+                and any(row["name"] == "Mojeek" and row["says"] == "Em uso nas janelas normais." for row in n["choices"])
+            )
+        )
         self.assertEqual(done["chose"], "Mojeek é a pesquisa deste perfil nas janelas normais.")
         self.assertEqual(next(row for row in done["choices"] if row["name"] == "Mojeek")["says"], "Em uso nas janelas normais.")
         defaults = self.m.chrome(
@@ -218,7 +224,7 @@ class SettingsSearchTest(unittest.TestCase):
         self.seen(lambda n: n["suggest"] is True)
         brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
         self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
-        told = self.seen(lambda n: n["chose"] and n["chose"].startswith("Brave Search"))
+        told = self.seen(lambda n: (n["chose"] or "").startswith("Brave Search") and n["suggest"] is False)
         self.assertEqual(
             told["chose"],
             "Brave Search é a pesquisa deste perfil nas janelas normais."
