@@ -715,7 +715,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 #### L1 Track A preview
 
 - **What it is:** `bin/nulavio setup` and `run` on the distribution's unmodified Firefox, with Nulavio's profile, a `userChrome.css` chrome theme and a local start page (README, "Try the preview without building").
-- **Code:** the parts that exist only for it: `browser/theme/userChrome.css`, `browser/startpage/`, `browser/config/prefs/theme.js` (953 lines in all) and the distribution-Firefox paths of `engine.py`. The rest of the launcher (1,700 lines in `cli.py`, `profile.py`, `engine.py`, `paths.py`) is also the `nulavio` tools the packages ship, and stays.
+- **Code:** the parts that exist only for it: `browser/theme/userChrome.css`, `browser/startpage/`, `browser/config/prefs/theme.js` (953 lines in all) and the distribution-Firefox paths of `engine.py`. The rest of the launcher (about 1,450 lines in `cli.py`, `profile.py`, `engine.py`, `paths.py`) is also the `nulavio` tools the packages ship, and stays.
 - **Boundaries and risks:** R1, R4, R5, R12, R13, R17, R19 exist only for it.
 - **Tests:** the integration harness itself starts profiles through the launcher on the distribution's Firefox in pull-request CI, so the harness keeps that path (verified: `ci.yml` runs the suite with no Nulavio build).
 - **Fit and cost:** signed RPM and APT packages are out (160.0-0.6). The preview offers people a Nulavio without the Shell, the Vault UI, routing, the patches or the fingerprinting work, under the same name.
@@ -774,4 +774,102 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Tests:** unit `test_site`, `test_site_discovery`.
 - **Open issues:** #173, #199, #437 (wave 5).
 - **Recommendation: Keep.**
+
+## Evidence: planned
+
+Each item: what the issue asks, its milestone, the maintainer's recorded decision where there is one (quoted from the issue's comments), what the engine already offers, and the recommendation. Nobody uses a planned item, so "what changes for people" is left out. An item marked **Reverses** goes against a decision recorded on its issue.
+
+### Under construction in the other session
+
+#### N151 Choose a profile's search provider in one step (#151, pull request #442)
+
+- **As it stood** at `92dde400` (+905 −13 lines in 17 files, not merged):
+  - a chooser at the top of Settings → Pesquisa;
+  - `NulavioSearch.choose()`, and `accounts()`, which reads whether a provider's sign-in cookie exists, by its name;
+  - a search choice for a new profile;
+  - Ecosia, Qwant and Startpage added on request;
+  - **"Levar esta pesquisa para outros perfis"**, which writes `nulavio-search-choice.json` into other profiles' folders for their Shell to apply at their next start. The pull request records this as a new trust boundary and residual risk, after its review found that a planted file could make an attacker's host the default.
+- **The engine already:** default engine, separate private default, adding and removing engines; nothing about accounts.
+- **Fit and cost:** the chooser serves ADR 0002. The cross-profile channel is the costly part: a file one profile writes and another trusts, for something each profile can now do in one step.
+- **Recommendation: Keep, change:** merge the chooser and the new-profile choice; leave out "carry to other profiles".
+
+#### N152 An account search provider in private windows and temporary profiles (#152)
+
+- **As it stood:** no pull request or code on `main`; reviewed from the issue.
+- **Decided (2026-11-14):** a warning before choosing; for Kagi, Privacy Pass or Kagi's extension with a Session Link; `validateTemplate` refuses a template that carries a session token.
+- **Fit and cost:** the warning and the refusal are generic and cheap. The Kagi paths are one provider's mechanism, and Privacy Pass is still a spike (#153).
+- **Recommendation: Keep, change:** the generic part in 1.0; the Kagi-specific part After 1.0, with N153.
+
+#### N156 Translate with a web service you add (#156) and N154 Page summaries (#154), pull request #443
+
+- **As it stood** at `fe60b580` (+1,760 −1 lines in 20 files, not merged; two integration runs still queued in its description):
+  - a new privileged module, `NulavioServices.sys.mjs` (545 lines), with a new experiment;
+  - menu items in `background.js`;
+  - 22 known addresses and 14 templates;
+  - groups in Idiomas and Assistente;
+  - `test_web_services`, 478 lines.
+- **Trust boundary:** the pull request adds one and numbers it TB22, which `main` already uses for #430's pre-check (a clash to fix in that pull request, not here).
+- **Decided:** #156 on 2026-11-14 (on-device by default, preset list approved, none preselected); #154 on 2026-11-16 (the engine's on-device summary stays off; the assistant and web services by address).
+- **The engine already:** translates pages and selections on the device (verified: `browser.translations.enable` and `browser.translations.select.enable` true in 160.0). The assistant (A3) already answers about a page.
+- **Fit and cost:**
+  - **Translation:** adds services people pick by name, on a click that names them. It is small next to what is built.
+  - **Summaries:** one preset (Kagi's) beside the assistant, which already summarises.
+  - Both share the new module, so splitting them is a little work in #443.
+- **Recommendation:**
+  - **N156: Keep.**
+  - **N154: After 1.0.** If splitting the pull request costs more than keeping both, keep both: the reason against N154 is overlap, not risk.
+
+#### N81 1Password (#81)
+
+- **As it stood:** no pull request or code on `main`; reviewed from the issue.
+- **Decided (2026-11-16):** P1 like Bitwarden; not certified; `nulavio doctor` shows the `sudo` line for `custom_allowed_browsers`, and no package edits another vendor's configuration.
+- **Fit and cost:** principle 4. One more provider in I5's pattern.
+- **Recommendation: Keep.** Check its key against P14.
+
+### Wave 4b and 4c, milestone 1.0
+
+| ID | Issue | Decision recorded | The engine already | Recommendation and reason |
+|---|---|---|---|---|
+| N95 | #95 Spike: native content filter | 2026-11-13: ADR 0012 stays Proposed, the spike does not start now | uBlock Origin is the filter | **After 1.0.** Nothing forces it, and the 1.0 waves do not need it |
+| N119 | #119 Sounds | none | the desktop's event sounds | **After 1.0.** Off by default by design; needs a person listening; nothing depends on it |
+| N153 | #153 Spike: Privacy Pass | none | no | **After 1.0.** Research; serves N152's Kagi part |
+| N155 | #155 Sidebar chatbot: more providers and any address | 2026-11-14: option (a), more providers in a neutral order plus "another address"; the chatbot stays blocked by default | the chatbot sidebar with Mozilla's provider list (verified: `browser.ml.chat.provider` in `firefox.js`) | **Do not build.** **Reverses** the decision. A provider's web page in the sidebar is a second chat surface next to A3, with the provider's own cookies |
+| N159 | #159 Link previews ("peek") | 2026-11-14: option (c), a panel loaded only on a click, Zen's Glance as the model | Link Preview with AI (off in Nulavio) | **After 1.0.** A new window surface and its design: wave-5-sized work |
+| N162 | #162 Per-site CSS | none | user styles only by hand (`userContent.css`) | **Do not build.** Unprivileged AMO extensions do it; the issue itself has to exempt it from the Guard |
+| N163 | #163 Notes per site | none | no | **Do not build.** Outside the vision's problem; extensions exist |
+| N164 | #164 Reading list with an offline copy | none | Reader View, bookmarks | **After 1.0.** A convenience |
+| N165 | #165 Feeds in the address bar | none | no (removed with live bookmarks) | **After 1.0.** A convenience |
+| N166 | #166 Toolbar buttons you define | 2026-11-14: no "run code"; an address template or a fixed browser command | bookmarks with a `%s` keyword, bookmarklets on the bookmarks toolbar | **Do not build.** The engine covers "open an address built from the page" |
+| N168 | #168 Low power mode | none | tab unloading under memory pressure | **After 1.0.** The issue says it ships only after a measurement shows a clear gain |
+| N169 | #169 A site as a Linux app | none | taskbar tabs, Windows only (verified: `browser.taskbarTabs.enabled` false off Windows) | **After 1.0.** Large: app_id, the DynamicLauncher portal, routing inside an app window |
+| N171 | #171 Privacy report | 2026-11-16: option A, the engine's layer only, kept in the profile | `about:protections`, the weekly report of what Enhanced Tracking Protection blocked (verified in 160.0's `AboutRedirector.cpp`; whether it reads well in Nulavio, with Mozilla's promotions off, was not checked) | **Do not build.** **Reverses** the decision. Option A rebuilds the engine's report; open `about:protections` from the site panel instead |
+| N216 | #216 .onion and Onion-Location | 2026-11-14: a Tor the person runs first, off by default, a ".onion available" button | a per-profile SOCKS proxy with remote DNS (inferred from the engine's settings) | **After 1.0.** Tor in a browser that is not Tor Browser identifies the person by its fingerprint, close to the vision's non-goal; the words need care, and the work is large |
+| N217 | #217 Network route per profile and site | 2026-11-14: Direct, Proxy, provider extension and Tor first; WireGuard after a spike; secrets in the keyring | per-profile proxy | **After 1.0.** Fable-level work with new secrets and a new boundary |
+| N218 | #218 Mail and calendar links with privacy services | none | `mailto:` handlers | **After 1.0.** A large catalogue, P3 |
+| N172 | #172 Parent: Orion's features | — | — | **Keep, change.** Close it at 1.0 with what was built (#157, #158, #160, #161, #167, #170 and what is kept above); its remaining sub-issues move After 1.0 or close |
+| N219 | #219 Parent: Tor, VPNs, privacy services | — | — | **Keep, change.** #220 to #222 stay in 1.0 (wave 3); #216 to #218 move After 1.0 |
+
+### Waves 4b and 4c, milestone After 1.0 or none
+
+| ID | Issue | Decision recorded | Recommendation and reason |
+|---|---|---|---|
+| N241 | #241 Automatic updates offered at first run | 2026-11-16: option A (a disabled timer in the packages, offered through polkit) | **Keep, After 1.0 as set.** Updates are a security feature; a candidate to bring forward, the maintainer's call |
+| N242 | #242 Image metadata stripped (no milestone) | none | **After 1.0.** A good privacy fit, but it rewrites the files a person sends; large and risky before a freeze |
+| N249 | #249 Spike: the assistant on the opposite side | 2026-11-16: After 1.0, time-boxed | **Keep, After 1.0 as set** |
+| N316 | #316 Acrylic window | none | **Do not build.** Taste against "calm" and the opaque security grammar; the engine keeps `browser.tabs.allow_transparent_browser` off (verified) |
+| N317 | #317 Pinned sites per profile | none | **Do not build.** Pinned tabs are already per profile: each profile is its own instance and session (ADR 0003). What is left is a grid's look |
+| N319 | #319 Motion map | none | **Keep, After 1.0 as set** |
+| N321 | #321 Command palette | 2026-11-16: option A, the engine's address-bar actions | **Keep, After 1.0 as set** |
+| N345 | #345 Imersivo styles (parent) | the maintainer asked for it, 2026-11-14 | **Keep, After 1.0 as set**, without N347 |
+| N346 | #346 Imersivo "Barras" | — | **Keep, After 1.0 as set** |
+| N347 | #347 Imersivo "Painel" | — | **Do not build.** It moves the engine's navigation toolbar and its indicators into a side panel: the most invasive style, and ADR 0009's decision 5 (the engine's indicators stay its own) is what it would strain. #348 is the maintainer's preferred default |
+| N348 | #348 Spike: Imersivo "Faixa" | 2026-11-14: if it is a go, it becomes Imersivo's default style | **Keep, After 1.0 as set** |
+
+### Not features
+
+#362 (memory of a new profile's extension process), #364 (the build's speed), #367 (`perf.yml` as a gate), #397 (the load line's frame cost), #398 (Imersivo's test), #440 (a test of a search sign-in across a Vault lock). These get no product verdict:
+
+- #397 closes if U9 is turned off or removed.
+- #398 follows U4.
+- #440 follows N151 and N152.
 
