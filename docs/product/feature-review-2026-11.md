@@ -136,3 +136,60 @@ The recommendations that are not "Keep" come first in each group of the [evidenc
 | N348 | #348 Spike: Imersivo "Faixa" | Keep (After 1.0, as set) | Decides the default style | | |
 | — | #362, #364, #367, #397, #398, #440 | No verdict: not features | #397 closes if U9 is turned off or removed; #398 follows U4; #440 follows N151/N152 | | |
 
+## What costs the most, across features
+
+### The engine's seams
+
+A seam is a place where Nulavio's code reaches into the engine's private shape, so an engine update can break it without any patch failing to apply. Found by a search of the Shell for engine modules, members whose name starts with `_`, and engine methods replaced at run time (verified at the commit; the search is in [How this was done](#how-this-was-done)):
+
+| Seam | Where | Features that rest on it | What happens when the engine changes |
+|---|---|---|---|
+| The settings page's registry: `SettingGroupManager._data`, `SettingPaneManager._data`, `Preferences._settings`, `SettingPaneManager.registerPane` replaced, the density control's `get`/`set`/`disabled` replaced | `settings/native/panes.mjs` | Every group Nulavio adds to Settings (U1 and most rows below) | A preflight checks the shape and the whole file undoes itself; an edit that throws leaves the engine's pane as it is (verified: `preflight()`, `undo()`, the `catch` in `registerPane`). Settings then has none of Nulavio's groups |
+| The identity handler: `gIdentityHandler._refreshIdentityIcons` and `getConnectionSecurityInformation` wrapped, `_pageExtensionPolicy` read | `NulavioWindow.sys.mjs`, `#ownPagesIdentity` | U2 (the Shell's pages named "Nulavio", R65) | Fails safe: the engine's own label stays (verified: the early `return () => {}`) |
+| The profile service: `setDefaultProfileForGroup`, `deleteCurrentProfile`, `setShowProfileSelectorWindow` replaced on `SelectableProfileService` | `NulavioProfiles.sys.mjs` | R1, R2, R7 (which profile a plain start opens; the last unprotected profile; the chooser) | Not checked here whether a change of signature is detected; the engine calls these by name |
+| Window actors registered at run time: `NulavioAllowCopy`, `NulavioFingerprinting`, `NulavioPageEdit`, `NulavioLookalike` | four modules | U11, P8, U10, P10 | A child module runs in every matching web content process (all frames for allow-copy and fingerprinting) |
+| Sidebar and start-up internals: `SidebarController._state`, `BrowserGlue._beforeUIStartup` | `NulavioLayout.sys.mjs` | U3, U4 | Read, not replaced |
+| A start-up category the engine calls for each new window, before the tab browser | `NulavioWindow.sys.mjs` (`browser-window-domcontentloaded-before-tabbrowser`) | U2, U4, U13 | The band is drawn before the first paint |
+
+**Engine updates so far** (verified: `git log -- browser/build/engine.json`): three version bumps (to 159.0, 159.0.1 and 160.0). The 160.0 bump (#19) touched `NulavioLayout.sys.mjs` (+33 −5 lines, the sidebar), the window theme and four integration test modules, and dropped a patch. Three bumps are too few to tell which features cost the most per update; the seams above are where the next ones are likely to land (inferred).
+
+### Tests that only a Nulavio build runs
+
+Pull-request CI runs the integration suite against the distribution's Firefox (`ci.yml` sets no `NULAVIO_ENGINE`; verified). Everything the Shell does (every row of Interface, most of Protection and Profiles) runs only against a Nulavio build: locally, in `release.yml`, in the nightly `rehearsal.yml` (#431) and in `asan.yml`. That is how failures reached the release runs and not the pull requests:
+
+- 160.0-0.6's first run (#376): `test_whats_new_browser` 04, `test_vault_profiles`, `test_drm` audio, `test_immersive` 21.
+- Its third run: the clean-link menu (#381).
+- `test_layout_presets`, nine tests after #391 (#403).
+- The first rehearsal: `test_split_view` (all five) and `test_load_line` 04 (#436, open).
+
+Failed pull-request CI runs since 2026-10-25 (96 runs; their logs read on 2026-11-17) were lint and unit tests of the release and review tooling, not feature tests. Flaky or broken feature tests with an issue: #138 (assistant), #209 (profile permissions), #246 (content filter), #280 (profiles), #398 (Imersivo), #409 (motion, profile ink), #436 (split view, load line).
+
+### Performance
+
+What #80's suite measured per feature (verified: [performance](../architecture/performance.md), its baseline of 2026-11-15, and ADR 0019):
+
+- Nulavio's preferences (ETP Strict, the fingerprinting overrides) on Mozilla's Firefox: Speedometer 18.6 against 18.7.
+- uBlock Origin off: 12.9 against 12.1, one diagnostic run of 3 iterations, inside the noise the suite states.
+- The audio noise (patch 0012): +2 ms per 10 s of rendered audio.
+- The gap to Mozilla's Firefox (startup +47 %, Speedometer −32 %) is the build (#364), not a feature.
+
+No other feature has a measurement. The frame budget covers the sidebar, a dialog, a tab switch, the new tab and idle; the load line (#397) and Imersivo were not measured.
+
+### What carries risk because of a feature
+
+Of the 79 residual risks in [residual risks](../security/residual-risks.md), these exist only because of one feature, and leave with it:
+
+| Feature | Risks |
+|---|---|
+| L1 Track A preview | R1, R4, R5, R12, R13, R17, R19 |
+| A1 AI Bridge | R26, R27, R28, R33, R34, R35, R36, R68 |
+| A2 Raw automation | R42 |
+| A3 Assistant | R43 |
+| R8 Phone unlock | R48, R49 |
+| R3, R4 Routing | R21, R22, R24, R45, R55 |
+| U12 Keep above | R77 |
+| U11 Allow copy | R76 |
+| L3 Confined mode | R46 |
+| L6 Flatpak bundle | R75 |
+| I2 KRunner | R44 |
+
