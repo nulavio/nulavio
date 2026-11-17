@@ -34,12 +34,15 @@ this.nulavioServices = class extends ExtensionAPI {
       }
     };
     const tabOf = tabId => wrapperOf(tabId)?.nativeTab ?? null;
+    // The page's address as the tab has it: the menu's own data has none for a page the Shell holds no host
+    // permission for, and a page's address is the engine's to say, not the caller's.
+    const pageOf = tab => tab?.linkedBrowser?.currentURI?.spec ?? "";
     return {
       nulavioServices: {
         menu: call(() => services.menu()),
-        check: call((itemId, target, tabId) => {
+        check: call((itemId, _target, tabId) => {
           const tab = tabOf(tabId);
-          return services.check(itemId, { target, isPrivate: !tab || services.isPrivate(tab.linkedBrowser) });
+          return services.check(itemId, { target: pageOf(tab), isPrivate: !tab || services.isPrivate(tab.linkedBrowser) });
         }),
         open: call(async (itemId, clicked, tabId) => {
           const tab = tabOf(tabId);
@@ -47,7 +50,7 @@ this.nulavioServices = class extends ExtensionAPI {
             return { done: false };
           }
           const isPrivate = services.isPrivate(tab.linkedBrowser);
-          const built = services.build(itemId, { text: clicked.text ?? "", target: clicked.target ?? "", isPrivate });
+          const built = services.build(itemId, { text: clicked.text ?? "", target: pageOf(tab), isPrivate });
           const win = wrapperOf(tabId)?.window; // the tab's own window (a XUL tab's ownerGlobal is not reachable here)
           if (!win) {
             return { done: false };

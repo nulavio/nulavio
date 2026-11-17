@@ -329,12 +329,25 @@ class WebServicesTest(unittest.TestCase):
         self.assertTrue(next(i for i in self.m.chrome(MENU) if i["label"] == refused)["disabled"])
         google = [url for url in self.m.chrome(GUARD_SEEN) if urlsplit(url).hostname == "translate.google.com"]
         self.assertEqual(google, [], "the page went to a service without a click")
+        # On a public page the same item is offered and usable: the page's address is the tab's own (the menu's data
+        # has none for a page the Shell holds no host permission for). The page itself is not fetched: the request
+        # guard cancels it, and the tab keeps its address.
+        self.m.chrome(CLOSE_MENU)
+        self.m.chrome(
+            "gBrowser.selectedBrowser.fixupAndLoadURIString('https://example.org/artigo',"
+            " {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});"
+        )
+        here = "return gBrowser.selectedBrowser.currentURI.spec;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(here) == "https://example.org/artigo", 10), self.m.chrome(here))
+        usable = "Traduzir página com Google Translate"
+        shown = self.menu_until(lambda items: any(i["label"] == usable and not i["disabled"] for i in items), on="body")
+        self.assertTrue(any(i["label"] == usable and not i["disabled"] for i in shown), shown)
 
-    def menu_until(self, wanted, tries: int = 5) -> list[dict]:
-        """Open the menu on the selected text until what it shows satisfies `wanted` (the background page draws again a
-        moment after a setting changes), and return what it showed last."""
+    def menu_until(self, wanted, tries: int = 5, on: str = "#text") -> list[dict]:
+        """Open the menu on `on` until what it shows satisfies `wanted` (the background page draws again a moment after
+        a setting changes), and return what it showed last."""
         for _ in range(tries):
-            self.m.context_click("#text")
+            self.m.context_click(on)
             self.assertTrue(harness.wait_until(self.m.menu_open, 10))
             if harness.wait_until(lambda: wanted(self.m.chrome(MENU) or []), 2):
                 return self.m.chrome(MENU)
