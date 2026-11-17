@@ -493,15 +493,28 @@ class NulavioSearchClass {
     } catch (e) {
       fail("opensearch-failed", String(e?.message ?? e));
     }
-    // The description declares its own search and suggestion addresses, which only the engine's parser reads (#484
-    // review): checked as soon as the engine has them, and the engine removed again when one carries a session.
-    const declared = [engine.getSubmission("nulavio")];
-    if (engine.supportsResponseType(SUGGEST_TYPE)) {
-      declared.push(engine.getSubmission("nulavio", SUGGEST_TYPE));
+    // The description declares its own addresses (search, suggestions, trending, visual search, search form, its
+    // own update address), which only the engine's parser reads (#484 review): each one the engine kept is checked as
+    // soon as it has them, and the engine is removed again when one carries a session or cannot be read.
+    let refused = "session-in-template";
+    try {
+      const declared = [];
+      for (const type of Object.values(lazy.SearchUtils.URL_TYPE)) {
+        if (type === lazy.SearchUtils.URL_TYPE.SEARCH_FORM) {
+          declared.push(engine.searchForm);
+        } else if (engine.supportsResponseType(type)) {
+          declared.push(engine.getSubmission("nulavio", type)?.uri?.spec);
+        }
+      }
+      if (!declared.some(address => address && carriesSession(new URL(address)))) {
+        refused = null;
+      }
+    } catch {
+      refused = "opensearch-failed";
     }
-    if (declared.some(submission => submission?.uri && carriesSession(new URL(submission.uri.spec)))) {
-      await lazy.SearchService.removeEngine(engine, lazy.SearchService.CHANGE_REASON.USER);
-      fail("session-in-template");
+    if (refused) {
+      await lazy.SearchService.removeEngine(engine, lazy.SearchService.CHANGE_REASON.USER).catch(e => console.error("Nulavio Search: a refused OpenSearch engine", e));
+      fail(refused);
     }
     return engine.id;
   }

@@ -268,10 +268,10 @@ class FixtureServer:
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
         if path == "/opensearch.xml":
-            # OpenSearch fixture (test_search 19): a description whose search address, or suggestion address, adds the
-            # parameter named in `search` or `suggest` (with a stand-in value) to its own.
+            # OpenSearch fixture (test_search 19): a description whose search, suggestion or search-form address adds
+            # the parameter named in `search`, `suggest` or `form` (with a stand-in value) to its own.
             base = f"http://127.0.0.1:{self.port}"
-            extra = {k: f"&amp;{query[k]}=stand-in" if query.get(k) else "" for k in ("search", "suggest")}
+            extra = {k: f"&amp;{query[k]}=stand-in" if query.get(k) else "" for k in ("search", "suggest", "form")}
             xml = (
                 '<?xml version="1.0" encoding="UTF-8"?>'
                 '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">'
@@ -279,6 +279,7 @@ class FixtureServer:
                 f'<Url type="text/html" method="get" template="{base}/search-os?q={{searchTerms}}{extra["search"]}"/>'
                 '<Url type="application/x-suggestions+json" method="get"'
                 f' template="{base}/suggest-os?q={{searchTerms}}{extra["suggest"]}"/>'
+                f'<Url type="text/html" rel="searchform" template="{base}/form-os?from=nulavio{extra["form"]}"/>'
                 "</OpenSearchDescription>"
             )
             return xml.encode(), "application/opensearchdescription+xml", {}

@@ -748,7 +748,7 @@ class SearchPrivacyTest(unittest.TestCase):
         the engine has read them; an engine whose search or suggestion address carries one is removed again."""
         self.require_nulavio()
         names = "return (await S.state()).engines.map(e => e.name);"
-        for name, param in (("Fixture OS busca", "search"), ("Fixture OS sugestao", "suggest")):
+        for name, param in (("Fixture OS busca", "search"), ("Fixture OS sugestao", "suggest"), ("Fixture OS form", "form")):
             with self.subTest(declared_in=param):
                 url = self.server.url(f"/opensearch.xml?name={name.replace(' ', '+')}&{param}=token")
                 self.assertEqual(self.search_error("return S.addOpenSearch({url: args[0]});", url), "session-in-template")
