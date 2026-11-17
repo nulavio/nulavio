@@ -7,8 +7,8 @@ The engine has a build-time check, check_networking (python/mozbuild/mozbuild/ac
 its Rust library must import none of a list of networking functions (recv, send, the gethostby…,
 getserv… and getproto… families), so that Rust code does not talk to the network around the engine's
 own network stack, and so around a proxy the person set. The build system runs it only when Rust gets
-its own link-time optimisation. A cross-language build (what #371 proposes for the release build;
-today's release build is not one, and still runs the engine's check) and a sanitised one skip it.
+its own link-time optimisation. A cross-language build (the release build since #364) and a
+sanitised one skip it.
 
 This does the same reading on a build that can be read, the mozconfig.no-lto variant: the undefined
 symbols of libgkrust.a, against the list in the very source tree that was built. It takes nobody's
