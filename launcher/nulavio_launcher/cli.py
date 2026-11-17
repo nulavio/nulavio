@@ -11,7 +11,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from . import __version__, confine, connect, desktop, doctor, extensions, guard, log, paths, profile, temporary
+from . import __version__, confine, connect, doctor, extensions, guard, log, paths, profile, temporary
 from . import engine as engine_mod
 from . import prefs as prefs_mod
 
@@ -425,16 +425,6 @@ def cmd_temporary(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_desktop(args: argparse.Namespace) -> int:
-    if args.desktop_cmd == "install":
-        written = desktop.install(_launcher_path())
-        _out(f"installed {len(written)} files under ~/.local/share (no MimeType: never becomes the default browser)")
-    else:
-        removed = desktop.uninstall()
-        _out(f"removed {len(removed)} files")
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nulavio", description="Nulavio's command-line tools")
     parser.add_argument("--version", action="version", version=f"nulavio-launcher {__version__}")
@@ -508,10 +498,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("integrations_cmd", nargs="?", choices=["api", "krunner-serve"], help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_integrations)
-
-    p = sub.add_parser("desktop", help="user-level desktop entry and icons")
-    p.add_argument("desktop_cmd", choices=["install", "uninstall"])
-    p.set_defaults(func=cmd_desktop)
 
     p = sub.add_parser("temporary", help="temporary profiles (deleted on close); `nulavio run --temporary` opens one")
     tsub = p.add_subparsers(dest="temporary_cmd", required=True)
