@@ -381,20 +381,29 @@ function serviceTitle(item, reason = null) {
 }
 
 async function drawServiceMenus() {
+  const items = await browser.nulavioServices.menu();
   for (const id of serviceItems.keys()) {
     await browser.menus.remove(id).catch(() => {});
   }
   serviceItems.clear();
-  for (const [index, item] of (await browser.nulavioServices.menu()).entries()) {
+  for (const [index, item] of items.entries()) {
     const id = `${SERVICE_MENU}${index}`; // the item's own id stays in the map: menu ids become element ids
     serviceItems.set(id, item);
     browser.menus.create({ id, title: serviceTitle(item), contexts: item.contexts }, () => void browser.runtime.lastError);
   }
 }
 
+// One drawing at a time, in order: several settings changed together (a choice and its clean-up) must not leave the
+// map naming one service for an item that shows another.
+let serviceDrawing = Promise.resolve();
+function redrawServiceMenus() {
+  serviceDrawing = serviceDrawing.then(drawServiceMenus).catch(console.error);
+  return serviceDrawing;
+}
+
 if (browser.nulavioServices && browser.menus) {
-  drawServiceMenus().catch(console.error);
-  browser.nulavioServices.onChanged.addListener(() => drawServiceMenus().catch(console.error));
+  redrawServiceMenus();
+  browser.nulavioServices.onChanged.addListener(redrawServiceMenus);
   browser.menus.onShown.addListener(async (info, tab) => {
     // Every item this menu's contexts call for, not only the ones the engine drew: an item hidden in a private
     // window is not drawn anywhere until it is made visible again here.
@@ -414,7 +423,8 @@ if (browser.nulavioServices && browser.menus) {
     }
     browser.menus.refresh();
   });
-  browser.menus.onClicked.addListener((info, tab) => {
+  browser.menus.onClicked.addListener(async (info, tab) => {
+    await serviceDrawing; // a drawing under way decides what the item now is
     const item = serviceItems.get(String(info.menuItemId));
     if (!item || !tab) {
       return;

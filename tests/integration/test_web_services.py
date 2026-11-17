@@ -17,13 +17,17 @@ from urllib.parse import quote, urlsplit
 import harness
 
 SV = 'const SV = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs");'
+# The services' hosts and the linked page's: what a click could send to. The engine's own background traffic
+# (Remote Settings and the like, docs/security/new-profile-connections.md) is left alone.
+WATCHED = ("deepl.com", "translate.google.com", "kagi.com", "lt.example.org", "tr.example.net", "r.example.net", "example.org")
 GUARD_START = """
+const watched = arguments[0];
 const seen = [];
 const observer = { observe(subject) {
   try {
     const channel = subject.QueryInterface(Ci.nsIHttpChannel);
     const host = channel.URI.host;
-    if (host !== '127.0.0.1' && host !== 'localhost') {
+    if (watched.some(h => host === h || host.endsWith('.' + h))) {
       seen.push(channel.URI.spec);
       channel.cancel(Cr.NS_BINDING_ABORTED);
     }
@@ -267,7 +271,7 @@ class WebServicesTest(unittest.TestCase):
     def test_04_a_menu_item_opens_its_address_and_nothing_goes_before_the_click(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
         self.ok("return SV.NulavioServices.setSummarizer({kind: 'web', key: 'kagi-summarizer'});")
-        self.m.chrome(GUARD_START)
+        self.m.chrome(GUARD_START, [list(WATCHED)])
         self.addCleanup(self.m.chrome, GUARD_STOP)
         tabs = self.m.chrome("return gBrowser.tabs.length;")
         items = self.open_menu_on_text()
@@ -317,7 +321,7 @@ class WebServicesTest(unittest.TestCase):
 
     def test_05_the_assistant_gets_the_page_in_its_panel_and_nothing_is_sent(self):
         self.ok("return SV.NulavioServices.setSummarizer({kind: 'assistant'});")
-        self.m.chrome(GUARD_START)
+        self.m.chrome(GUARD_START, [list(WATCHED)])
         self.addCleanup(self.m.chrome, GUARD_STOP)
         self.addCleanup(self.m.chrome, "SidebarController.hide();")
         self.open_menu_on_page()
