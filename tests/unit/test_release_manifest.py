@@ -185,6 +185,53 @@ class ReleaseManifestTest(unittest.TestCase):
         self.commit_record(accepted)  # a patch changed since it was accepted
         self.refused(said)
 
+    def commit_reader(self, text: str) -> None:
+        """The reader, the build script and the workflow at the base commit (what the claim's read_with names)."""
+        for path in networking_fixture.networking_check.READ_WITH:
+            (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.repo / path).write_text(text + path + "\n")
+        self.commit_record(json.loads(self.record.read_text()))
+
+    def test_a_base_commit_that_is_not_a_full_hash_is_refused_before_git_sees_it(self):
+        for value in ("--output=/tmp/x", "main", "HEAD~1", self.base[:12], "", None, 7):
+            with self.subTest(value=value):
+                self.manifest["nulavio_base_commit"] = value
+                self.write()
+                self.refused("not a full commit hash")
+                with self.assertRaises(release_manifest.ManifestError) as caught:
+                    release_manifest.networking_claim(self.out, self.repo)
+                self.assertIn("not a full commit hash", str(caught.exception))
+
+    def test_a_base_commit_without_the_reader_gives_no_claim(self):
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.networking_claim(self.out, self.repo)
+        self.assertIn("cannot be read at", str(caught.exception))
+
+    def test_the_claim_comes_from_the_manifest_and_the_base_commit_never_from_the_record(self):
+        nc = networking_fixture.networking_check
+        self.commit_reader("# the reader\n")
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A reader changed at the base commit is another claim.
+        self.commit_reader("# the reader, tightened\n")
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        # A record that says "accepted", or names another release, changes nothing in the claim.
+        self.commit_record({"firefox": "1.0", "source_sha256": "0" * 64, "result": "accepted", "accepted_in": "#1"})
+        self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # A patch changed at the base commit is another claim: the old attestation no longer fits.
+        (self.repo / "browser/patches/0001-example.patch").write_text("--- a/dom/y.cpp\n+++ b/dom/y.cpp\n")
+        self.commit_record(networking_fixture.record(self.repo, "159.0.1", SOURCE))
+        self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
+        # The command prints those bytes and nothing else.
+        done = subprocess.run(
+            [sys.executable, "-I", str(ROOT / "scripts" / "release" / "release_manifest.py"), "networking-claim", str(self.out),
+             "--repo", str(self.repo)],
+            capture_output=True,
+        )  # fmt: skip
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout, release_manifest.networking_claim(self.out, self.repo))
+
     def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
         self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))
         self.record.write_text(json.dumps(networking_fixture.record(self.repo, "159.0.1", SOURCE)))  # not committed
