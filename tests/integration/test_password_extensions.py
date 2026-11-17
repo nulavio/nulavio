@@ -42,12 +42,16 @@ return {
   version: addon.version,
   manifestVersion: m.manifest_version,
   popup: action.default_popup ? ext.baseURI.resolve(action.default_popup) : null,
+  base: ext.baseURI.spec,
   permissions: [...ext.permissions].sort(),
   backgroundState: String(ext.backgroundState ?? "n/a"),
 };
 """
 
-PROVIDERS = ("proton-pass", "keepassxc-browser", "bitwarden")
+PROVIDERS = ("proton-pass", "keepassxc-browser", "bitwarden", "1password")
+# Extensions that declare no popup in their manifest and set it when they run: the page they set, read from the
+# pinned package (1Password 8.12.44.33: `browser_action` with no `default_popup`, its page `popup/index.html`).
+RUNTIME_POPUP = {"1password": "popup/index.html"}
 
 
 @unittest.skipUnless(harness.engine_available(), "no supported Gecko engine installed")
@@ -93,10 +97,11 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
         info = harness.wait_until(lambda: (lambda i: i if i.get("active") else None)(self.popup_info(entry.id)), timeout=20)
         self.assertTrue(info, f"{key} did not become active")
         self.assertGreaterEqual(info["signedState"], 2, f"{key} is not Mozilla-signed")
-        self.assertTrue(info["popup"], f"{key} declares no toolbar popup")
+        popup = info["popup"] or (info["base"] + RUNTIME_POPUP[key] if key in RUNTIME_POPUP else None)
+        self.assertTrue(popup, f"{key} declares no toolbar popup")
         handle = self.m.new_tab()
         self.m.switch_to(handle)
-        self.m.navigate(info["popup"])
+        self.m.navigate(popup)
         time.sleep(4)  # let the popup's framework render
         text = self.m.execute("return (document.body && document.body.innerText || '').trim().slice(0, 240);")
         title = self.m.title()
@@ -127,6 +132,10 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
 
     def test_bitwarden(self):
         self.check_provider("bitwarden")
+
+    def test_1password(self):
+        # #81: installs, Mozilla's signature accepted, background running, popup renders; never with an account.
+        self.check_provider("1password")
 
 
 if __name__ == "__main__":

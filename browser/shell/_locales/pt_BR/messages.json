@@ -1345,6 +1345,7 @@
   "firstrunProviderProton": {"message": "Extensão oficial. O cofre fica na sua conta Proton."},
   "firstrunProviderKeepass": {"message": "O cofre é um arquivo seu, neste computador. Precisa do app KeePassXC."},
   "firstrunProviderBitwarden": {"message": "Extensão oficial, em teste no Nulavio. O cofre fica na sua conta Bitwarden."},
+  "firstrunProvider1Password": {"message": "Extensão oficial, em teste no Nulavio. O cofre fica na sua conta 1Password."},
   "firstrunProviderUse": {"message": "Usar $NAME$", "placeholders": {"name": {"content": "$1"}}},
   "firstrunDefaultCaption": {"message": "Dá para desfazer depois em Configurações, em Integrações."},
   "firstrunProfileTitle": {"message": "Quer um perfil com senha?"},

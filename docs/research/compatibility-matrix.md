@@ -12,6 +12,7 @@ Legend: ✅ verified by automated test or recorded evidence · 🟡 partially ve
 | **Proton Pass** 1.41.1 AMO (Firefox: MV3) / 1.42.0 CWS | ✅ install, signed, background, popup (sign-in screen). 🟡 login/autofill manual | ❌ loads; `setExtensionEnabled` segfaults | [gecko evidence](evidence/gecko-158-password-extensions.json) |
 | **KeePassXC-Browser** 1.10.4.1 | ✅ install, signed, background, popup. ✅ **association + autofill end to end** with KeePassXC 2.8.0 (Fedora 44 container) | ❌ loads; enabling crashes; native messaging undocumented | same |
 | **Bitwarden** 2026.10.0 | ✅ install, signed, background, popup (onboarding). 🟡 login/biometrics manual | ❌ loads; enabling crashes | same |
+| **1Password** 8.12.44.33 (AMO, proprietary) | 🟡 added 2026-11-16 (#81): install, signed, background, popup in `test_password_extensions` with the network; result recorded when it runs. **Not certified** (deferred by the maintainer, 2026-11-16): login, unlock with the desktop app, autofill are manual and need an account | not tried | — |
 
 ## Platform behaviour (Gecko, Track A)
 

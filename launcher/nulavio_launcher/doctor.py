@@ -8,6 +8,8 @@ from __future__ import annotations
 import ctypes.util
 import json
 import os
+import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -243,6 +245,108 @@ def check_native_messaging() -> list[Check]:
     return checks
 
 
+# 1Password's desktop app talks only to browsers it knows; any other browser's binary name goes in this file, one per
+# line, written by root (support.1password.com/additional-browsers, read 2026-11-16). Nulavio never writes it (#81,
+# the maintainer's decision of 2026-11-16): doctor says the exact command and the person runs it.
+ONEPASSWORD_ALLOWED = Path("/etc/1password/custom_allowed_browsers")
+ONEPASSWORD_APP = (Path("/opt/1Password/1password"), Path("/usr/bin/1password"))
+# Browsers 1Password recognises by itself (Firefox among them): no step needed for Track A.
+ONEPASSWORD_KNOWN = frozenset({"firefox", "firefox-bin", "firefox-esr"})
+
+
+def _root_owned(path: Path) -> bool:
+    """Whether the file and every folder above it belong to root and only root can change them (review of #478):
+    the line 1Password's app is given trusts a name, so it is only offered for an engine nobody else can replace."""
+    try:
+        resolved = Path(path).resolve(strict=True)
+    except OSError:
+        return False
+    for each in (resolved, *resolved.parents):
+        try:
+            info = os.stat(each)
+        except OSError:
+            return False
+        if info.st_uid != 0 or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return False
+    return True
+
+
+def check_1password(engine_path: Path | None = None) -> list[Check]:
+    """When 1Password's desktop app is installed and the engine is a browser it does not know (the Nulavio build),
+    whether its binary name is in custom_allowed_browsers, with the command that adds it. Nothing when the app is
+    not installed. Reads only; never writes the file."""
+    app = next((path for path in ONEPASSWORD_APP if path.exists()), None)
+    if app is None:
+        return []
+    if engine_path is None:
+        try:
+            engine_path = engine_mod.find_engine().path
+        except engine_mod.EngineError:
+            return []
+    name = Path(engine_path).name
+    # The command below is pasted into a root shell: only a plain file name goes into it, and quoted.
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+        return [
+            Check(
+                "passwords",
+                "1Password desktop app",
+                "warn",
+                f"the engine's file name {name!r} is not a plain name; no command given",
+            )
+        ]
+    if name in ONEPASSWORD_KNOWN:
+        return [Check("passwords", "1Password desktop app", "ok", f"{app}; it knows the engine ({name}) by itself")]
+    try:
+        listed = ONEPASSWORD_ALLOWED.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        listed = ""
+    except (OSError, UnicodeDecodeError) as exc:
+        return [Check("passwords", "1Password desktop app", "warn", f"cannot read {ONEPASSWORD_ALLOWED}: {exc}")]
+    allowed = {line.strip() for line in listed.splitlines()}
+    root_only = _root_owned(Path(engine_path))
+    if name in allowed:
+        if not root_only:
+            return [
+                Check(
+                    "passwords",
+                    "1Password desktop app",
+                    "warn",
+                    f"'{name}' is in {ONEPASSWORD_ALLOWED}, but the engine ({engine_path}) can be changed without root: "
+                    "the line lets any program with that name ask 1Password's app to unlock.",
+                )
+            ]
+        return [Check("passwords", "1Password desktop app", "ok", f"'{name}' is in {ONEPASSWORD_ALLOWED}")]
+    if not root_only:
+        return [
+            Check(
+                "passwords",
+                "1Password desktop app",
+                "warn",
+                f"the engine ({engine_path}) can be changed without root: adding '{name}' to {ONEPASSWORD_ALLOWED} would "
+                "let any program with that name ask 1Password's app to unlock, so no command is given. It is given for "
+                "an engine root alone can change (the RPM or DEB package, or the archive unpacked as root, e.g. under "
+                "/opt); without it, the extension works with a sign-in in the browser.",
+            )
+        ]
+    allowed_file = shlex.quote(str(ONEPASSWORD_ALLOWED))
+    # A file whose last line has no line break would join the two names: one is put before ours then.
+    command = f"printf '\\n%s\\n' {shlex.quote(name)}" if listed and not listed.endswith("\n") else f"echo {shlex.quote(name)}"
+    command = f"{command} | sudo tee -a {allowed_file}"
+    if not ONEPASSWORD_ALLOWED.parent.is_dir():
+        command = f"sudo install -d -m 0755 {shlex.quote(str(ONEPASSWORD_ALLOWED.parent))} && {command}"
+    return [
+        Check(
+            "passwords",
+            "1Password desktop app",
+            "info",
+            f"to unlock the 1Password extension with the desktop app, add '{name}' to {ONEPASSWORD_ALLOWED}: "
+            f"`{command}`, then quit 1Password (its menu > Quit) and open it again. The line trusts any program named "
+            f"'{name}', so it is meant for an install root owns (RPM, DEB). Nulavio does not change that file. "
+            "Without it, the extension still works with a sign-in in the browser.",
+        )
+    ]
+
+
 def check_seeds(prof: profile.Profile) -> list[Check]:
     """A default of Nulavio whose value changed since this profile got it (#384): on its way, or kept as the
     person's. A choice is only named when the default moved after it was made; any other choice is just a choice."""
@@ -300,7 +404,15 @@ def check_profiles() -> list[Check]:
 
 
 def run_all() -> list[Check]:
-    return check_engine() + check_platform() + check_media() + check_secrets() + check_native_messaging() + check_profiles()
+    return (
+        check_engine()
+        + check_platform()
+        + check_media()
+        + check_secrets()
+        + check_native_messaging()
+        + check_1password()
+        + check_profiles()
+    )
 
 
 def to_json(checks: list[Check]) -> str:
