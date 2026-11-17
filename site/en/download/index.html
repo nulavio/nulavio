@@ -49,9 +49,7 @@
 <div><dt>System</dt><dd>Fedora 44 or later, Ubuntu 24.04 or later; x86_64</dd></div>
 <div><dt>Updates</dt><dd>Through dnf or apt, like the rest of the system</dd></div>
 <!--/apt:on-->
-<!--flatpak:on-->
-<div><dt>Other distributions</dt><dd>A Flatpak bundle, with no automatic updates</dd></div>
-<!--/flatpak:on-->
+<div><dt>Other distributions</dt><dd>Not yet: Flatpak comes with Flathub, which updates it</dd></div>
 </dl>
 </section>
 
@@ -78,40 +76,15 @@ sudo apt install nulavio</code></pre></div>
 <p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
 <p class="prose">The file carries the public key above, and apt accepts only what that key signed. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
 <!--/apt:on-->
-<!--flatpak:on-->
 <h3 id="install-flatpak-h">Other distributions (Flatpak)</h3>
-<p class="prose">On another x86_64 distribution with Flatpak installed, use the Flatpak bundle on the release's GitHub page. Download it with the signed SHA-256 list, check both, and install it for your user only:</p>
-<div class="pre-scroll" role="region" aria-label="Flatpak installation commands" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{flatpak_url}}
-curl -fsSLO --proto '=https' {{release_files}}/SHA256SUMS
-curl -fsSLO --proto '=https' {{release_files}}/SHA256SUMS.asc
-curl -fsSLO --proto '=https' {{key_url}}
-gpg --show-keys --with-fingerprint nulavio-packages.asc
-gpg --import nulavio-packages.asc
-gpg --verify SHA256SUMS.asc SHA256SUMS
-grep -F " {{flatpak_bundle}}" SHA256SUMS | sha256sum --check
-flatpak install --user {{flatpak_bundle}}</code></pre></div>
-<p class="prose">Install only if the fingerprint is the one above, gpg says <code translate="no">Good signature</code>, and sha256sum says <code translate="no">OK</code> for the <code translate="no">.flatpak</code> file (it fails if the file is missing or not in the list).</p>
-<p class="prose">Before installing, Flatpak asks whether it may add the <code translate="no">flathub</code> remote (<code translate="no">https://dl.flathub.org/repo/</code>): Nulavio runs on the <code translate="no">org.freedesktop.Platform</code> 26.08 runtime, which comes from there. The first time that is up to about 1 GB of download and about 2.4 GB on disk; a system that already has the runtime downloads much less.</p>
-<p class="prose">It then shows Nulavio's permissions, which are these:</p>
-<ul class="prose">
-<li><code translate="no">network</code>, <code translate="no">ipc</code>, <code translate="no">wayland</code>, <code translate="no">fallback-x11</code> and <code translate="no">pulseaudio</code>: browsing, showing windows and playing sound.</li>
-<li><code translate="no">devices</code> (all devices) and <code translate="no">pcsc</code>: for cameras, FIDO2 security keys and smart cards, as in Mozilla's Firefox Flatpak.</li>
-<li><code translate="no">xdg-download</code>: the Downloads folder, and nothing else of your home folder. Profiles live in <code translate="no">~/.var/app/net.nulavio.Nulavio</code>.</li>
-<li>D-Bus: <code translate="no">FileManager1</code> to show a download in its folder, <code translate="no">NativeMessagingProxy</code> for password managers such as KeePassXC, <code translate="no">a11y.Bus</code> for accessibility, <code translate="no">org.mozilla.nulavio.*</code> to open a window in the browser that is already running, and <code translate="no">NetworkManager</code> to know whether the computer is online.</li>
-</ul>
-<p class="prose">Open Nulavio from the applications menu. To make it the default browser, choose Nulavio under Default Applications in the system settings, or run:</p>
-<div class="pre-scroll" role="region" aria-label="Command to make the Flatpak the default browser" tabindex="0"><pre translate="no"><code>xdg-settings set default-web-browser net.nulavio.Nulavio.desktop</code></pre></div>
-<ul class="limits-list">
-<li class="limit"><strong>Limit:</strong> The Flatpak bundle does not update itself. For each new version, download and check its bundle the same way, then install it over the old one with <code translate="no">flatpak install --user --reinstall</code> and the new file's name. Your profiles stay. Until you do, Nulavio lacks the new version's security fixes.</li>
-<li class="limit"><strong>Limit:</strong> The Flatpak has no profiles encrypted on disk and no <code translate="no">nulavio run --confined</code> mode, because both need programs outside the sandbox. It also lacks the KRunner, KDE Connect and activities integrations.</li>
-</ul>
-<!--/flatpak:on-->
+<p class="prose">Nulavio comes to other distributions through Flathub, which keeps it up to date. Until then there is no Flatpak to install: the bundle that came with earlier versions never updated itself, so releases no longer carry it.</p>
+<p class="limit"><strong>Limit:</strong> If you installed that bundle, it stays on its version and gets no security fixes. On Fedora or Ubuntu, install the package above, then remove the bundle (<a href="#remove">Remove</a>). To keep your bookmarks and passwords, export them in the bundle's Nulavio first: Bookmarks, Manage Bookmarks, Import and Backup, Export Bookmarks to HTML; and Passwords, the ⋯ menu, Export Passwords. Import them in the package's Nulavio from the same menus, then delete the exported password file, which is not encrypted.</p>
 <p class="limit"><strong>Limit:</strong> The fingerprint<!--apt:on--> and the SHA-256<!--/apt:on--> only protect<!--apt:off-->s<!--/apt:off--> you if you check <!--apt:off-->it<!--/apt:off--><!--apt:on-->them<!--/apt:on--> through a different path from the download, for example this page opened on another device<!--apt:on--> or the release notes on GitHub, which carry both<!--/apt:on-->.</p>
 </section>
 
 <section id="updates" aria-labelledby="updates-h">
 <h2 id="updates-h">Updates</h2>
-<p class="prose">New versions arrive through <code translate="no">sudo dnf upgrade</code><!--apt:on-->, <code translate="no">sudo apt upgrade</code><!--/apt:on--> or the system's software centre<!--flatpak:on-->; the Flatpak bundle only by installing the new version's bundle<!--/flatpak:on-->. When Mozilla publishes a Firefox security fix, the project's goal is to publish the matching Nulavio within 72 hours.</p>
+<p class="prose">New versions arrive through <code translate="no">sudo dnf upgrade</code><!--apt:on-->, <code translate="no">sudo apt upgrade</code><!--/apt:on--> or the system's software centre. When Mozilla publishes a Firefox security fix, the project's goal is to publish the matching Nulavio within 72 hours.</p>
 <p class="limit"><strong>Limit:</strong> In that window, the installed Nulavio does not have the fix yet.</p>
 </section>
 
@@ -157,11 +130,9 @@ sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
 <div class="pre-scroll" role="region" aria-label="Removal commands for Ubuntu" tabindex="0"><pre translate="no"><code>sudo apt remove nulavio
 sudo rm /etc/apt/sources.list.d/nulavio.sources</code></pre></div>
 <!--/apt:on-->
-<!--flatpak:on-->
-<p class="prose">The Flatpak:</p>
+<p class="prose">The Flatpak bundle of an earlier version:</p>
 <div class="pre-scroll" role="region" aria-label="Flatpak removal command" tabindex="0"><pre translate="no"><code>flatpak uninstall --user net.nulavio.Nulavio</code></pre></div>
-<!--/flatpak:on-->
-<p class="prose">Your profiles live in your home folder<!--flatpak:on--> (the Flatpak's in <code translate="no">~/.var/app/net.nulavio.Nulavio</code>)<!--/flatpak:on--> and are not deleted when you remove the program.</p>
+<p class="prose">Your profiles live in your home folder (the Flatpak bundle's in <code translate="no">~/.var/app/net.nulavio.Nulavio</code>) and are not deleted when you remove the program.</p>
 </section>
 
 <section id="report" aria-labelledby="report-h">

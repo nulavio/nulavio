@@ -22,6 +22,9 @@
       "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando doctor avisa quando ela falta e o que instalar.",
       "Com o Firefox da distribuição, um perfil criado antes de uma proteção contra reconhecimento existir passa a recebê-la no próximo início, a menos que você tenha mudado o conjunto; o comando doctor avisa quando manteve o seu.",
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
+    ],
+    "action": [
+      "Se você instalou o pacote Flatpak de uma versão anterior: ele nunca se atualiza, e as versões não o trazem mais. Instale o pacote RPM ou APT, traga favoritos e senhas exportando-os no Nulavio do Flatpak, e depois remova o Flatpak. O Flatpak volta pelo Flathub, que atualiza."
     ]
   },
   "en-US": {
@@ -43,6 +46,9 @@
       "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the doctor command says when it is missing and what to install.",
       "With distribution Firefox, a profile made before a fingerprinting protection existed now gets it at its next start, unless you changed the set yourself; the doctor command says when it kept yours.",
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
+    ],
+    "action": [
+      "If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. Install the RPM or APT package, bring your bookmarks and passwords by exporting them in the Flatpak's Nulavio, then remove the Flatpak. The Flatpak returns through Flathub, which updates."
     ]
   }
 }
