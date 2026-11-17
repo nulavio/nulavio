@@ -535,6 +535,16 @@ class NetworkingAttestationTest(unittest.TestCase):
         self.assertIn("subject-path: ${{ runner.temp }}/expected.json", text)  # bytes the attesting job made itself
         self.assertIn('      - "scripts/build/**"', text)  # what makes the reading is in the claim, so it starts a run too
         self.assertIn('      - ".github/workflows/networking-check.yml"', text)
+        self.assertIn('      - "ci/containers/fedora-build.Containerfile"', text)
+        # Every file whose digest is in the claim starts a run when it changes on main.
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import networking_check
+
+        watched = re.findall(r'(?m)^      - "([^"]+)"', text.split("\n  workflow_dispatch:", 1)[0])
+        for path in networking_check.READ_WITH:
+            self.assertTrue(any(path == w or (w.endswith("/**") and path.startswith(w[:-2])) for w in watched), path)
+        for path in (networking_check.MOZCONFIG, networking_check.VARIANT, networking_check.SERIES):
+            self.assertTrue(any(w.endswith("/**") and path.startswith(w[:-2]) for w in watched), path)
         self.assertEqual(text.count("subject-path:"), 1)  # the claim, and nothing else
         # The job that runs the build cannot sign; the job that signs builds nothing.
         body = text.split("\njobs:\n", 1)[1]

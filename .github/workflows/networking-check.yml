@@ -32,6 +32,7 @@ on:
       - "browser/build/**"
       - "browser/patches/**"
       - "scripts/build/**" # the reader and the build script: their digests are in the claim
+      - "ci/containers/fedora-build.Containerfile" # the build container, which installs the Rust toolchain
       - ".github/workflows/networking-check.yml"
   workflow_dispatch:
 

@@ -103,11 +103,20 @@ def inputs(read) -> dict:
 # What a workflow attests and a release recomputes (#455). The same bytes from both sides, or no match:
 # a fixed shape, sorted keys, no date, no counts, nothing a second build of the same inputs would change.
 CLAIM = "nulavio-rust-networking-check/v1"
-# What makes the reading: the reader, the build script and the workflow that runs them. Their digests are in
-# the claim, so an attestation made before one of them changed (a reader that was tightened, say) is not the
-# one a later release asks for. They are not in the record's "built_with": a change to them needs a new run of
-# the workflow, which it starts by itself, not a new build on someone's machine.
-READ_WITH = ("scripts/build/networking_check.py", "scripts/build/build_nulavio.sh", ".github/workflows/networking-check.yml")
+# What makes the reading: the reader and the module it asks about the patches, the build script, the build
+# container's file (it installs the Rust toolchain) and the workflow that runs them. Their digests are in the
+# claim, so an attestation made before one of them changed (a reader that was tightened, say) is not the one a
+# later release asks for. They are not in the record's "built_with": a change to them needs a new run of the
+# workflow, which it starts by itself, not a new build on someone's machine.
+# Not covered: which compiler the container's package manager served on the day. The container file is bound,
+# the version of rustc that a build got from it is not, and the reading and the release build may get two.
+READ_WITH = (
+    "scripts/build/networking_check.py",
+    "scripts/build/apply_patches.py",
+    "scripts/build/build_nulavio.sh",
+    "ci/containers/fedora-build.Containerfile",
+    ".github/workflows/networking-check.yml",
+)
 
 
 def reader(read) -> dict:
