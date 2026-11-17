@@ -615,3 +615,163 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Fit and cost:** each feature that leaves (U10, U12) takes its key with it.
 - **Recommendation: Keep.**
 
+### Integrations
+
+#### I1 Integrations status page (Nulavio Connect P0)
+
+- **Code:** 900 lines (`NulavioConnect.sys.mjs` 478, its experiment, the launcher's `connect.py` 236, `integrations.json`), the Integrations pane in Settings and its part of the Shell's own settings page.
+- **What it does:**
+  - **Status:** shows, with evidence, whether Plasma Browser Integration, the portals, a Secret Service and the default-browser setting are in place.
+  - **Default browser:** makes Nulavio the default browser on request, with a way back.
+- **Seams:** `Subprocess` (it runs helper programs), `AddonManager`.
+- **Boundaries and risks:** TB10; R11.
+- **Tests:** `test_connect` (9, unit and integration).
+- **Failures:** #273 (two menu entries after "make default" on a package install, closed).
+- **Decided by:** ADR 0004; FR-23.
+- **The rest of Nulavio already:** `nulavio doctor` checks the Secret Service, KWallet and the native-messaging hosts (verified: `check_secrets`, `check_native_messaging` in `doctor.py`).
+- **Fit and cost:** the default-browser action is something a person does. The status rows are diagnostics, which `doctor` is for. As a Settings pane, it is a second place that says what the desktop has, with its own helper processes.
+- **Recommendation: Keep, change.** Keep "Make Nulavio the default browser" (in Settings → Geral, where the engine puts its own). Move the status rows into `nulavio doctor`, and drop the Integrations pane and its part of the Shell's old settings page.
+- **For people who use it today:** the pane goes; the same facts come from `nulavio doctor`, which the release notes name.
+
+#### I2 KRunner plugin
+
+- **Code:** `krunner.py` (102 lines) and its part of `connect_p1.py`: a D-Bus service that opens a web address or a search.
+- **Boundaries and risks:** TB10; R44 (any program of the user can call it).
+- **Tests:** unit `test_connect_p1`.
+- **Decided by:** ADR 0004, P1.
+- **The desktop already:** KDE's own runners open a typed address or a web-search keyword in the default browser (inferred; not checked on this machine).
+- **Recommendation: Remove.** Replacement: KDE's runners, with Nulavio as the default browser.
+- **For people who use it today:** the plugin's files are removed (the release notes say how, if the package did not install them).
+
+#### I3 KDE Connect "send link to device"
+
+- **Code:** the link menu in `background.js` and `connect_p1.py`'s device list and share (`kdeconnect-cli`).
+- **Boundaries and risks:** TB10.
+- **Tests:** unit `test_connect_p1`.
+- **The desktop already:** Plasma Browser Integration, which I1 detects, ships a KDE Connect plugin in its host (verified: `KDEConnectPlugin` in `plasma-browser-integration-host` on this machine). Its "send to device" menu needs its extension from AMO (inferred).
+- **Recommendation: Remove.** Replacement: Plasma Browser Integration.
+- **For people who use it today:** the menu item goes; the release notes point to Plasma Browser Integration.
+
+#### I4 Meeting links per profile
+
+- **Code:** `NulavioMeetings.sys.mjs` (56 lines) and a group in the Integrations pane, which moves with I1's change.
+- **Tests:** `test_meetings` (4).
+- **Open issues:** #389 (accessibility of a locked choice).
+- **Decided by:** #221.
+- **Recommendation: Keep.**
+
+#### I5 Password provider choice
+
+- **Code:** 796 lines (`NulavioPasswords.sys.mjs` 381, its experiment, the launcher's `extensions.py`, the pages) and about 115 lines of Settings.
+- **Boundaries and risks:** TB3, TB4; R8, R9, R10.
+- **Tests:** `test_passwords` (7), `test_password_extensions` (3), `test_settings_passwords` (2); unit `test_engine_extensions_desktop`.
+- **Decided by:** FR-10 to FR-13; flows B and H.
+- **Open issues:** #225 (Proton Pass checklist), #81 (1Password).
+- **The engine already:** its own manager; extensions install from AMO by hand. Nulavio installs the pinned official extension after one confirmation and turns the engine's prompts off.
+- **Fit and cost:** principle 4.
+- **Recommendation: Keep.**
+
+### AI
+
+#### A1 AI Bridge: MCP, autonomy levels, AI Workspaces, audit
+
+- **Code:** the largest feature:
+  - the launcher's `ai/` without the assistant: 6,747 lines (`tools.py` 1,531, `registry.py` 595, `cli.py` 536, `policy.py` 388, `workspace.py`, `mcp.py`, `bidi.py`, `websocket.py`, `connect.py`, `audit.py`);
+  - the Shell's `NulavioAI.sys.mjs` (1,285), the request page, its experiment and the agents' part of the old settings page.
+- **Seams:** WebDriver BiDi to the engine; `ExtensionParent`.
+- **Boundaries and risks:** TB15; R26, R27, R28, R33, R34, R35, R36, R68.
+- **Tests:** `test_ai_bridge` (25, unit and integration), `test_ai_ui` (13), `test_ai_agents_real` (2, real Claude Code); unit `test_fake_llm`.
+- **Decided by:** ADR 0007; FR-26; SEC-17.
+- **Open issues:** #243.
+- **Off until used:** `nulavio ai serve` refuses an agent that was not registered with `nulavio ai add` (verified: `_serve` in `ai/cli.py`). Nothing listens before that.
+- **The engine already:** WebDriver BiDi and Marionette, behind command-line switches, with no per-call policy.
+- **Fit and cost:** not in the vision's problem statement, but one of the README's five highlights. It is the only feature with risks that same-user programs can use (R27, R33). If the maintainer wants a smaller 1.0, this is the largest single cut available: an optional package (`nulavio-ai`) for the launcher half is feasible. The Shell half (requests, the bars of a driven window, the emergency stop) needs the Shell's privileges, so it would stay or keep a narrow API (inferred).
+- **Recommendation: Keep.**
+
+#### A2 Raw automation
+
+- **Code:** no file of its own. It runs through the registry (`set_raw_automation`), the policy (`RAW_CAPABILITY`), the tools (`raw_automation`), the workspace's marker, the Shell's critical bar and the switch in the agents' page (verified by `grep raw launcher/nulavio_launcher/ai`).
+- **Boundaries and risks:** R42: outside the per-call policy and the activity record.
+- **Tests:** `test_ai_bridge` 20.
+- **Decided by:** ADR 0007, decision 1 ("A as an explicit raw automation option") and its amendment of 2026-10-28, which took it out of Full control.
+- **Fit and cost:** it hands an agent the engine's whole automation endpoint. That is exactly what the bridge exists to put a policy in front of. Agents keep the MCP tools, which cover browsing, forms, downloads and uploads.
+- **Recommendation: Remove.** Replacement: the MCP tools; for an agent's own library, a separate Firefox profile outside Nulavio. **Amends** ADR 0007.
+- **For people who use it today:** an agent with "Privileged debugging" loses it at the update. The release notes say so; the agents' page shows the switch gone.
+
+#### A3 Built-in assistant
+
+- **Code:** 2,265 lines (the launcher's `assistant.py` 879, the side panel 1,189, `markdown.js`) and about 142 lines of Settings.
+- **Boundaries and risks:** R43.
+- **Tests:** `test_assistant_ui` (42 tests, 1,834 lines), `test_settings_assistant` (3); unit `test_assistant`, `test_assistant_stream`.
+- **Failures:** #138 (closed).
+- **Decided by:** FR-27.
+- **Open issues:** #249 (side), N155 (the engine's chatbot, below).
+- **The engine already:** a sidebar chatbot that loads a provider's web page (off in Nulavio, P2).
+- **Fit and cost:** the same policy as outside agents, per-profile consent, the key in the system keyring. It is a second large AI surface; with N155 it would be a third.
+- **Recommendation: Keep**, as the one chat surface (see N155).
+
+### Launcher and packaging
+
+#### L1 Track A preview
+
+- **What it is:** `bin/nulavio setup` and `run` on the distribution's unmodified Firefox, with Nulavio's profile, a `userChrome.css` chrome theme and a local start page (README, "Try the preview without building").
+- **Code:** the parts that exist only for it: `browser/theme/userChrome.css`, `browser/startpage/`, `browser/config/prefs/theme.js` (953 lines in all) and the distribution-Firefox paths of `engine.py`. The rest of the launcher (1,700 lines in `cli.py`, `profile.py`, `engine.py`, `paths.py`) is also the `nulavio` tools the packages ship, and stays.
+- **Boundaries and risks:** R1, R4, R5, R12, R13, R17, R19 exist only for it.
+- **Tests:** the integration harness itself starts profiles through the launcher on the distribution's Firefox in pull-request CI, so the harness keeps that path (verified: `ci.yml` runs the suite with no Nulavio build).
+- **Fit and cost:** signed RPM and APT packages are out (160.0-0.6). The preview offers people a Nulavio without the Shell, the Vault UI, routing, the patches or the fingerprinting work, under the same name.
+- **Recommendation: Remove the preview as a way to use Nulavio:** the README section, the chrome theme and the start page. Keep running the distribution's Firefox as the test harness's engine.
+- **For people who use it today:** they move to the RPM or the APT package. Their profile under `~/.local/share/nulavio` is not opened by the packaged browser by itself (inferred: the package's profiles are the engine's own), so the release notes need a migration step, or the issue decides on one.
+
+#### L2 nulavio doctor
+
+- **Code:** `doctor.py` (307 lines).
+- **Tests:** unit `test_engine_extensions_desktop`, `test_profile_and_paths`; `test_media_codecs`.
+- **Recommendation: Keep**, and take I1's status rows.
+
+#### L3 Confined mode
+
+- **Code:** `confine.py` (149 lines): bubblewrap around the engine, seeing only the profile and Downloads.
+- **Boundaries and risks:** R46 (opt-in, partial; refuses on Ubuntu 26.04).
+- **Tests:** `test_confined` (4); unit `test_confine`.
+- **Failures:** #282, #312 (closed).
+- **Decided by:** SEC-19; Phase 5 spikes.
+- **Open issues:** #283 (package installs cannot start it, After 1.0).
+- **Fit and cost:** a person who installed a package has no way to reach it. With L1 gone it would have none at all.
+- **Recommendation: After 1.0.** Keep the code. Take SEC-19 out of the 1.0 promise until #283 gives packages a way to start it.
+- **For people who use it today:** only preview users can; see L1.
+
+#### L4 `nulavio desktop install`
+
+- **Code:** `desktop.py` (95 lines).
+- **Tests:** unit `test_engine_extensions_desktop`.
+- **Fit and cost:** the packages install the menu entry; only the preview needs this.
+- **Recommendation: Remove, with L1.**
+
+#### L5 RPM and APT packages and repositories
+
+- **Code:** `packaging/rpm/`, `packaging/linux/` (the menu entry, the AppArmor profile for the engine's user namespaces on Ubuntu) and the release scripts (`make_rpm.sh`, `make_deb.sh`, the signing and publishing steps).
+- **Boundaries and risks:** TB8, TB18, TB19, TB21, TB22; R57, R58, R60, R61.
+- **Tests:** `test_build_resources`, `check_rpm.sh`, `check_deb.sh`; unit release tests.
+- **Failures:** #417, #377 (closed).
+- **Recommendation: Keep.**
+
+#### L6 Flatpak bundle attached to releases
+
+- **Code:** `packaging/flatpak/`, `flatpak_manifest.py`, `check_flatpak*.{py,sh}`, the release's Flatpak job.
+- **Boundaries and risks:** R75: trusted as far as Flathub's runtime, and **it never updates itself**.
+- **Tests:** unit `test_flatpak`, `test_check_flatpak_bundle`.
+- **Failures:** #324 (closed by #338).
+- **Decided by:** #274 (D3, in 1.0: a Flatpak section on the download pages).
+- **Open issues:** #88 to #91 (Flathub, After 1.0).
+- **Fit and cost:** a browser installed from it stays on the version it was installed at until the person downloads another bundle. The update policy's 24 to 72 hours mean nothing for those people.
+- **Recommendation: After 1.0,** with Flathub, which updates. Stop attaching the bundle and take the section off the download pages until then. **Reverses** #274's decision (D3).
+- **For people who use it today:** they are on a version that does not update. The release notes and the download page tell them to move to the RPM or APT package, or to wait for Flathub.
+
+#### L7 The site and the waitlist
+
+- **Code:** `site/` (11 pages; `_worker.js`, 220 lines, the waitlist).
+- **Boundaries and risks:** TB17; R69, R71.
+- **Tests:** unit `test_site`, `test_site_discovery`.
+- **Open issues:** #173, #199, #437 (wave 5).
+- **Recommendation: Keep.**
+
