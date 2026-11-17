@@ -79,7 +79,7 @@ The packages are built on Blacksmith runners by `release.yml`, checked against a
 | `scripts/release/apk_sign.py`, `sign_companion.sh` | The Companion's APK signature (v2/v3 scheme) through KMS |
 | `scripts/release/publish_release.sh`, `upload_repo.sh`, `check_published.sh` | Staging, upload to the package bucket, the check after upload |
 | `scripts/release/kms_setup.sh`, `kms_import_key.py`, `make_release_key.sh`, `ci/aws/*.json` | Creating and importing the keys; the key and role policies |
-| `scripts/release/flatpak_manifest.py`, `check_flatpak.sh` | The Flatpak bundle: its manifest and the checks before it is bundled |
+| `scripts/release/flatpak_manifest.py`, `check_flatpak.sh` | The Flatpak for Flathub: its manifest and the checks of its build (no bundle is released since #467) |
 | `packaging/`, `site/rpm/nulavio.repo`, `site/apt/nulavio.sources` | The packages, and the repository files people install, which turn signature checks on |
 
 Questions the project would most like answered:
@@ -89,7 +89,7 @@ Questions the project would most like answered:
 3. Do the signatures and repository files make `dnf`, `apt` and Flatpak refuse a tampered or older package (R57 says the metadata has no expiry)?
 4. Are the scripts' refusals really fatal, and is there a path that publishes unsigned or partly signed?
 5. The APK signer is the project's own code (`apk_sign.py`): is its output what Android's verifier checks, and could a crafted input make it sign something other than the built APK?
-6. The Flatpak bundle is built in a job without OIDC and gets no attestation; what binds it to the release is its line in the signed `SHA256SUMS`, and `flatpak install` of a bundle does not check the project's signature ([build](../architecture/build.md), "Flatpak (Flathub)"). Is that link enough, and what should a person installing the bundle be told? No residual risk records this yet.
+6. Releases 160.0-0.4 to 0.6 carried a Flatpak bundle, built in a job without OIDC and with no attestation; what bound it to the release was its line in the signed `SHA256SUMS`, and `flatpak install` of a bundle does not check the project's signature. Since #467 releases carry none (the Flatpak waits for Flathub), and the `flatpak` jobs only check Flathub's build ([build](../architecture/build.md), "Flatpak (Flathub)"). Can anything those jobs make still reach what `sign` signs or `publish` uploads?
 
 Out of scope for this area: the engine's own source (Mozilla's), Blacksmith's and GitHub's infrastructure (R61, accepted), and the maintainer's own machine (where the offline key backups are). Also in scope, as "updates" in D11: how a new Firefox release is noticed and pinned (`upstream.yml`, `scripts/upstream/`, `browser/build/engine.json`) and the release metadata pull request (`release-metadata.yml`, TB21).
 

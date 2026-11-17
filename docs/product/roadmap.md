@@ -26,7 +26,7 @@ The [feature review](feature-review-2026-11.md) (#453, decided 2026-11-17) also 
 1. **Feature freeze** when waves 1–4 are closed: from then on, fixes only.
 2. **Release candidate**: an alpha release (`<Firefox>-0.N`) on the Firefox release current at the time, used for at least two weeks: upgrade from the previous alpha, the 50-site run (#202), fingerprinting (#79), performance (#80), the install journey on RPM, APT and Flatpak (#120), and the independent review's findings fixed or recorded (#224).
 3. **Go or no-go**: the 1.0 milestone is empty; every item of the [scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) is verified; CI is green on the exact commit; at least one month of alpha releases went out inside the [update policy](../architecture/update-policy.md)'s times.
-4. **Release** `<Firefox>-1.0` (the version scheme in [CHANGELOG.md](../../CHANGELOG.md)) through `release.yml`, signed after the maintainer's approval: dnf and APT repositories, the Flatpak bundle and the Companion's APK.
+4. **Release** `<Firefox>-1.0` (the version scheme in [CHANGELOG.md](../../CHANGELOG.md)) through `release.yml`, signed after the maintainer's approval: dnf and APT repositories and the Companion's APK. The Flatpak comes with Flathub, not as a bundle (#467).
 5. **Launch** in the same week: the site (#173), link previews (#199), release notes (#198), the launch material (#176), and the Flathub submission (#89) when #90 allows it.
 6. **After 1.0**: fixes as `<Firefox>-1.N`; the 24-hour public commitment for urgent Firefox releases decided; #207 from 2027-01-27, then #90 and #91.
 

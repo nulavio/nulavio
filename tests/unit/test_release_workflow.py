@@ -159,7 +159,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release\n", self.sign)
-        self.assertIn("needs: [build, flatpak, flatpak-check, companion]", self.sign)
+        self.assertIn("needs: [build, companion]", self.sign)
         self.assertIn("needs.build.result == 'success'", self.sign)  # a failed Flatpak never holds back a release
 
     def test_every_job_that_can_attest_runs_main_only(self):
@@ -331,8 +331,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
 
     def test_the_bundle_is_checked_against_the_attested_archive_in_a_job_that_cannot_sign(self):
-        # #324: built by Flathub's builder in a job with no attestation, parsed in a job with no token, and only its
-        # hash compared next to the signing role. Left out when it differs.
+        # #324: built by Flathub's builder in a job with no attestation, parsed in a job with no token.
         job = self.text[self.text.index("\n  flatpak-check:\n") : self.text.index("\n  companion:\n")]
         self.assertIn("scripts/release/check_flatpak_bundle.py --bundle", job)
         self.assertIn("contents: read", job)
@@ -341,31 +340,36 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for later in (self.sign, self.publish):
             self.assertNotIn("check_flatpak_bundle.py", later)
             self.assertNotIn("apt_install.sh flatpak", later)
-        compare = self.sign.index("needs.flatpak-check.outputs.bundle-sha256")
-        self.assertLess(compare, self.sign.index("release_notes.py notes"))  # the notes name only an accepted bundle
-        self.assertLess(compare, self.sign.index("configure-aws-credentials"))
-        self.assertIn('rm -rf "$RUNNER_TEMP/flatpak-bundle"', self.sign[compare : self.sign.index("release_notes.py notes")])
         self.assertIn("-type f -name '*.flatpak'", job)  # one regular file, nothing else accepted
-        self.assertIn("GITHUB_ACTIONS", (RELEASE / "publish_release.sh").read_text(encoding="utf-8"))
-        self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.sign)
-        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
-        self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), script.index('"$repo/scripts/release/sign_repo.sh"'))
-        self.assertLess(script.index("check_flatpak_bundle.py"), script.index('"$repo/scripts/release/sign_repo.sh"'))
+
+    def test_the_bundle_is_never_a_release_asset(self):
+        # #467: the bundle never updates itself (R75), so a release does not offer it until Flathub (#88-#91). The
+        # flatpak jobs stay as a check of Flathub's build; signing neither waits for them nor takes their bundle.
+        for job in (self.sign, self.publish):
+            for name in ("flatpak-bundle", "NULAVIO_FLATPAK_BUNDLE", "--flatpak ", "needs.flatpak", ".flatpak'"):
+                with self.subTest(name=name):
+                    self.assertNotIn(name, job)
+        self.assertNotIn("flatpak", self.sign.split("steps:", 1)[0].split("needs:", 1)[1].split("\n", 1)[0])
 
     def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
         self.assertIn("--compose-url-policy=full", self.text)
         self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
 
-    def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
+    def test_a_bundle_given_by_hand_is_still_checked_before_signing(self):
+        # publish_release.sh keeps NULAVIO_FLATPAK_BUNDLE for a run by hand (#467): the bundle is checked against the
+        # archive, or by the hash a check accepted, before anything is signed, refused in CI without that hash, and
+        # covered by SHA256SUMS.
+        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        signing = script.index('"$repo/scripts/release/sign_repo.sh"')
+        self.assertLess(script.index("if [[ -n ${NULAVIO_FLATPAK_BUNDLE_SHA256"), signing)  # the compare, not a comment
+        self.assertLess(script.index("check_flatpak_bundle.py"), signing)
+        self.assertIn("GITHUB_ACTIONS", script)
+        self.assertLess(script.index('cp "$bundle" "$stage/github/"'), script.index("sha256sum -- * >SHA256SUMS"))
+        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', script)
+
+    def test_the_flatpak_is_started_before_it_is_bundled(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.sign.index(
-            "NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk"
-        )
-        self.assertLess(sign, self.sign.index("subject-path: ${{ runner.temp }}/publish/github/*"))
-        publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
-        self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
-        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', publish)
 
 
 class AsanWorkflowTest(unittest.TestCase):

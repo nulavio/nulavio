@@ -6,6 +6,5 @@
   "repo_file": "https://nulavio.net/rpm/nulavio.repo",
   "key_url": "https://nulavio.net/keys/nulavio-packages.asc",
   "apt_sources": "https://nulavio.net/apt/nulavio.sources",
-  "flatpak_bundle": "nulavio-160.0-0.6.x86_64.flatpak",
   "companion_apk": "nulavio-companion-0.1.0.apk"
 }
