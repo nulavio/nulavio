@@ -90,7 +90,7 @@ The preview, which ran Nulavio's profile on your distribution's Firefox (`bin/nu
 3. Bookmarks: Bookmarks → Manage Bookmarks → Import and Backup → Export Bookmarks to HTML. Passwords: Passwords (`about:logins`) → ⋯ → Export Passwords. That file is not encrypted: keep it out of shared folders.
 4. In Nulavio: Bookmarks → Manage Bookmarks → Import and Backup → Import Bookmarks from HTML; Passwords → ⋯ → Import from a File. Then delete the exported password file.
 
-A password manager's extension (Proton Pass, Bitwarden, KeePassXC) keeps its vault in its own account or database: sign in again in Nulavio, nothing to export. If you ran `bin/nulavio desktop install`, its menu entry starts the preview, which now refuses to open, and the command is gone (#465): delete `~/.local/share/applications/nulavio-preview.desktop` and the `nulavio-preview.png` and `nulavio-preview.svg` icons under `~/.local/share/icons/hicolor/`. When you no longer need the preview's profiles, delete `~/.local/share/nulavio/profiles/`.
+A password manager's extension (Proton Pass, Bitwarden, KeePassXC) keeps its vault in its own account or database: sign in again in Nulavio, nothing to export. If you ran `bin/nulavio desktop install`, its menu entry starts the preview, which now refuses to open, and the command is gone (#465): delete `~/.local/share/applications/nulavio-preview.desktop` and the `nulavio-preview.png` and `nulavio-preview.svg` icons under `~/.local/share/icons/hicolor/` (under `$XDG_DATA_HOME` instead of `~/.local/share` if you had set it). When you no longer need the preview's profiles, delete `~/.local/share/nulavio/profiles/`.
 
 ## Tests
 
