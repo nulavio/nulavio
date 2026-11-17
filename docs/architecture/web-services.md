@@ -27,8 +27,10 @@ Nothing until the click on an item that names the service. Then:
 | A translation service, on a page | The page's address without its fragment (the part after `#`, which never goes to the page's own server and may hold a key or a token), and the target language | In the address of a new tab; the service then fetches the page itself |
 
 A service that fetches an address is never offered one it should not fetch: not an address on this computer
-(`localhost`, loopback), a private, shared, link-local, documentation, benchmarking or reserved address, an IPv6 address
-that carries an IPv4 one (mapped, compatible, NAT64, 6to4), a name ending in a local suffix (`.local`, `.localdomain`, `.internal`, `.lan`, `.home`, `.box`, `.router`, `.home.arpa` and a few more), a host without a dot (an intranet name), an address with a user name, or anything that is not an
+(`localhost`, loopback), a private, shared, link-local, site-local, multicast, documentation, benchmarking or
+reserved address (IPv4 and IPv6), an IPv6 address that carries an IPv4 one (mapped, compatible, NAT64, 6to4, Teredo), a
+name ending in a local suffix (`.local`, `.localdomain`, `.internal`, `.lan`, `.home`, `.box`, `.router`, `.home.arpa`
+and a few more) or in `.onion`, a host without a dot (an intranet name), an address with a user name, or anything that is not an
 `http(s)` page. The menu item stays, unusable, and says why. Private windows show none of these items unless the person
 ticks "Oferecer estes serviços também nas janelas privadas"; then the service opens in a private tab.
 
@@ -54,5 +56,6 @@ placeholders that kind of service takes (`{text}` or `{url}`, and `{lang}`).
 
 Not verified: that each service shows the text or the page as expected once opened. The tests check the address each
 item opens and that nothing is sent before the click; they cancel every request to the services. Kagi Translate needs
-an account and were not opened signed in. How Kagi Translate reads a page address that has its own `?` or `#` (Nulavio
-encodes them so they stay in the path) is not documented by Kagi.
+an account and were not opened signed in. How Kagi Translate reads a page address that has its own `?` (Nulavio
+encodes it so the query stays in the path; the fragment is removed before) or characters such as `&` and `%2F` (sent as
+the page's address has them) is not documented by Kagi.

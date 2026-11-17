@@ -178,16 +178,18 @@ export function refusedAddress(spec) {
     return privateV4(a, b, Number(v4[3])) ? "private-address" : null;
   }
   if (host.includes(":")) {
-    // IPv6: loopback, unspecified, unique local (fc00::/7), link-local (fe80::/10), and every form that carries an
-    // IPv4 address (mapped ::ffff:0:0/96, compatible ::/96, NAT64 64:ff9b::/96, 6to4 2002::/16): refused whole,
-    // since a service that fetches it may reach the IPv4 address inside.
-    if (host === "::1" || host === "::" || /^f[cd]/.test(host) || /^fe[89ab]/.test(host) || host.startsWith("::") ||
-        host.startsWith("64:ff9b:") || host.startsWith("2002:")) {
+    // IPv6: loopback, unspecified, unique local (fc00::/7), link-local (fe80::/10), old site-local (fec0::/10),
+    // multicast (ff00::/8), documentation (2001:db8::/32), benchmarking (2001:2::/48), and every form that carries
+    // an IPv4 address (mapped ::ffff:0:0/96, compatible ::/96, NAT64 64:ff9b::/96, 6to4 2002::/16, Teredo
+    // 2001::/32): refused whole, since a service that fetches it may reach the address inside. The address is in
+    // the URL parser's form (lower case, no leading zeros, the longest run of zeros as "::").
+    if (host === "::1" || host === "::" || /^f[cdf]/.test(host) || /^fe[89a-f]/.test(host) || host.startsWith("::") ||
+        host.startsWith("64:ff9b:") || host.startsWith("2002:") || /^2001:(db8|0|):/.test(host) || /^2001:2:(0)?:/.test(host)) {
       return "private-address";
     }
     return null;
   }
-  if (!host.includes(".") || /\.(local|localdomain|internal|lan|home|box|router|intranet|corp|home\.arpa|test|invalid|example)$/.test(host)) {
+  if (!host.includes(".") || /\.(local|localdomain|internal|lan|home|box|router|intranet|corp|home\.arpa|arpa|onion|test|invalid|example)$/.test(host)) {
     return "private-address";
   }
   return null;
@@ -263,7 +265,7 @@ class NulavioServicesClass {
       if (service.instance) {
         const base = validateInstance(entry.base);
         return { id: `${entry.key}:${base}`, key: entry.key, name: `${service.name} (${new URL(base).host})`, base,
-                 selection: service.instance.replace("{base}", base), page: null, lang: service.lang, account: false };
+                 selection: service.instance.replace("{base}", () => base), page: null, lang: service.lang, account: false };
       }
       if (!service.selection && !service.page) {
         fail("invalid-service");
@@ -371,7 +373,7 @@ class NulavioServicesClass {
   // -- the menus -------------------------------------------------------------
 
   /**
-   * The items the page and link menus offer now, for the background page to create: one per service and use,
+   * The items the page and selection menus offer now, for the background page to create: one per service and use,
    * named after the service. `sends` says what leaves the browser on the click.
    */
   menu() {
@@ -425,17 +427,18 @@ class NulavioServicesClass {
     const lang = this.language();
     if (use === "translate-selection" || use === "translate-page") {
       const t = this.translators().find(each => each.id === id) ?? fail("not-found");
-      const value = use === "translate-selection" ? { text: String(text).slice(0, MAX_TEXT) } : { url: target };
+      const value = use === "translate-selection" ? { text: String(text).slice(0, MAX_TEXT).replace(/[\uD800-\uDBFF]$/, "") } : { url: target };
       if (use === "translate-selection" && !value.text.trim()) {
         fail("nothing-selected");
       }
       // Kagi Translate's page path takes the address itself (its documented example is "/example.com"), not one
-      // encoded value: the scheme is left out, and the page's own "?" and "#" are encoded so they stay in the path.
+      // encoded value: the scheme is left out, the fragment was removed above, and the page's own "?" is encoded so
+      // the query stays in the path. Other characters go as the page's address has them.
       const template = use === "translate-selection" ? t.selection : t.page;
       const address = t.key === "kagi-translate" && use === "translate-page"
         ? template
-            .replace("{url}", target.replace(/^https?:\/\//, "").replace(/[?]/g, c => encodeURIComponent(c)))
-            .replace("{lang}", encodeURIComponent(languageFor(lang, t.lang)))
+            .replace("{url}", () => target.replace(/^https?:\/\//, "").replace(/[?]/g, c => encodeURIComponent(c)))
+            .replace("{lang}", () => encodeURIComponent(languageFor(lang, t.lang)))
         : fill(template, { ...value, lang: languageFor(lang, t.lang), base: t.base });
       return { open: address };
     }

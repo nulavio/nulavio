@@ -184,7 +184,8 @@ class WebServicesTest(unittest.TestCase):
             "https://example.org/": None,
             "http://example.org/x": None,
             "https://93.184.216.34/": None,
-            "https://[2001:db8::1]/": None,
+            "https://[2606:4700::1111]/": None,
+            "https://[2001:4860::8888]/": None,
             "http://localhost:8080/": "private-address",
             "http://app.localhost/": "private-address",
             "http://127.0.0.1/": "private-address",
@@ -205,6 +206,12 @@ class WebServicesTest(unittest.TestCase):
             "http://[::ffff:10.0.0.1]/": "private-address",
             "http://[64:ff9b::a00:1]/": "private-address",
             "http://[2002:a00:1::]/": "private-address",
+            "http://[fec0::1]/": "private-address",
+            "http://[ff02::1]/": "private-address",
+            "http://[2001:db8::1]/": "private-address",
+            "http://[2001::a00:1]/": "private-address",
+            "http://[2001:2::1]/": "private-address",
+            "http://abcdefghijklmnop.onion/": "private-address",
             "http://192.0.0.8/": "private-address",
             "http://198.18.0.1/": "private-address",
             "http://203.0.113.5/": "private-address",
@@ -270,6 +277,17 @@ class WebServicesTest(unittest.TestCase):
         for item, address in expected.items():
             with self.subTest(item=item):
                 self.assertEqual(self.ok(build, item, text, page), {"open": address})
+        # A selection cut at the limit inside an emoji: the half that would not encode is left out (review of #443).
+        long = "a" * 4999 + "\U0001f600"
+        self.assertEqual(
+            self.ok(build, "translate-selection|google", long, page)["open"],
+            f"https://translate.google.com/?sl=auto&tl=pt&text={'a' * 4999}&op=translate",
+        )
+        # A page address with "$" patterns stays as it is in Kagi's path (String.replace would expand them).
+        self.assertEqual(
+            self.ok(build, "translate-page|kagi-translate", text, "https://example.org/a$'b/$&")["open"],
+            "https://translate.kagi.com/example.org/a$'b/$&?to=pt",
+        )
         # Another target language, chosen in the setting: each service in its own form of it.
         self.ok(S + "return S.setLanguage('en-US');")
         self.assertEqual(
