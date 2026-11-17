@@ -30,6 +30,10 @@ nulavio-hide-page-title =
     .label = Hide the page title in the window title
     .description = The window's title bar, the taskbar, Alt+Tab and screen-sharing pickers see only "Nulavio" and the profile's name, never the page. It does not hide the titles on the tabs, inside the window, or the page itself.
 
+nulavio-load-line =
+    .label = Show a loading line at the top of the page
+    .description = A thin line along the top of the page while it loads. It does not say how far the load has gone; the tab shows the browser's own loading sign either way.
+
 nulavio-look-group =
     .label = Nulavio colours
     .description = Only how Nulavio's windows and pages look. Nothing here changes a protection.

@@ -1406,6 +1406,7 @@
   "menuImmersive": {"message": "Immersive"},
   "layoutChoiceImmersiveHint": {"message": "Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. Ctrl+L brings the address bar back."},
   "hidePageTitleLabel": {"message": "Hide the page title in the window title"},
+  "loadLineLabel": {"message": "Show a loading line at the top of the page"},
   "commandTogglePageEditing": {"message": "Edit or stop editing the text of the page"},
   "menuEditPage": {"message": "Edit Text on Page"},
   "pageEditBar": {"message": "The text of this page can be edited. Nothing is saved: reloading the page discards the changes."},
