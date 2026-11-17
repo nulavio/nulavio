@@ -102,14 +102,15 @@ def inputs(read) -> dict:
 
 # What a workflow attests and a release recomputes (#455). The same bytes from both sides, or no match:
 # a fixed shape, sorted keys, no date, no counts, nothing a second build of the same inputs would change.
-CLAIM = "nulavio-rust-networking-check/v1"
+CLAIM = "nulavio-rust-networking-check/v2"
 # What makes the reading: the reader and the module it asks about the patches, the build script, the build
 # container's file (it installs the Rust toolchain) and the workflow that runs them. Their digests are in the
 # claim, so an attestation made before one of them changed (a reader that was tightened, say) is not the one a
 # later release asks for. They are not in the record's "built_with": a change to them needs a new run of the
 # workflow, which it starts by itself, not a new build on someone's machine.
-# Not covered: which compiler the container's package manager served on the day. The container file is bound,
-# the version of rustc that a build got from it is not, and the reading and the release build may get two.
+# The container file names no version of the Rust toolchain: what its package manager served on the day
+# decides. So the claim also says which compiler the build used ("compiled_with", #472), and the release's
+# claim says which one the release build used: two compilers are two claims, and signing finds no attestation.
 READ_WITH = (
     "scripts/build/networking_check.py",
     "scripts/build/apply_patches.py",
@@ -128,8 +129,47 @@ def repository_reader(repo: Path = ROOT) -> dict:
     return reader(lambda path: (repo / path).read_bytes())
 
 
-def claim(firefox: str, source_sha256: str, built_with: dict, read_with: dict) -> bytes:
-    """The statement "this Firefox release, built with these inputs, passed the reading", as bytes.
+# Which Rust compiler a build used, as the build's own configuration says it (config.status, from
+# `rustc --version --verbose`): the version and the commit it was built from. A distribution's rustc may
+# report no commit; the engine's configure then writes "unknown".
+RUSTC_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?")
+RUSTC_COMMIT = re.compile(r"[0-9a-f]{40}|unknown")
+
+
+def checked_compiler(found: object) -> dict:
+    """{"rustc_version", "rustc_commit"} when both are there and look like what rustc reports, else ValueError.
+
+    The values come from a build machine (a configuration file, a manifest, a claim handed over by a build
+    job): only these two keys are taken, and only in these forms."""
+    if not isinstance(found, dict):
+        raise ValueError("it does not say which Rust compiler was used")
+    version, commit = found.get("rustc_version"), found.get("rustc_commit")
+    if not (isinstance(version, str) and RUSTC_VERSION.fullmatch(version)):
+        raise ValueError(f"the Rust compiler's version is not one rustc reports: {version!r}")
+    if not (isinstance(commit, str) and RUSTC_COMMIT.fullmatch(commit)):
+        raise ValueError(f"the Rust compiler's commit is not one rustc reports: {commit!r}")
+    return {"rustc_version": version, "rustc_commit": commit}
+
+
+def compiler(values: dict) -> dict:
+    """The Rust compiler of the build whose configuration values these are (substs())."""
+    try:
+        return checked_compiler({"rustc_version": values.get("RUSTC_VERSION"), "rustc_commit": values.get("RUSTC_COMMIT")})
+    except ValueError as error:
+        raise CannotCheck(f"the build's configuration: {error}") from None
+
+
+def compiler_from(path: Path) -> dict:
+    """The "compiled_with" of a claim or of a rehearsal's manifest (JSON), checked; ValueError otherwise."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"{path}: cannot be read ({error})") from None
+    return checked_compiler(data.get("compiled_with") if isinstance(data, dict) else None)
+
+
+def claim(firefox: str, source_sha256: str, built_with: dict, read_with: dict, compiled_with: dict) -> bytes:
+    """The statement "this Firefox release, built with these inputs and this Rust compiler, passed the reading".
 
     networking-check.yml writes it from its own build and reading and attests the file. The release's
     signing job writes it again from the manifest and the base commit (release_manifest.py networking-claim)
@@ -141,6 +181,7 @@ def claim(firefox: str, source_sha256: str, built_with: dict, read_with: dict) -
         "source_sha256": source_sha256,
         "built_with": {key: built_with[key] for key in ("mozconfig_sha256", "variant_sha256", "patch_stack_sha256")},
         "read_with": {path: read_with[path] for path in READ_WITH},
+        "compiled_with": checked_compiler(compiled_with),
         "result": "passed",
     }
     return (json.dumps(statement, sort_keys=True, separators=(",", ":")) + "\n").encode()
@@ -300,7 +341,9 @@ def check(
         raise CannotCheck("the source tree is not the release engine.json pins (its digest differs)")
     objdir = tree / "obj-nulavio"
     config_status = objdir / "config.status"
-    readable_build(substs(config_status))
+    values = substs(config_status)
+    readable_build(values)
+    compiled_with = compiler(values)
     inputs_used = built_with(tree, repo)
     libraries = sorted(objdir.glob("*/release/libgkrust.a"))
     if len(libraries) != 1:
@@ -339,6 +382,9 @@ def check(
         "library_sha256": sha256(library),
         "built_with": inputs_used,
         "imported": imported,
+        # For the claim only, never written to the record: the record says which tree was read, and a
+        # compiler belongs to a machine and a day (main() takes it out).
+        "compiled_with": compiled_with,
     }
 
 
@@ -356,17 +402,29 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
     parser.add_argument(
         "--expected-claim",
         action="store_true",
-        help="print the claim this checkout's pin and inputs need, without a build, and stop",
+        help="print the claim this checkout's pin and inputs need, without a build, and stop (needs --compiler-from)",
+    )
+    parser.add_argument(
+        "--compiler-from",
+        type=Path,
+        help='with --expected-claim: a claim or a rehearsal\'s manifest whose "compiled_with" names the Rust compiler',
     )
     args = parser.parse_args(argv)
     if args.expected_claim:
+        if not args.compiler_from:
+            print("networking-check: --expected-claim needs --compiler-from <a claim or a manifest.json>", file=sys.stderr)
+            return 2
         try:
+            # Only the compiler is taken from that file. Everything else is this checkout's.
+            compiled_with = compiler_from(args.compiler_from)
             engine = json.loads(ENGINE.read_text(encoding="utf-8"))
-            expected = claim(engine["firefox"], engine["source_sha256"], repository_inputs(ROOT), repository_reader(ROOT))
+            expected = claim(
+                engine["firefox"], engine["source_sha256"], repository_inputs(ROOT), repository_reader(ROOT), compiled_with
+            )
             sys.stdout.buffer.write(expected)
         except (OSError, ValueError, KeyError) as error:
             print(
-                f"networking-check: the pin, the mozconfig, its variant or the patch stack cannot be read ({error})",
+                f"networking-check: the pin, the mozconfig, its variant, the patch stack or the compiler: {error}",
                 file=sys.stderr,
             )
             return 2
@@ -392,10 +450,14 @@ def main(argv: list[str] | None = None, *, run=subprocess.run, which=shutil.whic
         print(record["how"], file=sys.stderr)
         return 1
     del record["imported"]
+    compiled_with = record.pop("compiled_with")
+    rustc = f"rustc {compiled_with['rustc_version']} ({compiled_with['rustc_commit']})"
+    print(f"networking-check: the build that was read was made with {rustc}", file=sys.stderr)
     if args.claim_out:
-        # From this reading's own values: the release it read and the inputs it found the tree to have.
+        # From this reading's own values: the release it read, the inputs it found the tree to have, and the
+        # compiler the build's configuration names.
         args.claim_out.parent.mkdir(parents=True, exist_ok=True)
-        made = claim(record["firefox"], record["source_sha256"], record["built_with"], repository_reader(ROOT))
+        made = claim(record["firefox"], record["source_sha256"], record["built_with"], repository_reader(ROOT), compiled_with)
         args.claim_out.write_bytes(made)
     text = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
     if args.write:
