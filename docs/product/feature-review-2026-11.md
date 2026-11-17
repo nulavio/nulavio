@@ -24,6 +24,8 @@ Status: **recommendations ready, decisions pending** (#453). Written by a coding
 | **Remove** | Deleted, with what replaces it |
 | **Do not build** | For a planned item: close the issue without building it, with the reason |
 
+**Reverses** marks a recommendation that goes against a decision the maintainer recorded (on the issue, in an ADR or in the release criteria), including one that only moves a decided item out of 1.0 ("timing"). **Amends** marks one that changes part of an accepted ADR.
+
 Each item's evidence separates:
 
 - **Verified**: read in the code at the commit above, or the output of a command, with the path or the command.
@@ -41,20 +43,19 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 
 | ID | Feature | Recommendation | Reason, in one line | Decision | Issue |
 |---|---|---|---|---|---|
-| U9 | Page-loading line (#318) | **Off by default** | Always indeterminate (the engine's progress was unreliable), repeats the tab's own loading indicator, has no switch, and its tests fail on a build of `main` (#436) | | |
+| U9 | Page-loading line (#318) | **Off by default** | Always indeterminate (the engine's progress was unreliable), repeats the tab's own loading indicator, has no switch, and its frame cost is not measured (#397). Asked for by the maintainer (#318) | | |
 | U10 | Edit the page's text (#161) | **Optional component** (AMO extension) | `document.designMode` needs no privilege; a built-in window actor and a key for an occasional tool | | |
 | U12 | Keep above other windows, on KDE (#170) | **Remove** | KWin already offers it for every window (window menu "Keep Above Others", and a shortcut); Nulavio's version adds a D-Bus trust (R77) | | |
-| I1 | Integrations status page (Connect P0) | **Keep, change** | Keep "make Nulavio the default browser"; move the status of portals, Secret Service and Plasma into `nulavio doctor` and drop the Settings pane. **Amends** ADR 0004 (P0's Settings → Integrations) | | |
 | I2 | KRunner plugin | **Remove** | KDE's own runners open addresses and searches in the default browser; the plugin is a service any program can call (R44). **Amends** ADR 0004 (P1) | | |
 | I3 | KDE Connect "send link to device" | **Remove** | Plasma Browser Integration, which Nulavio already detects, has its own KDE Connect plugin. **Amends** ADR 0004 (P1) | | |
 | A2 | Raw automation (WebDriver BiDi endpoint) | **Remove** | The one agent path outside Nulavio's per-call policy and its activity record (R42); agents keep the MCP tools. **Amends** ADR 0007 (decision 1, A13) | | |
-| R8 | Phone unlock and the Android Companion | **After 1.0** (offering pairing) | Pairing is already hidden behind a pref; verified on one phone (R48); 1.0 took it back "with the Companion on F-Droid", which now waits until 2027 (#207). **Reverses** the 2026-11-10 scope decision | | |
 | L6 | Flatpak bundle attached to releases | **After 1.0** | The bundle never updates itself (R75): a browser that does not update; ship it with Flathub (#88 to #91). **Reverses** #274 (D3) | | |
 | L1 | Track A preview (distribution Firefox with Nulavio's profile, chrome theme and start page) | **Remove** (the user-facing preview) | Signed packages replaced it; it alone carries R1, R4, R5, R12, R13, R17, R19. The launcher stays as the packaged tools and the test harness. **Amends** ADR 0001 (Track A) | | |
 | L3 | Confined mode (`--confined`) | **After 1.0** | Reachable only from the preview launcher (#283), refuses on Ubuntu (R46), partial; out of the 1.0 promise until a package can start it | | |
 | L4 | `nulavio desktop install` | **Remove** (with L1) | Packages install the menu entry; only the preview needed it | | |
+| L2 | `nulavio doctor` | **Keep, change** | Make it reachable from a package install: the packaged `nulavio` command starts the browser, so `doctor` is out of reach of the people #81's decision and #377 send to it (#283) | | |
 | P8 | Fingerprinting additions | **Keep, change** | Keep; once a release carries patch 0012, remove the Shell's per-tab screen fallback where the engine decides, so there is one mechanism | | |
-| P14 | Copy Link to Highlight shortcut (#157) | **Keep, change** | Keep the engine's menu item; choose another key: Ctrl+Shift+L is the autofill key of password-manager extensions Nulavio supports (Bitwarden; inferred, not checked) | | |
+| P14 | Copy Link to Highlight shortcut (#157) | **Keep, change** | Keep the engine's menu item; choose another key: Ctrl+Shift+L is the autofill key of password-manager extensions Nulavio supports (Bitwarden; inferred, not checked). **Reverses** #157's decision of 2026-11-14 (the key) | | |
 | P1 | Hardened baseline: prefs, policies, ETP Strict, HTTPS-Only, GPC, telemetry off | Keep | The product's first promise | | |
 | P2 | Mozilla's AI features, account, Pocket and promotions off | Keep | "Nothing phones home"; costs a list of prefs and one test module | | |
 | P3 | Guard at run time | Keep | The vision's "hope none of it silently regresses"; detection only, and said so (R38) | | |
@@ -75,6 +76,7 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 | R5 | Temporary profile | Keep | Small; a private window keeps the profile's extensions and logins | | |
 | R6 | Sensitive-sites profile template | Keep | A template, not a mechanism; R47 | | |
 | R7 | Vault: protected profiles (password, recovery code, keyring) | Keep | The third promise; reviewed independently (#224) | | |
+| R8 | Phone unlock and the Android Companion | Keep | Offered since 160.0-0.3 and in 1.0's scope with the signed APK (#205, #227). Costs a second platform and is verified on one phone (R48): the largest cut available if 1.0 must be smaller | | |
 | U1 | One settings page inside the engine's | Keep | Accepted ADRs 0008 and 0011; the riskiest seam on an engine update, with a fallback | | |
 | U2 | The identity band and the Shell's pages named "Nulavio" | Keep | Carries profile identity and the site; the identity-handler wrap fails safe | | |
 | U3 | Layouts: Lateral, Abas no topo, Foco | Keep | Presets over the engine's own options | | |
@@ -88,11 +90,11 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 | U14 | Split view (the engine's) | Keep | The engine's; Nulavio adds words and tests | | |
 | U15 | Tab groups (the engine's) | Keep | The engine's; Nulavio adds tests | | |
 | U16 | Nulavio's keys and address-bar quick actions | Keep | Engine commands; changed in the engine's own view | | |
+| I1 | Integrations status page (Connect P0) | Keep | A package install cannot run `nulavio doctor` (the packaged `nulavio` command starts the browser), so this pane is where people read these facts without a terminal | | |
 | I4 | Meeting links per profile (#221) | Keep | 56 lines, decided in #221 | | |
 | I5 | Password provider choice (flows B, H) | Keep | Principle 4, "your tools, not ours" | | |
 | A1 | AI Bridge: MCP, autonomy levels, AI Workspaces, audit | Keep | Off until an agent is added; the policy outside the model is the design | | |
 | A3 | Built-in assistant | Keep | Same policy as outside agents; per-profile consent | | |
-| L2 | `nulavio doctor` | Keep | Diagnostics, and the target of I1's status | | |
 | L5 | RPM and APT packages and repositories | Keep | How 1.0 ships | | |
 | L7 | The site and the waitlist | Keep | The waitlist is the project's only server, outside the browser (TB17) | | |
 
@@ -100,8 +102,7 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 
 | ID | Issue | Recommendation | Reason, in one line | Decision | Issue |
 |---|---|---|---|---|---|
-| N171 | #171 Privacy report | **Do not build** | The engine's `about:protections` already reports what Enhanced Tracking Protection blocked this week; option A builds the same layer again. **Reverses** the 2026-11-16 decision | | |
-| N166 | #166 Toolbar buttons you define | **Do not build** | Bookmarks with keywords (`%s`) and bookmarklets on the toolbar already open an address built from the page | | |
+| N166 | #166 Toolbar buttons you define | **Do not build** | Bookmarks with keywords (`%s`) and bookmarklets on the toolbar already open an address built from the page. **Reverses** the 2026-11-14 decision (its form) | | |
 | N162 | #162 Per-site CSS | **Do not build** | Unprivileged extensions (AMO) do it; the Guard would need an exception for it | | |
 | N163 | #163 Notes per site | **Do not build** | No fit with the vision's problem; AMO extensions exist | | |
 | N317 | #317 Pinned sites per profile | **Do not build** | Pinned tabs are already per profile: each profile is its own instance and session | | |
@@ -109,20 +110,21 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 | N347 | #347 Imersivo "Painel" | **Do not build** | Moves the engine's navigation toolbar and its indicators into a side panel: the most invasive style, and #348 is the maintainer's preferred default | | |
 | N155 | #155 Sidebar chatbot providers | **Do not build** | A second chat surface next to the assistant (A3); the chatbot is a provider's web page in the sidebar. **Reverses** the 2026-11-14 decision | | |
 | N151 | #151 Search provider in one step (PR #442) | **Keep, change** | Keep the chooser and "Entrar"; drop "carry this search to other profiles", which writes into other profiles' folders (a new boundary and R81 in the PR) | | |
-| N152 | #152 Account search in private windows and temporary profiles | **Keep, change** | Keep the generic part (the warning, refusing session tokens in templates); Kagi's extension and Privacy Pass wait for #153, After 1.0 | | |
-| N154 | #154 Page summaries (PR #443) | **After 1.0** | Built and tested, but one preset service (Kagi) and the assistant already summarises; a new privileged module shared with N156 | | |
+| N152 | #152 Account search in private windows and temporary profiles | **Keep, change** | Keep the generic part (the warning, refusing session tokens in templates); Kagi's extension and Privacy Pass wait for #153, After 1.0. **Reverses** the 2026-11-14 decision for Kagi (timing) | | |
+| N154 | #154 Page summaries (PR #443) | **After 1.0** | Built and tested, but one preset service (Kagi) and the assistant already summarises; a new privileged module shared with N156. **Reverses** the 2026-11-16 decision (timing) | | |
 | N156 | #156 Translation with a web service (PR #443) | Keep | On-device stays the default; web services on a named click, none preselected | | |
 | N81 | #81 1Password | Keep | Decided P1 on 2026-11-16; principle 4 | | |
+| N171 | #171 Privacy report | **After 1.0** | Option A shows the layer the engine already reports per site (the shield's panel, FR-18) and per week (`about:protections`); what is new is one place and a pointer to uBlock Origin. **Reverses** the 2026-11-16 decision (timing) | | |
 | N95 | #95 Spike: native content filter | **After 1.0** | Nothing forces it (2026-11-13 decision); uBlock Origin stays | | |
 | N119 | #119 Sounds | **After 1.0** | Needs a person listening; nothing depends on it; off by default anyway | | |
 | N153 | #153 Spike: Privacy Pass | **After 1.0** | Research; serves N152's Kagi part | | |
-| N159 | #159 Link previews ("peek") | **After 1.0** | New window surface, large design work | | |
+| N159 | #159 Link previews ("peek") | **After 1.0** | New window surface, large design work. **Reverses** the 2026-11-14 decision (timing) | | |
 | N164 | #164 Reading list with offline copy | **After 1.0** | A convenience; Reader View and bookmarks remain | | |
 | N165 | #165 Feeds in the address bar | **After 1.0** | A convenience; P3 | | |
 | N168 | #168 Low power mode | **After 1.0** | Its own issue says it ships only after a measurement shows a clear gain | | |
 | N169 | #169 A site as a Linux app | **After 1.0** | Large: app_id, portals, routing inside an app window | | |
-| N216 | #216 .onion and Onion-Location | **After 1.0** | Per-profile proxy is the engine's already; Tor outside Tor Browser risks an anonymity promise the vision rules out | | |
-| N217 | #217 Network route per profile and site | **After 1.0** | Large, Fable-level, new secrets; the engine's per-profile proxy covers the simple case | | |
+| N216 | #216 .onion and Onion-Location | **After 1.0** | Per-profile proxy is the engine's already; Tor outside Tor Browser risks an anonymity promise the vision rules out. **Reverses** the 2026-11-14 decision (timing) | | |
+| N217 | #217 Network route per profile and site | **After 1.0** | Large, Fable-level, new secrets; the engine's per-profile proxy covers the simple case. **Reverses** the 2026-11-14 decision (timing) | | |
 | N218 | #218 Mail and calendar links with privacy services | **After 1.0** | Large catalogue; P3 | | |
 | N172 | #172 Parent: Orion's features | **Keep, change** | Close it at 1.0 with what was built; the rest moves After 1.0 with its sub-issues | | |
 | N219 | #219 Parent: Tor, VPNs, privacy services | **Keep, change** | Keep #220 to #222 in 1.0; #216 to #218 move After 1.0 | | |
@@ -160,9 +162,9 @@ Pull-request CI runs the integration suite against the distribution's Firefox (`
 - 160.0-0.6's first run (#376): `test_whats_new_browser` 04, `test_vault_profiles`, `test_drm` audio, `test_immersive` 21.
 - Its third run: the clean-link menu (#381).
 - `test_layout_presets`, nine tests after #391 (#403).
-- The first rehearsal: `test_split_view` (all five) and `test_load_line` 04 (#436, open).
+- The first rehearsal (2026-11-16): `test_split_view` (all five) and `test_load_line` 04 (#436). #439 fixed both tests before the reviewed commit; they passed in a local run of the whole suite on a build of `main`, and the issue stays open until a nightly rehearsal is green.
 
-Failed pull-request CI runs since 2026-10-25 (96 runs; their logs read on 2026-11-17) were lint and unit tests of the release and review tooling, not feature tests. Flaky or broken feature tests with an issue: #138 (assistant), #209 (profile permissions), #246 (content filter), #280 (profiles), #398 (Imersivo), #409 (motion, profile ink), #436 (split view, load line).
+Of the 96 failed `ci` runs since 2026-10-25 (logs read on 2026-11-17), the 43 whose logs name what failed were mostly lint and unit tests of the release and review tooling. Feature tests among them: the phone link's unit tests in four runs (R8), and one run each of `test_engine_slice` 09, `test_shell` 03 (P11) and KeePassXC's `test_password_extensions` (I5). The other 53 logs matched nothing searchable and are not classified here. Flaky or broken feature tests with an issue: #138 (assistant), #209 (profile permissions), #246 (content filter), #280 (profiles), #398 (Imersivo), #409 (motion, profile ink), #436 (split view, load line).
 
 ### Performance
 
@@ -290,7 +292,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Open issues:** #406, #419, #420, #421 (all small).
 - **The engine already:** fingerprinting protection and its per-target override list. Patch 0012 adds two targets the engine lacks: audio noise per site, and one screen size per document.
 - **Fit and cost:** privacy by default, decided four days ago. The cost is the C++ patch at each update, and two mechanisms for the screen while releases without the patch exist. The Shell's per-tab path runs only where the engine lacks the target or the set leaves it out (verified: `engineDecides()` and `turnsOn()` in the child).
-- **Recommendation: Keep, change.** After a release that carries patch 0012 (the next one; 160.0-0.6 was built before #402 merged), remove the Shell's screen fallback, so one mechanism remains. Whether anything still needs it after #400 (launcher-seeded sets) is inferred, not checked.
+- **Recommendation: Keep, change.** After a release that carries patch 0012 (the next one: the tag `v160.0-0.6` is at `7b94d699` and does not contain #402's `7f9e6f52`, verified with `git tag --contains`), remove the Shell's screen fallback, so one mechanism remains. Whether anything still needs it after #400 (launcher-seeded sets) is inferred, not checked.
 - **For people who use it today:** nothing visible; the same screen size, from the engine.
 
 #### P9 Firefox's name in the User-Agent, font lists on every Fedora
@@ -343,10 +345,10 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 
 - **Code:** one command in `manifest.json` (Ctrl+Shift+L) on top of the engine's menu item.
 - **Tests:** `test_text_fragments` (6), `test_shortcuts`.
-- **Decided by:** #157 (closed).
+- **Decided by:** #157 (closed). Ctrl+Shift+L was proposed after a check of the keys the engine, the Shell and KDE use, and the maintainer accepted it on 2026-11-14 (verified: #157's comments). Password-manager extensions were not part of that check.
 - **The engine already:** has the item in the context menu.
 - **Fit and cost:** the key is the cost. Ctrl+Shift+L is the autofill key of Bitwarden's extension (FR-12) and of other password managers (inferred from their documentation, not checked here). When an extension and a built-in command claim one key, which wins was not checked.
-- **Recommendation: Keep, change:** keep the item; change or drop the key.
+- **Recommendation: Keep, change:** keep the item; change or drop the key. **Reverses** #157's decision on the key.
 - **For people who use it today:** the key changes; say so in the release notes.
 
 #### P15 DRM off in a new profile, WebRTC address limit, codecs
@@ -444,12 +446,11 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Seams:** Android's Keystore and BiometricPrompt; mDNS on the local network.
 - **Boundaries and risks:** R48 (one real phone), R49 (the network sees a phone operation).
 - **Tests:** `test_companion_emulator` (5); unit `test_phone_link`, `test_companion_protocol`, `test_companion_build`, `test_companion_version`, `test_apk_sign`.
-- **Decided by:** ADR 0005; D10 revised on 2026-11-10: phone unlock "came back in … with the Companion on F-Droid" ([release criteria](release-criteria.md#scope-of-10-decided-2026-11-04)).
+- **Decided by:** ADR 0005; D10 revised on 2026-11-10 ([release criteria](release-criteria.md#scope-of-10-decided-2026-11-04)): phone unlock is in 1.0, checked on the real phone with the signed APK (#227), since F-Droid waits until 2027.
 - **Open issues:** #207 (F-Droid: ask again from 2027-01-27), #227 (the real phone again, with the signed APK).
-- **Today:** pairing a phone is not offered. It is behind `nulavio.vault.phone.pairing`, false by default (verified: `NulavioVault.sys.mjs`); unlocking with a phone already paired does not depend on it.
-- **Fit and cost:** a convenience on top of R7, which already has two recovery methods. The condition it came back under (F-Droid) is now after 1.0. It is the one feature that makes Nulavio maintain a second platform.
-- **Recommendation: After 1.0, for offering pairing.** Keep the code and the pref as they are. Offer pairing when F-Droid accepts the Companion (#207) and #227 has passed. **Reverses** the 2026-11-10 scope decision: the release criteria and the roadmap's Phase 2c need the amendment.
-- **For people who use it today:** nobody can pair from the browser today, so nothing changes in the browser. The README ("comes with the next release") and the landing page ("Coming soon") need new words, and so does the Companion's place in the release (the signed APK keeps being built, or stops until then: a decision for the issue).
+- **Today:** pairing is offered. `nulavio.vault.phone.pairing` is false in the module and true in the build's branding prefs since #42 (verified: `firefox-branding.js`; the security changelog of 160.0-0.3). The signed APK is attached to releases since 160.0-0.5. Unlocking with a phone already paired never depends on the pref.
+- **Fit and cost:** a convenience on top of R7, which already has two recovery methods. It is the one feature that makes Nulavio maintain a second platform, and it is verified on one phone. The maintainer already weighed F-Droid's delay and kept it in 1.0 with the APK.
+- **Recommendation: Keep.** If 1.0 has to be smaller, this is the cut with the most release machinery behind it: turning the pref off would stop new pairings and leave paired phones working.
 
 ### Interface
 
@@ -458,10 +459,10 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Code:** `NulavioLoadLine.sys.mjs` (129 lines) and its styles in `window-band.css`. Started for every window by the layout experiment; no switch (verified: no pref in the module; `experiments/layout/parent.js` calls `watch()`).
 - **What it shows:** always the indeterminate state, because the engine's progress for a web page was found unreliable (verified: the module's header, "measured on 160.0").
 - **Tests:** `test_load_line` (5).
-- **Failures:** #436 (P1, open): test 04, under reduced motion, fails on a build of `main` in the first rehearsal. #397 (After 1.0): its frame cost is not measured.
+- **Failures:** #436: test 04, under reduced motion, failed in the first rehearsal; #439 fixed the test before the reviewed commit, and the issue waits for a green nightly. #397 (After 1.0): its frame cost is not measured.
 - **Decided by:** #318, asked for by the maintainer in the experience review; built in wave 4a.
 - **The engine already:** the selected tab shows the engine's loading indicator, and the reload button turns into stop.
-- **Fit and cost:** it says "loading" a second time, without progress, on every page of every window. Small code, but a listener per window, a failing test and an unmeasured frame cost, for a cue the engine already gives.
+- **Fit and cost:** it says "loading" a second time, without progress, on every page of every window. Small code, but a progress listener per window and an unmeasured frame cost, for a cue the engine already gives.
 - **Recommendation: Off by default**, with a switch in Settings → Aparência. The alternative is **Remove**; the maintainer asked for it, so the softer step is proposed.
 - **For people who use it today:** the line disappears after the update unless they turn it on; one line in the release notes.
 
@@ -596,7 +597,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 
 - **Code:** the engine's (verified: `browser.tabs.splitView.enabled` true in 160.0). Nulavio adds words in its menus and documents it.
 - **Tests:** `test_split_view` (5).
-- **Failures:** #436 (open, all five fail on a build of `main`).
+- **Failures:** #436: all five failed in the first rehearsal; fixed by #439 before the reviewed commit, open until a green nightly.
 - **Decided by:** #315.
 - **Recommendation: Keep.** The engine maintains it; Nulavio keeps the tests.
 
@@ -628,10 +629,9 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Tests:** `test_connect` (9, unit and integration).
 - **Failures:** #273 (two menu entries after "make default" on a package install, closed).
 - **Decided by:** ADR 0004; FR-23.
-- **The rest of Nulavio already:** `nulavio doctor` checks the Secret Service, KWallet and the native-messaging hosts (verified: `check_secrets`, `check_native_messaging` in `doctor.py`).
-- **Fit and cost:** the default-browser action is something a person does. The status rows are diagnostics, which `doctor` is for. As a Settings pane, it is a second place that says what the desktop has, with its own helper processes.
-- **Recommendation: Keep, change.** Keep "Make Nulavio the default browser" (in Settings → Geral, where the engine puts its own). Move the status rows into `nulavio doctor`, and drop the Integrations pane and its part of the Shell's old settings page.
-- **For people who use it today:** the pane goes; the same facts come from `nulavio doctor`, which the release notes name.
+- **The rest of Nulavio already:** `nulavio doctor` checks the Secret Service, KWallet and the native-messaging hosts (verified: `check_secrets`, `check_native_messaging` in `doctor.py`). But a package install cannot run it: the packaged `nulavio` command starts the browser (verified: `packaging/rpm/nulavio.spec`, `make_deb.sh`), and the tools inside the package are not on `PATH` (#283).
+- **Fit and cost:** the default-browser action is something a person does; the status rows are diagnostics. Moving them to `doctor` would ask for a terminal, which the vision's success sentence rules out, and `doctor` is out of reach of package users anyway. The screen-cast, security-key, notification and activity rows (P1/P2, `connect_p1.py`) stay with this pane.
+- **Recommendation: Keep.**
 
 #### I2 KRunner plugin
 
@@ -640,7 +640,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Tests:** unit `test_connect_p1`.
 - **Decided by:** ADR 0004, P1.
 - **The desktop already:** KDE's own runners open a typed address or a web-search keyword in the default browser (inferred; not checked on this machine).
-- **Recommendation: Remove.** Replacement: KDE's runners, with Nulavio as the default browser.
+- **Recommendation: Remove.** Replacement: KDE's runners, with Nulavio as the default browser. The plugin itself only opens an address or a search and leaves the profile to routing (verified: the header of `krunner.py`), so routing still applies. **Amends** ADR 0004 (P1).
 - **For people who use it today:** "Add to KRunner" wrote two files under `~/.local/share` (ADR 0004); the update does not remove files in a home folder, so the release notes give the two paths to delete.
 
 #### I3 KDE Connect "send link to device"
@@ -649,7 +649,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Boundaries and risks:** TB10.
 - **Tests:** unit `test_connect_p1`.
 - **The desktop already:** Plasma Browser Integration, which I1 detects, ships a KDE Connect plugin in its host (verified: `KDEConnectPlugin` in `plasma-browser-integration-host` on this machine). Its "send to device" menu needs its extension from AMO (inferred).
-- **Recommendation: Remove.** Replacement: Plasma Browser Integration.
+- **Recommendation: Remove.** Replacement: Plasma Browser Integration, which I1 keeps detecting; its extension asks for broader permissions than one menu item needs (inferred from its AMO listing, not checked). **Amends** ADR 0004 (P1).
 - **For people who use it today:** the menu item goes; the release notes point to Plasma Browser Integration.
 
 #### I4 Meeting links per profile
@@ -726,7 +726,9 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 
 - **Code:** `doctor.py` (307 lines).
 - **Tests:** unit `test_engine_extensions_desktop`, `test_profile_and_paths`; `test_media_codecs`.
-- **Recommendation: Keep**, and take I1's status rows.
+- **Reach:** the packaged `nulavio` command starts the browser (verified: `packaging/rpm/nulavio.spec` writes `%{_bindir}/nulavio` as the engine's launcher; `make_deb.sh` the same), and the tools inside the package are not on `PATH` (#283). Yet #81's decision (the 1Password `sudo` line) and #377 (the codec check) send people to `nulavio doctor`.
+- **Recommendation: Keep, change:** make `doctor` reachable from a package install (for example `nulavio --doctor`, or the tools on `PATH` under another name), as #283's first point; or point those two at Settings instead.
+- **For people who use it today:** only source-checkout users can run it now; nothing is taken away.
 
 #### L3 Confined mode
 
@@ -842,7 +844,7 @@ Each item: what the issue asks, its milestone, the maintainer's recorded decisio
 | N166 | #166 Toolbar buttons you define | 2026-11-14: no "run code"; an address template or a fixed browser command | bookmarks with a `%s` keyword, bookmarklets on the bookmarks toolbar | **Do not build.** The engine covers "open an address built from the page" |
 | N168 | #168 Low power mode | none | tab unloading under memory pressure | **After 1.0.** The issue says it ships only after a measurement shows a clear gain |
 | N169 | #169 A site as a Linux app | none | taskbar tabs, Windows only (verified: `browser.taskbarTabs.enabled` false off Windows) | **After 1.0.** Large: app_id, the DynamicLauncher portal, routing inside an app window |
-| N171 | #171 Privacy report | 2026-11-16: option A, the engine's layer only, kept in the profile | `about:protections`, the weekly report of what Enhanced Tracking Protection blocked (verified in 160.0's `AboutRedirector.cpp`; whether it reads well in Nulavio, with Mozilla's promotions off, was not checked) | **Do not build.** **Reverses** the decision. Option A rebuilds the engine's report; open `about:protections` from the site panel instead |
+| N171 | #171 Privacy report | 2026-11-16: option A, the engine's layer only, kept in the profile | per site, the shield's panel with the engine's log of blocked trackers (FR-18); per week, `about:protections` (verified in 160.0's `AboutRedirector.cpp`). Its Lockwise, mobile-app and VPN cards default on in `firefox.js`, and Nulavio sets none of their prefs; how the page reads in Nulavio was not checked | **After 1.0.** **Reverses** the decision (timing). The issue knew of `about:protections`; option A adds one place and a pointer to uBlock Origin over what the engine reports. Before 1.0, checking `about:protections` and turning off its Mozilla cards is the cheaper step |
 | N216 | #216 .onion and Onion-Location | 2026-11-14: a Tor the person runs first, off by default, a ".onion available" button | a per-profile SOCKS proxy with remote DNS (inferred from the engine's settings) | **After 1.0.** Tor in a browser that is not Tor Browser identifies the person by its fingerprint, close to the vision's non-goal; the words need care, and the work is large |
 | N217 | #217 Network route per profile and site | 2026-11-14: Direct, Proxy, provider extension and Tor first; WireGuard after a spike; secrets in the keyring | per-profile proxy | **After 1.0.** Fable-level work with new secrets and a new boundary |
 | N218 | #218 Mail and calendar links with privacy services | none | `mailto:` handlers | **After 1.0.** A large catalogue, P3 |
@@ -880,15 +882,17 @@ Where the maintainer accepts one of these, the issue for it carries the amendmen
 | ID | Recommendation | Reverses or amends |
 |---|---|---|
 | A2 | Remove raw automation | ADR 0007: decision 1 ("A as an explicit raw automation option") and the amendment of 2026-10-28; FR-26; R42 closes |
-| I1, I2, I3 | Integrations status into `doctor`; remove KRunner and KDE Connect | ADR 0004 (P0's Settings pane, P1's KRunner and KDE Connect); FR-23; R44 closes |
+| I2, I3 | Remove KRunner and KDE Connect | ADR 0004 (P1's KRunner and KDE Connect); FR-23; R44 closes |
+| P14 | Another key for Copy Link to Highlight | #157's decision of 2026-11-14 |
 | L1, L4 | Remove the Track A preview and `nulavio desktop` | ADR 0001 (Track A as the preview); README, FR-20; R1, R4, R5, R12, R13, R17, R19 close |
 | L3 | Confined mode After 1.0 | SEC-19 in the requirements |
 | L6 | Flatpak bundle After 1.0 | #274's decision of 2026-11-14 (D3); the download pages; R75 |
-| R8 | Phone pairing After 1.0 | [Scope of 1.0](release-criteria.md#scope-of-10-decided-2026-11-04) (phone unlock back in on 2026-11-10); the roadmap's Phase 2c; FR-25; README and landing page |
 | N155 | Do not build | #155's decision of 2026-11-14 |
-| N171 | Do not build | #171's decision of 2026-11-16 |
-| N216, N217, N218 | After 1.0 | #216's and #217's decisions stay as they are; only the milestone moves |
-| N95, N119, N153, N159, N164, N165, N168, N169 | After 1.0 | Only the milestone (the roadmap's wave 4b and 4c lists) |
+| N171 | After 1.0 | #171's decision of 2026-11-16 (timing) |
+| N152, N154, N159 | After 1.0 (N152: the Kagi part) | The decisions on #152 and #159 (2026-11-14) and #154 (2026-11-16), timing only |
+| N166 | Do not build | #166's decision of 2026-11-14 (its form) |
+| N216, N217, N218 | After 1.0 | #216's and #217's decisions (2026-11-14) stay as they are; only the milestone moves (timing) |
+| N95, N119, N153, N164, N165, N168, N169 | After 1.0 | Only the milestone (the roadmap's wave 4b and 4c lists) |
 
 No recommendation reverses an accepted ADR other than ADR 0001, 0004 and 0007, as amendments. ADRs 0008, 0009 and 0011 stand: U1, U2 and U4 are kept as they are.
 
@@ -902,7 +906,7 @@ No recommendation reverses an accepted ADR other than ADR 0001, 0004 and 0007, a
 ## How this was done
 
 - **Worktree:** `origin/main` at `68ec0575`, without the design screenshots.
-- **Inventory:** a feature-to-files map over the Shell (modules, experiments, pages, shared styles), the launcher, the patches, the configuration, the packaging and all 71 integration test modules. It fails on any file or module no feature claims; none was left. Sizes with `wc -l`; test counts are `def test_` per module.
+- **Inventory:** a feature-to-files map over the Shell (modules, experiments, pages, shared styles), the launcher, the patches, the configuration, the packaging and all 71 integration test modules. It fails on any Shell file, launcher module, patch or integration test module that no feature claims (configuration and packaging files are mapped but not checked that way); none was left. Patches 0001, 0002 and 0006 and the Shell's bootstrap (`background.js`, `manifest.json`, the locales) are plumbing every feature uses and are not reviewed as features. Sizes with `wc -l`; test counts are `def test_` per module.
 - **Seams:** a search of the Shell for engine modules (`resource:///modules/…`, `resource://gre/modules/…`, `moz-src:///…`), members with a leading `_` on engine objects, engine methods assigned at run time, and `registerWindowActor`.
 - **Engine updates:** `git log -- browser/build/engine.json`, and the files each bump touched.
 - **Failures:**
