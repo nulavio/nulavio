@@ -62,7 +62,7 @@ In each table, the recommendations other than "Keep" come first; the [evidence](
 | P4 | Content filter: uBlock Origin pinned, extra lists | Keep | Blocks ads from the first launch; no engine seam | Accepted, 2026-11-17 | — |
 | P5 | Site exceptions in one place | Keep | "Undo any breakage per site in two clicks" | Accepted, 2026-11-17 | — |
 | P6 | DNS choice | Keep | Small; the engine's own screen stays behind a button | Accepted, 2026-11-17 | — |
-| P7 | Search: providers and per-engine suggestion consent (patch 0004) | Keep | Nothing typed leaves without consent (SEC-14); the engine has one switch for all engines | Accepted, 2026-11-17 | — |
+| P7 | Search: providers and per-engine suggestion consent (patch 0004) | Keep | Nothing typed in the address bar reaches a search engine while typing without consent for that engine (SEC-14); the engine has one switch for all engines | Accepted, 2026-11-17 | — |
 | P9 | Firefox's name in the User-Agent (0009), font lists on every Fedora (0010) | Keep | Two small patches for compatibility and fingerprinting | Accepted, 2026-11-17 | — |
 | P10 | Look-alike login warning (flow D) | Keep | Small; its limit is written (R41) | Accepted, 2026-11-17 | — |
 | P11 | Programs never opened from the downloads UI (patch 0007) | Keep | Compensates the missing download protection (R15, accepted D9) | Accepted, 2026-11-17 | — |
@@ -279,7 +279,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Tests:** `test_search` (16), `test_settings_search` (2).
 - **Decided by:** ADR 0002; SEC-14; FR-21.
 - **The engine already:** one switch for suggestions from every engine (R17); adding engines by hand.
-- **Fit and cost:** "nothing typed leaves without consent" needs the patch: the engine has no per-engine switch.
+- **Fit and cost:** SEC-14 (what is typed in the address bar reaches a search engine while typing only with consent for that engine) needs the patch: the engine has no per-engine switch.
 - **Recommendation: Keep.** #151 changes it (N151).
 
 #### P8 Fingerprinting additions
@@ -685,7 +685,7 @@ Each item: **code** (verified sizes), **seams**, **boundaries and risks**, **tes
 - **Open issues:** #243.
 - **Off until used:** `nulavio ai serve` refuses an agent that was not registered with `nulavio ai add` (verified: `_serve` in `ai/cli.py`). Nothing listens before that.
 - **The engine already:** WebDriver BiDi and Marionette, behind command-line switches, with no per-call policy.
-- **Fit and cost:** not in the vision's problem statement, but one of the README's five highlights. It is the only feature with risks that same-user programs can use (R27, R33). If the maintainer wants a smaller 1.0, this is the largest single cut available: an optional package (`nulavio-ai`) for the launcher half is feasible. The Shell half (requests, the bars of a driven window, the emergency stop) needs the Shell's privileges, so it would stay or keep a narrow API (inferred).
+- **Fit and cost:** not in the vision's problem statement, but one of the README's five highlights. It carries the most risks that other programs of the same user can use (R27, R28, R33); KRunner (R44) and the engine's remote service (R23) are the others. If the maintainer wants a smaller 1.0, this is the largest single cut available: an optional package (`nulavio-ai`) for the launcher half is feasible. The Shell half (requests, the bars of a driven window, the emergency stop) needs the Shell's privileges, so it would stay or keep a narrow API (inferred).
 - **Recommendation: Keep.**
 
 #### A2 Raw automation
