@@ -307,7 +307,11 @@ class WebServicesTest(unittest.TestCase):
         self.activate("Traduzir seleção com DeepL", self.open_menu_on_text)
         want = f"https://www.deepl.com/translator#xx/pt-BR/{enc('Olá & mundo/?#')}"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10))
-        opened = self.m.chrome("return [gBrowser.selectedBrowser.currentURI.spec, gBrowser.selectedTab._tPos];")
+        # Whatever else fails below, the service's tab goes (the next tests read the page's tab).
+        self.addCleanup(
+            self.m.chrome, "while (gBrowser.tabs.length > arguments[0]) gBrowser.removeTab(gBrowser.tabs.at(-1));", [tabs]
+        )
+        opened = self.m.chrome("return [gBrowser.selectedBrowser.currentURI.spec, gBrowser.tabs.indexOf(gBrowser.selectedTab)];")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(GUARD_SEEN), 10))
         seen = self.m.chrome(GUARD_SEEN)
         # The request carries what the address does (the text is in the fragment, which a request never carries).
@@ -385,7 +389,8 @@ class WebServicesTest(unittest.TestCase):
         DOC = "const d = gBrowser.selectedBrowser.contentDocument;"
         self.m.navigate("about:preferences#languages")
         rows = DOC + (
-            "const g = d.getElementById(arguments[0]); if (!g || !g.getBoundingClientRect().height) return null;"
+            "if (!d) return null; const g = d.getElementById(arguments[0]);"
+            "if (!g || !g.getBoundingClientRect().height) return null;"
             "return [...g.querySelectorAll('moz-box-item')].map(r => [r.dataset.service ?? null, r.label]);"
         )
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(rows, ["nulavio-translate-known"]), 20))
