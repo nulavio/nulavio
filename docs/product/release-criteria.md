@@ -72,3 +72,26 @@ What is in place for it (2026-11-04): `publish_release.sh` signs only what a reh
 1.0 is the public alpha's scope made stable: every phase's DoD except FIDO2 unlock (S10), which the UI and the site show as not available yet (phone unlock, U6/U7 and S11, came back in on 2026-11-10 after its device test on a real phone, with the Companion on F-Droid); an independent review of the Vault and of the release chain with its findings fixed or recorded ([scope packet](../security/independent-review.md), #224); at least one month of alpha releases inside the update SLA; the remaining Proton Pass checklist (unlock after restart, autosave, passkeys); and the UX DoD (both themes, every preset, WCAG 2.2 AA checks). Performance (NFR-02, #80): the 1.0 candidate is measured with [the suite](../architecture/performance.md) against the release before it and Mozilla's Firefox, 5 runs a side; no measure may get worse against the release before it with an interval that excludes 0 unless the reason is recorded, and the gap to Firefox is published with the release (the build question is #364).
 
 Tracked since 2026-11-13 by the [1.0 milestone](https://github.com/nulavio/nulavio/milestone/1); the parts that had no issue are #224 (independent review), #225 (Proton Pass), #226 (UX DoD), #227 (phone unlock on the real phone, with the APK of #205, since F-Droid's inclusion waits until 2027: #207) and #228 (Ubuntu host, R46). The waves and the release plan are in the [roadmap](roadmap.md#road-to-10).
+
+### The independent review of the Vault and the release chain (#224): done, every finding closed
+
+**Who reviewed, and what that is worth.** The maintainer decided on 2026-11-14 against an outside engagement for 1.0: the review was done by a fresh session of an AI model (Claude Opus 5.5), given only the [scope packet](../security/independent-review.md) and the code, not the authors' reasoning. It is independent of the sessions that wrote the code; it is not a security firm, and it can miss what a person who breaks systems for a living would find. The same kind of reviewer reads every pull request that touches these areas.
+
+**What it read.** Both areas as a whole at one commit of `main` (`d6978110c7fe`, 2026-11-14), after the Vault changes of #204, #187 and #177 had landed, so it read the key handling 1.0 ships. It answered the packet's twelve questions and ran the unit suites with libsodium, gocryptfs and apksigner required: 1097 tests, OK.
+
+**What it did not find a way to do.** Recover a profile's key without a valid secret; get a secret into a command line, a log or the disk; attack the desktop side of the phone link (nv1); publish anything unsigned. The APK signer's output is verified by Android's own `apksigner`.
+
+**What it found, and what became of each.**
+
+| Finding | Outcome |
+|---|---|
+| The release notes' attestation command accepted an attestation from any workflow or branch of the repository (handled privately) | Fixed in #370, released in 160.0-0.6; advisory [GHSA-9hc4-cxv9-5wf2](https://github.com/nulavio/nulavio/security/advisories/GHSA-9hc4-cxv9-5wf2), finding F1 |
+| A protected profile's record of its current key file could be deleted without any key, after which an older key file with a removed secret opened the profile through Nulavio (handled privately) | Fixed in #370, released in 160.0-0.6; the same advisory, finding F2 |
+| The Flatpak bundle signed with a release was built by an unpinned builder and not compared with the attested archive (#324) | Fixed in #338; what remains is residual risk R75 |
+| A phone unlock whose lock watcher could not start left the profile open (#325) | Fixed in #330 |
+| The KMS signing role trusted any workflow of the release environment (#326) | Fixed in #372; R60 says what the role trusts now |
+| The check after upload compared the served dnf repository file loosely (#327) | Fixed in #331 |
+| Four informational findings, among them the signing session kept longer than needed (#328) | Fixed in #332 |
+
+Fixing the second finding raised three more questions, all closed: a stop while protecting an existing profile could leave a key file with no volume (#411, fixed in #433); a refused unlock wrote into the volume it refused (#412, fixed in #432); and a profile whose record is lost with no backup stays refused, by the maintainer's decision, with the backup documented (#413, #429). One follow-up from that work is open and is not a finding of the review: the lock between two protections of one profile (#434, P3).
+
