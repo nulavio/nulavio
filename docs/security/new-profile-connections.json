@@ -74,7 +74,7 @@
         "filters.adtidy.org",
         "secure.fanboy.co.nz"
       ],
-      "mirrors_not_recorded": ["malware-filter.pages.dev", "raw.githubusercontent.com"]
+      "mirrors_not_recorded": ["raw.githubusercontent.com"]
     }
   ]
 }
