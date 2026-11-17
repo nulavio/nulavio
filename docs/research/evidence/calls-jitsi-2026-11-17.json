@@ -1,0 +1,252 @@
+{
+  "what": "Jitsi Meet joined as a guest, without an account, by two profiles on one computer (#221)",
+  "date": "2026-11-17",
+  "host": "Fedora 44, kernel 7.3.3, headless",
+  "method": [
+    "A script outside the repository (it uses a third party's public service) drives two engines through Marionette.",
+    "Each profile is new. Camera and microphone are the engine's fake devices (media.navigator.streams.fake, test-only), with the site's camera and microphone permission given as a person gives it; nothing else is changed.",
+    "Each guest opens the room's link, types a one-letter name in the page before the meeting and presses its Join button. The room's name is 16 random hexadecimal digits.",
+    "After joining, the script reads the page's own conference object: who is in the room, the peer connection's statistics, a chat message sent by A and received by B, and whether the page's library says end-to-end encryption is supported.",
+    "The camera preview and the working microphone in the page before the meeting were seen in the run's screenshot (the fake camera's frame, and the page's own 'microphone is working' line), not asserted by the script."
+  ],
+  "runs": {
+    "Nulavio, a build of main at 68ec0575 (Firefox 160.0, not a released package), on meet.ffmuc.net": {
+      "defaults": {
+        "etp": "strict",
+        "default_address_only": true,
+        "version": "160.0",
+        "name": "Nulavio"
+      },
+      "A: page before the meeting shown": true,
+      "A: joined as a guest": true,
+      "A: own camera and microphone in the meeting": [
+        {
+          "type": "audio",
+          "muted": false
+        },
+        {
+          "type": "video",
+          "muted": false
+        }
+      ],
+      "B: page before the meeting shown": true,
+      "B: joined as a guest": true,
+      "B: own camera and microphone in the meeting": [
+        {
+          "type": "audio",
+          "muted": false
+        },
+        {
+          "type": "video",
+          "muted": false
+        }
+      ],
+      "each sees two people": true,
+      "audio and video received, two people": {
+        "A": {
+          "p2p": false,
+          "ice": "connected",
+          "inbound": {
+            "video": {
+              "packets": 293,
+              "frames": 61
+            },
+            "audio": {
+              "packets": 118,
+              "frames": 0
+            }
+          },
+          "outbound": {
+            "audio": {
+              "packets": 155
+            },
+            "video": {
+              "packets": 627
+            }
+          },
+          "pair": {
+            "local": "prflx",
+            "remote": "host",
+            "protocol": "udp",
+            "relay": null
+          }
+        },
+        "B": {
+          "p2p": false,
+          "ice": "connected",
+          "inbound": {
+            "video": {
+              "packets": 283,
+              "frames": 58
+            },
+            "audio": {
+              "packets": 112,
+              "frames": 0
+            }
+          },
+          "outbound": {
+            "audio": {
+              "packets": 149
+            },
+            "video": {
+              "packets": 694
+            }
+          },
+          "pair": {
+            "local": "prflx",
+            "remote": "host",
+            "protocol": "udp",
+            "relay": null
+          }
+        }
+      },
+      "chat message received by B": [
+        "teste 1 2 3"
+      ],
+      "end-to-end encryption offered": {
+        "A": false,
+        "B": false
+      },
+      "A: name typed, Join button": {
+        "name": "A",
+        "join": true
+      },
+      "B: name typed, Join button": {
+        "name": "B",
+        "join": true
+      }
+    },
+    "Firefox 160.0 as Fedora ships it, a new profile, on meet.ffmuc.net (the comparison)": {
+      "defaults": {
+        "etp": "standard",
+        "default_address_only": false,
+        "version": "160.0",
+        "name": "Firefox"
+      },
+      "A: page before the meeting shown": true,
+      "A: joined as a guest": true,
+      "A: own camera and microphone in the meeting": [
+        {
+          "type": "audio",
+          "muted": false
+        },
+        {
+          "type": "video",
+          "muted": false
+        }
+      ],
+      "B: page before the meeting shown": true,
+      "B: joined as a guest": true,
+      "B: own camera and microphone in the meeting": [
+        {
+          "type": "audio",
+          "muted": false
+        },
+        {
+          "type": "video",
+          "muted": false
+        }
+      ],
+      "each sees two people": true,
+      "audio and video received, two people": {
+        "A": {
+          "p2p": false,
+          "ice": "connected",
+          "inbound": {
+            "video": {
+              "packets": 234,
+              "frames": 39
+            },
+            "audio": {
+              "packets": 80,
+              "frames": 0
+            }
+          },
+          "outbound": {
+            "audio": {
+              "packets": 116
+            },
+            "video": {
+              "packets": 589
+            }
+          },
+          "pair": {
+            "local": "prflx",
+            "remote": "host",
+            "protocol": "udp",
+            "relay": null
+          }
+        },
+        "B": {
+          "p2p": false,
+          "ice": "connected",
+          "inbound": {
+            "video": {
+              "packets": 234,
+              "frames": 39
+            },
+            "audio": {
+              "packets": 80,
+              "frames": 0
+            }
+          },
+          "outbound": {
+            "audio": {
+              "packets": 116
+            },
+            "video": {
+              "packets": 596
+            }
+          },
+          "pair": {
+            "local": "prflx",
+            "remote": "host",
+            "protocol": "udp",
+            "relay": null
+          }
+        }
+      },
+      "chat message received by B": [
+        "teste 1 2 3"
+      ],
+      "end-to-end encryption offered": {
+        "A": false,
+        "B": false
+      },
+      "A: name typed, Join button": {
+        "name": "A",
+        "join": true
+      },
+      "B: name typed, Join button": {
+        "name": "B",
+        "join": true
+      }
+    },
+    "Nulavio, the same build, on meet.jit.si": {
+      "defaults": {
+        "etp": "strict",
+        "default_address_only": true,
+        "version": "160.0",
+        "name": "Nulavio"
+      },
+      "A: page before the meeting shown": true,
+      "A: joined as a guest": false,
+      "A: page": {
+        "url": "https://meet.jit.si/sala-049f4cfd5a11afe8",
+        "text": "Pedindo para se juntar à conferência…\nSala 049 F 4 Cfd 5 A 11 Afe 8\nA conferência ainda não começou porque não chegou nenhum moderador. Se deseja tornar-se um moderador, faça login. Caso contrário, aguarde.\nEu sou o anfitrião\nSeu microfone está funcionando corretamente"
+      },
+      "A: name typed, Join button": {
+        "name": "A",
+        "join": true
+      }
+    }
+  },
+  "not_run": [
+    "screen sharing (a window, a whole screen, Wayland on KDE and GNOME)",
+    "background blur, noise suppression, reactions",
+    "a real camera and microphone, and choosing between devices",
+    "a call through a VPN or proxy route (#217), and in the temporary profile",
+    "a call that needs a relay (TURN): both guests reached the instance's bridge directly over UDP",
+    "more than two people, and two people on different networks"
+  ]
+}
