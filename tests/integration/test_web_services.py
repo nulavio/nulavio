@@ -55,8 +55,9 @@ return [...open.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulav
 ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
   .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+// The drawn one: after a refresh of the menu the engine may keep a hidden copy of an item next to the new one.
 const item = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
-  .find(i => i.getAttribute('label') === arguments[0]);
+  .find(i => i.getAttribute('label') === arguments[0] && !i.hidden && d.defaultView.getComputedStyle(i).display !== 'none');
 if (!item) return false;
 d.getElementById('contentAreaContextMenu').activateItem(item);
 return true;
