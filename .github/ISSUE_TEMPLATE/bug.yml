@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: Nulavio version
-      description: From `rpm -q nulavio`, or the preview launcher's `bin/nulavio doctor`.
+      description: From `rpm -q nulavio`, or `dpkg -s nulavio` on Ubuntu, or Help → About Nulavio.
       placeholder: nulavio-160.0-0.1
     validations:
       required: true

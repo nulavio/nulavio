@@ -1,4 +1,4 @@
-"""Command-line interface of the Nulavio preview launcher (Track A)."""
+"""Command-line interface of the `nulavio` tools: profiles, the Vault, the AI Bridge and diagnostics."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ def _launcher_path() -> Path:
 def cmd_setup(args: argparse.Namespace) -> int:
     eng = engine_mod.find_engine()
     engine_mod.check_supported(eng)
+    engine_mod.require_nulavio(eng)
     prof = profile.get(args.profile)
     if prof.exists():
         _err(f"profile '{prof.name}' already exists at {prof.path}")
@@ -61,9 +62,8 @@ def cmd_setup(args: argparse.Namespace) -> int:
         _err(f"unknown provider '{args.provider}' (choose: {', '.join(providers)})")
         return 2
     baseline = profile.baseline_prefs()
-    _out("Nulavio Preview — setup\n")
+    _out("Nulavio — setup\n")
     _out(f"  Engine     {eng.label} ({eng.path})")
-    _out("             unmodified upstream engine; security updates come from its package")
     _out(f"  Profile    {prof.path}")
     _out("             new directory, mode 0700, separate from any Firefox profile")
     _out(f"  Defaults   {len(baseline)} privacy/security preferences (list: `nulavio prefs explain`)")
@@ -76,12 +76,10 @@ def cmd_setup(args: argparse.Namespace) -> int:
     _out(f"  Passwords  {providers[args.provider]['label']}")
     if eng.builtin_theme:
         _out("  Theme      Nulavio Horizon, built into this engine")
-    else:
-        _out(f"  Theme      {'Nulavio colours for the browser chrome' if not args.no_theme else 'engine default'}")
     _out("  Network    nothing is sent to Nulavio; there is no Nulavio server\n")
     if not _confirm("Create this profile?", args.yes):
         return 1
-    prof = profile.create(args.profile, provider=args.provider, theme=not args.no_theme)
+    prof = profile.create(args.profile, provider=args.provider)
     if not args.no_ublock:
         extensions.install(ublock, prof.path)
         _out(f"✓ {ublock.name} {ublock.version} verified and placed in the profile")
@@ -115,6 +113,7 @@ def _filter_context(prof: profile.Profile) -> dict[str, str]:
 def cmd_run(args: argparse.Namespace) -> int:
     eng = engine_mod.find_engine()
     engine_mod.check_supported(eng)
+    engine_mod.require_nulavio(eng)
     if args.temporary:
         return _run_temporary(args, eng)
     prof = profile.get(args.profile)
@@ -204,9 +203,7 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
         locale = prof.load_settings().get("locale", "en")
         if locale != "en":
             profile.sync_langpack(prof, engine_mod.langpack(eng, locale))
-        applied = profile.prepare_for_launch(
-            prof, {"engine": eng.label, **_filter_context(prof)}, builtin_theme=eng.builtin_theme
-        )
+        applied = profile.prepare_for_launch(prof, {"engine": eng.label, **_filter_context(prof)})
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
             confined=bool(getattr(args, "confined", False)),
@@ -339,20 +336,13 @@ def cmd_provider(args: argparse.Namespace) -> int:
 
 
 def cmd_prefs(args: argparse.Namespace) -> int:
-    for pref in profile.baseline_prefs() + profile.theme_prefs():
+    for pref in profile.baseline_prefs():
         if args.category and pref.category != args.category:
             continue
         _out(f"{pref.name} = {prefs_mod.format_value(pref.value)}   [{pref.category}, {pref.mode}]")
         _out(f"    why: {pref.why}")
         if pref.tradeoff:
             _out(f"    trade-off: {pref.tradeoff}")
-    return 0
-
-
-def cmd_theme(args: argparse.Namespace) -> int:
-    prof = profile.get(args.profile)
-    profile.set_theme(prof, args.state == "on")
-    _out(f"theme {args.state} for '{prof.name}' (takes effect on next start)")
     return 0
 
 
@@ -446,7 +436,7 @@ def cmd_desktop(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="nulavio", description="Nulavio Preview launcher (Gecko engine, Track A)")
+    parser = argparse.ArgumentParser(prog="nulavio", description="Nulavio's command-line tools")
     parser.add_argument("--version", action="version", version=f"nulavio-launcher {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -455,7 +445,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--provider", default="builtin")
     p.add_argument("--install-provider-extension", action="store_true", help="also install the provider's official extension")
     p.add_argument("--no-ublock", action="store_true")
-    p.add_argument("--no-theme", action="store_true")
     p.add_argument("--yes", action="store_true", help="accept the plan without prompting")
     p.set_defaults(func=cmd_setup)
 
@@ -510,11 +499,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=["explain"])
     p.add_argument("--category")
     p.set_defaults(func=cmd_prefs)
-
-    p = sub.add_parser("theme", help="toggle the preview chrome theme")
-    p.add_argument("state", choices=["on", "off"])
-    p.add_argument("--profile", default=DEFAULT_PROFILE)
-    p.set_defaults(func=cmd_theme)
 
     p = sub.add_parser("doctor", help="check engine, sandbox prerequisites, secrets, native messaging, profiles")
     p.add_argument("--json", action="store_true")

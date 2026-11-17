@@ -23,6 +23,8 @@ Nulavio is a Gecko-based browser ([ADR 0001](../adr/0001-engine-selection.md)) b
 
 ## Modules
 
+Track A, the preview on the distribution's unmodified Firefox, is no longer offered since 2026-11-17 (#464): its column says what it was. The distribution's Firefox stays the test harness's engine in pull-request CI; its chrome theme (`browser/theme/userChrome.css`) is removed, and the start page (`browser/startpage/`) stays because launcher profiles on the Nulavio build still open it.
+
 | Module | Responsibility | Track A (now) | Track B (planned) | Interface | Tests |
 |---|---|---|---|---|---|
 | **Nulavio Core** | Web engine, sandbox, site isolation, network, WebExtensions | Distribution Firefox, unmodified | Firefox release source + minimal patch stack, own branding | Engine command line (allow-listed), prefs, policies | `tests/integration/test_engine_slice.py` |

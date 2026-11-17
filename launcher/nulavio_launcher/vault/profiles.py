@@ -56,8 +56,7 @@ def is_encrypted(prof: profile.Profile) -> bool:
 
 
 def create(name: str, *, password: str | None, keyring: Keyring | None = None, provider: str = "builtin",
-           theme: bool = True, kdf: dict | None = None,
-           recovery_kdf: dict | None = None) -> tuple[profile.Profile, str]:  # fmt: skip
+           kdf: dict | None = None, recovery_kdf: dict | None = None) -> tuple[profile.Profile, str]:  # fmt: skip
     """A new encrypted profile. Returns (profile, recovery code); the code is shown once."""
     if not password and keyring is None:
         raise VaultError("no-method", "choose a password, the OS keyring, or both")
@@ -79,7 +78,7 @@ def create(name: str, *, password: str | None, keyring: Keyring | None = None, p
         vault.save()
         box.init(vault)
         box.mount(vault)
-        profile.create(name, provider=provider, theme=theme, inside_container=True)
+        profile.create(name, provider=provider, inside_container=True)
         box.unmount()
     except BaseException:
         box.destroy()
