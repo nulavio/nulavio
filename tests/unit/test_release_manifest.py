@@ -23,6 +23,8 @@ from verify_firefox_release import SIGNING_SUBKEYS  # noqa: E402
 RPM = "packages/x86_64/nulavio-159.0.1-0.1.fc44.x86_64.rpm"
 DEB = "packages/nulavio_159.0.1-0.1_amd64.deb"
 SOURCE = "b5fe407199685f8bddf3b2c81feb8b805429e6f3d307c9430f53456f85b6e063"
+# The Rust compiler the manifest says built the release (#472).
+COMPILER = {"rustc_version": "1.99.0", "rustc_commit": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4"}
 
 
 def digest(path: Path) -> str:
@@ -55,6 +57,7 @@ class ReleaseManifestTest(unittest.TestCase):
             "firefox": "159.0.1",
             "source_sha256": SOURCE,
             "signing_subkey": min(SIGNING_SUBKEYS),
+            "compiled_with": dict(COMPILER),
             "engine_json": {"firefox": "159.0.1", "source_sha256": SOURCE},
             "nulavio_base_commit": self.base,
             "worktree_diff_sha256": hashlib.sha256(b"").hexdigest(),
@@ -210,12 +213,12 @@ class ReleaseManifestTest(unittest.TestCase):
     def test_the_claim_comes_from_the_manifest_and_the_base_commit_never_from_the_record(self):
         nc = networking_fixture.networking_check
         self.commit_reader("# the reader\n")
-        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo), COMPILER)
         self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
         # A reader changed at the base commit is another claim.
         self.commit_reader("# the reader, tightened\n")
         self.assertNotEqual(release_manifest.networking_claim(self.out, self.repo), expected)
-        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo))
+        expected = nc.claim("159.0.1", SOURCE, nc.repository_inputs(self.repo), nc.repository_reader(self.repo), COMPILER)
         # A record that says "accepted", or names another release, changes nothing in the claim.
         self.commit_record({"firefox": "1.0", "source_sha256": "0" * 64, "result": "accepted", "accepted_in": "#1"})
         self.assertEqual(release_manifest.networking_claim(self.out, self.repo), expected)
@@ -231,6 +234,33 @@ class ReleaseManifestTest(unittest.TestCase):
         )  # fmt: skip
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout, release_manifest.networking_claim(self.out, self.repo))
+
+    def test_a_release_built_with_another_rust_compiler_asks_for_another_claim(self):
+        # #472: the reading and the release are two builds, and the container's package manager may have served
+        # two compilers. The claim names the one the release build used, from its manifest.
+        self.commit_reader("# the reader\n")
+        attested = release_manifest.networking_claim(self.out, self.repo)  # what a reading with COMPILER attested
+        self.assertEqual(json.loads(attested)["compiled_with"], COMPILER)
+        for other in ({**COMPILER, "rustc_version": "1.99.1"}, {**COMPILER, "rustc_commit": "0" * 40}):
+            with self.subTest(compiled_with=other):
+                self.manifest["compiled_with"] = other
+                self.write()
+                needed = release_manifest.networking_claim(self.out, self.repo)
+                self.assertNotEqual(needed, attested)
+                self.assertEqual(json.loads(needed)["compiled_with"], other)
+        # A manifest that does not say, or says it in a form rustc does not report, gives no claim: nothing to sign on.
+        for bad in (None, {}, {"rustc_version": "1.99.0"}, {**COMPILER, "rustc_version": "$(id)"}, "rustc 1.99.0"):
+            with self.subTest(compiled_with=bad):
+                self.manifest["compiled_with"] = bad
+                self.write()
+                with self.assertRaises(release_manifest.ManifestError) as caught:
+                    release_manifest.networking_claim(self.out, self.repo)
+                self.assertIn("Rust compiler", str(caught.exception))
+        del self.manifest["compiled_with"]  # a rehearsal made before #472
+        self.write()
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.networking_claim(self.out, self.repo)
+        self.assertIn("rehearse again", str(caught.exception))
 
     def test_the_record_is_read_at_the_base_commit_not_in_the_working_tree(self):
         self.commit_record(networking_fixture.record(self.repo, "159.0", SOURCE))
