@@ -237,7 +237,7 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertIsInstance(work, dict, work)
         self.assertIsInstance(study, dict, study)
         self.assertEqual(self.run_async(pending, work["path"]), {"provider": "qwant", "privateToo": True})
-        mode = "return IOUtils.getPermissions(PathUtils.join(args[0], 'nulavio-search-choice.json'));"
+        mode = "return (await IOUtils.stat(PathUtils.join(args[0], 'nulavio-search-choice.json'))).permissions;"
         self.assertEqual(self.run_async(mode, work["path"]), 0o600, "the choice file is the owner's only")
         self.assertEqual(self.run_async(pending, study["path"]), "NotFoundError", "no choice: ADR 0002's default")
         # A provider Nulavio does not offer is refused before any profile is made.
