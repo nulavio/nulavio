@@ -14,7 +14,7 @@
 # the release build does with a new engine version before the pin moves. It builds the
 # mozconfig.no-lto variant, reads that build's Rust library for the engine's networking
 # check (scripts/build/networking_check.py, which writes browser/build/networking-check.json:
-# a cross-language release build, which #371 proposes, cannot be read for it), then runs the
+# the release build is cross-language since #364 and cannot be read for it), then runs the
 # unit and the integration tests. It makes no package and no manifest.json, only
 # <out>/precheck.json, so nothing it leaves can be signed or published. autobuild.py runs it.
 set -euo pipefail

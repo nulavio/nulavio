@@ -10,7 +10,11 @@
 from a tree with uncommitted or untracked changes, an engine pin that differs
 from the source it built, a listed file missing or with another SHA-256, a base
 commit that is not on ``--on`` (default origin/main), a .deb whose version is not
-the RPM's. On success it prints JSON: the release tag (``v<version>-<release>`` from
+the RPM's, or a release the networking check's record does not cover: at the base
+commit, browser/build/networking-check.json is missing, names another Firefox
+release or source digest, was read with another mozconfig, variant or patch stack,
+or says neither "passed" nor "accepted" with an issue number (#430). On success it
+prints JSON: the release tag (``v<version>-<release>`` from
 the RPM), the RPMs, the .debs, the portable archives, the SBOMs.
 
 ``networking-claim`` prints, as bytes, the claim that the rehearsal's Firefox release
@@ -164,7 +168,7 @@ def networking_claim(out: Path, repo: Path) -> bytes:
 def check_networking(manifest: dict, repo: Path) -> None:
     """Publish only a Firefox release whose Rust code passed the engine's networking check (#430).
 
-    A cross-language release build (#371) cannot be read for that check, so it is made on another build of
+    The release build is cross-language (#364) and cannot be read for that check, so it is made on another build of
     the same source and recorded in the repository. The record is read at the manifest's base commit, which
     check_base() has shown to be reviewed history: never from a working tree, where anyone could write it.
     It must also have been read with that commit's mozconfig, variant and patch stack: a patch or a configure
