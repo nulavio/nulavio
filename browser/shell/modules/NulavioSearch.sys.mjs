@@ -94,11 +94,10 @@ export const ACCOUNTS = Object.freeze({
   kagi: Object.freeze({ host: "kagi.com", cookie: "kagi_session", signIn: "https://kagi.com/signin" }),
 });
 
-/* #151: a choice made in one profile for another. The Shell writes it into the other profile's folder (mode 0600,
-   atomically, never through a link), and that profile's Shell reads it once at its next start, makes that provider its
-   search, and deletes the file. Only a provider of PROVIDERS travels: a file anyone else put there can at most switch
-   the profile to another provider Nulavio itself offers, never to an address of their choosing (R81). It never carries
-   consent for suggestions: those are allowed in each profile itself. */
+/* #151: a new profile's search. The profile that creates it writes the choice into the new profile's folder (mode
+   0600, through a new temporary file, never through a link), and the new profile's Shell applies it at its first start
+   only, then deletes the file. At any later start such a file is deleted unread: it never changes a profile that has
+   already run. Only a provider of PROVIDERS can be named, never an address, and it carries no consent for suggestions. */
 export const PENDING_FILE = "nulavio-search-choice.json";
 
 /** Whether `path` is a symbolic link (never followed), false for another file, null when nothing is there. */
@@ -345,7 +344,6 @@ class NulavioSearchClass {
         .map(([key, p]) => ({ key, name: p.name, alias: p.alias, account: key in ACCOUNTS, suggests: Boolean(p.suggest) }))
         .sort((a, b) => a.name.localeCompare(b.name)),
       accounts: this.accounts(),
-      carry: await this.carryable().catch(e => (console.error("Nulavio Search: carryable", e), null)),
     };
   }
 
@@ -579,30 +577,37 @@ class NulavioSearchClass {
   startup() {
     this.#started ??= (async () => {
       this.#observe();
+      // The first start of a profile is the one before its search migration has run.
+      const firstStart = Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION;
       const result = await this.migrate();
-      await this.applyPending();
+      if (firstStart) {
+        await this.applyPending();
+      } else {
+        await this.#dropPending();
+      }
       return result;
     })();
     return this.#started;
   }
 
   /**
-   * #151: what this profile's normal default would carry to another profile (`choice`, for validatePending), or
-   * null with the reason when it cannot travel (an engine the person built by hand exists only here).
+   * #151: the choice left for a new profile (PENDING_FILE), applied at its first start (`startup` calls this only
+   * then; at any later start the file is removed unread). The file is deleted before the choice is applied, so a
+   * choice that fails is not tried again; the failure is logged.
    */
-  async carryable() {
-    await lazy.SearchService.init();
-    const [engine, privateDefault] = await Promise.all([lazy.SearchService.getDefault(), lazy.SearchService.getDefaultPrivate()]);
-    const privateToo = engine.id === privateDefault.id;
-    const key = this.#providerKey(engine);
-    // Only the providers Nulavio offers by name travel (validatePending); any other engine is set in each profile.
-    return { name: engine.name, choice: key && Object.hasOwn(PROVIDERS, key) ? { provider: key, privateToo } : null };
+  /** A choice file in a profile that has run before was not left by the profile that created it: removed unread. */
+  async #dropPending() {
+    try {
+      const path = PathUtils.join(PathUtils.profileDir, PENDING_FILE);
+      if (isLink(path) !== null) {
+        await IOUtils.remove(path, { ignoreAbsent: true });
+        console.warn("Nulavio Search: a search choice file in a profile that has run before was removed unread");
+      }
+    } catch (e) {
+      console.error("Nulavio Search: the search choice file", e);
+    }
   }
 
-  /**
-   * #151: a choice another profile left for this one (PENDING_FILE), applied once at start-up. The file is deleted
-   * before the choice is applied, so a choice that fails is not tried again at every start; the failure is logged.
-   */
   async applyPending() {
     let path;
     try {

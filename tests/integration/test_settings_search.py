@@ -49,8 +49,6 @@ return {
   privateToo: shown(el("nulavio-search-choose-privateToo")) ? el("nulavio-search-choose-privateToo").checked : null,
   suggest: shown(el("nulavio-search-choose-suggest")) ? el("nulavio-search-choose-suggest").checked : null,
   chose: bar("nulavio-search-choose-said"), choseError: bar("nulavio-search-choose-error"),
-  carry: rows("nulavio-search-carry", "nulavio-search-carry").map(row => ({ profile: row.dataset.profile ?? null, name: row.label,
-    says: row.description })),
 };
 """
 )
@@ -224,9 +222,9 @@ class SettingsSearchTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
-    def test_04_the_choice_goes_to_a_new_profile_and_to_others(self):
-        """#151: a new profile can be created with its search, and this profile's search can be taken to the others
-        of its group, one or all: each gets it in a file its own Shell applies at its next start (test_search 16)."""
+    def test_04_a_new_profile_starts_with_the_search_chosen_for_it(self):
+        """#151: a new profile can be created with its search, in a file its own Shell applies at its first start
+        (test_search 16); without a choice it gets none, and an unknown provider is refused before any profile is made."""
         P = 'const P = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;'
         create = (
             P
@@ -239,25 +237,13 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertIsInstance(work, dict, work)
         self.assertIsInstance(study, dict, study)
         self.assertEqual(self.run_async(pending, work["path"]), {"provider": "qwant", "privateToo": True})
+        mode = "return IOUtils.getPermissions(PathUtils.join(args[0], 'nulavio-search-choice.json'));"
+        self.assertEqual(self.run_async(mode, work["path"]), 0o600, "the choice file is the owner's only")
         self.assertEqual(self.run_async(pending, study["path"]), "NotFoundError", "no choice: ADR 0002's default")
         # A provider Nulavio does not offer is refused before any profile is made.
         refused = self.run_async(P + "return P.create({name: 'Outro', search: {provider: 'nope'}}).catch(e => e.code);")
         self.assertEqual(refused, "unknown-provider")
         self.assertNotIn("Outro", [p["name"] for p in self.run_async(P + "return (await P.list()).profiles;")])
-        # This profile's search, then "Usar lá" on one of them, then "Usar em todos".
-        self.m.chrome(S + "return S.choose({provider: 'mojeek', privateToo: false});")
-        self.open()
-        rows = self.seen(lambda n: len(n["carry"]) == 3)["carry"]
-        self.assertEqual(sorted(row["name"] for row in rows[:2]), ["Estudo", "Trabalho"])
-        self.assertEqual(rows[2]["name"], "Todos os outros perfis")
-        self.assertTrue(all(row["says"].startswith("Passa a pesquisar com Mojeek") for row in rows), rows)
-        self.m.chrome(CLICK, [f'#nulavio-search-carry moz-button[data-profile="{study["id"]}"]'])
-        self.assertEqual(self.seen(lambda n: n["chose"])["chose"], "Mojeek será a pesquisa de Estudo na próxima vez que abrir.")
-        self.assertEqual(self.run_async(pending, study["path"]), {"provider": "mojeek", "privateToo": False})
-        self.assertEqual(self.run_async(pending, work["path"]), {"provider": "qwant", "privateToo": True})
-        self.m.chrome(CLICK, ['#nulavio-search-carry moz-button[data-profile="all"]'])
-        self.seen(lambda n: n["chose"] and "Trabalho" in n["chose"])
-        self.assertEqual(self.run_async(pending, work["path"]), {"provider": "mojeek", "privateToo": False})
 
 
 if __name__ == "__main__":

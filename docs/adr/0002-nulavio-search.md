@@ -53,12 +53,12 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
   choose({provider | id, privateToo?, suggest?}) -> id   // #151: add if missing, make default (and private), consent only if asked
   accounts() -> {kagi: {signedIn, signIn, host}}          // #151: the session cookie's presence, never its value
-  carryable() -> {name, choice}                           // #151: what this profile's default would carry, or choice null
-  applyPending()                                          // #151: at start-up, the file another profile left, once
+  applyPending()                                          // #151: a new profile's first start only, then deleted
 browser.nulavioProfiles (NulavioProfiles.sys.mjs)
-  create({..., search?: {provider, privateToo?}}) ; carrySearch(ids, {provider, privateToo?})
-nulavio-search-choice.json (in a profile's folder; mode 0600, written atomically, never through a link; deleted when read):
-  {"provider": <a key of PROVIDERS>, "privateToo"?: boolean}   // nothing else: any other file is deleted unused
+  create({..., search?: {provider, privateToo?}})          // #151: the new profile's search
+nulavio-search-choice.json (in the new profile's folder; mode 0600, written atomically, never through a link):
+  {"provider": <a key of PROVIDERS>, "privateToo"?: boolean}   // read at its first start only; any other file, or at any
+                                                                // later start, deleted unread
   onChanged
 Errors are stable codes (needs-https, missing-terms, alias-taken, ...), translated by the page.
 
@@ -79,9 +79,9 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
   is ticked (the consent of point 4).
 - A provider with accounts (Kagi) says whether the profile is signed in, from the presence of its session cookie,
   and offers its sign-in page.
-- A profile can be created with its provider, and a profile's provider can be taken to the others of its group: a
-  file in each one's folder, applied by its own Shell at its next start. Only a provider of the curated list travels,
-  so a file planted there cannot point a profile at an address (residual risk R81); suggestion consent never travels.
+- A profile can be created with its provider (Settings › Perfis, "Pesquisa"), applied at the new profile's first start
+  from a file the creating profile writes into its folder; a profile that has run before never applies such a file.
+  Taking one profile's provider to the others was built and left out by the maintainer's decision of 2026-11-17 (#453).
 
 ## Consequences and risks
 

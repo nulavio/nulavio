@@ -308,6 +308,17 @@ class SearchProvidersTest(unittest.TestCase):
     def test_no_nulavio_endpoint(self):
         self.assertIsNone(re.search(r"nulavio\.net|nulavio\.(com|org|io)", self.text), "a Nulavio endpoint")
 
+    def test_a_new_profiles_search_choice_is_applied_at_its_first_start_only(self):
+        """#151 (and #453's decision): the choice file is read only at a profile's first start; later it is removed
+        unread, so a file left in a profile that has run cannot change its search."""
+        start = self.text[self.text.index("  startup() {") : self.text.index("  /** A choice file in a profile")]
+        self.assertIn("const firstStart = Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION;", start)
+        self.assertLess(start.index("const firstStart"), start.index("await this.migrate()"), "read before the migration")
+        self.assertRegex(
+            start, r"if \(firstStart\) \{\s*await this\.applyPending\(\);\s*\} else \{\s*await this\.#dropPending\(\);"
+        )
+        self.assertNotIn("carry", self.text.lower(), "taking a search to other profiles was left out (#453)")
+
     def test_a_sign_in_is_read_from_a_cookies_name_never_its_value(self):
         """#151: providers with accounts name their session cookie; the module reads only whether it is there."""
         block = self.text[self.text.index("export const ACCOUNTS") : self.text.index("export class SearchSettingsError")]

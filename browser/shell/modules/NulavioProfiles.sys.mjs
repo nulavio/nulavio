@@ -97,7 +97,7 @@ function userJs(prefs, title) {
   return `// ${title}\n// Written by Nulavio when this profile was created. Deleting this file turns these settings off.\n${lines.join("\n")}\n`;
 }
 
-/** #151: a carried search choice written into a profile's folder: owner-only, atomically, never through a link. */
+/** #151: a new profile's search choice, written into its folder: owner-only, atomically, never through a link. */
 async function writeSearchChoice(folder, choice) {
   const path = PathUtils.join(folder, lazy.PENDING_FILE);
   if (lazy.isLink(path)) {
@@ -832,34 +832,6 @@ class NulavioProfilesClass {
     await profile.setAvatar(avatar);
     await this.#setColor(profile.id, color);
     return profile.id;
-  }
-
-  /**
-   * #151: this profile's search choice for other profiles of the group, applied by each at its next start. A locked
-   * profile's files cannot be written: it is answered "locked" and left as it is. Returns one result per id.
-   */
-  async carrySearch(ids, choice) {
-    choice = lazy.validatePending(choice);
-    if (!Array.isArray(ids) || !ids.length) {
-      fail("invalid-choice");
-    }
-    const results = [];
-    for (const id of ids) {
-      const profile = await this.#profile(id);
-      if (profile.id === this.#service.currentProfile?.id) {
-        results.push({ id: profile.id, result: "here" });
-        continue;
-      }
-      // Locked: its files are not there to write. Not known: never taken for unprotected (#142).
-      const lock = await this.#protection(profile);
-      if (lock === "locked" || lock === "unknown") {
-        results.push({ id: profile.id, result: lock });
-      } else {
-        await writeSearchChoice(profile.path, choice);
-        results.push({ id: profile.id, result: "next-start" });
-      }
-    }
-    return results;
   }
 
   async update(id, { name, avatar, color } = {}) {

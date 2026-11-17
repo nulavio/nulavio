@@ -633,8 +633,8 @@ class SearchPrivacyTest(unittest.TestCase):
 
     def test_16_a_choice_left_by_another_profile_is_applied_once_at_start(self):
         """#151: another profile's Shell leaves a choice in this profile's folder; this profile applies it at its start
-        (here: called as the start-up does) and deletes the file. Only a provider Nulavio offers by name travels, never
-        with suggestion consent; any other file is deleted and changes nothing (R81)."""
+        (here: called as its first start does) and deletes the file. Only a provider Nulavio offers by name can be
+        named, never with suggestion consent; any other file is deleted and changes nothing."""
         self.require_nulavio()
         before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
         normal = next(e[0] for e in before if e[1])
@@ -655,26 +655,18 @@ class SearchPrivacyTest(unittest.TestCase):
         self.assertIsNone(self.search("return S.applyPending();"), "nothing left: nothing applied")
         for bad in (
             '{"provider": "nope"}',
-            '{"searxng": "https://searx.example.org/"}',  # only a provider Nulavio offers by name travels (R81)
+            '{"searxng": "https://searx.example.org/"}',  # only a provider Nulavio offers by name
             '{"engine": "google"}',
             '{"provider": "brave", "privateToo": "yes"}',
             "not json",
             '{"provider": "brave", "engine": "x"}',
-            '{"provider": "brave", "suggest": true}',  # consent never travels: a file asking for it is refused whole
+            '{"provider": "brave", "suggest": true}',  # consent is never given by a file: one asking for it is refused whole
         ):
             with self.subTest(bad=bad):
                 self.search(leave, bad)
                 self.assertIsNone(self.search("return S.applyPending();"))
                 self.assertFalse(self.search(exists))
                 self.assertTrue(self.search("return (await S.list()).find(e => e.id === args[0]).isDefault;", mojeek))
-        # What this profile's default carries: a curated provider by its key, an engine of the person's own not at all.
-        self.assertEqual(
-            self.search("return S.carryable();"), {"name": "Mojeek", "choice": {"provider": "mojeek", "privateToo": False}}
-        )
-        custom = self.search("return S.addCustom({name: 'Minha busca', url: 'https://example.org/?q=%s'});")
-        self.addCleanup(self.search, "await S.remove(args[0]);", custom)
-        self.search("await S.setDefault(args[0]);", custom)
-        self.assertEqual(self.search("return S.carryable();"), {"name": "Minha busca", "choice": None})
 
 
 if __name__ == "__main__":

@@ -1686,84 +1686,6 @@
         }),
       });
     }
-    // The same choice for other profiles of the group: written into each one's folder and applied at its next start.
-    // A locked profile cannot take it; an engine built by hand here cannot travel; consent for suggestions never does.
-    const carryNow = () => search.state.value?.carry ?? null;
-    const otherProfiles = () => profilesNow().filter(profile => !profile.isCurrent && profile.id !== null);
-    const carryTo = ids => {
-      const carry = carryNow();
-      if (!carry?.choice || !ids.length) {
-        return;
-      }
-      chooseBench.act(
-        () => shell.NulavioProfiles.carrySearch(ids, carry.choice),
-        results => {
-          const named = id => otherProfiles().find(profile => profile.id === id)?.name ?? "";
-          const later = results.filter(r => r.result === "next-start").map(r => named(r.id));
-          const refused = results.filter(r => r.result === "locked" || r.result === "unknown").map(r => named(r.id));
-          return [
-            later.length ? msg("carryDone", carry.name, later.join(", ")) : "",
-            refused.length ? msg("carryRefused", refused.join(", ")) : "",
-          ].filter(Boolean).join(" ");
-        }
-      );
-    };
-    setting({
-      id: "nulavio-search-carry",
-      setup(emitChange, stops) {
-        chooseSetup(emitChange, stops);
-        stops.push(profileList.listen(emitChange));
-        profileList.refresh();
-      },
-      visible: () => search.state.ready && otherProfiles().length > 0,
-      getControlConfig(config) {
-        const carry = carryNow();
-        const others = otherProfiles();
-        if (!carry?.choice) {
-          const none = { key: "carry-none", control: "moz-box-item", controlAttrs: { label: msg("carryNotPossible", carry?.name ?? "") } };
-          return { ...config, options: [none] };
-        }
-        const button = (key, label, named, extra) => ({
-          key,
-          control: "moz-button",
-          slot: "actions",
-          disabled: chooseBench.state.busy,
-          controlAttrs: { label, "aria-label": named, "data-action": "carry", ...extra },
-        });
-        const rows = others.flatMap(profile => stacked({
-          key: `carry-${profile.id}`,
-          control: "moz-box-item",
-          controlAttrs: {
-            label: profile.name,
-            description: profile.locked ? msg("carryLocked") : msg("carryNextStart", carry.name),
-            class: "nulavio-search-carry",
-            "data-profile": String(profile.id),
-          },
-          options: profile.locked
-            ? []
-            : [button(`carry-use-${profile.id}`, msg("carryUse"), msg("carryUseNamed", carry.name, profile.name), { "data-profile": String(profile.id) })],
-        }));
-        const all = others.filter(profile => !profile.locked);
-        if (all.length > 1) {
-          rows.push(...stacked({
-            key: "carry-all",
-            control: "moz-box-item",
-            controlAttrs: { label: msg("carryAllLabel"), description: msg("carryNextStart", carry.name), class: "nulavio-search-carry" },
-            options: [button("carry-use-all", msg("carryAll"), msg("carryAllNamed", carry.name), { "data-profile": "all" })],
-          }));
-        }
-        return { ...config, options: rows };
-      },
-      onUserClick(event) {
-        const target = event.target.closest?.('[data-action="carry"]')?.dataset.profile;
-        const open = otherProfiles().filter(profile => !profile.locked);
-        if (target === "all") {
-          carryTo(open.map(profile => profile.id));
-        } else if (open.some(profile => String(profile.id) === target)) {
-          carryTo([Number(target)]);
-        }
-      },
-    });
     const chooseBars = [
       chooseBench.bar("nulavio-search-choose-error", "error", () => chooseBench.state.error, () => Boolean(chooseBench.state.error)),
       chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said)),
@@ -2566,11 +2488,6 @@
           { id: "nulavio-search-choose", control: "moz-box-group" },
         ],
       },
-      nulavioSearchCarry: {
-        l10nId: "nulavio-search-carry-group",
-        headingLevel: 2,
-        items: [{ id: "nulavio-search-carry", control: "moz-box-group" }],
-      },
       nulavioSearch: {
         l10nId: "nulavio-search-group",
         headingLevel: 2,
@@ -2669,7 +2586,6 @@
         ...config,
         groupIds: [
           "nulavioSearchChoose",
-          "nulavioSearchCarry",
           ...after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
         ],
       }),

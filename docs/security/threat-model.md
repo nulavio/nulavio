@@ -361,21 +361,4 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 
 ---
 
-### S23 — A search choice left in another profile's folder (#151)
-
-| Field | |
-|---|---|
-| Assets | Which search provider a profile uses (where what is typed in the address bar goes) |
-| Adversary | T-LOCAL: any program of the same user while the target profile is closed and not locked (it can write that folder) |
-| Preconditions | A file `nulavio-search-choice.json` in the profile's folder at its next start: written by another profile's Shell on the person's click ("Levar esta pesquisa para outros perfis", or a new profile's search), or by such a program |
-| Boundary | TB23 |
-| Impact | The profile's default search becomes another provider of the curated list (and the private default too, if the file says so) at its next start, as a change made in the browser: the Guard does not report it |
-| Preventive | The file may name only a key of `PROVIDERS`, never an address, and carries no consent for suggestions; anything else is deleted unused; a link is removed unread; the writer refuses a link, writes 0600 through a temporary file of a random name and checks the result is not a link; a locked profile, or one whose protection cannot be read, is not written |
-| Detective | None beyond Settings › Pesquisa, which shows the provider in use |
-| Limitations | The same program could already edit the profile's other files (S11); this channel can only pick among Nulavio's own providers |
-| Tests | `test_search` 16, `test_settings_search` 04 |
-| Residual | Low; listed as R81 |
-
----
-
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.
