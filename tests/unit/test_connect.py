@@ -45,7 +45,7 @@ class DefinitionsTest(unittest.TestCase):
         p0 = [i["id"] for i in items if i["priority"] == "P0"]
         later = [i["id"] for i in items if i["priority"] != "P0"]
         self.assertEqual(p0, ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"])
-        self.assertEqual(later, ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"])
+        self.assertEqual(later, ["kde-connect", "screen-cast", "security-keys", "notifications", "activities"])
         python = (ROOT / "launcher" / "nulavio_launcher" / "connect.py").read_text(encoding="utf-8")
         later_python = (ROOT / "launcher" / "nulavio_launcher" / "connect_p1.py").read_text(encoding="utf-8")
         shell = (ROOT / "browser" / "shell" / "modules" / "NulavioConnect.sys.mjs").read_text(encoding="utf-8")

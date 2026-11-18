@@ -8,7 +8,7 @@ At-a-glance view of [threat-model.md](threat-model.md). Ratings use likelihood (
 | S2 | Malicious/compromised extension | T-EXT, T-SUPPLY | 2 | 3 | Signature required, 1 pinned default ext, blocklist on, doctor inventory | Permission review UI, new-extension alert | lock unit tests | Medium-high |
 | S3 | Over-privileged extension | — | 2 | 2 | Reviewed permissions in lock, diff on refresh | Host-permission explainer | lock refresh | Medium |
 | S4 | Compromised renderer | T-WEB | 2 | 2 | seccomp + userns + Fission, env stripping | Release SLA (B) | `test_04`, env unit test | Medium |
-| S5 | Sandbox escape | T-WEB | 1 | 3 | Upstream sandbox; opt-in bubblewrap confinement; AppArmor userns profile (.deb) | — | `test_confine`, `test_confined` | Low L / critical I |
+| S5 | Sandbox escape | T-WEB | 1 | 3 | Upstream sandbox; opt-in bubblewrap confinement (source checkout only, not part of 1.0: #466); AppArmor userns profile (.deb) | — | `test_confine`, `test_confined` | Low L / critical I |
 | S6 | Phishing / lookalike | T-WEB | 3 | 3 | Safe Browsing on, provider origin matching | Suspicious-login interstitial, passkeys | guard rule | Medium-high |
 | S7 | Malicious download | T-WEB | 2 | 3 | No auto-open, SB downloads, 0600 files | Executable warning flow | `test_07` | Medium |
 | S8 | Cookie/session leak | T-WEB, T-NET, T-LOCAL | 2 | 3 | TCP, ETP Strict, HTTPS-Only, 0700 profile | — | `test_03`, `test_06`, `test_09`; sensitive-sites profile clears on close (`test_profiles` 11) | High vs T-LOCAL |
