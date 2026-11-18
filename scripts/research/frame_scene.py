@@ -251,7 +251,7 @@ def one_run(engine: Path, samples: int, prefs: dict | None = None, layout: str |
         if layout:
             m.set_context("chrome")
             try:
-                m.execute_async(
+                applied = m.execute_async(
                     "const done = arguments[arguments.length - 1];"
                     f"ChromeUtils.importESModule('{LAYOUT_MODULE}').NulavioLayout"
                     ".apply(window, arguments[0]).then(() => done(true), e => done(String(e)));",
@@ -259,7 +259,11 @@ def one_run(engine: Path, samples: int, prefs: dict | None = None, layout: str |
                 )
             finally:
                 m.set_context("content")
+            if applied is not True:  # a locked layout, for one: the scenes would be measured in another strip
+                raise RuntimeError(f"the layout {layout} was not applied: {applied}")
         out["verticalTabs"] = m.chrome("return gBrowser.tabContainer.verticalMode;")
+        if layout and out["verticalTabs"] != (layout != "top"):
+            raise RuntimeError(f"the layout {layout} was asked for, and the tab strip is not in it")
         base = m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
         with harness.FixtureServer() as server:
             m.navigate(server.url("/page/Scene"))
