@@ -230,6 +230,23 @@ class WatchTest(unittest.TestCase):
         )
         self.assertEqual(watch.vulnerability_rows([], {}, [item], datetime.date(2026, 11, 18)), [])
 
+    def test_a_malformed_reply_is_an_error_not_a_skip(self):
+        for reply in ([None], [{}], [{"ghsa_id": "GHSA-x", "html_url": "u"}], ["x"], [{**UBO[0], "state": None}]):
+            with self.subTest(reply=reply):
+                rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": reply}))
+                self.assertIn("error", {r.state for r in rows})
+                self.assertEqual(watch.exit_status(rows), 2)
+        draft = [{**UBO[0], "state": "draft"}]
+        rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": draft}), {"ublock-origin": "1.75.0"})
+        self.assertEqual(watch.exit_status(rows), 0)  # a valid draft stays excluded
+
+    def test_the_token_is_read_from_the_first_line_of_stdin(self):
+        self.assertEqual(watch.read_token(io.StringIO("ghs_abc\nmore")), "ghs_abc")
+        self.assertIsNone(watch.read_token(io.StringIO("\n")))
+        self.assertIsNone(watch.read_token(io.StringIO("")))
+        text = (ROOT / "scripts" / "release" / "watch_dependencies.py").read_text()
+        self.assertNotIn("os.environ", text)  # the token is not read from the environment
+
     def test_a_full_page_is_not_assumed_to_be_everything(self):
         rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": [UBO[0]] * 100}))
         self.assertIn("error", {r.state for r in rows})
@@ -267,8 +284,8 @@ class WatchTest(unittest.TestCase):
 
 
 class FetchTest(unittest.TestCase):
-    def http(self, code):
-        return urllib.error.HTTPError("https://api.github.com/x", code, "x", {}, io.BytesIO(b""))
+    def http(self, code, **headers):
+        return urllib.error.HTTPError("https://api.github.com/x", code, "x", headers, io.BytesIO(b""))
 
     def reply(self, body):
         response = mock.MagicMock()
@@ -312,17 +329,48 @@ class FetchTest(unittest.TestCase):
             net.json("https://addons.mozilla.org/api/v5/x/")
         self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
 
-    def test_retrying_stops_when_the_budget_is_spent(self):
+    def test_retrying_stops_when_the_budget_is_spent_counting_the_requests(self):
         now = [0.0]
-        sleeps = []
-        net = watch.Net(sleep=sleeps.append, clock=lambda: now[0])
-        url = watch.GITHUB + "repos/o/r/security-advisories"
-        with mock.patch.object(net, "_open", side_effect=self.http(503)), self.assertRaises(urllib.error.HTTPError):
-            net.github_json(url)  # the first repository uses 2 + 8 + 30 seconds of the budget
-        self.assertEqual(sleeps, [2, 8, 30])
-        now[0] = watch.GITHUB_BUDGET - 1  # almost nothing left: the next repository gets no retry
+        sleeps, timeouts = [], []
+
+        def slow_failure(*args, **kwargs):  # each request takes as long as its timeout, then fails
+            timeouts.append(kwargs["timeout"])
+            now[0] += kwargs["timeout"]
+            raise self.http(503)
+
+        net = watch.Net(sleep=lambda d: (sleeps.append(d), now.__setitem__(0, now[0] + d)), clock=lambda: now[0])
+        with mock.patch.object(net, "_open", side_effect=slow_failure), self.assertRaises(urllib.error.HTTPError):
+            net.github_json(watch.GITHUB + "repos/o/r/security-advisories")
+        self.assertLessEqual(now[0], watch.GITHUB_BUDGET + 1)  # requests started at 0, 32, 70 stop there: no 130
+        self.assertEqual(timeouts, [30, 30, 30, 30][: len(timeouts)])
+        self.assertLessEqual(len(timeouts), 4)
+        # nothing left for the next repository: one short attempt, no sleep
         sleeps.clear()
-        with mock.patch.object(net, "_open", side_effect=self.http(503)) as opened, self.assertRaises(urllib.error.HTTPError):
+        with mock.patch.object(net, "_open", side_effect=slow_failure) as opened, self.assertRaises(urllib.error.HTTPError):
+            net.github_json(watch.GITHUB + "repos/o/s/security-advisories")
+        self.assertEqual((sleeps, opened.call_count), ([], 1))
+        self.assertEqual(timeouts[-1], watch.GITHUB_BUDGET - 100)  # what is left, not the full 30 s
+
+    def test_a_rate_limited_403_is_retried_and_an_authorization_403_is_not(self):
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append, wall=lambda: 1000.0)
+        url = watch.GITHUB + "repos/o/r/security-advisories"
+        limited = self.http(403, **{"retry-after": "7"})
+        with mock.patch.object(net, "_open", side_effect=[limited, self.reply([1])]):
+            self.assertEqual(net.github_json(url), [1])
+        self.assertEqual(sleeps, [7])
+        sleeps.clear()
+        reset = self.http(403, **{"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1015"})
+        with mock.patch.object(net, "_open", side_effect=[reset, self.reply([2])]):
+            self.assertEqual(net.github_json(url), [2])
+        self.assertEqual(sleeps, [15])
+        sleeps.clear()
+        authorization = self.http(403, **{"x-ratelimit-remaining": "42"})
+        with mock.patch.object(net, "_open", side_effect=authorization) as opened, self.assertRaises(urllib.error.HTTPError):
+            net.github_json(url)
+        self.assertEqual((sleeps, opened.call_count), ([], 1))
+        long_wait = self.http(403, **{"retry-after": "3600"})  # does not fit the budget: reported, not waited for
+        with mock.patch.object(net, "_open", side_effect=long_wait) as opened, self.assertRaises(urllib.error.HTTPError):
             net.github_json(url)
         self.assertEqual((sleeps, opened.call_count), ([], 1))
 

@@ -1426,7 +1426,9 @@ class ReleaseFilesTest(TempDirTest):
         self.assertIn("\npermissions:\n  contents: read\n", text)
         self.assertEqual(re.findall(r"(?m)^\s+(\w[\w-]*): write(?:\s+#.*)?$", text), ["issues"])
         self.assertRegex(text, r"(?m)^    permissions:\n      contents: read\n      issues: write(?:\s+#.*)?$")
-        self.assertIn("timeout-minutes: 5", text)
+        self.assertRegex(text, r"(?m)^    timeout-minutes: 14\b")  # the Firefox steps and the dependency watch's own 8
+        self.assertRegex(text, r"(?m)^        timeout-minutes: 8\b")
+        self.assertIn("--token-stdin", text)  # the token reaches the watch on stdin, not in its environment (I3)
         self.assertRegex(text, r"concurrency:\n  group: upstream\n  cancel-in-progress: false")
         self.assertIn("persist-credentials: false", text)
         self.assertIn("watch_upstream.py --json --verify", text)

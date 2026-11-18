@@ -32,7 +32,6 @@ import argparse
 import dataclasses
 import datetime as _dt
 import json
-import os
 import re
 import sys
 import time
@@ -47,6 +46,7 @@ OSV = "https://api.osv.dev/v1/"
 AMO = "https://addons.mozilla.org/api/v5/"
 GITHUB = "https://api.github.com/"
 ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json"
+MIN_REQUEST_SECONDS = 10
 RETRY_DELAYS = (2, 8, 30)  # a transient GitHub failure is retried before it is reported (as watch_upstream.py does)
 GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step ends and writes its summary in time
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
@@ -85,14 +85,22 @@ class Row:
 class Net:
     """The only code here that touches the network (the unit tests replace it)."""
 
-    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep, clock=time.monotonic):
+    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep, clock=time.monotonic, wall=time.time):
         self.timeout = timeout
         self.token = token  # the workflow's read-only GITHUB_TOKEN: only for api.github.com, it raises the rate limit
         self.sleep = sleep
         self.clock = clock
+        self.wall = wall  # the epoch clock, for the rate limit's reset time
         self.github_started: float | None = None
 
-    def _open(self, url: str, data: dict | None = None, headers: dict | None = None, method: str | None = None):
+    def _open(
+        self,
+        url: str,
+        data: dict | None = None,
+        headers: dict | None = None,
+        method: str | None = None,
+        timeout: float | None = None,
+    ):
         if not url.startswith("https://"):
             raise ValueError(f"refusing a non-https URL: {url}")
         body = json.dumps(data).encode() if data is not None else None
@@ -105,7 +113,7 @@ class Net:
                 request.add_header(key, value)
         if body is not None:
             request.add_header("Content-Type", "application/json")
-        return urllib.request.urlopen(request, timeout=self.timeout)  # noqa: S310 - https only, checked above
+        return urllib.request.urlopen(request, timeout=timeout or self.timeout)  # noqa: S310 - https only, checked above
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
         try:
@@ -125,18 +133,45 @@ class Net:
             headers["Authorization"] = f"Bearer {self.token}"
         if self.github_started is None:
             self.github_started = self.clock()
+        deadline = self.github_started + GITHUB_BUDGET
         for attempt in range(len(RETRY_DELAYS) + 1):
-            late = attempt == len(RETRY_DELAYS) or self.clock() - self.github_started + RETRY_DELAYS[attempt] > GITHUB_BUDGET
+            # the budget covers the requests too: a request may not outlast it (but gets a few seconds at least)
+            timeout = max(MIN_REQUEST_SECONDS, min(self.timeout, deadline - self.clock()))
             try:
-                with self._open(url, headers=headers) as response:
+                with self._open(url, headers=headers, timeout=timeout) as response:
                     return json.load(response)
             except urllib.error.HTTPError as exc:
-                if exc.code not in (429, 500, 502, 503, 504) or late:
+                delay = self.backoff(exc, RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
+                failure = exc
+                if delay is None:
                     raise
-            except OSError:  # a reset, a timeout, DNS (HTTPError is handled above)
-                if late:
-                    raise
-            self.sleep(RETRY_DELAYS[attempt])
+            except OSError as exc:  # a reset, a timeout, DNS (HTTPError is handled above)
+                failure = exc
+                delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+            if attempt == len(RETRY_DELAYS) or self.clock() + delay >= deadline:  # checked after the failure
+                raise failure
+            self.sleep(delay)
+
+    def backoff(self, exc: urllib.error.HTTPError, default: float) -> float | None:
+        """Seconds to wait before retrying this HTTP error, or None when it is not worth retrying.
+
+        Server errors and 429 are; a 403 only when it is GitHub's rate limit (Retry-After, or no calls left until the
+        reset time), whose own backoff is honoured when it fits the budget; any other 403 (authorization) is not.
+        """
+        headers = exc.headers or {}
+        limited = exc.code == 429 or (
+            exc.code == 403 and (headers.get("retry-after") or headers.get("x-ratelimit-remaining") == "0")
+        )
+        if exc.code not in (500, 502, 503, 504) and not limited:
+            return None
+        try:
+            if headers.get("retry-after"):
+                return max(float(headers["retry-after"]), 1)
+            if headers.get("x-ratelimit-remaining") == "0":
+                return max(float(headers["x-ratelimit-reset"]) - self.wall(), 1)
+        except (KeyError, ValueError):
+            pass
+        return default
 
     def head(self, url: str, headers: dict) -> tuple[int, dict[str, str]]:
         try:
@@ -391,14 +426,16 @@ def range_covers(text: str | None, version: str) -> bool:
     if not text or not text.strip():
         raise ValueError("empty vulnerable_version_range")
     key = strict_version(version)
-    for clause in text.split(","):
+    clauses = []
+    for clause in text.split(","):  # every clause is read before any is judged, so a bad one is never skipped
         clause = clause.strip()
         if match := RANGE_CLAUSE.fullmatch(clause):
-            op, bound = match.group(1), strict_version(match.group(2))
+            clauses.append((match.group(1), strict_version(match.group(2))))
         elif match := RANGE_OR_LOWER.fullmatch(clause):
-            op, bound = "<=", strict_version(match.group(1))
+            clauses.append(("<=", strict_version(match.group(1))))
         else:
             raise ValueError(f"cannot read the range {text!r} (at {clause!r})")
+    for op, bound in clauses:
         holds = {
             "<": key < bound,
             "<=": key <= bound,
@@ -469,7 +506,13 @@ def advisory_row(
             rows.append(Row("advisory", "accepted", f"{text} (accepted until {until})", {**detail, "exception": item}))
 
     for advisory in advisories:
-        if advisory.get("state") != "published" or advisory.get("withdrawn_at"):
+        if (
+            not isinstance(advisory, dict)
+            or not isinstance(advisory.get("state"), str)
+            or not all(isinstance(advisory.get(k), str) and advisory[k] for k in ("ghsa_id", "html_url"))
+        ):  # a malformed reply is an error row, never a silent skip
+            raise ValueError("an advisory without a state, id or link")
+        if advisory["state"] != "published" or advisory.get("withdrawn_at"):
             continue
         ident, link = advisory["ghsa_id"], advisory["html_url"]
         covered, problems = None, []
@@ -688,10 +731,21 @@ def markdown(deps: list[Dep], rows: list[Row]) -> str:
     return "### Pinned dependencies\n\n" + head + "\n\n" + "\n".join(items or ["- nothing to act on"]) + "\n"
 
 
+def read_token(stream=None) -> str | None:
+    """The GitHub token, from the first line of stdin: it travels there, not in argv or a child's environment (I3)."""
+    line = (stream or sys.stdin).readline().strip()
+    return line or None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--summary", type=Path, help="append a Markdown summary (GitHub job summary)")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--token-stdin",
+        action="store_true",
+        help="read a GitHub token from the first line of stdin (never argv or the environment)",
+    )
     parser.add_argument("--list", action="store_true", help="print the inventory and exit (no network)")
     args = parser.parse_args()
     if args.list:
@@ -699,7 +753,7 @@ def main() -> int:
             print(dep.label())
         return 0
     try:
-        deps, rows = run(Net(token=os.environ.get("GITHUB_TOKEN")), _dt.datetime.now(_dt.UTC))
+        deps, rows = run(Net(token=read_token() if args.token_stdin else None), _dt.datetime.now(_dt.UTC))
     except UNAVAILABLE as exc:  # the repository's own files (inventory, exceptions) could not be read
         print(f"watch_dependencies: cannot read the pins: {exc}", file=sys.stderr)
         if args.summary:
