@@ -27,8 +27,8 @@ Not changed by anything here, so their tests show stability only: the panels aro
 run has none), the keyboard layout (the engine has no Keyboard Map API) and reduced transparency (the engine
 keeps that media query off). Their pages record those two as "Unsupported", which test_00b holds.
 
-The audio probe passes only on an engine with Nulavio's patch 0012; on an older one (the last release, which
-pull-request CI runs the Shell on) it is skipped with that reason.
+The audio probe and the two Screen probes pass only on an engine with Nulavio's patch 0012; on an older one
+(160.0-0.6 or earlier, under this tree's Shell) they are skipped with that reason.
 
 KNOWN_GAPS lists the probes that do not pass yet, each with its reason. A probe listed there is skipped with
 that reason while it fails, and fails the run once it passes, until its line is removed: the list only gets
@@ -102,10 +102,13 @@ DEVICE_CONSTANTS = {
 }
 # Probes that do not pass yet, and why (#79). Each fix removes its line.
 KNOWN_GAPS: dict[str, str] = {}
-# A probe that passes only with Nulavio's engine patch 0012. Pull-request CI runs the Shell on the last release's
-# engine, which may be from before the patch; a build of this tree has it, and the probe must then pass.
+# A probe that passes only with Nulavio's engine patch 0012. This tree's Shell may be run on an engine from before
+# the patch (160.0-0.6 or earlier); a build of this tree has it, and the probe must then pass. The screen's size
+# is the engine's alone since #468: the Shell no longer sets it per tab.
 BEFORE_THE_PATCH = {
     "AudioContext fingerprint": "this engine is from before patch 0012, which adds per-site noise to rendered audio",
+    "Screen width": "this engine is from before patch 0012, which gives every document one screen size",
+    "Screen height": "this engine is from before patch 0012, which gives every document one screen size",
 }
 HAS_PATCH = """
 const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");

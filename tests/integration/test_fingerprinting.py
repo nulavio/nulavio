@@ -10,8 +10,9 @@ engine, in a patch or in a default that weakens it fails a run:
   between two sites, stay stable within one, and are not the plain values;
 * a page does not learn the size of the toolbars and the sidebar, where the
   window is, or the real number of processors (every computer says 4);
-* a page reads one screen size, 1920 by 1080, whatever the display is
-  (NulavioFingerprinting.sys.mjs), from its first script on;
+* a page reads one screen size, 1920 by 1080, whatever the display is, from
+  its first script on: the engine answers each document (patch 0012), and
+  its set of protections is the one thing that decides;
 * a font the person installed is not visible to pages (patch 0010; Fedora and
   Ubuntu, the distributions the engine has font lists for);
 * with WebGL available, the graphics card's model is not given out;
@@ -128,8 +129,9 @@ const done = arguments[arguments.length - 1];
 """
 # What Nulavio relies on from the engine's own set: if Mozilla drops one, the claim that names it goes too.
 RELIED_ON = {"CanvasRandomization", "FontVisibilityLangPack", "NavigatorHWConcurrencyTiered", "ScreenAvailToResolution"}
-# The targets engine patch 0012 adds. An engine without it (a release before the patch, which CI tests the Shell
-# on) skips the names in the overrides, and the tests that need them say so.
+# The targets engine patch 0012 adds. An engine without it (a release from before the patch, 160.0-0.6 or earlier,
+# under this tree's Shell) skips the names in the overrides, and the tests that need them say so: there rendered
+# audio is the same on every site and pages read the display's size, which nothing else hides (#468).
 PATCHED_IN = {"AudioRandomization", "ScreenSizeConstant"}
 TARGETS = """
 const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");
@@ -627,7 +629,9 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(set(self.m.chrome(user_set).split(",")), want)
         page = self.measure()
         self.assertEqual(self.m.execute(ASKS), [True, True])
-        self.assertEqual((page["hw"], page["screen"]["size"]), (4, "1920x1080"), "the rest of the protection changed with it")
+        self.assertEqual(page["hw"], 4, "the rest of the protection changed with it")
+        if self.patched():  # the screen is the engine's alone, by patch 0012's target, which this set keeps
+            self.assertEqual(page["screen"]["size"], "1920x1080", "the rest of the protection changed with it")
         # Off again, from Settings' own writer: the engine's set is the build's default again.
         self.share(False)
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is None, 5), self.m.chrome(user_set))
@@ -671,12 +675,50 @@ class FingerprintingTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.chrome("return Services.prefs.getBoolPref(arguments[0], false);", [SHARE_PREF]), 5)
         )
 
+    def test_10b_a_set_the_shell_wrote_in_an_earlier_build_takes_in_the_builds_new_entries_at_the_start(self):
+        # #468: with "let sites see my motion and contrast preferences" on, the set in the profile is one the Shell
+        # wrote from the build's default of that day. A profile that turned it on in 160.0-0.6 has a set without
+        # the entries added since, the screen's among them, and nothing but the engine's set gives pages the
+        # constant screen. At each start the Shell writes it again from this build's default.
+        default = self.m.chrome(f"return Services.prefs.getDefaultBranch('').getStringPref('{OVERRIDES_PREF}');")
+        earlier = ",".join(i for i in default.split(",") if i[1:] not in ACCESSIBILITY | PATCHED_IN)
+        current = {i for i in default.split(",") if i[1:] not in ACCESSIBILITY}
+        self.assertNotEqual(
+            set(earlier.split(",")), current, "the build's set has nothing newer than the setting: nothing was tested"
+        )
+        written = "nulavio.fingerprinting.overridesWritten"
+        self.addCleanup(
+            self.m.chrome,
+            f"{FINGERPRINTING}.unwatch(); for (const pref of arguments) Services.prefs.clearUserPref(pref);"
+            f"{FINGERPRINTING}.watch();",
+            [SHARE_PREF, OVERRIDES_PREF, written],
+        )
+        self.m.chrome(
+            f"{FINGERPRINTING}.unwatch();"
+            "Services.prefs.setBoolPref(arguments[0], true);"
+            "Services.prefs.setStringPref(arguments[1], arguments[3]); Services.prefs.setStringPref(arguments[2], arguments[3]);",
+            [SHARE_PREF, OVERRIDES_PREF, written, earlier],
+        )
+        self.assertFalse(PATCHED_IN & set(self.m.chrome(TARGETS)["on"]))
+        self.m.chrome(f"{FINGERPRINTING}.watch();")  # the Shell's start
+        now = "return [Services.prefs.getStringPref(arguments[0]), Services.prefs.getStringPref(arguments[1])];"
+        ours, recorded = self.m.chrome(now, [OVERRIDES_PREF, written])
+        self.assertEqual((set(ours.split(",")), recorded), (current, ours))
+        if self.patched():
+            self.assertLessEqual(PATCHED_IN, set(self.m.chrome(TARGETS)["on"]))
+            self.assertEqual(self.measure()["screen"]["size"], "1920x1080")
+
     def patched(self) -> bool:
         """Whether this engine has Nulavio's patch 0012 (its two targets). A build of this tree must have it."""
         has = set(self.m.chrome(TARGETS)["known"]).issuperset(PATCHED_IN)
         if not has and harness.built_from_this_tree():
             self.fail(f"this engine is a build of this tree and does not know {sorted(PATCHED_IN)}: patch 0012 is missing")
         return has
+
+    def needs_the_engines_screen(self) -> None:
+        """The constant screen is the engine's alone (patch 0012's ScreenSizeConstant; ADR 0016, #468)."""
+        if not self.patched():
+            self.skipTest("this engine is from before patch 0012: pages read the display's size")
 
     def test_11_rendered_audio_differs_per_site_and_stays_the_same_within_one(self):
         first, other, again = self.measure("127.0.0.1"), self.measure("localhost"), self.measure("127.0.0.1")
@@ -714,6 +756,7 @@ class FingerprintingTest(unittest.TestCase):
         )
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
+        self.needs_the_engines_screen()
         constant = {"size": "1920x1080", "avail": "1920x1080", "availAt": "0,0", "device1920": True}
         live = "return screen.width + 'x' + screen.height;"
         first, other = self.measure("127.0.0.1"), self.measure("localhost")
@@ -743,6 +786,7 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(self.measure("127.0.0.1")["screen"], constant)
 
     def test_08b_the_page_shown_keeps_the_constant_while_an_exempted_site_is_on_its_way(self):
+        self.needs_the_engines_screen()
         # Review of #375: a protected page that sends the tab to a site the person exempted is still there until
         # the answer comes. It must not read the display's size in that time.
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), SlowPage)
@@ -779,29 +823,7 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(self.m.execute(live), f"127.0.0.1 {plain}")
 
     def test_08e_the_engine_asks_every_document_a_frame_a_pop_up_and_an_image_too(self):
-        # How the Shell reads the engine's set, on any engine: the last entry that names the target decides.
-        turns = (
-            "const { turnsOn } = ChromeUtils.importESModule("
-            '"resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs");'
-            "return Array.from(arguments).map(set => turnsOn(set, 'ScreenSizeConstant'));"
-        )
-        sets = {
-            "": False,
-            "+ScreenSizeConstant": True,
-            "-EfficientCanvasRandomization,+ScreenSizeConstant,+DeviceSensors": True,
-            # The engine skips no space: with one before the sign it does not know the entry, and neither may we.
-            "-EfficientCanvasRandomization, +ScreenSizeConstant,+DeviceSensors": False,
-            "+ScreenSizeConstant ": False,
-            "ScreenSizeConstant": False,
-            "+ScreenSizeConstant,-ScreenSizeConstant": False,
-            "-AllTargets,+ScreenSizeConstant": True,
-            "+ScreenSizeConstant,-AllTargets": False,
-            "+AllTargets": True,
-            "+ScreenSizeConstantToo,+ScreenSize": False,
-        }
-        self.assertEqual(self.m.chrome(turns, list(sets)), list(sets.values()))
-        if not self.patched():
-            self.skipTest("this engine is from before patch 0012: the size is kept per tab (ADR 0016, known limits)")
+        self.needs_the_engines_screen()
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Documents)
         self.addCleanup(server.shutdown)
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -849,7 +871,7 @@ class FingerprintingTest(unittest.TestCase):
         # A frame of the exempted site inside a protected page is not exempted: it reads the constant.
         self.assertEqual(documents(other, one), dict.fromkeys(every[:-1], constant) | {"image": "constant"})
         # The tab's own screen size is automation's to set (WebDriver BiDi's emulation uses it), and it comes before
-        # the constant. The Shell leaves it alone on the engine's way: it is still there after the next load.
+        # the constant. The Shell never touches it: it is still there after the next load.
         self.measure("localhost")
         tab_size = "gBrowser.selectedBrowser.browsingContext"
         self.m.chrome(f"{tab_size}.setScreenAreaOverride(800, 600);")
@@ -866,18 +888,22 @@ class FingerprintingTest(unittest.TestCase):
         finally:
             self.m.chrome(f"Services.prefs.clearUserPref('{OVERRIDES_PREF}'); {tab_size}.resetScreenAreaOverride();")
         self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
-        # A set the person wrote without the target: the engine no longer answers, and the tab's size does, for
-        # the pages of the web and not for the exempted site.
+        # The engine's set is the one thing that decides (#468): with a set written without the target, pages read
+        # the display's size, as they lose any other protection a set leaves out: the open page at once, and the
+        # next one from its first script. Nothing in the Shell puts the constant back. With the build's set again,
+        # so is the constant, for the page that stayed open too.
         own = ",".join(i for i in self.m.chrome(TARGETS)["overrides"].split(",") if i.strip() != "+ScreenSizeConstant")
         self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [own])
         self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
         self.assertNotIn("ScreenSizeConstant", self.m.chrome(TARGETS)["on"])
-        self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
-        self.assertEqual(documents(one, other)["self"], plain)
+        self.assertTrue(self.arrives(live, plain), self.m.execute(live))
+        self.assertEqual(self.measure("localhost")["screen"]["size"], plain)
         self.m.chrome(f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
+        self.assertTrue(self.arrives(live, constant), self.m.execute(live))
         self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
 
     def test_08d_only_pages_of_the_web_get_the_constant_and_an_open_page_follows_the_switch(self):
+        self.needs_the_engines_screen()
         # From the independent review of #375.
         live = "return screen.width + 'x' + screen.height;"
         with self.unprotected():
@@ -893,6 +919,7 @@ class FingerprintingTest(unittest.TestCase):
         self.assertTrue(self.arrives(live, "1920x1080"), self.m.execute(live))
 
     def test_08c_a_private_window_has_the_constant_and_its_own_exemptions(self):
+        self.needs_the_engines_screen()
         with self.unprotected():
             plain = self.measure()["screen"]["size"]
         before = set(self.m.window_handles())
