@@ -80,6 +80,9 @@ ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routi
 # until it is reviewed: an option could otherwise reach a protection through another module.
 PREF_WRITERS = {
     "NulavioAccountRules.sys.mjs": {"setStringPref(OFFERED_PREF)": 1},  # which services were offered here (#220)
+    # in an engine an agent drives only: the engine's Local Network Access, on the default branch and locked, never
+    # saved to the profile (#243, LOCAL_NETWORK_PREFS; test_the_agent_network_module_pins_only_local_network_access)
+    "NulavioAgentNetwork.sys.mjs": {"setBoolPref(name)": 1, "setIntPref(name)": 1, "lockPref(name)": 1},
     "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
     # the engine's per-site fingerprinting list, from the sites' time zone permissions (#79, ADR 0017); and the
     # engine's set without its three accessibility entries while the person's setting says so, with the bar that
@@ -470,6 +473,26 @@ class PrefWriterInventoryTest(unittest.TestCase):
                 if calls:
                     found[path.name] = dict(calls)
         self.assertEqual(found, PREF_WRITERS)
+
+    def test_the_agent_network_module_pins_only_local_network_access(self):
+        """#243: in an engine an agent drives, the default branch of the engine's Local Network Access prefs, then a
+        lock; only there (its environment), only stricter values, and never a pref an enterprise policy locked."""
+        source = (SHELL / "modules" / "NulavioAgentNetwork.sys.mjs").read_text(encoding="utf-8")
+        listed = source[
+            source.index("export const LOCAL_NETWORK_PREFS") : source.index("]);", source.index("LOCAL_NETWORK_PREFS"))
+        ]
+        self.assertEqual(
+            re.findall(r'\["([\w.\-]+)", (true|false|\d+)\]', listed),
+            [("network.lna.enabled", "true"), ("network.lna.blocking", "true"),
+             ("network.lna.allow_top_level_navigation", "false"), ("permissions.default.local-network", "2"),
+             ("permissions.default.loopback-network", "2")],
+        )  # fmt: skip
+        body = source[source.index("  async arm() {") : source.index("  observe(subject) {")]
+        self.assertIn("if (this.#armed || !this.driven()) {", body)
+        self.assertIn('const defaults = Services.prefs.getDefaultBranch("");', body)
+        self.assertIn("for (const [name, value] of LOCAL_NETWORK_PREFS) {", body)
+        self.assertIn("if (Services.prefs.prefIsLocked(name)) {", body)
+        self.assertIn("return Boolean(Services.env.get(WORKSPACE_ENV));", source)
 
     def test_the_meetings_module_writes_only_the_meeting_apps_switches(self):
         source = (SHELL / "modules" / "NulavioMeetings.sys.mjs").read_text(encoding="utf-8")
