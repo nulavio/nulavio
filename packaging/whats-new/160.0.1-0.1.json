@@ -17,8 +17,7 @@
       "Esconder o título da página na barra da janela, em Configurações, Aparência: a barra de título, a barra de tarefas e os seletores de compartilhamento de tela mostram Nulavio, e não o título da página.",
       "O Imersivo está no menu Exibir, ao lado de Tela inteira, e a primeira execução o oferece quando as abas ficam na lateral.",
       "Uma linha fina no topo da página enquanto ela carrega, desligada por padrão: ligue em Configurações, Aparência, Mostrar uma linha de carregamento no topo da página.",
-      "Diagnóstico pelo terminal numa instalação por pacote: nulavio-doctor confere o motor do pacote, os codecs, o chaveiro do sistema e a ligação com os gerenciadores de senha. O comando nulavio continua abrindo o navegador.",
-      "Mais ações do Nulavio na barra de endereço: Ctrl+Alt+P lista as ações, e lá estão agora o Imersivo, uma janela temporária, trocar de perfil e copiar um link para o texto selecionado."
+      "Diagnóstico pelo terminal numa instalação por pacote: nulavio-doctor confere o motor do pacote, os codecs, o chaveiro do sistema e a ligação com os gerenciadores de senha. O comando nulavio continua abrindo o navegador."
     ],
     "fixed": [
       "O motor passa ao Firefox 160.0.1, com as correções de segurança do aviso da Mozilla mfsa2026-130, de gravidade alta.",
@@ -46,8 +45,7 @@
       "Hide the page title in the window title, in Settings, Appearance: the title bar, the taskbar and screen-sharing pickers show Nulavio, not the page's title.",
       "Immersive is in the View menu, next to Full Screen, and the first run offers it when the tabs are in the side list.",
       "A thin line along the top of the page while it loads, off by default: turn it on in Settings, Appearance, Show a loading line at the top of the page.",
-      "Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser.",
-      "More Nulavio actions in the address bar: Ctrl+Alt+P lists them, and they now include Immersive, a temporary window, switching profile and copying a link to the selected text."
+      "Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser."
     ],
     "fixed": [
       "The engine moves to Firefox 160.0.1, with the security fixes of Mozilla's advisory mfsa2026-130, of high severity.",

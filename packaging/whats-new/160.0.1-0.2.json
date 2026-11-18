@@ -6,13 +6,15 @@
   "pt-BR": {
     "summary": "Atualizações automáticas do Nulavio, ligadas por você: duas vezes por dia o sistema instala a versão nova do pacote, sem esperar o navegador.",
     "new": [
-      "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar."
+      "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar.",
+      "Mais ações do Nulavio na barra de endereço: Ctrl+Alt+P lista as ações, e lá estão agora o Imersivo, uma janela temporária, trocar de perfil e copiar um link para o texto selecionado."
     ]
   },
   "en-US": {
     "summary": "Automatic updates of Nulavio, turned on by you: twice a day the system installs the new version of the package, without waiting for the browser.",
     "new": [
-      "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on."
+      "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on.",
+      "More Nulavio actions in the address bar: Ctrl+Alt+P lists them, and they now include Immersive, a temporary window, switching profile and copying a link to the selected text."
     ]
   }
 }
