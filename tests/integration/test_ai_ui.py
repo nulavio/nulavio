@@ -85,6 +85,9 @@ class AiUiTest(unittest.TestCase):
         for scheme in ("light", "dark"):
             self.js("document.documentElement.dataset.theme = arguments[0];", scheme)
             time.sleep(0.3)
+            # #502: the buttons' colour change is a 120 ms transition (pages.css); in a test tab the page's animation
+            # clock may not advance, which left it at the old theme's colour in the capture. End it before capturing.
+            self.js("for (const a of document.getAnimations()) a.finish();")
             (self.shots / f"{name}-{scheme}.png").write_bytes(self.m.screenshot_png(full=True))
         self.js("delete document.documentElement.dataset.theme;")
 
