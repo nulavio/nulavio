@@ -677,9 +677,10 @@ class FingerprintingTest(unittest.TestCase):
 
     def test_10b_a_set_the_shell_wrote_in_an_earlier_build_takes_in_the_builds_new_entries_at_the_start(self):
         # #468: with "let sites see my motion and contrast preferences" on, the set in the profile is one the Shell
-        # wrote from the build's default of that day. A profile that turned it on in 160.0-0.6 has a set without
-        # the entries added since, the screen's among them, and nothing but the engine's set gives pages the
-        # constant screen. At each start the Shell writes it again from this build's default.
+        # wrote from the build's default of that day, and nothing but the engine's set gives pages the constant
+        # screen. No published version wrote one without the screen's entry (the setting first shipped in
+        # 160.0.1-0.1, with the entry in the default): this holds that an entry a later build adds reaches such a
+        # profile, shown with the two newest. At each start the Shell writes the set again from the build's default.
         default = self.m.chrome(f"return Services.prefs.getDefaultBranch('').getStringPref('{OVERRIDES_PREF}');")
         earlier = ",".join(i for i in default.split(",") if i[1:] not in ACCESSIBILITY | PATCHED_IN)
         current = {i for i in default.split(",") if i[1:] not in ACCESSIBILITY}
@@ -894,7 +895,7 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
         # The engine's set is the one thing that decides (#468): with a set written without the target, pages read
         # the display's size, as they lose any other protection a set leaves out: the open page at once, and the
-        # next one from its first script. (This set has no ScreenRect, which the engine would ask first.) Nothing
+        # next one from its first script. (This set has none of the engine's own screen targets, which are asked first.) Nothing
         # in the Shell puts the constant back. With the build's set again, so is the constant, for the page that
         # stayed open too.
         own = ",".join(i for i in self.m.chrome(TARGETS)["overrides"].split(",") if i.strip() != "+ScreenSizeConstant")
