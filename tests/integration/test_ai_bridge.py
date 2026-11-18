@@ -27,7 +27,7 @@ from mcp_client import McpClient
 from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
-from nulavio_launcher.ai import audit, policy, registry, tools
+from nulavio_launcher.ai import audit, policy, registry, tools, workspace
 from nulavio_launcher.ai.bidi import Bidi, script_result
 from nulavio_launcher.vault import sodium, storage
 from nulavio_launcher.vault.core import Vault
@@ -762,6 +762,67 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(bridge.call("tab_new", {"url": public.replace("/moved", "/page")})["isError"])
         wanted = {"/sub-img", "/sub-frame", "/sub-fetch", "/sub-socket", "/sub-worker"}
         self.assertTrue(harness.wait_until(lambda: wanted <= set(self.fx.hits), timeout=10), self.fx.hits)
+
+    def test_26_a_name_that_answers_the_engine_with_this_computer_reaches_nothing_from_a_public_page(self):
+        # LESIS 929cb094 (R29, #243): the Bridge decides on its own DNS lookup, the engine connects to its own.
+        # A name the Bridge reads as public and the engine resolves to this computer (rebinding) stands in
+        # here as rebind.test: public to the Bridge (its lookup is answered with a public address), and to
+        # the engine this computer (network.dns.localDomains). A public page (127.0.0.2, public to both:
+        # the engine's own address-space override) reaches for it by fetch, a frame and a pop-up: the engine's
+        # Local Network Access refuses each, with no prompt for anyone to answer, a pop-up included.
+        secret = self.fx.url("/secret").replace("127.0.0.1", "rebind.test")
+        page = (
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
+            f'<script>fetch("{secret}-fetch").catch(() => {{}}); window.open("{secret}-popup");</script>'
+        ).encode()
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+
+            def log_message(self, *_args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.2", 0), Public)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port = server.server_address[1]
+        engine_side = {
+            "network.lna.address_space.public.override": f"127.0.0.2:{port}",
+            "network.dns.localDomains": "rebind.test",
+            # The fixture speaks plain http, and the page opens its pop-up without a click: the Bridge's
+            # agent could click, and the question here is the address, not the scheme or the gesture.
+            "dom.security.https_only_mode": False,
+            "dom.disable_open_during_load": False,
+        }
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        local_address, real_lookup = policy._local_address, policy.socket.getaddrinfo
+
+        def lookup(host, *args, **kwargs):
+            if host == "rebind.test":
+                return [(2, 1, 6, "", ("93.184.215.14", 0))]  # what the Bridge is told: a public address
+            return real_lookup(host, *args, **kwargs)
+
+        for stand_in in (
+            mock.patch.object(policy, "_local_address", lambda text: text != "127.0.0.2" and local_address(text)),
+            mock.patch.object(policy.socket, "getaddrinfo", side_effect=lookup),
+        ):
+            stand_in.start()
+            self.addCleanup(stand_in.stop)
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-rebind", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
+        self.assertFalse(opened["isError"], opened)
+        time.sleep(4)
+        self.assertEqual([hit for hit in self.fx.hits if hit.startswith("/secret")], [])
 
 
 if __name__ == "__main__":

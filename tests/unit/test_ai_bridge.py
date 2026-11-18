@@ -1902,6 +1902,16 @@ class WorkspaceTest(Home):
         self.assertFalse(set(WORKSPACE_PREFS) - set(re.findall(r'user_pref\("([^"]+)"', user_js)))
         self.assertTrue(str(ws.profile_dir).startswith(str(self.home)))
         self.assertIn('user_pref("nulavio.ai.target", "workspace");', user_js)
+        # #243: the engine refuses a public page's requests to this computer and the local network itself, a
+        # pop-up's included, with no prompt (LESIS 929cb094: what the Bridge's own DNS lookup cannot see).
+        lna = (
+            ("network.lna.blocking", "true"),
+            ("network.lna.allow_top_level_navigation", "false"),
+            ("permissions.default.local-network", "2"),
+            ("permissions.default.loopback-network", "2"),
+        )
+        for name, value in lna:
+            self.assertIn(f'user_pref("{name}", {value});', user_js)
 
     def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
         """#463: the marker the window read while raw automation was on is not written any more; one left in a
