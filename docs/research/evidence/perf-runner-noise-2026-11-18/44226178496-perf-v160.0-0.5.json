@@ -1,0 +1,571 @@
+{
+ "build": "/releases/new/nulavio/nulavio",
+ "baseline": "/releases/previous/nulavio/nulavio",
+ "runs": [
+  {
+   "run": 0,
+   "side": "build",
+   "engine": "/releases/new/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 854.0,
+   "startup_second_ms": 423.0,
+   "pss_mib_1_tabs": 564.3369140625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 614.8193359375,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 18.772445102515608
+  },
+  {
+   "run": 0,
+   "side": "baseline",
+   "engine": "/releases/previous/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 823.0,
+   "startup_second_ms": 399.0,
+   "pss_mib_1_tabs": 564.9970703125,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 615.25,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 18.39239343685864
+  },
+  {
+   "run": 0,
+   "side": "firefox",
+   "engine": "/home/tester/.cache/nulavio/perf/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 611.0,
+   "startup_second_ms": 297.0,
+   "pss_mib_1_tabs": 467.3994140625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 491.482421875,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 26.00375511974333
+  },
+  {
+   "run": 1,
+   "side": "build",
+   "engine": "/releases/new/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 878.0,
+   "startup_second_ms": 478.0,
+   "pss_mib_1_tabs": 567.69921875,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 614.8330078125,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 17.146811674409296
+  },
+  {
+   "run": 1,
+   "side": "baseline",
+   "engine": "/releases/previous/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 877.0,
+   "startup_second_ms": 428.0,
+   "pss_mib_1_tabs": 565.0712890625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 615.3623046875,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 16.842988112431012
+  },
+  {
+   "run": 1,
+   "side": "firefox",
+   "engine": "/home/tester/.cache/nulavio/perf/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 671.0,
+   "startup_second_ms": 340.0,
+   "pss_mib_1_tabs": 455.900390625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 489.9501953125,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 24.110114163744083
+  },
+  {
+   "run": 2,
+   "side": "build",
+   "engine": "/releases/new/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 887.0,
+   "startup_second_ms": 432.0,
+   "pss_mib_1_tabs": 564.60546875,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 612.8876953125,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 15.559105330420294
+  },
+  {
+   "run": 2,
+   "side": "baseline",
+   "engine": "/releases/previous/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 1041.0,
+   "startup_second_ms": 507.0,
+   "pss_mib_1_tabs": 564.49609375,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 615.3701171875,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 16.6853350741593
+  },
+  {
+   "run": 2,
+   "side": "firefox",
+   "engine": "/home/tester/.cache/nulavio/perf/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 797.0,
+   "startup_second_ms": 335.0,
+   "pss_mib_1_tabs": 467.744140625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 491.39453125,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 23.919773521148883
+  },
+  {
+   "run": 3,
+   "side": "build",
+   "engine": "/releases/new/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 932.0,
+   "startup_second_ms": 460.0,
+   "pss_mib_1_tabs": 520.5869140625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 567.14453125,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 17.772130307994882
+  },
+  {
+   "run": 3,
+   "side": "baseline",
+   "engine": "/releases/previous/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 906.0,
+   "startup_second_ms": 459.0,
+   "pss_mib_1_tabs": 563.4765625,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 614.2451171875,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 16.64666836395885
+  },
+  {
+   "run": 3,
+   "side": "firefox",
+   "engine": "/home/tester/.cache/nulavio/perf/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 683.0,
+   "startup_second_ms": 341.0,
+   "pss_mib_1_tabs": 467.3623046875,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 490.890625,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 22.23369971643643
+  },
+  {
+   "run": 4,
+   "side": "build",
+   "engine": "/releases/new/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 908.0,
+   "startup_second_ms": 455.0,
+   "pss_mib_1_tabs": 563.755859375,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 613.8818359375,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 17.20418215745677
+  },
+  {
+   "run": 4,
+   "side": "baseline",
+   "engine": "/releases/previous/nulavio/nulavio",
+   "version": "160.0",
+   "startup_first_ms": 956.0,
+   "startup_second_ms": 461.0,
+   "pss_mib_1_tabs": 563.8037109375,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 3,
+   "pss_mib_10_tabs": 613.0625,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 16.96338858470152
+  },
+  {
+   "run": 4,
+   "side": "firefox",
+   "engine": "/home/tester/.cache/nulavio/perf/firefox-160.0-fde774e9757c8878/firefox",
+   "version": "160.0",
+   "startup_first_ms": 658.0,
+   "startup_second_ms": 322.0,
+   "pss_mib_1_tabs": 459.8046875,
+   "processes_1_tabs": 8,
+   "unreadable_1_tabs": 0,
+   "readings_1_tabs": 2,
+   "pss_mib_10_tabs": 487.802734375,
+   "processes_10_tabs": 11,
+   "unreadable_10_tabs": 0,
+   "readings_10_tabs": 2,
+   "sandbox": "on",
+   "speedometer3_score": 24.237323449678943
+  }
+ ],
+ "metrics": {
+  "startup_first_ms": {
+   "build": [
+    854.0,
+    878.0,
+    887.0,
+    932.0,
+    908.0
+   ],
+   "baseline": [
+    823.0,
+    877.0,
+    1041.0,
+    906.0,
+    956.0
+   ],
+   "firefox": [
+    611.0,
+    671.0,
+    797.0,
+    683.0,
+    658.0
+   ]
+  },
+  "startup_second_ms": {
+   "build": [
+    423.0,
+    478.0,
+    432.0,
+    460.0,
+    455.0
+   ],
+   "baseline": [
+    399.0,
+    428.0,
+    507.0,
+    459.0,
+    461.0
+   ],
+   "firefox": [
+    297.0,
+    340.0,
+    335.0,
+    341.0,
+    322.0
+   ]
+  },
+  "pss_mib_1_tabs": {
+   "build": [
+    564.3369140625,
+    567.69921875,
+    564.60546875,
+    520.5869140625,
+    563.755859375
+   ],
+   "baseline": [
+    564.9970703125,
+    565.0712890625,
+    564.49609375,
+    563.4765625,
+    563.8037109375
+   ],
+   "firefox": [
+    467.3994140625,
+    455.900390625,
+    467.744140625,
+    467.3623046875,
+    459.8046875
+   ]
+  },
+  "processes_1_tabs": {
+   "build": [
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "baseline": [
+    8,
+    8,
+    8,
+    8,
+    8
+   ],
+   "firefox": [
+    8,
+    8,
+    8,
+    8,
+    8
+   ]
+  },
+  "unreadable_1_tabs": {
+   "build": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "baseline": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "firefox": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "readings_1_tabs": {
+   "build": [
+    3,
+    2,
+    3,
+    2,
+    3
+   ],
+   "baseline": [
+    3,
+    3,
+    3,
+    3,
+    3
+   ],
+   "firefox": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ]
+  },
+  "pss_mib_10_tabs": {
+   "build": [
+    614.8193359375,
+    614.8330078125,
+    612.8876953125,
+    567.14453125,
+    613.8818359375
+   ],
+   "baseline": [
+    615.25,
+    615.3623046875,
+    615.3701171875,
+    614.2451171875,
+    613.0625
+   ],
+   "firefox": [
+    491.482421875,
+    489.9501953125,
+    491.39453125,
+    490.890625,
+    487.802734375
+   ]
+  },
+  "processes_10_tabs": {
+   "build": [
+    11,
+    11,
+    11,
+    11,
+    11
+   ],
+   "baseline": [
+    11,
+    11,
+    11,
+    11,
+    11
+   ],
+   "firefox": [
+    11,
+    11,
+    11,
+    11,
+    11
+   ]
+  },
+  "unreadable_10_tabs": {
+   "build": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "baseline": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "firefox": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  "readings_10_tabs": {
+   "build": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "baseline": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "firefox": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ]
+  },
+  "speedometer3_score": {
+   "build": [
+    18.772445102515608,
+    17.146811674409296,
+    15.559105330420294,
+    17.772130307994882,
+    17.20418215745677
+   ],
+   "baseline": [
+    18.39239343685864,
+    16.842988112431012,
+    16.6853350741593,
+    16.64666836395885,
+    16.96338858470152
+   ],
+   "firefox": [
+    26.00375511974333,
+    24.110114163744083,
+    23.919773521148883,
+    22.23369971643643,
+    24.237323449678943
+   ]
+  }
+ },
+ "intervals": {
+  "startup_first_ms": [
+   -0.14793467819404416,
+   0.07776427703523692
+  ],
+  "startup_second_ms": [
+   -0.10256410256410253,
+   0.14035087719298245
+  ],
+  "pss_mib_1_tabs": [
+   -0.07778473611005388,
+   0.005674308530146499
+  ],
+  "processes_1_tabs": [
+   0.0,
+   0.0
+  ],
+  "unreadable_1_tabs": null,
+  "readings_1_tabs": [
+   -0.33333333333333337,
+   0.0
+  ],
+  "pss_mib_10_tabs": [
+   -0.07818849045103615,
+   0.0013364639616677554
+  ],
+  "processes_10_tabs": [
+   0.0,
+   0.0
+  ],
+  "unreadable_10_tabs": null,
+  "readings_10_tabs": [
+   0.0,
+   0.0
+  ],
+  "speedometer3_score": [
+   -0.07622654444926813,
+   0.11455550388120006
+  ]
+ }
+}
