@@ -166,8 +166,20 @@ class SidebarMotionTest(unittest.TestCase):
         self.assertEqual(prefs, {"sidebar.animation.expand-on-hover.duration-ms": expand})
 
     def test_no_engine_patch_for_the_sidebar_motion(self):
-        series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")
-        self.assertNotIn("sidebar", series)
+        # The sidebar's motion is Horizon's: the motion tokens on the engine's own view transition (#19, patch 0008
+        # gone). This read "no patch names the sidebar" until a patch arranged the sidebar without moving it
+        # differently (0013, the panel opposite the tabs, #527): now no patch changes the sidebar's timing or how it
+        # animates, by what the patches add.
+        patches = ROOT / "browser" / "patches"
+        lines = (patches / "series").read_text(encoding="utf-8").splitlines()
+        series = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+        self.assertTrue(series)
+        for name in series:
+            with self.subTest(patch=name):
+                self.assertNotRegex(name, r"motion|animation")
+                text = (patches / name).read_text(encoding="utf-8")
+                added = "\n".join(line for line in text.splitlines() if line.startswith("+") and not line.startswith("+++"))
+                self.assertNotRegex(added, r"sidebar\.animation|--motion-|startViewTransition|_getRects|\.animate\(")
 
 
 if __name__ == "__main__":
