@@ -49,12 +49,12 @@ while :; do
     host=$(grep -Eo "Could not (GET|HEAD) 'https?://[^/']+" "$log" | head -n 1 | sed -E "s/^Could not (GET|HEAD) '//" || true)
     why=$(grep -Eo "$refused" "$log" | head -n 1 || true)
     what="${host:+$host: }$why"
-    then=
+    note=
     if [[ -n $mirror && -n $host && $mirror == "$host"/* ]]; then
         mirror= # the mirror refused: Maven Central directly from now on
-        then=", without the mirror"
+        note=", without the mirror"
     fi
-    echo "::warning title=Gradle::a repository refused the build (${what}); running Gradle again in ${wait} s${then} (run $((attempt + 1)) of $(( ${#waits[@]} + 1 )))"
+    echo "::warning title=Gradle::a repository refused the build (${what}); running Gradle again in ${wait} s${note} (run $((attempt + 1)) of $(( ${#waits[@]} + 1 )))"
     sleep "$wait"
     attempt=$((attempt + 1))
 done
