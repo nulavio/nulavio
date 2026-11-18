@@ -3,7 +3,7 @@
 # they are off after the install, the helper turns them on and off, the units are valid where systemd-analyze is
 # there, and removing the package takes the units away (the flag file stays, empty, read by nothing).
 #
-#   updates_probe.sh "<command that removes the nulavio package>"
+#   updates_probe.sh <command that removes the nulavio package>...
 set -eu
 flag=/etc/nulavio/automatic-updates
 units=/usr/lib/systemd/system
@@ -25,11 +25,18 @@ fi
 # No systemd runs in the container: the helper says the timer starts at the next boot, and still sets the state.
 [ "$("$helper" on 2>/dev/null)" = on ] && [ -f "$flag" ] && [ ! -s "$flag" ] || fail "on did not create $flag"
 [ "$("$helper" off 2>/dev/null)" = off ] && [ ! -e "$flag" ] || fail "off did not remove $flag"
+# What the service runs, with no Nulavio repository configured in the container: it refuses, and changes nothing.
+before=$(rpm -q nulavio 2>/dev/null || dpkg-query -W -f='${Version}' nulavio)
+if /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
+    fail "update-nulavio succeeded without Nulavio's repository: $(cat /tmp/update.out)"
+fi
+after=$(rpm -q nulavio 2>/dev/null || dpkg-query -W -f='${Version}' nulavio)
+[ "$before" = "$after" ] || fail "update-nulavio changed the package without Nulavio's repository"
 "$helper" on >/dev/null 2>&1
-sh -c "$1" >/dev/null 2>&1 || fail "removing the package failed"
+"$@" >/dev/null 2>&1 || fail "removing the package failed"
 for f in $shipped; do
     [ ! -e "$f" ] || fail "$f is still there after removal"
 done
 [ ! -L "$link" ] || fail "the timer's link is still there after removal"
 [ -f "$flag" ] || fail "$flag went with the package"
-echo "automatic updates: off after install, the helper turns them on and off$verified; removal takes the units, leaves $flag"
+echo "automatic updates: off after install, the helper turns them on and off$verified, update-nulavio refuses without Nulavio's repository; removal takes the units, leaves $flag"

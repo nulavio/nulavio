@@ -40,5 +40,5 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     python3 -I /checks/doctor_probe.py /usr/lib64/nulavio < /tmp/doctor.json
     test -f /usr/share/applications/nulavio.desktop && test -f /usr/share/icons/hicolor/128x128/apps/nulavio.png && echo "desktop entry and icons: present"
     # Automatic updates (#241), last: it removes the package.
-    sh /checks/updates_probe.sh "dnf -y -q remove nulavio"
+    sh /checks/updates_probe.sh dnf -y -q remove nulavio
 '

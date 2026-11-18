@@ -103,10 +103,14 @@ Each run takes a lock, so runs never overlap. It builds only a release whose sig
 
 The browser cannot update itself (`--disable-updater`): the RPM and the .deb packages carry the system's own way, off until the person turns it on.
 
-- `nulavio-update.timer` runs 15 minutes after boot and every 12 hours, with up to an hour of random delay. It starts `nulavio-update.service`, which runs `/usr/libexec/nulavio/update-nulavio` as root. With dnf that is `dnf -y --refresh upgrade nulavio`; with APT, a refresh of Nulavio's own source list (`/etc/apt/sources.list.d/nulavio.sources`), then `apt-get install --only-upgrade nulavio`. Only `nulavio` is updated, with the package manager's own signature checks.
+- `nulavio-update.timer` runs at midnight and noon, within an hour of random delay; a time missed while the computer was off or asleep runs when it is back (`Persistent=true`). It starts `nulavio-update.service`, which runs `/usr/libexec/nulavio/update-nulavio` as root:
+  - with dnf, `dnf -y --refresh upgrade --from-repo=nulavio nulavio`: the package comes only from Nulavio's repository, and what it needs from the system's;
+  - with APT, a refresh of Nulavio's own source list (`/etc/apt/sources.list.d/nulavio.sources`), then `apt-get install --no-remove --only-upgrade nulavio`. APT has no way to take a package from one source only, so the highest `nulavio` among the system's sources wins, as in a manual `apt upgrade` (R83). It never removes another package to make room.
+  - Only `nulavio` is updated, with the package manager's own signature checks. A package on hold is left alone.
 - Both units require `/etc/nulavio/automatic-updates`. The package enables the timer with its own `timers.target.wants` link, so no script runs at install and removal takes the units away; without the file the timer and the service do nothing.
 - `/usr/libexec/nulavio/automatic-updates on|off` creates or removes that file, then starts or stops the timer. The polkit action `net.nulavio.automatic-updates` runs it after the administrator's password, every time. The browser offers it in its first run and in Settings, and reads the state from the file (a separate change).
-- By hand: `sudo /usr/libexec/nulavio/automatic-updates on` (or `off`); `systemctl list-timers nulavio-update.timer` and `journalctl -u nulavio-update` show what ran. Removing the package leaves the empty file `/etc/nulavio/automatic-updates`, which nothing reads any more.
+- By hand: `sudo /usr/libexec/nulavio/automatic-updates on` (or `off`); `systemctl list-timers nulavio-update.timer` and `journalctl -u nulavio-update` show what ran. `systemctl disable` cannot remove a link the package ships; the helper's `off`, or `systemctl mask nulavio-update.timer`, is the way to stop it.
+- Removing the package leaves the empty file `/etc/nulavio/automatic-updates`: installed again, Nulavio would update itself again without asking. The download pages' removal steps delete it.
 
 ### Measured
 

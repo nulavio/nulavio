@@ -7,9 +7,10 @@ Documentation=https://nulavio.net/baixar/
 ConditionPathExists=/etc/nulavio/automatic-updates
 
 [Timer]
-OnBootSec=15min
-OnUnitActiveSec=12h
+# At midnight and noon, within an hour; a time missed while the computer was off or asleep runs when it is back.
+OnCalendar=*-*-* 00,12:00:00
 RandomizedDelaySec=1h
+Persistent=true
 
 [Install]
 WantedBy=timers.target
