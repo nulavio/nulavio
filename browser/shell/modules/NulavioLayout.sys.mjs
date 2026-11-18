@@ -684,7 +684,14 @@ export const NulavioLayout = {
       announce("linkHighlightNothing");
       return false;
     }
-    lazy.ClipboardHelper.copyString(url, global);
+    try {
+      lazy.ClipboardHelper.copyString(url, global);
+    } catch (e) {
+      // Announced here, not by the callers: the key and the address-bar action both drop what this rejects with (#546).
+      console.error(e);
+      announce("linkHighlightNotCopied");
+      return false;
+    }
     announce("linkHighlightCopied");
     return true;
   },

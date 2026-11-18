@@ -21,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import pngdiff
+from test_profiles import chrome_async
 
 LOCALES = Path(__file__).resolve().parents[2] / "browser" / "shell" / "_locales"
 # What the window announces when there is nothing to copy, in either language the profile may use.
@@ -223,6 +224,26 @@ class TextFragmentsTest(unittest.TestCase):
         self.assertTrue(base.startswith(self.server.url("/highlight?id=7")), copied)
         self.assertTrue(fragment.startswith(":~:text="), copied)
         self.assertIn("frase", urllib.parse.unquote(fragment))
+
+    def test_02bb_a_link_that_cannot_be_written_to_the_clipboard_is_announced_by_the_function_itself(self):
+        """#546: every caller (Ctrl+Alt+C, the address bar's action) drops what copyLinkToHighlight rejects with, so a
+        failure of the clipboard is announced from inside it, and it says that nothing was copied. A page that gives
+        a link, and a window that is not one the clipboard accepts, make `copyString` throw."""
+        said = chrome_async(
+            self.m,
+            "const layout = ChromeUtils.importESModule("
+            "'resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs').NulavioLayout;"
+            "const global = { documentPrincipal: { originNoSuffix: 'https://example.test' },"
+            "  getActor: () => ({ getTextDirective: async () => 'https://example.test/#:~:text=frase' }) };"
+            "const browser = { browsingContext: { currentWindowGlobal: global }, currentURI: { schemeIs: () => false } };"
+            "const said = [];"
+            "const result = await layout.copyLinkToHighlight(browser, key => said.push(key));"
+            "return { result, said };",
+        )["ok"]
+        self.assertEqual(said, {"result": False, "said": ["linkHighlightNotCopied"]})
+        words = [json.loads((LOCALES / lang / "messages.json").read_text(encoding="utf-8"))["linkHighlightNotCopied"]["message"]
+                 for lang in ("en", "pt_BR")]  # fmt: skip
+        self.assertEqual(words, ["The link could not be copied.", "O link não pôde ser copiado."])
 
     def test_02c_on_a_page_with_an_anchor_the_link_keeps_it(self):
         """The engine adds the directive after the page's own anchor (`#intro:~:text=`): that link is copied too."""
