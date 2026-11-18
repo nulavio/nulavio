@@ -24,9 +24,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+from marionette import MarionetteError
 
 from nulavio_launcher import extensions
 
+BODY_COUNT = "return document.querySelectorAll('body *').length;"
 POPUP_INFO = """
 const {ExtensionParent} = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
 const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
@@ -85,6 +87,32 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
+    def read_popup(self, popup: str) -> tuple[str, str, int, bytes]:
+        """The popup page in a tab of its own: its text, title, element count and a capture, once its framework has
+        drawn something. An extension can close or replace that tab (its own onboarding after installation), which
+        discards the browsing context the test reads: that is retried once, and a second time fails with the reason
+        (#503)."""
+        discarded = []
+        for _ in range(2):
+            handle = self.m.new_tab()
+            self.m.switch_to(handle)
+            try:
+                self.m.navigate(popup)
+                harness.wait_until(lambda: (self.m.execute(BODY_COUNT) or 0) > 5, timeout=15)
+                time.sleep(1)  # the framework's first paint is there; let it settle for the capture
+                text = self.m.execute("return (document.body && document.body.innerText || '').trim().slice(0, 240);")
+                return text, self.m.title(), self.m.execute(BODY_COUNT) or 0, self.m.screenshot_png()
+            except MarionetteError as error:
+                if "discarded" not in str(error):
+                    raise
+                discarded.append(str(error))
+            finally:
+                if handle in self.m.window_handles():
+                    self.m.switch_to(handle)
+                    self.m.send("WebDriver:CloseWindow")
+                self.m.switch_to(self.m.window_handles()[0])
+        self.fail(f"the popup's tab was discarded twice (the extension closed or replaced it): {discarded}")
+
     def check_provider(self, key: str) -> dict:
         entry = self.lock[key]
         os.environ["NULAVIO_HOME"] = str(self.session.home)  # fetch() caches inside the disposable home
@@ -99,16 +127,8 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
         self.assertGreaterEqual(info["signedState"], 2, f"{key} is not Mozilla-signed")
         popup = info["popup"] or (info["base"] + RUNTIME_POPUP[key] if key in RUNTIME_POPUP else None)
         self.assertTrue(popup, f"{key} declares no toolbar popup")
-        handle = self.m.new_tab()
-        self.m.switch_to(handle)
-        self.m.navigate(popup)
-        time.sleep(4)  # let the popup's framework render
-        text = self.m.execute("return (document.body && document.body.innerText || '').trim().slice(0, 240);")
-        title = self.m.title()
-        elements = self.m.execute("return document.querySelectorAll('body *').length;")
-        (self.artifacts / f"popup-{key}.png").write_bytes(self.m.screenshot_png())
-        self.m.send("WebDriver:CloseWindow")
-        self.m.switch_to(self.m.window_handles()[0])
+        text, title, elements, shot = self.read_popup(popup)
+        (self.artifacts / f"popup-{key}.png").write_bytes(shot)
         result = {
             "version": info["version"],
             "manifest_version": info["manifestVersion"],
