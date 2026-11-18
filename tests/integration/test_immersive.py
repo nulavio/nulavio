@@ -171,7 +171,8 @@ const page = gBrowser.selectedBrowser.closest(".browserContainer").getBoundingCl
 const frame = getComputedStyle(document.documentElement).getPropertyValue("--nulavio-frame-margin").trim();
 return { box: [Math.round(b.left), Math.round(b.right)], page: [Math.round(page.left), Math.round(page.right)],
          shown: e.checkVisibility() && b.width > 0 && b.right > 2 && b.left < innerWidth - 2 && s.opacity !== "0",
-         frame: frame ? Math.round(parseFloat(frame)) : 0 };
+         frame: frame ? Math.round(parseFloat(frame)) : 0,
+         opposite: document.documentElement.hasAttribute("nulavio-panel-opposite") };
 """
 
 
@@ -1510,6 +1511,15 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(self.m.chrome(PANEL)["shown"], "the panel left with a request waiting in it")
         self.m.chrome(f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');")
         self.assertTrue(harness.wait_until(self.panel_away, 6), self.m.chrome(PANEL))
+        # With the panel beside the tabs (the setting off) it stays in the flow (#344): a waiting request holds nothing,
+        # so the window's other rules that look at the holds (#239: a click on the page takes the keyboard) are as before.
+        self.m.chrome(f"Services.prefs.clearUserPref('{OPPOSITE}');")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PANEL)["opposite"], 5))
+        self.m.chrome(
+            f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
+            "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.assertFalse(harness.wait_until(lambda: self.window()["hold"] is not None, 2), self.window())
 
     def test_28_a_side_that_changes_moves_the_part_that_is_away_at_once(self):
         """#346 (from #539's review): with the mode on and the tab list away, changing its side (sidebar.position_start)

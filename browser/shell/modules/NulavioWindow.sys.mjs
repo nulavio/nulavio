@@ -1029,7 +1029,10 @@ class WindowUI {
         state.holds.delete(node); // a popup that never opened, or went away without its event
       }
     }
-    const parts = [...state.holds.values()].flatMap(part => part.split(" "));
+    // #346: the side panel has an edge of its own only on the other side of the page (#527); beside the tabs it stays in
+    // the flow (#344), and a hold on it means nothing there.
+    const opposite = root.hasAttribute("nulavio-panel-opposite");
+    const parts = [...state.holds.values()].flatMap(part => part.split(" ")).filter(part => part !== "panel" || opposite);
     mark("nulavio-immersive-hold", [...new Set(parts)].sort().join(" "));
     const neutral = this.#neutral(win);
     if (state.bar.hasAttribute("nv-neutral") !== neutral) {
@@ -1160,6 +1163,7 @@ class WindowUI {
     }
     root.toggleAttribute("nulavio-immersive-entering", true);
     win.requestAnimationFrame(() => win.requestAnimationFrame(() => root.removeAttribute("nulavio-immersive-entering")));
+    this.#applyImmersive(win); // the panel's holds count only with the panel on the other side
   }
 
   /** A tab dragged in the tab list (or the tab strip, with the tabs on top): that part stays shown from the start of
