@@ -69,9 +69,10 @@ class GradleRetryTest(unittest.TestCase):
         self.assertIn("run 2 of 3", warnings[0])
         self.assertEqual(self.slept, ["0", "0"])
 
-    def test_by_default_it_waits_60_then_120_seconds(self):
+    def test_by_default_it_waits_2_then_5_minutes(self):
+        """#535: on main a 429 outlasted 60 + 120 s (run of bdf68ec9); 120 + 300 s fits both jobs' time limits."""
         self.assertEqual(self.run_with(RATE_LIMITED, RATE_LIMITED, waits=None)[:2], (0, 3))
-        self.assertEqual(self.slept, ["60", "120"])
+        self.assertEqual(self.slept, ["120", "300"])
 
     def test_it_gives_up_after_the_last_wait_with_gradles_failure(self):
         code, count, out = self.run_with(RATE_LIMITED, RATE_LIMITED, RATE_LIMITED, RATE_LIMITED)
