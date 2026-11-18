@@ -17,7 +17,9 @@
    (launcher/nulavio_launcher/ai/tools.py, Bridge._write_local). The request has
    been sent by then: what is held back is the page. A load through a proxy is
    not checked (the proxy connects, not the engine), as Local Network Access
-   does not check one either.
+   does not check one either. A page from the HTTP cache carries no address
+   when the check runs, so a top-level GET in these engines skips the cache,
+   and any other top-level page that comes from it is cancelled.
 
    In the same engines it sets the engine's Local Network Access to refuse a
    public page's requests to local addresses with no prompt, a pop-up's
@@ -29,7 +31,9 @@
 const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
 const LOCAL_ENV = "NULAVIO_AI_LOCAL"; // workspace.py LOCAL_ENV
 const READY_FILE = "nulavio-ai-guard"; // workspace.py GUARD_READY
-const TOPICS = Object.freeze(["http-on-examine-response", "http-on-examine-cached-response", "http-on-examine-merged-response"]);
+const OPENING = "http-on-opening-request";
+const CACHED = "http-on-examine-cached-response";
+const TOPICS = Object.freeze([OPENING, "http-on-examine-response", CACHED, "http-on-examine-merged-response"]);
 // What the AI Workspace also has in its user.js (workspace.py WORKSPACE_PREFS).
 export const LOCAL_NETWORK_PREFS = Object.freeze([
   ["network.lna.enabled", true],
@@ -122,7 +126,7 @@ class AgentNetwork {
     return true;
   }
 
-  observe(subject) {
+  observe(subject, topic) {
     let channel;
     try {
       channel = subject.QueryInterface(Ci.nsIHttpChannel);
@@ -133,9 +137,20 @@ class AgentNetwork {
     if (loadInfo.externalContentPolicyType !== Ci.nsIContentPolicy.TYPE_DOCUMENT) {
       return; // frames and a page's own requests: the engine's Local Network Access, set above
     }
+    if (topic === OPENING) {
+      // Before the cache is looked at: a page from it would come with no address to check.
+      if (channel.requestMethod === "GET" || channel.requestMethod === "HEAD") {
+        channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
+      }
+      return;
+    }
     // The engine's reading of the address it got the page from (its address-space overrides included), set once it
-    // connected, or from the cache entry. A proxied load has none: the proxy connected.
+    // has connected. A proxied load has none (the proxy connected); a page from the cache has none yet.
     const space = loadInfo.ipAddressSpace;
+    if (topic === CACHED && space === Ci.nsILoadInfo.Unknown) {
+      channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY); // only a page sent with a body (a form's answer) gets here
+      return;
+    }
     if (space !== Ci.nsILoadInfo.Local && space !== Ci.nsILoadInfo.Private) {
       return;
     }

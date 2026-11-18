@@ -894,6 +894,7 @@ class AiBridgeTest(unittest.TestCase):
                 hits.append(self.path)
                 body = b"<!doctype html><title>Local</title><p>only on this computer"
                 self.send_response(200)
+                self.send_header("Cache-Control", "max-age=3600")
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -949,6 +950,13 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(allowed["isError"], allowed)
         self.assertEqual(allowed["structuredContent"]["title"], "Local")
         self.assertIn("only on this computer", bridge.call("page_read", {"tab": tab})["structuredContent"]["text"])
+        # A page from the HTTP cache comes with no address to check: in an agent's engine each page is fetched again.
+        registry.grant(agent["id"], "local_resources", "block")
+        self.assertFalse(bridge.call("navigate", {"tab": tab, "url": f"http://127.0.0.2:{port}/page"})["isError"])
+        again = bridge.call("navigate", {"tab": tab, "url": f"{secret}-allowed"})
+        self.assertNotIn("only on this computer", json.dumps(again))
+        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+        self.assertEqual(hits.count("/secret-allowed"), 2)
 
     def test_28_a_place_the_user_allowed_by_asking_opens_during_that_call(self):
         # #243: the Shell lets a local page through when the Bridge allowed its place, here by asking (an address the
