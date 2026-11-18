@@ -1398,7 +1398,6 @@
   "updatesByHand": {"message": "Não foi possível pedir a senha de administrador aqui. Para ligar, rode isto num terminal:"},
   "updatesSaidOn": {"message": "As atualizações automáticas estão ligadas."},
   "updatesSaidOff": {"message": "As atualizações automáticas estão desligadas."},
-  "updatesAsking": {"message": "Esperando a senha de administrador…"},
   "err_cancelled": {"message": "Nada mudou: a senha não foi informada."},
   "err_no_polkit": {"message": "Não foi possível pedir a senha de administrador aqui. Num terminal: sudo /usr/libexec/nulavio/automatic-updates on"},
   "err_not_packaged": {"message": "Este Nulavio não foi instalado pelo pacote RPM ou .deb: atualize-o do jeito que ele foi instalado."},

@@ -497,6 +497,8 @@ class FirstRunStageTest(unittest.TestCase):
         settings_page.click(self.m, "#nulavio-updates-auto")
         error = settings_page.wait_control(self.m, "nulavio-updates-error")
         self.assertEqual(error["message"], "Nada mudou: a senha não foi informada.")
+        self.assertFalse(settings_page.control(self.m, "nulavio-updates-said")["shown"], "a line left next to the error")
+        self.assertTrue(settings_page.control(self.m, "nulavio-updates-auto")["pressed"], "a dismissed prompt changed it")
         folder = harness.artifacts_dir() / "firstrun-stage"
         settings_page.shoot(self.m, folder, "updates-settings")
 

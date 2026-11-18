@@ -2911,7 +2911,9 @@
       get: () => Boolean(updatesNow()?.on),
       set: value => {
         const on = Boolean(value);
-        updateBench.act(() => shell.NulavioUpdates.set(on), msg(on ? "updatesSaidOn" : "updatesSaidOff"), msg("updatesAsking"));
+        // No "waiting" line: the system's own password prompt is what the person sees meanwhile, and a line left
+        // from it would stay next to the error of a dismissed prompt.
+        updateBench.act(() => shell.NulavioUpdates.set(on), msg(on ? "updatesSaidOn" : "updatesSaidOff"));
       },
     });
     setting({
