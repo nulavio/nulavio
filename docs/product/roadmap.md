@@ -82,7 +82,7 @@ The [feature review](feature-review-2026-11.md) (#453, decided 2026-11-17) also 
 - [x] Smart Profile Routing M5: links clicked in pages, opt-in after a [security review](../security/routing-m5-review.md) (`test_routing` 15–22)
 - [x] Temporary profile (deleted on close): in memory where the system allows, deleted by the Nulavio tools when its instance exits; selector, Settings and `nulavio run --temporary` (`test_temporary`)
 - [x] Nulavio Connect P0: `nulavio integrations` and Settings → Integrations (Plasma Browser Integration, portals, secret storage, default browser) with evidence; "Make Nulavio the default browser" on request, with restore (`test_connect`)
-- [x] Nulavio Connect P1/P2: KRunner plugin (removed on 2026-11-17, #461), KDE Connect "send link to device", screen-cast, security keys/passkeys and notifications status; activities detected (mapping later, by choice); MPRIS and per-profile proxy are the engine's own (`test_connect_p1`, `test_connect`)
+- [x] Nulavio Connect P1/P2: KRunner plugin (removed on 2026-11-17, #461), KDE Connect "send link to device" (removed on 2026-11-17, #462), screen-cast, security keys/passkeys and notifications status; activities detected (mapping later, by choice); MPRIS and per-profile proxy are the engine's own (`test_connect_p1`, `test_connect`)
 
 **DoD:** each item verified on the Nulavio build by an integration test that uses the engine's real services.
 
