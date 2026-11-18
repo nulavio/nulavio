@@ -681,18 +681,7 @@
         box-shadow var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
     }
 
-    /* Motion map (#319, docs/design/motion-map.md): a tab arrives in the vertical
-       list. The engine opens it there at once (it animates only the horizontal
-       strip's width), so the tab's content comes into its place: opacity and a
-       4px step along the list, nothing that lays the list out again. The Shell
-       marks only a tab that has just opened (NulavioWindow): the engine puts a
-       moved tab back as the same node, which must not arrive twice. Closing
-       stays instant, in the engine. */
-    #tabbrowser-tabs[orient="vertical"] .tabbrowser-tab[nulavio-arriving] > .tab-stack {
-      animation: nulavio-tab-in var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
-    }
-
-    /* Motion map: the room the other tabs make for a dragged one is the engine's
+    /* Motion map (#319, docs/design/motion-map.md): the room the other tabs make for a dragged one is the engine's
        movement (200ms on its own curve), here on the motion tokens: the same
        property, in both strips. With the tabs on top the engine also opens and
        closes a tab by its width (100ms ease-out). That one keeps the engine's
@@ -746,12 +735,5 @@
   from {
     opacity: 0;
     transform: scaleY(0.4);
-  }
-}
-
-@keyframes nulavio-tab-in {
-  from {
-    opacity: 0;
-    translate: 0 calc(-1 * var(--nv-space-2));
   }
 }

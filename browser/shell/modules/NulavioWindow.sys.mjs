@@ -68,6 +68,13 @@ const SURFACES = Object.freeze({
 // (window-band.css) the band does not repeat it. Every other surface asks for trust
 // and keeps its name in a full band row ([nv-named]).
 const PLAIN_SURFACES = Object.freeze(new Set(["newtabTitle", "settingsTitle", "profilesButton"]));
+// The engine's security panels, which open with no animation (#stillPanel): the site's trust panel (identity and
+// protections in one since the engine's browser.urlbar.trustPanel.featureGate), the separate identity panel and shield
+// it replaced (still in the engine, shown when that gate is off), the site's permissions, and a permission or other
+// consent prompt.
+const STILL_PANELS = Object.freeze(
+  new Set(["trustpanel-popup", "identity-popup", "protections-popup", "permission-popup", "notification-popup"])
+);
 // ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
 const PREF_IMMERSIVE = "nulavio.layout.immersive";
 // ADR 0009, decision 4: how long a tab opened in the background keeps its part of the chrome in view.
@@ -559,7 +566,10 @@ class WindowUI {
     win.gBrowser.addProgressListener(progress);
     win.gBrowser.tabContainer.addEventListener("TabSelect", header);
     // ADR 0009: a panel or a menu anchored on the toolbar or on the tab list keeps it shown for its whole life.
-    const popup = event => this.#popupHold(win, event);
+    const popup = event => {
+      this.#stillPanel(event);
+      this.#popupHold(win, event);
+    };
     for (const type of ["popupshowing", "popupshown", "popuphidden"]) {
       win.addEventListener(type, popup, true);
     }
@@ -567,11 +577,7 @@ class WindowUI {
     const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
     // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
-    // ...and every tab that opens arrives in the list once (the motion map, #319).
-    const opened = event => {
-      this.#arriving(win, event.target);
-      this.#backgroundTab(win, event.target);
-    };
+    const opened = event => this.#backgroundTab(win, event.target);
     win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
     // ...and a tab being dragged in it: the engine's drag session takes the hover away from the list, which left
     // under the pointer before the drop (#344).
@@ -1032,25 +1038,6 @@ class WindowUI {
     }
   }
 
-  /** The motion map (#319, docs/design/motion-map.md): a tab that has just opened in the vertical list is marked for
-      its one movement, which the window theme draws (horizon.css). Only an opening is marked: the engine puts a tab
-      that is moved in the list back as the same node, and a mark left on it would make it arrive again. So the mark
-      goes when the movement ends, or two frames later when nothing moves (the theme off). Nothing is marked where
-      nothing would move: with the tabs on top, which the engine animates itself, and under reduced motion. The
-      window is not asked for its styles while the tab opens: by the second frame the movement exists or never will. */
-  #arriving(win, tab) {
-    if (win.gReduceMotion || !win.gBrowser.tabContainer.verticalMode) {
-      return;
-    }
-    tab.toggleAttribute("nulavio-arriving", true);
-    win.requestAnimationFrame(() =>
-      win.requestAnimationFrame(() => {
-        const moving = tab.getAnimations({ subtree: true }).filter(animation => animation.animationName === "nulavio-tab-in");
-        Promise.allSettled(moving.map(animation => animation.finished)).then(() => tab.removeAttribute("nulavio-arriving"));
-      })
-    );
-  }
-
   /** A tab opened in the background, with the mode on: the tab list at the side (or the toolbar, with the tabs on
       top) comes into view for a moment, so the tab is seen arriving. One the engine selects at once is not this. */
   #backgroundTab(win, tab) {
@@ -1084,6 +1071,18 @@ class WindowUI {
       return;
     }
     this.#applyImmersive(win);
+  }
+
+  /** UX7, "security cues never move" (#319): the engine's security panels open at once, in every window and on every
+      desktop. The engine fades an arrow panel in over 180 ms (toolkit popup.css) unless the panel carries
+      animate="false", its own per-panel switch (panel.js reads it as the panel starts to show). This sets it on the
+      panels of STILL_PANELS, before the panel's own handler runs (this listener captures on the window), so
+      the other panels keep the engine's behaviour and no style of a security surface is touched. */
+  #stillPanel(event) {
+    const panel = event.target;
+    if (event.type === "popupshowing" && STILL_PANELS.has(panel?.id) && panel.getAttribute("animate") !== "false") {
+      panel.setAttribute("animate", "false");
+    }
   }
 
   /** A panel or menu anchored on the toolbar or on the tab list: that part stays shown from before the

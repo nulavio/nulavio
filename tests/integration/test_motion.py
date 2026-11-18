@@ -36,9 +36,10 @@ class MotionTest(unittest.TestCase):
         # 1. The new tab, as if its script never marked it painted.
         self.open("newtab/newtab.html", "return document.documentElement.hasAttribute('data-painted');")
         self.assertTrue(self.m.execute(reduced))
-        self.m.execute("document.documentElement.removeAttribute('data-painted');")
         hidden = "return getComputedStyle(document.querySelector('.page')).visibility;"
-        self.assertEqual(self.m.execute(hidden), "hidden")
+        # The mark is removed and the style read in one script (#553): the fallback shows the page 600 ms later, and
+        # two scripts that far apart on a busy machine read it already visible.
+        self.assertEqual(self.m.execute("document.documentElement.removeAttribute('data-painted');" + hidden), "hidden")
         # Waited for, not slept through: on a busy machine the reveal can start later than its delay (a release
         # run's whole suite failed here once on a 0.7 s sleep and passed three times alone).
         self.assertTrue(harness.wait_until(lambda: self.m.execute(hidden) == "visible", 8), "the new tab stayed invisible")
@@ -231,12 +232,9 @@ class MotionTest(unittest.TestCase):
         "  const strip = getComputedStyle(gBrowser.tabContainer);"
         "  const system = Services.scriptSecurityManager.getSystemPrincipal();"
         "  const tab = gBrowser.addTab('about:blank', {triggeringPrincipal: system});"
-        "  const marked = tab.hasAttribute('nulavio-arriving');"
         "  let opening = [];"
         "  for (let i = 0; i < 30 && !opening.length; i++) { await frame(); opening = read(tab); }"
         "  await Promise.allSettled(tab.getAnimations({subtree: true}).map(a => a.finished));"
-        "  for (let i = 0; i < 30 && tab.hasAttribute('nulavio-arriving'); i++) { await frame(); }"
-        "  const markedAfter = tab.hasAttribute('nulavio-arriving');"
         "  gBrowser.moveTabTo(tab, {tabIndex: 0});"
         "  await frame(); await frame();"
         "  const moved = read(tab);"
@@ -244,7 +242,7 @@ class MotionTest(unittest.TestCase):
         "  const closing = read(tab);"
         "  const goneAtOnce = !tab.isConnected;"
         "  for (let i = 0; i < 120 && tab.isConnected; i++) { await frame(); }"
-        "  done({vertical: gBrowser.tabContainer.verticalMode, marked, opening, markedAfter, moved, closing, goneAtOnce,"
+        "  done({vertical: gBrowser.tabContainer.verticalMode, opening, moved, closing, goneAtOnce,"
         "    gone: !tab.isConnected,"
         "    room: strip.getPropertyValue('--tab-dragover-transition').replace(/\\s+/g, ' ').trim()});"
         "})().catch(e => done({error: String(e)}));"
@@ -270,33 +268,25 @@ class MotionTest(unittest.TestCase):
         # The engine follows the system setting live (gReduceMotion); wait until it has.
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return window.gReduceMotion === arguments[0];", [on]), 10))
 
-    def test_06_a_tab_arrives_in_the_vertical_list_once(self):
-        """The motion map: in the vertical list the engine shows a new tab at once, and Nulavio lets its content
-        arrive (opacity and a 4px step, 120 ms on the enter curve). Only an opening does it: the engine puts a moved
-        tab back as the same node, which does not arrive again. Closing is instant. Nothing under reduced motion."""
-        enter = "cubic-bezier(0, 0, 0, 1)"
+    def test_06_in_the_vertical_list_a_tab_opens_and_closes_at_once(self):
+        """The motion map: in the vertical list the engine shows a new tab and removes a closed one at once, and
+        Nulavio adds nothing there (a tab's arrival is proposed and held for a real-desktop measurement, #555). A
+        moved tab does not move either."""
         try:
-            self.reduced(False)
-            got = self.tab_in("lateral")
-            self.assertTrue(got["vertical"])
-            self.assertTrue(got["marked"], "the Shell did not mark the opening tab")
-            self.assertEqual([tuple(a) for a in got["opening"]], [("CSSAnimation", "tab-stack", "nulavio-tab-in", 120, enter)])
-            self.assertFalse(got["markedAfter"], "the mark stayed after the movement")
-            self.assertEqual(got["moved"], [], "a moved tab arrived again")
-            self.assertEqual(got["closing"], [])
-            self.assertTrue(got["goneAtOnce"], "closing waited in the vertical list")
-            self.reduced(True)
-            got = self.tab_in("lateral")
-            self.assertEqual((got["opening"], got["moved"], got["closing"]), ([], [], []))
-            self.assertFalse(got["marked"] or got["markedAfter"], "a tab was marked under reduced motion")
-            self.assertTrue(got["goneAtOnce"])
+            for reduce in (False, True):
+                with self.subTest(reduced=reduce):
+                    self.reduced(reduce)
+                    got = self.tab_in("lateral")
+                    self.assertTrue(got["vertical"])
+                    self.assertEqual((got["opening"], got["moved"], got["closing"]), ([], [], []))
+                    self.assertTrue(got["goneAtOnce"], "closing waited in the vertical list")
         finally:
             self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
-    def test_07_with_the_tabs_on_top_the_engine_moves_the_tab_and_nulavio_adds_nothing(self):
+    def test_07_with_the_tabs_on_top_the_engine_moves_the_tab_and_dragging_is_on_the_tokens(self):
         """The motion map: with the tabs on top the engine opens and closes a tab by its width, and that keeps the
-        engine's own 100 ms (on the tokens it measured worse). The arrival of the vertical list does not run here.
-        The room the other tabs make for a dragged one is on the tokens. Under reduced motion the engine moves nothing."""
+        engine's own 100 ms (on the tokens it measured worse). The room the other tabs make for a dragged one is on
+        the tokens. Under reduced motion the engine moves nothing."""
         width = [("CSSTransition", "tabbrowser-tab", prop, 100, "ease-out") for prop in ("max-width", "min-width")]
         try:
             self.reduced(False)
@@ -308,7 +298,6 @@ class MotionTest(unittest.TestCase):
             self.assertTrue(got["gone"], "the closing tab never left")
             self.assertEqual(got["moved"], [])
             self.assertEqual(got["room"], "transform 180ms cubic-bezier(0.2, 0, 0, 1)")
-            self.assertFalse(got["marked"] or got["markedAfter"], "a tab was marked with the tabs on top")
             self.reduced(True)
             got = self.tab_in("top")
             self.assertEqual((got["opening"], got["moved"], got["closing"]), ([], [], []))
@@ -368,6 +357,93 @@ class MotionTest(unittest.TestCase):
         finally:
             self.m.chrome("SidebarController.hide();")
             self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+
+    # -- UX7: the engine's security panels open at once (#319) --------------------------------------
+
+    # Open one panel and read it from the moment it starts to show until it is open: the engine's own switch
+    # (animate), whether it holds input back for a transition (animating), the transition's time, its opacity, and
+    # what is animating on it. The listener is on the window in the bubbling phase, after the panel's own handler.
+    PANEL = (
+        "const done = arguments[arguments.length - 1];"
+        "const [id, how] = arguments;"
+        "(async () => {"
+        "  const frame = () => new Promise(r => requestAnimationFrame(r));"
+        "  const read = p => { const cs = getComputedStyle(p); return [p.getAttribute('animate'),"
+        "    p.hasAttribute('animating'), cs.transitionDuration, cs.opacity, p.getAnimations().length]; };"
+        "  const seen = [];"
+        "  const showing = e => { if (e.target.id === id) seen.push(read(e.target)); };"
+        "  window.addEventListener('popupshowing', showing);"
+        "  const system = Services.scriptSecurityManager.getSystemPrincipal();"
+        "  const openers = {"
+        "    trust: () => gTrustPanelHandler.showPopup({}),"
+        "    permission: () => gPermissionPanel.openPopup(new MouseEvent('click')),"
+        "    prompt: () => { window.nvPrompt = PopupNotifications.show(gBrowser.selectedBrowser, 'nulavio-motion-test',"
+        "      'Teste', null, {label: 'OK', accessKey: 'O', callback() {}}, null, {}); },"
+        "    menu: () => PanelUI.show(),"
+        "  };"
+        "  await openers[how]();"
+        "  let panel = null;"
+        "  for (let i = 0; i < 300; i++) {"
+        "    panel = document.getElementById(id);"
+        "    if (panel && panel.state !== 'closed') seen.push(read(panel));"
+        "    if (panel?.state === 'open') break;"
+        "    await frame();"
+        "  }"
+        "  window.removeEventListener('popupshowing', showing);"
+        "  const state = panel?.state ?? null;"
+        "  if (window.nvPrompt) { PopupNotifications.remove(window.nvPrompt); delete window.nvPrompt; }"
+        "  if (panel && panel.state !== 'closed') {"
+        "    const hidden = new Promise(r => panel.addEventListener('popuphidden', r, {once: true}));"
+        "    panel.hidePopup(); await hidden;"
+        "  }"
+        "  done({state, seen});"
+        "})().catch(e => done({error: String(e)}));"
+    )
+
+    def panel(self, panel_id: str, how: str) -> dict:
+        self.m.set_context("chrome")
+        try:
+            got = self.m.execute_async(self.PANEL, [panel_id, how])
+        finally:
+            self.m.set_context("content")
+        self.assertNotIn("error", got, got)
+        self.assertEqual(got["state"], "open", f"{panel_id} did not open")
+        self.assertTrue(got["seen"], f"{panel_id} was never read")
+        return got
+
+    def test_09_the_security_panels_open_with_no_animation(self):
+        """UX7, "security cues never move": the engine fades its arrow panels in (180 ms) unless a panel carries
+        animate="false". The Shell sets that on the security panels as they start to show: the site's trust panel
+        (identity and protections in one, in this engine), the site's permissions, and a permission prompt. From
+        the first reading to the open panel: no transition time, full opacity, nothing animating, input never held
+        back. The main menu keeps the engine's behaviour, which is what shows the readings can tell the two apart."""
+        self.reduced(False)
+        site = (
+            "const p = Services.scriptSecurityManager.createContentPrincipalFromOrigin(arguments[0]);"
+            "Services.perms.{}; return true;"
+        )
+        with harness.FixtureServer() as server:
+            origin = server.url("/").rstrip("/")
+            # The site's permissions panel hangs from the permission box, which is there once the site holds a
+            # permission (pop-up windows, the least of them). Taken away again below.
+            self.m.chrome(site.format("addFromPrincipal(p, 'popup', Ci.nsIPermissionManager.ALLOW_ACTION)"), [origin])
+            try:
+                self.m.navigate(server.url("/page/Motion"))
+                still = ["false", False, "0s", "1", 0]
+                for panel_id, how in (
+                    ("trustpanel-popup", "trust"),
+                    ("permission-popup", "permission"),
+                    ("notification-popup", "prompt"),
+                ):
+                    with self.subTest(panel=panel_id):
+                        got = self.panel(panel_id, how)
+                        self.assertEqual([r for r in got["seen"] if r != still], [], "the panel moved, or could have")
+                menu = self.panel("appMenu-popup", "menu")
+                self.assertEqual(menu["seen"][0][0], "open", "the main menu lost the engine's own behaviour")
+                self.assertNotEqual(menu["seen"][0][2], "0s")
+            finally:
+                self.m.chrome(site.format("removeFromPrincipal(p, 'popup')"), [origin])
+        self.m.chrome("Services.prefs.clearUserPref('ui.prefersReducedMotion');")
 
 
 if __name__ == "__main__":
