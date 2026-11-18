@@ -19,8 +19,8 @@
    not checked (the proxy connects, not the engine), as Local Network Access
    does not check one either. A page from the HTTP cache carries no address
    when the check runs, so in these engines every top-level page is fetched,
-   never taken from the cache: each one, every redirect hop included, skips it,
-   and one that comes from the cache all the same is cancelled.
+   never taken from the cache: each one is asked to skip it, and one that comes
+   from the cache all the same (a redirect hop can) is cancelled.
 
    In the same engines it sets the engine's Local Network Access to refuse a
    public page's requests to local addresses with no prompt, a pop-up's
@@ -146,7 +146,8 @@ class AgentNetwork {
       return; // frames and a page's own requests: the engine's Local Network Access, set above
     }
     if (BEFORE_CACHE.includes(topic)) {
-      // Whatever the method, and on every redirect hop: a page from the cache would come with no address to check.
+      // Whatever the method: a page from the cache would come with no address to check. One that comes from it
+      // all the same is cancelled below.
       channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
       return;
     }

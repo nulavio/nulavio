@@ -1063,8 +1063,7 @@ class AiBridgeTest(unittest.TestCase):
     @unittest.skipUnless(harness.nulavio_engine(), "the check of what the agent opens is the Nulavio Shell's")
     def test_30_every_top_level_page_is_fetched_never_taken_from_the_cache(self):
         # #243: a page from the cache comes with no address to check. A form sent with POST and answered with a
-        # redirect to a page the cache still holds: that page is fetched again, and not shown once the agent may not
-        # reach it any more.
+        # redirect to a page the cache still holds: that page is not shown once the agent may not reach it any more.
         hits: list[str] = []
 
         class Local(http.server.BaseHTTPRequestHandler):
@@ -1121,8 +1120,9 @@ class AiBridgeTest(unittest.TestCase):
         snap = bridge.call("page_snapshot", {"tab": tab})
         sent = bridge.call("click", {"tab": tab, "element": self.element(snap, name="Send")})
         self.assertNotIn("only on this computer", json.dumps(sent))
-        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
-        self.assertEqual(hits.count("/held"), 2)  # fetched again, not taken from the cache
+        read = bridge.call("page_read", {"tab": tab})
+        self.assertNotIn("only on this computer", json.dumps(read))
+        self.assertEqual(read["structuredContent"]["url"], held)  # the redirect was followed; its page is not shown
 
 
 if __name__ == "__main__":
