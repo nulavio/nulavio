@@ -160,6 +160,25 @@
       &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox {
         margin-inline: var(--nv-space-3);
       }
+      /* #527: the side panel on the other side of the page (nulavio.sidebar.panelOpposite; the engine orders it, patch
+         0013). While it is open the window's margin is the panel's, on its outer side, and the splitter alone is the gap
+         between the page and the panel, as with the panel beside the tabs. */
+      &[nulavio-panel-opposite] {
+        #tabbrowser-tabbox[sidebar-panel-open] { margin-inline-end: 0; }
+        #sidebar-box[sidebar-panel-open] { margin-inline: 0 var(--nv-space-3); }
+        &[sidebar-positionend] #tabbrowser-tabbox[sidebar-panel-open] { margin-inline: 0; }
+        &[sidebar-positionend] #sidebar-box[sidebar-panel-open] { margin-inline: var(--nv-space-3) 0; }
+        /* Foco: while the launcher is expanded over the page, the engine keeps the collapsed launcher's width as a margin
+           of what sits beside it, which it takes to be the panel. Here the page sits beside it. */
+        @media -moz-pref("sidebar.visibility", "expand-on-hover") {
+          #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded]:not([sidebar-positionend]) {
+            margin-inline-start: var(--sidebar-launcher-collapsed-width);
+          }
+          #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded][sidebar-positionend] {
+            margin-inline-end: var(--sidebar-launcher-collapsed-width);
+          }
+        }
+      }
       /* The engine draws this container's edges only where they face chrome, and rounds one corner; here
          every edge faces the frame. (#browser in the selector: the engine's own rule names two ids.) */
       #browser #tabbrowser-tabbox #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
