@@ -81,6 +81,9 @@
     get NulavioPrivacy() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy;
     },
+    get NulavioUpdates() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioUpdates.sys.mjs").NulavioUpdates;
+    },
     get NulavioWhatsNew() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioWhatsNew.sys.mjs").NulavioWhatsNew;
     },
@@ -2818,7 +2821,8 @@
       // Web services for translation after the engine's own, which stays the default and on the device.
       languages: config => ({ ...config, groupIds: after(config.groupIds, "translations", "nulavioTranslate", "nulavioTranslateAdd") }),
       // "Sobre": how many managed policies are in effect and whose they are.
-      about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioWhatsNew", "nulavioPolicies"] }),
+      // Automatic updates (#241) right under the engine's own updates group, which says the system manages them.
+      about: config => ({ ...config, groupIds: [...after(config.groupIds, "updates", "nulavioUpdates"), "nulavioWhatsNew", "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
       // Next to the engine's own groups on the same subject: who receives what is typed after its suggestions
       // group, and the engines Nulavio adds after its list of engines.
@@ -2888,6 +2892,57 @@
           return config;
         }
         return { ...config, l10nId: now.origin === "own" ? "nulavio-policies-own" : "nulavio-policies-other", l10nArgs: { count: now.count } };
+      },
+    });
+    // -- automatic updates (#241): the packages' timer, switched through polkit (the administrator's password) --
+    const updates = source(() => shell.NulavioUpdates.state());
+    const updateBench = workbench({}, updates);
+    const updatesNow = () => (updates.state.ready ? updates.state.value : null);
+    setting({
+      id: "nulavio-updates-auto",
+      setup(emitChange, stops) {
+        updates.watch(emitChange, stops);
+        updateBench.watch(emitChange, stops);
+        updates.refresh();
+      },
+      visible: () => Boolean(updatesNow()?.available),
+      // Nothing can ask for the password here: the command below is the way, and the switch only shows the state.
+      disabled: () => updateBench.state.busy || !updatesNow()?.canAsk,
+      get: () => Boolean(updatesNow()?.on),
+      set: value => {
+        const on = Boolean(value);
+        // No "waiting" line: the system's own password prompt is what the person sees meanwhile, and a line left
+        // from it would stay next to the error of a dismissed prompt.
+        updateBench.act(() => shell.NulavioUpdates.set(on), msg(on ? "updatesSaidOn" : "updatesSaidOff"));
+      },
+    });
+    setting({
+      id: "nulavio-updates-command",
+      setup: updates.watch,
+      visible: () => Boolean(updatesNow()?.available && !updatesNow().canAsk), // its command turns them on or off
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, type: "info", message: `${msg("updatesByHand")} ${updatesNow()?.command ?? ""}` },
+      }),
+    });
+    setting({
+      id: "nulavio-updates-other",
+      setup: updates.watch,
+      visible: () => updates.state.ready && !updatesNow()?.available,
+      getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, type: "info", message: msg("err_not_packaged") } }),
+    });
+    groups({
+      nulavioUpdates: {
+        l10nId: "nulavio-updates-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-updates-failed", updates),
+          { id: "nulavio-updates-auto", l10nId: "nulavio-updates-auto", control: "moz-toggle" },
+          { id: "nulavio-updates-command", control: "moz-message-bar" },
+          { id: "nulavio-updates-other", control: "moz-message-bar" },
+          updateBench.bar("nulavio-updates-error", "error", () => updateBench.state.error, () => Boolean(updateBench.state.error)),
+          updateBench.bar("nulavio-updates-said", "success", () => updateBench.state.said, () => Boolean(updateBench.state.said)),
+        ],
       },
     });
     // -- what's new in this version (#198): the notes, and the bar after an update (on unless turned off) --

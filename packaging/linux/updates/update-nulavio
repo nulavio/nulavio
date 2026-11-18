@@ -1,0 +1,27 @@
+#!/bin/sh
+# Update the nulavio package and nothing else, from Nulavio's signed repository (#241). Run as root by
+# nulavio-update.service. The package manager checks the repository's signatures, as for a manual update.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+if command -v rpm >/dev/null 2>&1 && rpm -q nulavio >/dev/null 2>&1; then
+    # The package from Nulavio's repository only; what it needs still comes from the system's repositories.
+    exec dnf -y --refresh upgrade --from-repo=nulavio nulavio
+fi
+status=$(command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='${Status}' nulavio 2>/dev/null || true)
+if [ "$status" = "hold ok installed" ]; then
+    echo "nulavio is on hold (apt-mark hold): not updated" >&2
+    exit 1
+fi
+if [ "$status" = "install ok installed" ]; then
+    list=/etc/apt/sources.list.d/nulavio.sources
+    [ -f "$list" ] || { echo "$list is missing: Nulavio's repository is not configured" >&2; exit 1; }
+    # Only Nulavio's list is refreshed; the others stay as the system last read them.
+    apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+    DEBIAN_FRONTEND=noninteractive
+    export DEBIAN_FRONTEND
+    # Never removes another package to make room (dnf refuses that too without --allowerasing).
+    exec apt-get -q -y --no-remove -o Dpkg::Options::=--force-confold install --only-upgrade nulavio
+fi
+echo "nulavio was not installed from its RPM or .deb package" >&2
+exit 1
