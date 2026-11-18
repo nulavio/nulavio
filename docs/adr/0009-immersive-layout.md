@@ -136,4 +136,30 @@ The maintainer left tabs on top and a tab list on the right for after 1.0 (2026-
 
 Measured at 1440×900 on a 160.0.1 build of this branch, in all three positions, with every part away: the page gets **1424×868 (95.4 %)**, between the frame margins and under the band; nothing else of the window is in view at either edge. The tab list at rest is entirely past its edge (x −240 on the left, x 1456 on the right). Captures and geometry from the probe that measured it are in the pull request.
 
-Not in this amendment: the assistant's panel on the side opposite the tabs, with an edge of its own. It depends on the panel being able to sit there at all, which is [#527](https://github.com/nulavio/nulavio/issues/527) (the spike in [#249](https://github.com/nulavio/nulavio/issues/249)).
+The assistant's panel on the side opposite the tabs, with an edge of its own, came after this amendment, once the panel could sit there at all ([#527](https://github.com/nulavio/nulavio/issues/527); the next amendment).
+
+## Amendment 2026-11-18: the side panel on its own edge (#346, #527)
+
+The side panel can sit on the side of the page opposite the tabs. This is a setting in Aparência, off by default, through engine patch 0013 ([#527](https://github.com/nulavio/nulavio/issues/527), the spike in [#249](https://github.com/nulavio/nulavio/issues/249)). The panel can be the assistant, the bookmarks, the history, or any extension's sidebar. #346 gives it an edge of its own in "Barras":
+
+- **With the setting on**, the panel leaves the flow by its own edge, the one away from the tab list, as the tab list leaves by its. Only that edge brings it back, drawn over the page, which does not move. The page keeps the frame margin on both sides.
+  - The tab list's edge never brings the panel, and the panel's edge never brings the tab list.
+  - The toolbar never covers the panel's top: it starts under the toolbar while the toolbar is shown, as the tab list does.
+  - The tab list is drawn over the panel, never the reverse. In a window too narrow for both, the panel covers the tab list's edge while it is shown.
+  - The panel's splitter goes with it: the panel is resized with the mode off.
+  - `test_immersive` 25 runs the journeys of 20 by both edges and the toolbar, with the tabs on either side.
+- **What keeps it in view, as for the toolbar:**
+  - the pointer in it;
+  - the keyboard in it;
+  - a menu or a panel anchored in it (hold `panel`);
+  - the band's pin;
+  - a moment (1.5 s) after it is opened, as for a tab opened in the background: the assistant's key, a launcher button, a menu;
+  - a permission request of the assistant's task waiting as a card in it. The panel is open, so the request goes there and not to a tab in front, and it must not wait unseen in a panel that is out of view (`test_immersive` 26, 27).
+- **A change of side** (the tab list's `sidebar.position_start`, or the panel's setting) moves the part that is away to its new edge at once. Before, its slide ran while its edge changed, and it was seen crossing the window (#539's review; `test_immersive` 28).
+- **With the setting off** the panel stays beside the tabs, in the flow, as #344 decided (`test_immersive` 20, unchanged).
+
+Decision 7 said "no engine patch". That still holds for Immersive itself, its controller and its sheet. The panel's side is the engine's, through patch 0013.
+
+With the panel away, the page has the same area as in the previous amendment: the panel takes no room. At 1440×900 the page is 1424 px wide between the frame margins (`test_immersive` 25, `test_panel_opposite` 03). Its height is unchanged, since the panel is drawn over the page and never beside it.
+
+Not run: RTL (the rules mirror as the tab list's do), a real touch screen, and a real permission request in the panel. Test 27 stands in for that request: it gives the window what `NulavioAI` says of a waiting card, then sends its notice.

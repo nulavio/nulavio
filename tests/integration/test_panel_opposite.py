@@ -5,7 +5,9 @@ Nulavio's sheets give it the window's margin on its outer side (horizon.css, and
 geometry is read for every layout, both sides of the tabs (`sidebar.position_start`), with Imersivo off and on, in
 both themes at 1440 x 900 and 1366 x 768, and compared with the same window with the setting off: the panel is
 after the page with the tabs on the left and before it with the tabs on the right, the margin at the window's edge
-and the gap between the page and the panel are the ones the page had, and the page and the panel are as wide.
+and the gap between the page and the panel are the ones the page had, and the page and the panel are as wide. In
+Imersivo the panel has an edge of its own (#346): away, the page has the frame margin on both sides, and that edge
+brings the panel over the page (the journeys are test_immersive 25 to 28).
 That comparison is what notices when Mozilla's sidebar styles change under Nulavio's rules (#249).
 
 A test of what the patch adds fails on a build of this tree that lacks it (NULAVIO_BUILT_FROM_TREE=1, as the
