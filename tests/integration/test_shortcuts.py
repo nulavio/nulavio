@@ -376,8 +376,9 @@ class ShortcutsTest(unittest.TestCase):
         self.m.chrome(pick, ["nulavio-immersive"])
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(immersive), 10))
         # The profile menu, as its button opens it.
+        # In the button's panel: a tab with the menu in it (the fallback when the button is removed) does not count.
         popup = (
-            "return [...document.querySelectorAll('browser')]"
+            "return [...document.querySelectorAll('panel browser')]"
             "  .some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html'));"
         )
         # The button's own action toggles: the menu an earlier test opened and hid can still count as open, and the
@@ -393,8 +394,9 @@ class ShortcutsTest(unittest.TestCase):
         )
         # Nothing selected: the link is not copied, and the window says why (as Ctrl+Alt+C does).
         self.m.chrome(pick, ["nulavio-highlight"])
-        said = harness.wait_until(self.announced, 10)
-        self.assertEqual(said, "Selecione um texto na página antes de copiar um link para ele.")
+        why = "Selecione um texto na página antes de copiar um link para ele."
+        # The window keeps its previous announcement until the next: wait for this one, not for any.
+        self.assertTrue(harness.wait_until(lambda: self.announced() == why, 10), self.announced())
 
     def test_12_the_key_opens_the_address_bar_in_its_actions_mode(self):
         """#321: Ctrl+Alt+P puts the address bar of its window in the engine's actions mode, focused, with Nulavio's
