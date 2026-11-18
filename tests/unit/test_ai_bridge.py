@@ -1952,6 +1952,24 @@ class WorkspaceTest(Home):
             self.assertIn("is not the Nulavio build", answer["content"][0]["text"])
             popen.assert_not_called()
 
+        # A profile of the user's that could not start is not left as open.
+        with (
+            mock.patch.dict(os.environ, clean, clear=True),
+            mock.patch.object(engine_mod, "find_engine", return_value=firefox),
+            mock.patch.object(workspace.subprocess, "Popen") as popen,
+        ):
+            given, _ = registry.add("profiles", "other", "autonomous")
+            registry.set_profiles(given["id"], [{"label": "Trabalho", "path": str(folder)}])
+            bridge = tools.Bridge(given["id"], "s-2", approver=registry.Approver())
+            answer = bridge.call("tab_new", {"profile": "Trabalho"})
+            self.assertTrue(answer["isError"], answer)
+            self.assertIn("is not the Nulavio build", answer["content"][0]["text"])
+            self.assertNotIn("Trabalho", bridge.profiles)
+            listed = bridge.call("profiles_list", {})["structuredContent"]["profiles"]
+            self.assertIn({"profile": "Trabalho", "open": False}, listed)
+            popen.assert_not_called()
+            self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
+
         class Started(Exception):
             pass
 

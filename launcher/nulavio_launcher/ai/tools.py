@@ -1198,6 +1198,9 @@ class Bridge:
                 "profile-missing": f"the profile {label} no longer exists",
             }
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
+        except EngineError:
+            self.profiles.pop(label, None)  # not open: profiles_list says so, and the next call looks again
+            raise
         self._sync_downloads()
         self._sync_forms()  # before its first navigation
         self._sync_network()

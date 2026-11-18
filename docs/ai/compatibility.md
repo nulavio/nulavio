@@ -50,5 +50,5 @@ Checked on 2026-10-26 on Fedora 44 KDE (Wayland), engine Gecko 158.0.1 (Nulavio 
 | Platform | Label | Notes |
 |---|---|---|
 | Fedora 44 KDE (Wayland), Nulavio build | SUPPORTED | All tests above |
-| Fedora / Ubuntu with distribution Firefox (Track A) | UNSUPPORTED | The Bridge drives only the Nulavio build, whose windows carry the agent's band and lock; an installed Nulavio's tools use the engine beside them. Only the test harness runs the Bridge on distribution Firefox (`NULAVIO_TEST_DISTRIBUTION_FIREFOX`, set by `tests/lib/harness.py`): CI runs the engine tests that way in Fedora and Ubuntu containers |
+| Fedora / Ubuntu with distribution Firefox (Track A) | UNSUPPORTED | The Bridge drives only the Nulavio build, whose windows carry the agent's band and lock; an installed Nulavio's tools use the engine beside them. Only the test harness, in a source checkout, runs the Bridge on distribution Firefox (`NULAVIO_TEST_DISTRIBUTION_FIREFOX`, set by `tests/lib/harness.py`; an install's tools do not read it): CI runs the engine tests that way in Fedora and Ubuntu containers |
 | Windows | UNTESTED | stdio works the same; workspace launch, paths and the approval prompt need a Windows port |
