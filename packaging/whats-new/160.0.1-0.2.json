@@ -10,7 +10,8 @@
       "Se você escreveu a própria lista de proteções em about:config (privacy.fingerprintingProtection.overrides), acrescente +ScreenSizeConstant: sem essa entrada, os sites deixam de ler a tela de 1920 por 1080 e leem o tamanho da sua. Quem nunca mexeu nisso não precisa fazer nada."
     ],
     "new": [
-      "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar."
+      "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar.",
+      "Mais ações do Nulavio na barra de endereço: Ctrl+Alt+P lista as ações, e lá estão agora o Imersivo, uma janela temporária, trocar de perfil e copiar um link para o texto selecionado."
     ]
   },
   "en-US": {
@@ -20,7 +21,8 @@
       "If you wrote your own list of protections in about:config (privacy.fingerprintingProtection.overrides), add +ScreenSizeConstant: without that entry, sites no longer read the 1920 by 1080 screen, and read the size of yours. If you never changed it, there is nothing to do."
     ],
     "new": [
-      "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on."
+      "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on.",
+      "More Nulavio actions in the address bar: Ctrl+Alt+P lists them, and they now include Immersive, a temporary window, switching profile and copying a link to the selected text."
     ]
   }
 }
