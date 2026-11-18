@@ -1186,6 +1186,41 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
 
+    def test_23_the_tab_list_on_the_right_leaves_and_comes_back_by_the_right_edge(self):
+        """#346: with the tab list on the right (sidebar.position_start false) it leaves by the right and only the right
+        edge brings it back, over the page, which does not move; the left edge brings nothing. At rest nothing of it
+        is in view."""
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.apply_preset("lateral")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', false);")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return document.documentElement.hasAttribute('sidebar-positionend');"), 10)
+        )
+        geometry = (
+            "const r = id => document.getElementById(id).getBoundingClientRect();"
+            "const list = r('sidebar-container'), edge = r('nulavio-immersive-edge'), page = r('tabbrowser-tabbox');"
+            "return {width: innerWidth, list: [list.left, list.right], edge: [edge.left, edge.right],"
+            " page: [page.left, page.right]};"
+        )
+        self.m.chrome(AWAY)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        rest = self.m.chrome(geometry)
+        self.assertGreaterEqual(rest["list"][0], rest["width"], rest)  # out of view, past the right edge
+        self.assertEqual(round(rest["edge"][1]), rest["width"], rest)  # the edge that brings it back is the right one
+        self.m.chrome(EDGE)  # the left edge
+        time.sleep(1)
+        self.assertFalse(self.m.chrome(PARTS)["tabs"]["shown"], "the left edge brought the list on the right")
+        self.m.chrome(AWAY)
+        self.m.chrome("window.synthesizeMouseEvent('mousemove', innerWidth - 2, Math.round(innerHeight / 2), {}, {});")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        shown = self.m.chrome(geometry)
+        self.assertAlmostEqual(shown["list"][1], shown["width"], delta=1, msg=shown)
+        self.assertEqual(shown["page"], rest["page"], "the page moved when the list came in")
+        self.m.chrome(AWAY)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
         self.m.set_context("chrome")
