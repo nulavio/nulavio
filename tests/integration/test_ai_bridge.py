@@ -881,6 +881,7 @@ class AiBridgeTest(unittest.TestCase):
         stand_in.start()
         self.addCleanup(stand_in.stop)
 
+    @unittest.skipUnless(harness.nulavio_engine(), "the check of what the agent opens is the Nulavio Shell's")
     def test_27_what_the_agent_opens_is_shown_only_from_an_address_it_may_reach(self):
         # #243 (R29): the engine's Local Network Access lets through what its driver opens, and a redirect on the way
         # there; the Shell checks those pages on the address the engine got them from. The agent opens an address the
@@ -991,6 +992,7 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(opened["structuredContent"]["title"], "Asked")
         self.assertEqual(hits, ["/asked"])
 
+    @unittest.skipUnless(harness.nulavio_engine(), "the profile's Local Network Access is set by the Nulavio Shell")
     def test_29_a_users_profile_opened_for_an_agent_refuses_a_public_pages_local_requests_and_keeps_nothing(self):
         # #243: in one of the user's own profiles the engine asked, and let a page's pop-up through. The Shell sets the
         # engine's Local Network Access there as in the AI Workspace (refused, no prompt, a pop-up's included), on the
