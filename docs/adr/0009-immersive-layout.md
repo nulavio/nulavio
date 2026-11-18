@@ -145,7 +145,7 @@ The side panel can sit on the side of the page opposite the tabs. This is a sett
 - **With the setting on**, the panel leaves the flow by its own edge, the one away from the tab list, as the tab list leaves by its. Only that edge brings it back, drawn over the page, which does not move. The page keeps the frame margin on both sides.
   - The tab list's edge never brings the panel, and the panel's edge never brings the tab list.
   - The toolbar never covers the panel's top: it starts under the toolbar while the toolbar is shown, as the tab list does.
-  - The tab list is drawn over the panel, never the reverse. In a window too narrow for both, the panel covers the tab list's edge while it is shown.
+  - The tab list is drawn over the panel, never the reverse. In a window too narrow for both, the panel shown would be drawn over the tab list's edge, by the order of their layers (not run).
   - The panel's splitter goes with it: the panel is resized with the mode off.
   - `test_immersive` 25 runs the journeys of 20 by both edges and the toolbar, with the tabs on either side.
 - **What keeps it in view, as for the toolbar:**
