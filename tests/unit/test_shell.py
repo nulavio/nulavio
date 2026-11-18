@@ -273,6 +273,35 @@ class PrivilegedApiTest(unittest.TestCase):
         for code in codes:
             self.assertIn(f"err_{code.replace('-', '_')}", en, code)
 
+    # Codes whose one message reads right for every module that throws them. Add one here only when its message
+    # does; otherwise give the module a code of its own.
+    SHARED_ERROR_CODES = frozenset(
+        {
+            "bad-request",
+            "credentials-in-url",
+            "invalid-name",
+            "invalid-profile",
+            "invalid-url",
+            "locked",
+            "name-taken",
+            "no-window",
+            "not-found",  # not on the Vault's methods page: "the list was refreshed" (#519)
+            "unknown-provider",
+        }
+    )
+
+    def test_no_module_throws_another_modules_error_code(self):
+        """One code is one message: a code two modules throw shows one module's words for the other's error (#486;
+        #495 found the delete page's words for locking the profile in use). It only sees `fail("code")`: a code a
+        module passes through from another, as NulavioProfiles did with NulavioSearch's (#495), is not seen."""
+        modules: dict[str, set[str]] = {}
+        for path in MODULES.glob("*.sys.mjs"):
+            for code in re.findall(r'fail\("([a-z-]+)"', path.read_text(encoding="utf-8")):
+                modules.setdefault(code, set()).add(path.name)
+        shared = {code: sorted(names) for code, names in modules.items() if len(names) > 1}
+        self.assertEqual({code: names for code, names in shared.items() if code not in self.SHARED_ERROR_CODES}, {})
+        self.assertEqual(self.SHARED_ERROR_CODES - set(shared), set(), "an allowed code is no longer shared")
+
 
 class SearchProvidersTest(unittest.TestCase):
     """docs/adr/0002-nulavio-search.md: who search goes to, and when."""
