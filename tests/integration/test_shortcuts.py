@@ -72,6 +72,7 @@ class ShortcutsTest(unittest.TestCase):
             "alt,control+F",
             "alt,control+I",
             "alt,control+K",
+            "alt,control+P",  # #321: the address bar's actions mode
             "alt,shift+A",
             "alt,shift+P",
         ]
@@ -184,6 +185,7 @@ class ShortcutsTest(unittest.TestCase):
             "toggle-focus": "Ctrl+Alt+F",
             "toggle-immersive": "Ctrl+Alt+I",
             "lock-profile": "Ctrl+Alt+B",
+            "open-actions": "Ctrl+Alt+P",
         }
         self.assertEqual({command: self.key(command) for command in defaults}, defaults)
         self.assertFalse(settings_page.control(self.m, "nulavio-keys-reset")["shown"], "nothing was changed yet")
@@ -332,13 +334,82 @@ class ShortcutsTest(unittest.TestCase):
             "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
             "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
         )
-        unsupported = actions + "return ['nulavio-settings', 'nulavio-focus'].map(a => Q.getAction(a).isUnsupported());"
-        self.assertEqual(self.m.chrome(unsupported), [False, False])
+        names = ["nulavio-settings", "nulavio-focus", "nulavio-immersive", "nulavio-temporary", "nulavio-profiles",
+                 "nulavio-highlight"]  # fmt: skip
+        unsupported = actions + "return arguments[0].map(a => Q.getAction(a).isUnsupported());"
+        self.assertEqual(self.m.chrome(unsupported, [names]), [False] * len(names))
         self.m.chrome("Services.prefs.setStringPref('nulavio.ai.workspace', 'test-agent');")
         try:
-            self.assertEqual(self.m.chrome(unsupported), [True, True])
+            self.assertEqual(self.m.chrome(unsupported, [names]), [True] * len(names))
         finally:
             self.m.chrome("Services.prefs.clearUserPref('nulavio.ai.workspace');")
+
+    def test_11_more_actions_are_found_by_their_words_and_do_what_their_keys_do(self):
+        """#321: Immersive, a temporary window, the profile menu and a link to the selected text, after ">", in both
+        languages' words; each does what its key or button does, in the window it was picked in."""
+        actions = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+        )
+        found = lambda text, exact=False: chrome_async(  # noqa: E731
+            self.m, actions + "return [...await Q.getActions({input: args[0], includesExactMatch: args[1]})];", [text, exact]
+        )["ok"]
+        for words, name in (
+            (("imers", "imersivo", "immersive"), "nulavio-immersive"),
+            (("tempor", "temporaria", "temporary window"), "nulavio-temporary"),
+            (("perf", "perfis", "switch profile"), "nulavio-profiles"),
+            (("destaq", "destaque", "highlight"), "nulavio-highlight"),
+        ):
+            for word in words:
+                self.assertIn(name, found(word, len(word) > 6), word)
+        ids = ["nulavio-quickaction-immersive", "nulavio-quickaction-temporary", "nulavio-quickaction-profiles",
+               "nulavio-quickaction-highlight"]  # fmt: skip
+        labels = chrome_async(self.m, "return await document.l10n.formatValues(args[0].map(id => ({id})));", [ids])["ok"]
+        self.assertEqual(
+            labels,
+            ["Ligar ou desligar o modo Imersivo", "Nova janela temporária", "Trocar de perfil",
+             "Copiar um link para o texto selecionado"],
+        )  # fmt: skip
+        pick = actions + "Q.getAction(arguments[0]).onPick(null, {browserWindow: window});"
+        immersive = f"return {LAYOUT}.immersive().on;"
+        self.assertFalse(self.m.chrome(immersive))
+        self.m.chrome(pick, ["nulavio-immersive"])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(immersive), 10))
+        self.m.chrome(pick, ["nulavio-immersive"])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(immersive), 10))
+        # The profile menu, as its button opens it.
+        self.m.chrome(pick, ["nulavio-profiles"])
+        popup = (
+            "return [...document.querySelectorAll('browser')]"
+            "  .some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html'));"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(popup), 10))
+        self.m.chrome("for (const p of document.querySelectorAll('panel[panelopen], panel[open]')) p.hidePopup?.();")
+        # Nothing selected: the link is not copied, and the window says why (as Ctrl+Alt+C does).
+        self.m.chrome(pick, ["nulavio-highlight"])
+        said = harness.wait_until(self.announced, 10)
+        self.assertEqual(said, "Selecione um texto na página antes de copiar um link para ele.")
+
+    def test_12_the_key_opens_the_address_bar_in_its_actions_mode(self):
+        """#321: Ctrl+Alt+P puts the address bar of its window in the engine's actions mode, focused, with Nulavio's
+        actions listed; nothing runs until one is picked."""
+        before = self.m.chrome(f"return {LAYOUT}.immersive().on;")
+        self.m.chrome(f"{key_of('alt,control+P')}.doCommand();")
+        mode = "return {source: gURLBar.searchMode?.source ?? null, focused: gURLBar.focused};"
+        actions_source = self.m.chrome(
+            "return ChromeUtils.importESModule('chrome://browser/content/urlbar/UrlbarShared.mjs')"
+            ".UrlbarShared.RESULT_SOURCE.ACTIONS;"
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(mode) == {"source": actions_source, "focused": True}, 10),
+            self.m.chrome(mode),
+        )
+        listed = "return [...gURLBar.view.panel.querySelectorAll('[data-action]')].map(e => e.dataset.action);"
+        self.assertTrue(
+            harness.wait_until(lambda: "nulavio-immersive" in (self.m.chrome(listed) or []), 10), self.m.chrome(listed)
+        )
+        self.assertEqual(self.m.chrome(f"return {LAYOUT}.immersive().on;"), before, "an action ran without a pick")
+        self.m.chrome("gURLBar.searchMode = null; gURLBar.view.close(); gBrowser.selectedBrowser.focus();")
 
 
 if __name__ == "__main__":

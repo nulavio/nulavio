@@ -224,8 +224,11 @@ class PrivilegedApiTest(unittest.TestCase):
                 "copyLinkToHighlight",
                 "setPageEditing",
                 "setKeepAbove",
+                "openActions",  # #321: one tab's window, the address bar in its actions mode; nothing runs
             },
         )
+        actions = next(f for f in schema["functions"] if f["name"] == "openActions")
+        self.assertEqual([(a["name"], a["type"]) for a in actions["parameters"]], [("tabId", "integer")])
         # #161: editing the page's text is one boolean for one tab, the one the menu or the key was used in.
         edit = next(f for f in schema["functions"] if f["name"] == "setPageEditing")
         self.assertEqual([(a["name"], a["type"]) for a in edit["parameters"]], [("on", "boolean"), ("tabId", "integer")])

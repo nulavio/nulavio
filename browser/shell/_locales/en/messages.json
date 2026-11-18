@@ -1395,6 +1395,7 @@
   "firstrunWelcomeLeadProfile": {"message": "Each profile has its own choices: the next ones apply to this one only. The band at the top shows which one you are in and how it is protected."},
   "immersiveLabel": {"message": "Immersive"},
   "commandToggleImmersive": {"message": "Turn Immersive on or off"},
+  "commandOpenActions": {"message": "Find an action in the address bar"},
   "layoutImmersiveOn": {"message": "Immersive on. The address bar comes back with Ctrl+L."},
   "layoutImmersiveOff": {"message": "Immersive off."},
   "menuImmersive": {"message": "Immersive"},

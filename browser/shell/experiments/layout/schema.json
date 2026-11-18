@@ -29,6 +29,10 @@
         "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
       },
       {
+        "name": "openActions", "type": "function", "async": true,
+        "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
+      },
+      {
         "name": "setImmersive", "type": "function", "async": true,
         "parameters": [
           { "name": "on", "type": "boolean", "optional": true },

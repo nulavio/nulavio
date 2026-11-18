@@ -208,7 +208,8 @@
         "lock-profile",
         "copy-link-to-highlight",
         "toggle-page-editing",
-        "toggle-keep-above"
+        "toggle-keep-above",
+        "open-actions"
       ],
       "default": "_execute_action",
       "writer": "engine",
@@ -224,7 +225,11 @@
       "values": [
         "nulavio-assistant",
         "nulavio-settings",
-        "nulavio-focus"
+        "nulavio-focus",
+        "nulavio-immersive",
+        "nulavio-temporary",
+        "nulavio-profiles",
+        "nulavio-highlight"
       ],
       "default": "nulavio-assistant",
       "writer": "engine",

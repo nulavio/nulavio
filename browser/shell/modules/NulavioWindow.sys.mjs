@@ -39,7 +39,10 @@ const WIDGET = "nulavio-band-widget";
 const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
 // UX6 (D8): Nulavio's other quick actions after ">". None of them unlocks, resumes, grants or turns
 // anything off (tests/unit/test_personalisation.py); lock and AI actions have their own places.
-const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus"]);
+// #321 adds Immersive, a temporary window, the profile menu and Copy Link to Highlight, each what its key or button
+// already does.
+const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus", "nulavio-immersive",
+  "nulavio-temporary", "nulavio-profiles", "nulavio-highlight"]);
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
@@ -1553,6 +1556,69 @@ class WindowUI {
             lazy.NulavioLayout.toggleFocus(win, say).catch(() => {}); // announced in the window
           }
           return null;
+        },
+      });
+      // #321: what Ctrl+Alt+I, the profile menu's "Nova janela temporária", the profile button (Alt+Shift+P) and
+      // Ctrl+Alt+C already do, found by their words. Each runs in the window it was picked in.
+      const icon = WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "";
+      const sayIn = win => {
+        const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+        return key => win.A11yUtils?.announce({ raw: extension?.localizeMessage(key) ?? key }).catch(() => {});
+      };
+      lazy.ActionsProviderQuickActions.addAction("nulavio-immersive", {
+        commands: ["imersivo", "modo imersivo", "immersive", "immersive mode"],
+        icon,
+        label: "nulavio-quickaction-immersive",
+        isUnsupported: workspace, // never Immersive where an agent drives the window (ADR 0009)
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            try {
+              lazy.NulavioLayout.setImmersive(!lazy.NulavioLayout.immersive().on, sayIn(win)); // a locked pref says so
+            } catch (e) {
+              // Already announced in the window.
+            }
+          }
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-temporary", {
+        commands: ["temporária", "temporaria", "janela temporária", "janela temporaria", "temporary", "temporary window"],
+        icon,
+        label: "nulavio-quickaction-temporary",
+        isUnsupported: workspace,
+        onPick: () => {
+          lazy.NulavioProfiles.openTemporary().catch(console.error); // a profile of its own, deleted when it closes
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-profiles", {
+        commands: ["perfil", "perfis", "trocar de perfil", "profile", "profiles", "switch profile"],
+        icon,
+        label: "nulavio-quickaction-profiles",
+        isUnsupported: workspace,
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+          // The profile menu, as its button opens it: it lists the profiles and filters them as the person types.
+          const action = extension && lazy.ExtensionParent.apiManager.global.browserActionFor?.(extension);
+          if (win && action) {
+            action.openPopup(win, true).catch(console.error);
+          }
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-highlight", {
+        commands: ["destaque", "link para o destaque", "copiar link para o destaque", "highlight", "copy link to highlight"],
+        icon,
+        label: "nulavio-quickaction-highlight",
+        isUnsupported: workspace,
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            lazy.NulavioLayout.copyLinkToHighlight(win.gBrowser.selectedBrowser, sayIn(win)).catch(() => {});
+          }
+          return { focusContent: true };
         },
       });
     } catch (e) {

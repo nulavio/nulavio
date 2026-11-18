@@ -61,7 +61,7 @@ Read on 2026-11-17 from the `commands` of the pinned XPIs in `browser/distributi
 | KeePassXC-Browser 1.10.4.1 | Alt+Shift+U (fill username and password), Alt+Shift+I (fill password), Alt+Shift+O (fill TOTP), Alt+Shift+G (password generator) |
 | 1Password 8.12.44.33 | Ctrl+Period (open), Ctrl+Shift+L (lock) |
 
-Nulavio's keys are Ctrl+Alt+B, Ctrl+Alt+C, Ctrl+Alt+E, Ctrl+Alt+F, Ctrl+Alt+I and Ctrl+Alt+K, plus Alt+Shift+A and Alt+Shift+P, so none of them is one of the keys above. Ctrl+Alt+E and Ctrl+Alt+K leave with #459 and #460. "Copy Link to Highlight" had Ctrl+Shift+L (#157), the key three of the four use, and moved to Ctrl+Alt+C:
+Nulavio's keys are Ctrl+Alt+B, Ctrl+Alt+C, Ctrl+Alt+E, Ctrl+Alt+F, Ctrl+Alt+I, Ctrl+Alt+K and Ctrl+Alt+P (#321), plus Alt+Shift+A and Alt+Shift+P, so none of them is one of the keys above. Ctrl+Alt+E and Ctrl+Alt+K leave with #459 and #460. "Copy Link to Highlight" had Ctrl+Shift+L (#157), the key three of the four use, and moved to Ctrl+Alt+C:
 - `test_shortcuts` 01 checks that it is in no other key of a running window, the engine's included;
 - this desktop's `kglobalshortcutsrc` (Plasma 6) and the GNOME schemas installed here bind no Ctrl+Alt+C;
 - no extension above asks for a Ctrl+Alt key.

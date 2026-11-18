@@ -403,6 +403,7 @@ class CommandsTest(unittest.TestCase):
                 "copy-link-to-highlight": "Ctrl+Alt+C",  # #157, #469
                 "toggle-page-editing": "Ctrl+Alt+E",  # #161
                 "toggle-keep-above": "Ctrl+Alt+K",  # #170
+                "open-actions": "Ctrl+Alt+P",  # #321
             },
         )
         self.assertEqual(len(set(keys.values())), len(keys))
@@ -430,7 +431,7 @@ class QuickActionsTest(unittest.TestCase):
         block = source[source.index('addAction("nulavio-settings"') : source.index("  stop() {")]
         for forbidden in ("NulavioVault", "unlock", "setStopped", "grant", "autonomy", "NulavioGuard", "Services.prefs.set"):
             self.assertNotIn(forbidden, block)
-        for name in ("nulavio-quickaction-settings", "nulavio-quickaction-focus"):
+        for name in [f"nulavio-quickaction-{n.removeprefix('nulavio-')}" for n in declared["values"]]:
             for ftl in (
                 ROOT / "browser" / "branding" / "nulavio" / "locales" / "en-US" / "brand.ftl",
                 ROOT / "browser" / "l10n" / "pt-BR" / "browser" / "branding" / "nulavio" / "brand.ftl",
