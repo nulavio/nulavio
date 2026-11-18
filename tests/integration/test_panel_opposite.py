@@ -244,6 +244,8 @@ class PanelOppositeTest(unittest.TestCase):
                         name = f"{preset}-{'left' if start else 'right'}{'-immersive' if immersive else ''}-{w}x{h}"
                         name += "-dark" if dark else "-light"
                         with self.subTest(name):
+                            # Off again whatever this arrangement found, so the next one starts from the window as it is.
+                            self.m.chrome(f"Services.prefs.clearUserPref('{PREF}');")
                             self.side(name, start, immersive)
                             self.show()
                             off = self.settle(lambda g: g["panel"] is not None and not g["opposite"], name + ", off")
@@ -264,6 +266,7 @@ class PanelOppositeTest(unittest.TestCase):
         self.apply("focus")
         for start in (True, False):
             with self.subTest(start=start):
+                self.m.chrome(f"Services.prefs.clearUserPref('{PREF}');")
                 self.side(f"focus, {start}", start, False)
                 self.show()
                 rest = self.opposite(True)
