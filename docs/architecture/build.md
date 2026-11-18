@@ -328,7 +328,7 @@ The Flatpak `net.nulavio.Nulavio` packages the same signed build as the RPM: the
 
 Codecs in the Flatpak (checked on 2026-11-16, runtime 26.08): the runtime carries the codec library the engine loads (`libavcodec.so.62`) with AAC, MP3, Opus and FLAC, and its `codecs-extra` extension, installed with the runtime and first in the library path, adds H.264. The Flatpak asks for nothing more (#377).
 
-Not in the Flatpak: the Vault (it needs `gocryptfs` and FUSE on the host), `nulavio run --confined` (bubblewrap inside the sandbox), and the Connect features that talk to desktop services over D-Bus (KRunner, KDE Connect, activities). The AppStream text says so. `tests/unit/test_flatpak.py` refuses permissions that undo the sandbox (the home, the host, any D-Bus name, the Flatpak service).
+Not in the Flatpak: the Vault (it needs `gocryptfs` and FUSE on the host), `nulavio run --confined` (bubblewrap inside the sandbox), and the Connect features that talk to desktop services over D-Bus (KDE Connect, activities). The AppStream text says so. `tests/unit/test_flatpak.py` refuses permissions that undo the sandbox (the home, the host, any D-Bus name, the Flatpak service).
 
 Every release run builds it: the `flatpak` job of `release.yml` builds and installs it from the archive that run made with Flathub's own builder (`org.flatpak.Builder`, with `--compose-url-policy=full` as `flathub-build` does), runs `flatpak-builder-lint` on the manifest and the repository, and `check_flatpak.sh` starts it headless in the sandbox and requires a rendered page. Measured on 2026-11-11 with 160.0-0.3: builds, renders, both lints clean. The `publish` job writes the Flathub manifest (`--url`: the GitHub release asset and its SHA-256) into the `published` artifact.
 
