@@ -771,13 +771,20 @@ class AiBridgeTest(unittest.TestCase):
         # the engine's own address-space override) reaches for it by fetch, a frame and a pop-up: the engine's
         # Local Network Access refuses each, with no prompt for anyone to answer, a pop-up included.
         secret = self.fx.url("/secret").replace("127.0.0.1", "rebind.test")
+        # The page reports back to its own (public) server what happened: that the fetch was refused at once (not
+        # left waiting on a prompt) and that the pop-up was opened (not stopped by the pop-up blocker).
         page = (
             f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
-            f'<script>fetch("{secret}-fetch").catch(() => {{}}); window.open("{secret}-popup");</script>'
+            f'<script>fetch("{secret}-fetch").then(() => "sent", () => "refused")'
+            '.then(how => fetch("/ran?fetch=" + how));'
+            f'fetch("/ran?popup=" + (window.open("{secret}-popup") ? "opened" : "blocked"));</script>'
         ).encode()
+        ran: list[str] = []
 
         class Public(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
+                if self.path.startswith("/ran"):
+                    ran.append(self.path)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(page)))
@@ -821,8 +828,13 @@ class AiBridgeTest(unittest.TestCase):
         self.addCleanup(bridge.close)
         opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
         self.assertFalse(opened["isError"], opened)
-        time.sleep(4)
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?popup=opened"])
+        time.sleep(2)
         self.assertEqual([hit for hit in self.fx.hits if hit.startswith("/secret")], [])
+        # The Bridge let rebind.test through (it read a public address): what refused it was the engine.
+        logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        self.assertEqual([e for e in logged if "rebind.test" in str(e.get("target"))], [])
 
 
 if __name__ == "__main__":

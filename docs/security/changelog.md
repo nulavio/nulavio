@@ -35,7 +35,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Nulavio fixes**:
 
-- AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. The Bridge now looks a name up again for each request it holds and keeps only answers that it is local, and in the AI Workspace the engine's own Local Network Access refuses a public page's requests to local addresses, a pop-up's included, with no prompt. What is left, in your own profiles opened for an agent, is in R29. Nothing to do: it comes with the update.
+- AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. In the AI Workspace the engine's own Local Network Access, which decides on the address it connects to, now refuses a public page's requests to local addresses with no prompt, a pop-up's included. Not covered yet (R29): a rebinding name the agent itself opens, or a redirect on its way, and your own profiles opened for an agent. Nothing to do: it comes with the update.
 
 ## Nulavio 160.0.1-0.1 (Firefox 160.0.1), published 2026-11-18
 
