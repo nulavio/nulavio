@@ -2821,7 +2821,8 @@
       // Web services for translation after the engine's own, which stays the default and on the device.
       languages: config => ({ ...config, groupIds: after(config.groupIds, "translations", "nulavioTranslate", "nulavioTranslateAdd") }),
       // "Sobre": how many managed policies are in effect and whose they are.
-      about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioUpdates", "nulavioWhatsNew", "nulavioPolicies"] }),
+      // Automatic updates (#241) right under the engine's own updates group, which says the system manages them.
+      about: config => ({ ...config, groupIds: [...after(config.groupIds, "updates", "nulavioUpdates"), "nulavioWhatsNew", "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
       // Next to the engine's own groups on the same subject: who receives what is typed after its suggestions
       // group, and the engines Nulavio adds after its list of engines.

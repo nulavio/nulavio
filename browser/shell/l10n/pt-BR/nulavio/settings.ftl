@@ -253,8 +253,8 @@ nulavio-open-integrations =
 ## Sobre: atualizações automáticas pelos pacotes RPM e .deb (#241)
 
 nulavio-updates-group =
-    .label = Atualizações do Nulavio
-    .description = O Nulavio não se atualiza sozinho: quem atualiza é o sistema, pelo repositório assinado do Nulavio.
+    .label = Atualizações automáticas
+    .description = Quem atualiza o Nulavio é o sistema, pelo repositório assinado do Nulavio. Aqui você escolhe se isso acontece sozinho.
 nulavio-updates-auto =
     .label = Atualizar o Nulavio automaticamente
     .description = Até duas vezes por dia, em segundo plano, só o Nulavio. Ligar ou desligar pede a senha de administrador.

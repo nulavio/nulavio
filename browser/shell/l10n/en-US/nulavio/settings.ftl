@@ -265,8 +265,8 @@ nulavio-meeting-links-browser =
 ## About: automatic updates through the RPM and .deb packages (#241)
 
 nulavio-updates-group =
-    .label = Nulavio updates
-    .description = Nulavio does not update itself: the system does, from Nulavio's signed repository.
+    .label = Automatic updates
+    .description = The system updates Nulavio, from Nulavio's signed repository. Here you choose whether it does so by itself.
 nulavio-updates-auto =
     .label = Update Nulavio automatically
     .description = Up to twice a day, in the background, Nulavio only. Turning it on or off asks for the administrator password.
