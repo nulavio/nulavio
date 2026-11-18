@@ -11,6 +11,14 @@
 
 No extension is installed silently: everything Nulavio adds is listed in the setup plan or requires an explicit command.
 
+## Optional extensions the documentation names
+
+Tools that are occasional, that an extension does as well without a privilege, and that Nulavio therefore does not build or bundle (the maintainer's decisions in the [feature review](../product/feature-review-2026-11.md) of #453). Nulavio installs none of them: the person installs one from addons.mozilla.org, like any user extension.
+
+| What | Extension | Why this one | Checked |
+|---|---|---|---|
+| Edit the text of a page in place (`document.designMode`), removed from Nulavio in #459 | [Toggle Document Design Mode (WebExtension)](https://addons.mozilla.org/firefox/addon/toggle-document-design-mode/) 1.0.1resigned1, GPL-3.0, by Andrei Petcu | Of the AMO extensions that turn `designMode` on, the one with the fewest permissions: `activeTab` only. Its toolbar button or Alt+Shift+D runs a 6-line script in the current tab that switches `document.designMode` on or off; nothing else (read from its XPI, SHA-256 `5df0971e…d733d`). Alt+Shift+D is none of Nulavio's keys or the password managers' ([password providers](password-providers.md#extension-shortcuts-and-nulavios-keys)) | 2026-11-17, AMO's API and its XPI; not installed on a Nulavio build |
+
 ## Facts verified on Firefox 158
 
 - Only Mozilla-signed extensions load on release builds (`xpinstall.signatures.required` cannot be relaxed there; Guard blocks attempts in user prefs).

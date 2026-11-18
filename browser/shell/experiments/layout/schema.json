@@ -18,13 +18,6 @@
         "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
       },
       {
-        "name": "setPageEditing", "type": "function", "async": true,
-        "parameters": [
-          { "name": "on", "type": "boolean", "optional": true },
-          { "name": "tabId", "type": "integer", "minimum": 0 }
-        ]
-      },
-      {
         "name": "setKeepAbove", "type": "function", "async": true,
         "parameters": [{ "name": "tabId", "type": "integer", "minimum": 0 }]
       },

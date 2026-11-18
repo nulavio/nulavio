@@ -207,7 +207,6 @@
         "toggle-immersive",
         "lock-profile",
         "copy-link-to-highlight",
-        "toggle-page-editing",
         "toggle-keep-above"
       ],
       "default": "_execute_action",
