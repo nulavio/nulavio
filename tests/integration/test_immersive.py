@@ -1424,10 +1424,11 @@ class ImmersiveTest(unittest.TestCase):
                     # The panel's edge, into the panel, a moment there, and back onto the page.
                     frames = self.walk(mirror([page, (w - 1, h // 2, 300), (w - 120, h // 2, 400), page]))
                     check("the panel's edge", frames, True, False, False)
-                    shown = [f["panel"] for f in frames if visible(f["panel"]) and f["panel"][4] == 1]
+                    # All the way in, at the frame margin of its side (the frames of its slide are in view only in part).
+                    shown = [f["panel"] for f in frames if visible(f["panel"]) and f["panel"][0] >= 0 and f["panel"][2] <= w]
                     self.assertTrue(shown, "the panel never came all the way")
-                    edge_gap = (w - shown[-1][2]) if start else shown[-1][0]
-                    self.assertEqual(edge_gap, frame, f"the panel shown is not at the frame margin: {shown[-1]}")
+                    gaps = {(w - box[2]) if start else box[0] for box in shown}
+                    self.assertEqual(gaps, {frame}, f"the panel shown is not at the frame margin: {shown}")
                     # The tab list's edge brings the tab list, never the panel.
                     frames = self.walk(mirror([page, (1, h // 2, 300), (100, h // 2, 300), page]))
                     check("the tab list's edge", frames, False, True, False)
@@ -1452,8 +1453,13 @@ class ImmersiveTest(unittest.TestCase):
             self.m.chrome(AWAY)
             self.assertTrue(harness.wait_until(self.panel_away, 6), f"{why}: the panel stayed: {self.m.chrome(PANEL)}")
 
-        # The keyboard in the panel (its page), then back in the page.
-        self.m.chrome("SidebarController.browser.focus();")
+        # The keyboard in the panel (the page in it), then back in the page.
+        self.m.chrome(
+            "const outer = SidebarController.browser; outer.contentWindow.focus();"
+            "(outer.contentDocument?.querySelector('browser') ?? outer).focus();"
+        )
+        inside = "return document.getElementById('sidebar-box').matches(':focus-within');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(inside), 5), "the keyboard did not go into the panel")
         stays("the keyboard in it")
         self.m.chrome("gBrowser.selectedBrowser.focus();")
         leaves("the keyboard back in the page")
