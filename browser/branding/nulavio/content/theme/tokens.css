@@ -94,7 +94,6 @@
   --nv-security-pattern-temporary: dashed;
   --nv-security-pattern-private: dotted;
   --nv-security-pattern-agent: double;
-  --nv-security-pattern-raw: diagonal-stripes;
   --nv-security-pattern-guard: solid;
   --nv-security-opacity: 1;
   --nv-security-duration: 0ms;
@@ -172,8 +171,6 @@
   --nv-color-security-private-meta: light-dark(#E8E2EE, #E8E2EE);
   --nv-color-security-agent-ink: light-dark(#0B1623, #F1F7F5);
   --nv-color-security-agent-on: light-dark(#F1F7F5, #0B1623);
-  --nv-color-security-raw-fill: light-dark(#A8323A, #E26D70);
-  --nv-color-security-raw-text: light-dark(#FFFFFF, #0B1623);
   --nv-color-security-guard-fill: light-dark(#FBEBD3, #3A2A12);
   --nv-color-security-guard-edge: light-dark(#8A5A10, #E7AE61);
   --nv-color-security-guard-text: light-dark(#8A5A10, #E7AE61);
@@ -201,7 +198,6 @@
   --nv-color-downloads-attention-warning: light-dark(#8A5A10, #E7AE61);
   --nv-color-route-vertical: light-dark(#0F7A68, #6FE0C5);
   --nv-color-fullscreen-ink: light-dark(#0B1623, #0B1623);
-  --nv-color-fullscreen-automation: light-dark(#E26D70, #E26D70);
   --nv-color-fullscreen-acting: light-dark(#6FE0C5, #6FE0C5);
   --nv-color-fullscreen-private: light-dark(#2A1745, #2A1745);
   --nv-color-fullscreen-foreground: light-dark(#F1F7F5, #F1F7F5);

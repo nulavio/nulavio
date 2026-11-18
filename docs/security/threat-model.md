@@ -113,7 +113,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preconditions | Renderer compromise (S4) plus a parent/IPC or kernel bug |
 | Boundary | TB2, kernel |
 | Impact | Equivalent to T-LOCAL (see S13) |
-| Preventive | Upstream sandbox; fast patching; **opt-in outer confinement** `nulavio run --confined` (bubblewrap): the browser sees only its profile and Downloads in the home folder, its writes elsewhere stay in memory, and the engine's sandbox is unchanged on Fedora ([spikes](phase5-spikes.md#bubblewrap)); on Ubuntu the `.deb`'s AppArmor profile keeps user namespaces available to the engine's sandbox, except inside the confined mode, where Ubuntu's bubblewrap policy removes them, so the confined mode refuses to start there (R46, [#282](https://github.com/nulavio/nulavio/issues/282)). Flatpak not now, SELinux module not adopted ([spikes](phase5-spikes.md)) |
+| Preventive | Upstream sandbox; fast patching; **opt-in outer confinement** `nulavio run --confined` (bubblewrap; from a source checkout only, not part of 1.0, #283, #466): the browser sees only its profile and Downloads in the home folder, its writes elsewhere stay in memory, and the engine's sandbox is unchanged on Fedora ([spikes](phase5-spikes.md#bubblewrap)); on Ubuntu the `.deb`'s AppArmor profile keeps user namespaces available to the engine's sandbox, except inside the confined mode, where Ubuntu's bubblewrap policy removes them, so the confined mode refuses to start there (R46, [#282](https://github.com/nulavio/nulavio/issues/282)). Flatpak not now, SELinux module not adopted ([spikes](phase5-spikes.md)) |
 | Detective | None reliable inside the browser |
 | Limitations | Out-of-browser containment is the only further layer |
 | Tests | Sandbox presence only (we cannot test escapes); `test_confine`, `test_confined` (what a confined browser can reach) |
@@ -344,7 +344,9 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_release_metadata`, `test_release_metadata_workflow`, `test_release_notes` |
 | Residual | Existing supply-chain and shared-account limits (S13, S19); this automation does not accept or reduce those risks by itself |
 
-### S21 — A program on the session bus posing as KWin (keep above, #170)
+### S21 — A program on the session bus posing as KWin (keep above, #170) — removed
+
+The item was removed before it shipped (#460, 2026-11-17): Nulavio no longer asks KWin for anything, so this scenario has no surface left. The table below is the record of what it was.
 
 | Field | |
 |---|---|

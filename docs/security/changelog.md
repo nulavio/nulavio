@@ -29,6 +29,14 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0-0.6)
 
+**Upstream**: Firefox 160.0.1, released by Mozilla 2026-11-17 14:06:53 UTC ([mfsa2026-130](https://www.mozilla.org/security/advisories/mfsa2026-130/), high). Urgency: urgent (an advisory of high impact; not exploited in the wild, no public exploit code). Source SHA-256 `7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d` (Mozilla's signed SHA256SUMS, subkey `827E658608679618CD349F93678E455D76767AA3`). The next package carries it as 160.0.1-0.1 (#444).
+
+**Timing** (to complete when it is published)
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| 2026-11-17 14:06:53 UTC | staged, by the `upstream` workflow, −14.6 h (#444 opened 2026-11-16 23:31 UTC); published seen +8.6 h | | | 24 h (2026-11-18 14:06 UTC): | 72 h (2026-11-20 14:06 UTC): |
+
 **New protections and their limits**:
 
 - Automatic updates (#241), packaging part: the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The browser's switch follows in the next change.
@@ -58,15 +66,12 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Removed**:
 
 - The Track A preview, Nulavio's profile on the distribution's Firefox (#464, ADR 0001 amendment of 2026-11-17): `nulavio setup` and `run` refuse an engine that is not the Nulavio build, and its chrome theme is gone. People who used it move to the RPM or APT package; their profiles stay where they were, and the README gives the steps to bring bookmarks and passwords. R1, R4, R5, R12, R13 and R17 closed with it.
+- The KRunner plugin (#461, ADR 0004 amendment of 2026-11-17): Nulavio no longer runs a session-bus service that any program of the user could call to open an address or a search in it, and R44 closes with it. The two files "Add to KRunner" wrote under the data folder (`krunner/dbusplugins/net.nulavio.krunner.desktop`, `dbus-1/services/net.nulavio.krunner.service`) stay until the person deletes them; the release notes give them.
 - Raw automation (#463, ADR 0007 amendment of 2026-11-17): no tool hands an agent the AI Workspace's WebDriver BiDi endpoint any more, so nothing an agent does through the bridge escapes the per-call policy and the activity record (a program running as the user can still reach the workspace's automation port, AI-T17 and AI-T18). The browser's internal pages, which only its opt-in opened, are offered to no agent; an opt-in recorded by an earlier version grants nothing, and the agents' page says once that it was removed. R42 closed.
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).
-
-**New ways the browser talks to the desktop**:
-
-- "Manter acima das outras janelas" on KDE Plasma (#170): on the person's action, Nulavio asks KWin over the session bus to run a one-line script that keeps that one window above the others. Whatever answers as KWin learns the profile's path and the window's id (R77).
 
 ## Nulavio 160.0-0.6 (Firefox 160.0), published 2026-11-16
 
