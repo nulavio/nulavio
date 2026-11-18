@@ -29,7 +29,9 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.1)
 
-Nothing yet.
+**New protections and their limits**:
+
+- Automatic updates (#241), packaging part: the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The browser's switch follows in the next change.
 
 ## Nulavio 160.0.1-0.1 (Firefox 160.0.1), published 2026-11-18
 
