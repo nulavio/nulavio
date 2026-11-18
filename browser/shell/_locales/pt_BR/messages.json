@@ -1403,6 +1403,7 @@
   "firstrunWelcomeLeadProfile": {"message": "Cada perfil tem as suas próprias escolhas: as próximas valem só para este. A faixa do topo mostra em qual você está e como ele está protegido."},
   "immersiveLabel": {"message": "Imersivo"},
   "commandToggleImmersive": {"message": "Ligar ou desligar o modo Imersivo"},
+  "commandOpenActions": {"message": "Procurar uma ação na barra de endereço"},
   "layoutImmersiveOn": {"message": "Imersivo ligado. A barra de endereço volta com Ctrl+L."},
   "layoutImmersiveOff": {"message": "Imersivo desligado."},
   "menuImmersive": {"message": "Imersivo"},

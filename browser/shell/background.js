@@ -249,6 +249,12 @@ if (browser.commands) {
       if (target) {
         browser.nulavioLayout.copyLinkToHighlight(target.id).catch(() => {}); // announced in the window
       }
+    } else if (command === "open-actions" && browser.nulavioLayout?.openActions) {
+      // #321: Ctrl+Alt+P opens the address bar in its actions mode (">"), where Nulavio's actions are listed.
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      if (target) {
+        browser.nulavioLayout.openActions(target.id).catch(console.error);
+      }
     } else if (command === "lock-profile") {
       lockAsked = Date.now();
       browser.action.openPopup(tab ? { windowId: tab.windowId } : {}).catch(console.error);
