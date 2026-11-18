@@ -269,6 +269,17 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(self.manifest["action"]["default_popup"], "profiles/popup.html")
         self.assertEqual(self.manifest["commands"]["_execute_action"]["suggested_key"]["default"], "Alt+Shift+P")
 
+    def test_the_first_run_steps_are_the_same_in_the_api_and_the_module(self):
+        """ "Usar os padrões" sends every step at once: a schema that allows fewer than there are refuses it, and the
+        first run never ends (#241 added "updates", and maxItems had stayed at 7)."""
+        steps = json.loads(
+            re.search(r"FIRSTRUN_STEPS = Object\.freeze\((\[.*?\])\)", module_text("NulavioPrivacy.sys.mjs")).group(1)
+        )
+        schema = json.loads((SHELL / "experiments" / "privacy" / "schema.json").read_text(encoding="utf-8"))[0]
+        param = next(f for f in schema["functions"] if f["name"] == "firstRunDone")["parameters"][0]
+        self.assertEqual(param["items"]["enum"], steps)
+        self.assertEqual(param["maxItems"], len(steps))
+
     def test_every_module_error_has_a_message(self):
         en = locale("en")
         text = "".join(module_text(n.name) for n in MODULES.glob("*.sys.mjs"))
