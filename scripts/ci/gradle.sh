@@ -10,6 +10,9 @@
 #
 #   scripts/ci/gradle.sh <gradle argument>...
 #
+# NULAVIO_MAVEN_MIRROR: an https mirror of Maven Central that Gradle asks before Maven Central itself
+# (scripts/ci/maven-mirror.init.gradle, #535); unset, Gradle reads Maven Central only. When the mirror is the
+# repository that refused a run, the next runs go to Maven Central without it.
 # NULAVIO_GRADLE_RETRY_WAITS: the waits in seconds before each new run (default "120 300": three
 # runs at most). NULAVIO_GRADLEW: the Gradle wrapper (default android/gradlew; the tests use a stub).
 set -euo pipefail
@@ -18,6 +21,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 gradlew=${NULAVIO_GRADLEW:-$root/android/gradlew}
 read -r -a waits <<< "${NULAVIO_GRADLE_RETRY_WAITS-120 300}"
+mirror=${NULAVIO_MAVEN_MIRROR-}
 log=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gradle.XXXXXX")
 trap 'rm -f "$log"' EXIT
 
@@ -28,7 +32,12 @@ refused='Received status code (429|5[0-9][0-9]) from server|Server returned HTTP
 attempt=1
 while :; do
     status=0
-    "$gradlew" -p "$root/android" --no-daemon "$@" 2>&1 | tee "$log" || status=$?
+    through=()
+    if [[ -n $mirror ]]; then
+        echo "gradle.sh: Maven Central through the mirror $mirror first"
+        through=(--init-script "$root/scripts/ci/maven-mirror.init.gradle")
+    fi
+    NULAVIO_MAVEN_MIRROR=$mirror "$gradlew" -p "$root/android" --no-daemon "${through[@]}" "$@" 2>&1 | tee "$log" || status=$?
     (( status == 0 )) && exit 0
     if grep -q 'Dependency verification failed' "$log"; then
         exit "$status" # an artifact differs from its pinned checksum: never fetched again
@@ -40,7 +49,12 @@ while :; do
     host=$(grep -Eo "Could not (GET|HEAD) 'https?://[^/']+" "$log" | head -n 1 | sed -E "s/^Could not (GET|HEAD) '//" || true)
     why=$(grep -Eo "$refused" "$log" | head -n 1 || true)
     what="${host:+$host: }$why"
-    echo "::warning title=Gradle::a repository refused the build (${what}); running Gradle again in ${wait} s (run $((attempt + 1)) of $(( ${#waits[@]} + 1 )))"
+    then=
+    if [[ -n $mirror && -n $host && $mirror == "$host"/* ]]; then
+        mirror= # the mirror refused: Maven Central directly from now on
+        then=", without the mirror"
+    fi
+    echo "::warning title=Gradle::a repository refused the build (${what}); running Gradle again in ${wait} s${then} (run $((attempt + 1)) of $(( ${#waits[@]} + 1 )))"
     sleep "$wait"
     attempt=$((attempt + 1))
 done

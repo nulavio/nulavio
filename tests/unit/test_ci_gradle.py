@@ -1,4 +1,5 @@
-"""scripts/ci/gradle.sh: the Companion's Gradle steps run again only when a repository refused them (#516)."""
+"""scripts/ci/gradle.sh: the Companion's Gradle steps run again only when a repository refused them (#516), and in CI
+read Maven Central through a mirror first (#535)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "ci" / "gradle.sh"
+INIT = ROOT / "scripts" / "ci" / "maven-mirror.init.gradle"
+MIRROR = "https://maven-central.storage-download.googleapis.com/maven2/"
 
 RATE_LIMITED = """FAILURE: Build failed with an exception.
 > Could not resolve all artifacts for configuration 'classpath'.
@@ -23,13 +26,20 @@ RATE_LIMITED = """FAILURE: Build failed with an exception.
 VERIFICATION = RATE_LIMITED + "Dependency verification failed for configuration ':app:releaseRuntimeClasspath'\n"
 LINT = "FAILURE: Build failed with an exception.\n> Lint found errors in the project; aborting build.\n"
 NOT_FOUND = "> Could not resolve com.example:gone:1.0.\n   > Could not find com.example:gone:1.0.\n"
+MIRROR_REFUSED = """FAILURE: Build failed with an exception.
+> Could not resolve all artifacts for configuration 'classpath'.
+   > Could not resolve com.google.code.gson:gson:2.11.0.
+      > Could not GET 'https://maven-central.storage-download.googleapis.com/maven2/com/google/code/gson/gson/2.11.0/gson-2.11.0.pom'.
+         > Received status code 503 from server: Service Unavailable
+"""
 
 
 class GradleRetryTest(unittest.TestCase):
-    def run_with(self, *outputs: str, waits: str | None = "0 0") -> tuple[int, int, str]:
+    def run_with(self, *outputs: str, waits: str | None = "0 0", mirror: str | None = None) -> tuple[int, int, str]:
         """Run the script with a gradlew that prints each output in turn and fails with 7, then succeeds once they run
-        out. `waits` None leaves the script's default. Returns the exit code, how many times gradlew ran, and what the
-        script printed; `self.slept` is the waits it asked for (a stub `sleep` records them)."""
+        out. `waits` None leaves the script's default; `mirror` is NULAVIO_MAVEN_MIRROR (None: unset). Returns the exit
+        code, how many times gradlew ran, and what the script printed; `self.slept` is the waits it asked for (a stub
+        `sleep` records them), `self.runs` each run's arguments and the mirror Gradle was given."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             for i, text in enumerate(outputs):
@@ -38,7 +48,8 @@ class GradleRetryTest(unittest.TestCase):
             stub.write_text(
                 "#!/usr/bin/env bash\n"
                 f'cd "{tmp}"\n'
-                'n=$(cat count 2>/dev/null || echo 0); echo $((n + 1)) > count; echo "args: $*" >> args\n'
+                'n=$(cat count 2>/dev/null || echo 0); echo $((n + 1)) > count\n'
+                'echo "args: $* mirror=${NULAVIO_MAVEN_MIRROR-unset}" >> args\n'
                 '[[ -f out$n ]] || { echo "BUILD SUCCESSFUL"; exit 0; }\n'
                 'cat out$n >&2; exit 7\n'
             )  # fmt: skip
@@ -50,13 +61,19 @@ class GradleRetryTest(unittest.TestCase):
             env = {**os.environ, "NULAVIO_GRADLEW": str(stub), "RUNNER_TEMP": tmp}
             env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
             env.pop("NULAVIO_GRADLE_RETRY_WAITS", None)
+            env.pop("NULAVIO_MAVEN_MIRROR", None)
+            if mirror is not None:
+                env["NULAVIO_MAVEN_MIRROR"] = mirror
             if waits is not None:
                 env["NULAVIO_GRADLE_RETRY_WAITS"] = waits
             done = subprocess.run([str(SCRIPT), "-q", ":nv1:test"], env=env, capture_output=True, text=True)
             count = int((tmp_path / "count").read_text())
             slept = tmp_path / "slept"
             self.slept = slept.read_text().split() if slept.exists() else []
-            self.assertIn(f"-p {ROOT / 'android'} --no-daemon -q :nv1:test", (tmp_path / "args").read_text())
+            self.runs = (tmp_path / "args").read_text().splitlines()
+            for run in self.runs:
+                android = re.escape(str(ROOT / "android"))
+                self.assertRegex(run, rf"^args: -p {android} --no-daemon (--init-script \S+ )?-q :nv1:test ")
             self.assertEqual(sorted(p.name for p in tmp_path.glob("gradle.*")), [], "the log is left behind")
             return done.returncode, count, done.stdout
 
@@ -102,6 +119,67 @@ class GradleRetryTest(unittest.TestCase):
     def test_success_at_once(self):
         self.assertEqual(self.run_with()[:2], (0, 1))
 
+    def test_without_a_mirror_gradle_reads_maven_central_only(self):
+        self.run_with()
+        self.assertEqual(self.runs, [f"args: -p {ROOT / 'android'} --no-daemon -q :nv1:test mirror="])
+        self.run_with(mirror="")
+        self.assertNotIn("--init-script", self.runs[0])
+
+    def test_with_a_mirror_gradle_gets_the_init_script_and_the_url(self):
+        code, count, out = self.run_with(mirror=MIRROR)
+        self.assertEqual((code, count), (0, 1))
+        run = f"args: -p {ROOT / 'android'} --no-daemon --init-script {INIT} -q :nv1:test mirror={MIRROR}"
+        self.assertEqual(self.runs, [run])
+        self.assertIn(f"through the mirror {MIRROR} first", out)
+
+    def test_when_the_mirror_refuses_the_next_runs_go_to_maven_central(self):
+        code, count, out = self.run_with(MIRROR_REFUSED, RATE_LIMITED, mirror=MIRROR)
+        self.assertEqual((code, count), (0, 3))
+        self.assertIn("--init-script", self.runs[0])
+        for run in self.runs[1:]:
+            self.assertNotIn("--init-script", run)
+            self.assertTrue(run.endswith(" mirror="), run)
+        warnings = [line for line in out.splitlines() if line.startswith("::warning title=Gradle::")]
+        self.assertIn("maven-central.storage-download.googleapis.com: Received status code 503", warnings[0])
+        self.assertIn("without the mirror", warnings[0])
+        self.assertNotIn("without the mirror", warnings[1])
+
+    def test_when_maven_central_refuses_the_mirror_stays(self):
+        self.assertEqual(self.run_with(RATE_LIMITED, mirror=MIRROR)[:2], (0, 2))
+        self.assertEqual([("--init-script" in run) for run in self.runs], [True, True])
+
+    def test_a_failed_verification_is_not_retried_with_the_mirror_either(self):
+        self.assertEqual(self.run_with(VERIFICATION, mirror=MIRROR)[:2], (7, 1))
+
+
+class MirrorInitScriptTest(unittest.TestCase):
+    """What the init script does is tried with Gradle in the pull request (#535); this checks what must not drift."""
+
+    text = INIT.read_text(encoding="utf-8")
+
+    def test_it_puts_the_mirror_right_before_maven_central_in_both_lists(self):
+        self.assertIn("settings.pluginManagement.repositories", self.text)
+        self.assertIn("settings.dependencyResolutionManagement.repositories", self.text)
+        self.assertIn("def central = 'https://repo.maven.apache.org/maven2/'", self.text)
+        self.assertIn("repositories.add(at, added)", self.text)
+        self.assertIn('throw new GradleException("maven-mirror.init.gradle: no Maven Central', self.text)
+
+    def test_it_takes_only_an_https_url(self):
+        self.assertIn("System.getenv('NULAVIO_MAVEN_MIRROR')", self.text)
+        self.assertIn("mirror ==~ /https:", self.text)
+
+    def test_it_touches_nothing_but_repositories(self):
+        code = "\n".join(line for line in self.text.splitlines() if not line.lstrip().startswith("//"))
+        for word in ("verification", "Verification", "startParameter", "offline", "refresh", "allowInsecureProtocol",
+                     "content {", "exclusiveContent", "metadataSources"):  # fmt: skip
+            self.assertNotIn(word, code)
+
+    def test_local_f_droid_and_release_builds_do_not_use_it(self):
+        for path in [*(ROOT / "android").rglob("*.kts"), *(ROOT / "scripts" / "release").iterdir()]:
+            if path.is_file():
+                self.assertNotIn("maven-mirror", path.read_text(encoding="utf-8", errors="replace"), path)
+                self.assertNotIn("NULAVIO_MAVEN_MIRROR", path.read_text(encoding="utf-8", errors="replace"), path)
+
 
 class WorkflowTest(unittest.TestCase):
     text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
@@ -116,6 +194,10 @@ class WorkflowTest(unittest.TestCase):
             ],
         )
         self.assertNotIn("android/gradlew", self.text)
+
+    def test_both_gradle_steps_read_maven_central_through_the_mirror(self):
+        steps = re.findall(r"(?m)^\s+env:\n\s+NULAVIO_MAVEN_MIRROR: (\S+) #.*\n\s+run: .*scripts/ci/gradle\.sh ", self.text)
+        self.assertEqual(steps, [MIRROR, MIRROR])
 
     def test_nothing_turns_dependency_verification_off_or_refetches(self):
         script = SCRIPT.read_text(encoding="utf-8")

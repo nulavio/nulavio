@@ -1,0 +1,34 @@
+// Gradle init script for the Companion's CI builds only (scripts/ci/gradle.sh, #535): Gradle asks a mirror of
+// Maven Central (NULAVIO_MAVEN_MIRROR, an https URL) for what it would ask Maven Central, and Maven Central itself
+// only for what the mirror does not have. GitHub's runners share their egress addresses, and Maven Central answers
+// them with 429 Too Many Requests for long enough that waiting does not help (#516, #535).
+//
+// Only where the bytes come from changes. Every artifact and POM is still checked against
+// android/gradle/verification-metadata.xml, whichever repository served it, and the lockfiles still fix the
+// versions. android/settings.gradle.kts is not changed: local, F-Droid and release builds read Maven Central as
+// before.
+//
+// The mirror goes right before Maven Central in each list of repositories that has it, so Google's Maven repository
+// still comes first for the Android artifacts. A list without Maven Central stops the build, so a change to the
+// settings cannot leave the mirror out unnoticed.
+
+def mirror = System.getenv('NULAVIO_MAVEN_MIRROR')
+if (!(mirror ==~ /https:\/\/[A-Za-z0-9.-]+\/[A-Za-z0-9._\/-]*\//)) {
+    throw new GradleException("maven-mirror.init.gradle: NULAVIO_MAVEN_MIRROR must be an https URL ending in /, not '${mirror}'")
+}
+def central = 'https://repo.maven.apache.org/maven2/'
+
+settingsEvaluated { settings ->
+    [plugins: settings.pluginManagement.repositories, dependencies: settings.dependencyResolutionManagement.repositories].each { what, repositories ->
+        def at = repositories.findIndexOf { it instanceof MavenArtifactRepository && it.url.toString() == central }
+        if (at < 0) {
+            throw new GradleException("maven-mirror.init.gradle: no Maven Central among the ${what} repositories ${repositories*.name}")
+        }
+        def added = repositories.maven {
+            name = 'MavenCentralMirror'
+            url = mirror
+        }
+        repositories.remove(added)
+        repositories.add(at, added)
+    }
+}
