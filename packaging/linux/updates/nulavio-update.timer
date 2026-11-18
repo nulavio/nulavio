@@ -1,0 +1,15 @@
+# Nulavio's automatic updates (#241). Shipped enabled by the package's own timers.target.wants link, so no script
+# runs at install; it does nothing until the person turns updates on in Nulavio, which creates the file below
+# (/usr/libexec/nulavio/automatic-updates, through polkit, with the administrator's password).
+[Unit]
+Description=Check for a new version of Nulavio
+Documentation=https://nulavio.net/baixar/
+ConditionPathExists=/etc/nulavio/automatic-updates
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=12h
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target
