@@ -197,6 +197,28 @@
       ]
     },
     {
+      "id": "panelOpposite",
+      "kind": "cosmetic",
+      "prefs": [
+        "nulavio.sidebar.panelOpposite"
+      ],
+      "prefType": "bool",
+      "values": [
+        false,
+        true
+      ],
+      "prefValues": [
+        null,
+        true
+      ],
+      "default": false,
+      "writer": "NulavioPersonalise",
+      "labelKey": "panelOppositeLabel",
+      "ui": [
+        "settings/native/panes.mjs#nulavio-panel-opposite"
+      ]
+    },
+    {
       "id": "shortcuts",
       "kind": "command",
       "prefs": [],
