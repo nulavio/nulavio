@@ -39,8 +39,8 @@ Decided on 2026-11-18 (#367) from four `perf.yml` runs on GitHub's runner, kept 
 | Measure | Spread of 5 runs (coefficient of variation) | The same comparison twice (0.6 against 0.5) | Largest change between releases with no change meant to affect it | Widest 95 % interval |
 |---|---|---|---|---|
 | First start | 1–10 %, one run 23 % (a single slow start) | +1.1 %, +4.1 % | +4.1 % | −7 … +55 % |
-| Second start | 2–9 % | −3.5 %, −1.1 % | −3.5 % | −14 … +14 % |
-| Memory, 1 and 10 tabs | 0.1–4.7 % | −0.1 %, +0.1 % | −4.7 % | ±8.7 % |
+| Second start | 2–9 % | −3.5 %, −1.1 % | −3.5 % | −10.3 … +14.0 % |
+| Memory, 1 and 10 tabs | 0.1–4.7 % | −0.1 %, +0.1 % | −4.7 % | −8.4 … +8.7 % |
 | Speedometer 3 | 1–7 % | −1.3 %, +3.5 % | +3.5 % | −7.6 … +11.5 % |
 
 Between runs on different days the absolute numbers move a lot (the first start of 0.6: 1246 ms, then 906 ms; Speedometer 12.2, then 15.6): the runner's hardware differs from run to run. Only the change against the release before, measured in the same run, is compared.
@@ -53,7 +53,7 @@ Between runs on different days the absolute numbers move a lot (the first start 
 | Memory, 1 and 10 tabs | +10 % |
 | Speedometer 3 | −10 % |
 
-That is two to three times the largest change seen with no change meant. The interval alone is not enough: 0.4 against 0.3 shows a first start 2.3 % slower with an interval of +0.5 … +5.0 %, the runner's own drift. The four runs above all pass. The thresholds are looked at again when the gate fails on a release with no change that explains it, or when ten releases have run.
+That is two to four times the largest change seen with no change meant (memory 2.1×, Speedometer 2.9×, first and second start 3.7× and 4.3×). A measure that was not measured, or has no interval, fails in `perf.yml` too (`--strict`): it always measures all five, so a missing one means the measuring broke. The interval alone is not enough: 0.4 against 0.3 shows a first start 2.3 % slower with an interval of +0.5 … +5.0 %, the runner's own drift. The four runs above all pass. The thresholds are looked at again when the gate fails on a release with no change that explains it, or when ten releases have run.
 
 For 1.0, the [release criterion](../product/release-criteria.md#scope-of-10-decided-2026-11-04) is this gate: the 1.0 candidate's run against the release before it passes it, or the reason is recorded.
 

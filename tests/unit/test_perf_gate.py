@@ -54,12 +54,35 @@ class PerfGateTest(unittest.TestCase):
         found = self.verdict(data)
         self.assertEqual((found["pss_mib_1_tabs"], found["speedometer3_score"]), ("missing", "missing"))
 
-    def test_the_command_exits_1_on_a_failure_and_names_it(self):
+    def test_at_the_threshold_it_passes_and_a_fall_whose_interval_holds_0_passes(self):
+        found = self.verdict(results(startup_first_ms=(0.15, (0.1, 0.2)), speedometer3_score=(-0.2, (-0.3, 0.01))))
+        self.assertEqual(set(found.values()), {"pass"})
+
+    def gate(self, data: dict, *flags: str) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "perf.json"
-            path.write_text(json.dumps(results(pss_mib_1_tabs=(0.15, (0.11, 0.2)))))
-            done = subprocess.run([sys.executable, "-I", str(ROOT / "scripts" / "perf" / "gate.py"), str(path)],
+            path.write_text(json.dumps(data))
+            return subprocess.run([sys.executable, "-I", str(ROOT / "scripts" / "perf" / "gate.py"), *flags, str(path)],
                                   capture_output=True, text=True)  # fmt: skip
+
+    def test_strict_fails_on_a_measure_not_measured(self):
+        data = results()
+        data["intervals"]["speedometer3_score"] = None
+        self.assertEqual(self.gate(data).returncode, 0)
+        done = self.gate(data, "--strict")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("- **not judged**: speedometer3_score", done.stdout)
+
+    def test_the_measures_are_the_ones_run_py_writes(self):
+        """A name changed in run.py would leave the gate with nothing to judge (--strict then fails every run)."""
+        source = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")
+        for name in gate.THRESHOLDS:
+            with self.subTest(name=name):
+                written = f'"{name}"' in source or (name.startswith("pss_mib_") and 'f"pss_mib_{count}_tabs"' in source)
+                self.assertTrue(written, name)
+
+    def test_the_command_exits_1_on_a_failure_and_names_it(self):
+        done = self.gate(results(pss_mib_1_tabs=(0.15, (0.11, 0.2))))
         self.assertEqual(done.returncode, 1)
         self.assertIn("- **worse**: pss_mib_1_tabs: +15.0%", done.stdout)
 
@@ -72,8 +95,11 @@ class PerfGateTest(unittest.TestCase):
 
     def test_perf_yml_runs_the_gate_after_measuring_and_still_keeps_the_json(self):
         workflow = (ROOT / ".github" / "workflows" / "perf.yml").read_text(encoding="utf-8")
-        self.assertIn("python3 -I scripts/perf/gate.py perf/perf.json", workflow)
-        self.assertIn("steps.measure.outcome == 'success'", workflow)
+        step = workflow[workflow.index("- name: The gate (#367)") : workflow.index("actions/upload-artifact")]
+        self.assertIn("python3 -I scripts/perf/gate.py --strict perf/perf.json", step)
+        self.assertIn("steps.measure.outcome == 'success'", step)
+        # GitHub's default shell has no pipefail: the pipe into tee would end with tee's status and pass.
+        self.assertRegex(step, r"(?m)^\s+shell: bash\b")
         self.assertLess(workflow.index("scripts/perf/gate.py"), workflow.index("actions/upload-artifact"))
         upload = workflow[workflow.index("actions/upload-artifact") :]
         self.assertIn("if: always()", upload.split("with:")[0])

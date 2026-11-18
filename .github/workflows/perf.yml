@@ -70,9 +70,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: The gate (#367), each measure against its threshold; a failure is the maintainer's to read
         if: ${{ !cancelled() && steps.measure.outcome == 'success' }}
+        shell: bash # -o pipefail: without it the pipe ends with tee's status and a failed gate passes
         run: |
           { printf '\n### Gate: each measure against its threshold (docs/architecture/performance.md, Thresholds)\n\n'
-            python3 -I scripts/perf/gate.py perf/perf.json; } | tee -a "$GITHUB_STEP_SUMMARY"
+            python3 -I scripts/perf/gate.py --strict perf/perf.json; } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

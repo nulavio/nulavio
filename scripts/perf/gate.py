@@ -5,7 +5,10 @@ change is worse than its threshold. The thresholds are two to three times the la
 same comparison on GitHub's runner (docs/architecture/performance.md, "Thresholds"). Prints one line per measure for the
 job summary and exits 1 when one fails; the release is already published, and the maintainer reads the result.
 
-    python3 -I scripts/perf/gate.py perf/perf.json
+    python3 -I scripts/perf/gate.py [--strict] perf/perf.json
+
+--strict (perf.yml): a measure that was not measured, or has no interval, fails too. perf.yml always measures all of
+them, so a missing one means the measuring broke or a name changed, which must not leave the gate silent.
 """
 
 from __future__ import annotations
@@ -47,11 +50,19 @@ def verdicts(results: dict) -> list[tuple[str, str, str]]:
 
 
 def main(argv: list[str]) -> int:
-    results = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+    strict = "--strict" in argv[1:]
+    paths = [a for a in argv[1:] if a != "--strict"]
+    if len(paths) != 1:
+        print("usage: gate.py [--strict] perf.json", file=sys.stderr)
+        return 2
+    results = json.loads(Path(paths[0]).read_text(encoding="utf-8"))
     found = verdicts(results)
+    failing = {"fail", "missing"} if strict else {"fail"}
     for _name, verdict, words in found:
-        print(f"- {'**worse**' if verdict == 'fail' else verdict}: {words}")
-    return 1 if any(verdict == "fail" for _name, verdict, _words in found) else 0
+        print(
+            f"- {'**worse**' if verdict == 'fail' else '**not judged**' if verdict == 'missing' and strict else verdict}: {words}"
+        )
+    return 1 if any(verdict in failing for _name, verdict, _words in found) else 0
 
 
 if __name__ == "__main__":
