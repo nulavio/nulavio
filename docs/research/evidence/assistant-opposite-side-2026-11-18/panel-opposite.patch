@@ -1,0 +1,22 @@
+--- a/browser/components/sidebar/browser-sidebar.js
++++ b/browser/components/sidebar/browser-sidebar.js
+@@ -1021,6 +1021,19 @@
+     [...browser.children].forEach((node, i, children) => {
+       node.style.order = this._positionStart ? i + 1 : children.length - i;
+     });
++    // Nulavio (#249): the panel and its splitter on the other side of the
++    // page, while the launcher and the vertical tabs stay where they are.
++    const opposite = Services.prefs.getBoolPref(
++      "nulavio.sidebar.panelOpposite",
++      false
++    );
++    if (opposite) {
++      const last = browser.children.length + 1;
++      const end = this._positionStart ? last : 0;
++      this._splitter.style.order = this._positionStart ? last - 1 : 1;
++      this._box.style.order = end;
++    }
++    document.documentElement.toggleAttribute("nulavio-panel-opposite", opposite);
+     let sidebarContainer = document.getElementById("sidebar-container");
+     let sidebarMain = document.querySelector("sidebar-main");
+ 
