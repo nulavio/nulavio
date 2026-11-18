@@ -288,15 +288,15 @@ class PrivilegedApiTest(unittest.TestCase):
             "locked",
             "name-taken",
             "no-window",
-            "not-found",
+            "not-found",  # not on the Vault's methods page: "the list was refreshed" (#519)
             "unknown-provider",
         }
     )
 
     def test_no_module_throws_another_modules_error_code(self):
-        """One code is one message: a code two modules throw shows one module's words for the other's error (#486,
-        #495: the search chooser's "the list was refreshed" for a new profile's search, the delete page's words
-        for locking the profile in use)."""
+        """One code is one message: a code two modules throw shows one module's words for the other's error (#486;
+        #495 found the delete page's words for locking the profile in use). It only sees `fail("code")`: a code a
+        module passes through from another, as NulavioProfiles did with NulavioSearch's (#495), is not seen."""
         modules: dict[str, set[str]] = {}
         for path in MODULES.glob("*.sys.mjs"):
             for code in re.findall(r'fail\("([a-z-]+)"', path.read_text(encoding="utf-8")):
