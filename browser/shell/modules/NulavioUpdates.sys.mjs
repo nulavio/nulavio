@@ -17,6 +17,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
 export const FLAG = "/etc/nulavio/automatic-updates";
 export const HELPER = "/usr/libexec/nulavio/automatic-updates";
 const PKEXEC = "/usr/bin/pkexec";
+// A prompt left open does not hold the switch for ever: after this, the call is ended and nothing changed.
+const PROMPT_TIMEOUT_MS = 5 * 60 * 1000;
 // Where the RPM (lib64) and the .deb (lib) install the engine: only those installs carry the timer.
 const PACKAGED = Object.freeze(["/usr/lib64/nulavio", "/usr/lib/nulavio"]);
 
@@ -51,7 +53,9 @@ export const NulavioUpdates = {
     const gre = Services.dirsvc.get("GreD", Ci.nsIFile).path;
     const [helper, pkexec, on] = await Promise.all([IOUtils.exists(HELPER), IOUtils.exists(PKEXEC), IOUtils.exists(FLAG)]);
     const available = PACKAGED.includes(gre) && helper;
-    return { available, on: available && on, canAsk: available && pkexec, command: `sudo ${HELPER} on` };
+    const isOn = available && on;
+    // What to run in a terminal instead, for the change the switch would make.
+    return { available, on: isOn, canAsk: available && pkexec, command: `sudo ${HELPER} ${isOn ? "off" : "on"}` };
   },
 
   /**
@@ -67,21 +71,38 @@ export const NulavioUpdates = {
     if (!before.canAsk) {
       fail("no-polkit");
     }
+    // --disable-internal-agent: without a polkit agent in the session pkexec would otherwise ask in the terminal
+    // the browser was started from, and wait there.
     const proc = await lazy.Subprocess.call({
       command: PKEXEC,
-      arguments: [HELPER, on ? "on" : "off"],
+      arguments: ["--disable-internal-agent", HELPER, on ? "on" : "off"],
       stderr: "pipe",
     });
-    await proc.stdin.close();
-    await Promise.all([drain(proc.stdout), drain(proc.stderr)]);
-    const { exitCode } = await proc.wait();
-    // pkexec: 126 when the person dismissed the prompt or the password was wrong, 127 when it could not
-    // ask at all (no polkit agent in the session) or was not allowed.
+    let timedOut = false;
+    const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+    timer.initWithCallback(() => {
+      timedOut = true;
+      proc.kill();
+    }, PROMPT_TIMEOUT_MS, Ci.nsITimer.TYPE_ONE_SHOT);
+    let exitCode;
+    let stderr = "";
+    try {
+      await proc.stdin.close();
+      [, stderr] = await Promise.all([drain(proc.stdout), drain(proc.stderr)]);
+      ({ exitCode } = await proc.wait());
+    } finally {
+      timer.cancel();
+    }
+    if (timedOut) {
+      fail("timed-out");
+    }
+    // pkexec (man pkexec): 126 when the person dismissed the authentication dialog; 127 when not authorized, when
+    // authentication failed or could not happen (no polkit agent: "No authentication agent"), or on an error.
     if (exitCode === 126) {
       fail("cancelled");
     }
     if (exitCode === 127) {
-      fail("no-polkit");
+      fail(/no authentication agent/i.test(stderr) ? "no-polkit" : "not-authorized");
     }
     const after = await this.state();
     if (exitCode !== 0 || after.on !== Boolean(on)) {

@@ -2919,7 +2919,7 @@
     setting({
       id: "nulavio-updates-command",
       setup: updates.watch,
-      visible: () => Boolean(updatesNow()?.available && !updatesNow().canAsk && !updatesNow().on),
+      visible: () => Boolean(updatesNow()?.available && !updatesNow().canAsk), // its command turns them on or off
       getControlConfig: config => ({
         ...config,
         controlAttrs: { ...config.controlAttrs, type: "info", message: `${msg("updatesByHand")} ${updatesNow()?.command ?? ""}` },

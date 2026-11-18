@@ -867,9 +867,15 @@ async function firstRun() {
     updatesOn.disabled = true;
     try {
       await connect.setAutomaticUpdates(true);
-      await advance("updates");
+      updatesOn.hidden = true; // asked and done: shown again ("Voltar"), the card says so instead of asking again
+      document.getElementById("firstrun-updates-said").hidden = false;
+      if (current === "updates") {
+        await advance("updates"); // a prompt answered late, after the person went on, moves nothing
+      }
     } catch (e) {
-      error.textContent = errorText(e);
+      if (current === "updates") {
+        error.textContent = errorText(e);
+      }
       if (e?.message === "no-polkit") {
         updatesByHand(updates);
         updatesOn.hidden = true;
