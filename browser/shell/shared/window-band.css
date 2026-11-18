@@ -632,7 +632,7 @@
         inline-size: var(--nv-space-2);
         z-index: calc(var(--nv-zIndex-band) - 3);
       }
-      &[sidebar-positionend] #browser > #nulavio-immersive-panel-edge {
+      &[sidebar-positionend] #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
         inset-inline: 0 auto;
       }
       #browser > #sidebar-box {
