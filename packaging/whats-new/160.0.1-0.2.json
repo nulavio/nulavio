@@ -6,7 +6,8 @@
   "pt-BR": {
     "summary": "Atualizações automáticas do Nulavio, ligadas por você: duas vezes por dia o sistema instala a versão nova do pacote, sem esperar o navegador.",
     "breaking": [
-      "Enviar link para dispositivo, no menu de um link, saiu: a Integração do Plasma com o navegador tem o próprio envio para o KDE Connect. A linha do KDE Connect em Integrações continua mostrando os aparelhos ao alcance."
+      "Enviar link para dispositivo, no menu de um link, saiu: a Integração do Plasma com o navegador tem o próprio envio para o KDE Connect. A linha do KDE Connect em Integrações continua mostrando os aparelhos ao alcance.",
+      "Se você escreveu a própria lista de proteções em about:config (privacy.fingerprintingProtection.overrides), acrescente +ScreenSizeConstant: sem essa entrada, os sites deixam de ler a tela de 1920 por 1080 e leem o tamanho da sua. Quem nunca mexeu nisso não precisa fazer nada."
     ],
     "new": [
       "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar.",
@@ -16,7 +17,8 @@
   "en-US": {
     "summary": "Automatic updates of Nulavio, turned on by you: twice a day the system installs the new version of the package, without waiting for the browser.",
     "breaking": [
-      "Send Link to Device, in a link's menu, is gone: Plasma Browser Integration has its own KDE Connect sharing. The KDE Connect row in Integrations still shows the devices in reach."
+      "Send Link to Device, in a link's menu, is gone: Plasma Browser Integration has its own KDE Connect sharing. The KDE Connect row in Integrations still shows the devices in reach.",
+      "If you wrote your own list of protections in about:config (privacy.fingerprintingProtection.overrides), add +ScreenSizeConstant: without that entry, sites no longer read the 1920 by 1080 screen, and read the size of yours. If you never changed it, there is nothing to do."
     ],
     "new": [
       "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on.",

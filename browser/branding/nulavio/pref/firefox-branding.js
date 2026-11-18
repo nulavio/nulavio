@@ -78,9 +78,10 @@ pref("browser.safebrowsing.downloads.remote.enabled", false);
 //     per site, and every document reads a 1920 by 1080 screen. An engine
 //     without the patch does not know the names and skips them.
 // A site the person exempts from tracking protection is exempt from these too.
-// The Shell's own per-tab screen size (NulavioFingerprinting.sys.mjs) is only
-// for a set a person wrote without +ScreenSizeConstant. Language and window size are left as they
-// are: changing them breaks sites (docs/security/hardening.md).
+// Nothing else gives pages the 1920 by 1080 screen: a set written without
+// +ScreenSizeConstant reads the display's size (#468, ADR 0016). Language and
+// window size are left as they are: changing them breaks sites
+// (docs/security/hardening.md).
 pref("privacy.fingerprintingProtection.overrides", "-EfficientCanvasRandomization,+WebGLRendererConstant,+WebGLVendorSanitize,+WindowOuterSize,+WindowScreenXY,+WindowInnerScreenXY,+MouseEventScreenPoint,+UseStandinsForNativeColors,+DeviceSensors,+NavigatorHWConcurrency,+JSDateTimeUTC,+CSSPrefersReducedMotion,+CSSPrefersContrast,+CSSPrefersReducedTransparency,+AudioRandomization,+ScreenSizeConstant");
 
 // Follow the desktop's language among the locales packaged in the build
