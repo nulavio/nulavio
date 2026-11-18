@@ -129,8 +129,10 @@ if (!window.nvTraceMove) {
 }
 const box = id => {
   const e = document.getElementById(id), b = e.getBoundingClientRect(), s = getComputedStyle(e);
+  // The bounds as they are, and last the right side as far as the window goes: a part past the right edge (#346, the
+  // tab list on the right) is out of view as one past the left edge is, and a page that grows past it still moved.
   return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), +s.opacity,
-          e.checkVisibility() ? 1 : 0];
+          e.checkVisibility() ? 1 : 0, Math.round(Math.min(b.right, innerWidth))];
 };
 const tick = () => {
   if (!t.on) return;
@@ -183,7 +185,8 @@ def pointer_path(points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]
 
 
 def visible(part: list) -> bool:
-    return part[5] == 1 and part[4] > 0.05 and part[2] > part[0] + 2 and part[2] > 2 and part[3] > part[1]
+    right = part[6] if len(part) > 6 else part[2]  # within the window (TRACE's last number)
+    return part[5] == 1 and part[4] > 0.05 and right > part[0] + 2 and right > 2 and part[3] > part[1]
 
 
 def covers(a: list, b: list) -> bool:
@@ -968,10 +971,14 @@ class ImmersiveTest(unittest.TestCase):
         toolbar, across the page, and out and back in during the hold and during a transition: the toolbar never
         covers the tab list or the assistant's panel, the page and the panel never move sideways, the band never
         moves, and once the pointer rests on the page nothing stays shown. With no panel, Nulavio's assistant and a
-        site's; in Lateral, Foco and Abas no topo (where the side column is the launcher's, as with the mode off);
-        light at 1440 x 900 and dark at the narrowest window.
+        site's; in Lateral, Foco and Abas no topo (where the side column is the launcher's, as with the mode off), and in
+        Lateral with the tab list on the right (#346: every journey mirrored, by the right edge); light at 1440 x 900
+        and dark at the narrowest window.
         The tab list is drawn over the panel as it is over the page: it comes and goes without moving either."""
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        # Last, once the window has its size back: the pointer on the page, away from where any part comes in (the
+        # mirrored journeys end at the left quarter, where the tab list on the left would be).
+        self.addCleanup(self.rest_pointer)
         self.addCleanup(
             self.m.chrome,
             "Services.prefs.clearUserPref('browser.ml.chat.enabled'); Services.prefs.clearUserPref('browser.ml.chat.provider');",
@@ -985,9 +992,10 @@ class ImmersiveTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
         before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
         self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
         chatbot = self.server.url("/page/chatbot")
 
-        def journey(name: str, points: list[tuple[int, int]], pause_ms: int = 0) -> list[dict]:
+        def walk(name: str, points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]:
             self.m.chrome(TRACE)
             self.m.set_context("chrome")
             try:
@@ -1036,8 +1044,16 @@ class ImmersiveTest(unittest.TestCase):
         for size, dark in (((1440, 900), 0), ((320, 480), 1)):
             self.m.chrome("window.resizeTo(arguments[0], arguments[1]);", list(size))
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
-            for preset in ("lateral", "focus", "top"):
+            for preset, start in (("lateral", True), ("focus", True), ("top", True), ("lateral", False)):
                 self.apply_preset(preset)
+                self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+                # The engine can move the column at the end of a view transition: wait for its side, then stillness.
+                side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+                self.assertTrue(
+                    harness.wait_until(
+                        lambda side=side, start=start: self.m.chrome(side) is not start and self.m.chrome(STILL), 10
+                    )
+                )
                 for panel, show in PANELS.items():
                     self.m.chrome(show, [chatbot])
                     if panel != "none":
@@ -1049,7 +1065,14 @@ class ImmersiveTest(unittest.TestCase):
                     self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
                     self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
                     w, h = self.m.chrome("return [innerWidth, innerHeight];")
-                    where = f"{preset}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
+                    side = "" if start else " on the right"
+                    where = f"{preset}{side}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
+
+                    def journey(name, points, pause_ms=0, w=w, start=start):
+                        # With the tab list on the right, the same path seen in a mirror: by the right edge.
+                        mirrored = [p if start else (w - 1 - p[0], *p[1:]) for p in points]
+                        return walk(name, mirrored, pause_ms)
+
                     page = (w * 3 // 4, h // 2)
                     with self.subTest(where=where):
                         # Band -> toolbar -> tab list and back up, then out over the page.
@@ -1188,6 +1211,103 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+
+    def test_23_the_tab_list_on_the_right_leaves_and_comes_back_by_the_right_edge(self):
+        """#346: with the tab list on the right (sidebar.position_start false) it leaves by the right and only the right
+        edge brings it back, over the page, which does not move; the left edge brings nothing. At rest nothing of it
+        is in view."""
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.apply_preset("lateral")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', false);")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return document.documentElement.hasAttribute('sidebar-positionend');"), 10)
+        )
+        geometry = (
+            "const r = id => document.getElementById(id).getBoundingClientRect();"
+            "const list = r('sidebar-container'), edge = r('nulavio-immersive-edge'), page = r('tabbrowser-tabbox');"
+            "return {width: innerWidth, list: [list.left, list.right], edge: [edge.left, edge.right],"
+            " page: [page.left, page.right]};"
+        )
+        self.m.chrome(AWAY)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        rest = self.m.chrome(geometry)
+        self.assertGreaterEqual(rest["list"][0], rest["width"], rest)  # out of view, past the right edge
+        self.assertEqual(round(rest["edge"][1]), rest["width"], rest)  # the edge that brings it back is the right one
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.m.chrome(TRACE)  # every frame while the pointer is at the left edge, not one look after it
+        self.m.chrome(EDGE)  # the left edge
+        time.sleep(1)
+        frames = self.trace_end()
+        self.assertGreater(len(frames), 10)
+        flashed = [f["tabs"] for f in frames if visible(f["tabs"])]
+        self.assertEqual(flashed, [], "the left edge brought the list on the right")
+        self.m.chrome(AWAY)
+        self.m.chrome("window.synthesizeMouseEvent('mousemove', innerWidth - 2, Math.round(innerHeight / 2), {}, {});")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(STILL), 5))  # in place, past its slide
+        shown = self.m.chrome(geometry)
+        self.assertAlmostEqual(shown["list"][1], shown["width"], delta=1, msg=shown)
+        self.assertEqual(shown["page"], rest["page"], "the page moved when the list came in")
+        self.m.chrome(AWAY)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+
+    def test_24_the_security_cues_are_the_engines_with_the_tab_list_anywhere(self):
+        """#346: the first part of the matrix (09) with the tab list on the right and with tabs on top, in both themes:
+        out of view no cue is restyled, and back in view every cue is drawn where and as with the mode off."""
+
+        def cues() -> dict:
+            return {cue["id"]: cue for cue in self.m.chrome(CUES)}
+
+        def drawn(now: dict) -> dict:
+            return {name: (cue.get("display"), cue.get("visibility"), cue.get("opacity")) for name, cue in now.items()}
+
+        def sized(now: dict) -> dict:
+            return {name: (cue.get("width"), cue.get("height"), cue.get("inside")) for name, cue in now.items()}
+
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        for preset, start in (("lateral", False), ("top", True)):
+            self.apply_preset(preset)
+            self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+            side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+            self.assertTrue(
+                harness.wait_until(lambda side=side, start=start: self.m.chrome(side) is not start and self.m.chrome(STILL), 10)
+            )
+            for dark in (0, 1):
+                with self.subTest(preset=preset, right=not start, dark=bool(dark)):
+                    self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                    self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
+                    self.assertTrue(self.settled(True)["toolbar"])
+                    reference = cues()
+                    self.assertTrue(reference["trust-icon-container"]["inside"], reference)
+                    self.m.chrome(
+                        "Services.prefs.setBoolPref('nulavio.layout.immersive', true); gBrowser.selectedBrowser.focus();"
+                    )
+                    self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+                    self.assertFalse(self.settled(False)["toolbar"])
+                    self.assertEqual(drawn(cues()), drawn(reference))
+                    self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+                    self.assertTrue(self.settled(True)["toolbar"])
+                    back = cues()
+                    self.assertEqual(drawn(back), drawn(reference))
+                    self.assertEqual(sized(back), sized(reference))
+                    self.m.chrome("gBrowser.selectedBrowser.focus();")
+                    self.assertFalse(self.settled(False)["toolbar"])
+
+    def rest_pointer(self):
+        """The pointer on the page, three quarters across and halfway down, through the engine's own event path."""
+        w, h = self.m.chrome("return [innerWidth, innerHeight];")
+        self.m.set_context("chrome")
+        try:
+            move = {"type": "pointerMove", "duration": 0, "origin": "viewport", "x": w * 3 // 4, "y": h // 2}
+            pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": [move]}
+            self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
+        finally:
+            self.m.set_context("content")
 
     def test_22_after_the_tab_drags_the_toolbar_takes_the_pointer_again(self):
         """#398: the journeys above (21) drag a tab with events of their own and no drag session. When they are done,
