@@ -989,6 +989,39 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(self.m.execute("return document.getElementById('headline').textContent;"), msg("vaultGoneHeadline"))
         self.assertFalse(self.m.execute("return document.getElementById('current').closest('.field').checkVisibility();"))
 
+    def test_16c_the_unlock_and_phone_pages_say_a_profile_that_went_meanwhile_is_gone(self):
+        """#547: the same as 16b on the other pages. After the page loaded, `not-found` for a profile that was
+        deleted behind its back says what the page says on load, and offers nothing: never "the list was refreshed"."""
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        seen = (
+            "const seen = s => [...document.querySelectorAll(s)].filter(e => e.checkVisibility());"
+            "return {fields: seen('input').map(e => e.id), headline: document.getElementById('headline').textContent,"
+            " status: document.getElementById('status').textContent, level: document.getElementById('status').dataset.level};"
+        )
+        # Unlock: the profile is there when the page loads, gone when the password is sent.
+        profile_id, _code = self.create_via_api("Some", password=PASSWORD, keyring=False)
+        self.open_page(f"vault/unlock.html?p={profile_id}")
+        self.wait_state("idle")
+        self.call("await P.remove(args[0]);", profile_id)
+        self.type_into("password", PASSWORD)
+        self.click("#password-form button[type=submit]")
+        self.wait_state("error")
+        page = self.m.execute(seen)
+        self.assertEqual((page["status"], page["level"], page["headline"]), (msg("vaultGone"), "error", msg("vaultGoneHeadline")))
+        self.assertEqual(page["fields"], [])
+        self.assertNotIn(msg("err_not_found"), page["status"])
+        # Phone: the same, when a code is asked for.
+        profile_id, _code = self.create_via_api("Some", password=PASSWORD, keyring=False)
+        self.open_page(f"vault/phone.html?p={profile_id}")
+        self.wait_state("idle")
+        self.call("await P.remove(args[0]);", profile_id)
+        self.type_into("current", PASSWORD)
+        self.click("#start-form button[type=submit]")
+        self.wait_state("unavailable")
+        page = self.m.execute(seen)
+        self.assertEqual((page["status"], page["level"], page["headline"]), (msg("vaultGone"), "error", msg("vaultGoneHeadline")))
+        self.assertEqual(page["fields"], [])
+
     def test_17_an_unfinished_recovery_code_replacement_is_undone_and_the_unlock_page_says_so(self):
         """#187: a new recovery code never typed back (the page left) is undone by the next unlock with
         the password; the page says so and stays open to be read."""
