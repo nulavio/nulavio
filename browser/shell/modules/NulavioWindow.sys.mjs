@@ -408,7 +408,7 @@ class WindowUI {
 
   // ADR 0011: the Shell's pages are the browser's own interface (unlock, the Guard's review, the new tab), so
   // the address bar names them as it names the engine's internal pages ("Nulavio") instead of "Extensão
-  // (Nulavio Shell)". Only the identity label, its icon and what its panel calls the page change: the pages
+  // (Nulavio)", the engine's label with the add-on's name (#483). Only the identity label, its icon and what its panel calls the page change: the pages
   // stay unprivileged, the address stays, and every other extension keeps the engine's label. The Shell is
   // known by its id and by being shipped with the application, never by a name a page or an add-on can give.
   // Done here and not as an engine patch: it is what a built-in add-on can do (browser/patches/series).
