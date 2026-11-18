@@ -169,13 +169,19 @@
         &[sidebar-positionend] #tabbrowser-tabbox[sidebar-panel-open] { margin-inline: 0; }
         &[sidebar-positionend] #sidebar-box[sidebar-panel-open] { margin-inline: var(--nv-space-3) 0; }
         /* Foco: while the launcher is expanded over the page, the engine keeps the collapsed launcher's width as a margin
-           of what sits beside it, which it takes to be the panel. Here the page sits beside it. */
+           of what sits beside it, which it takes to be the panel. Here the page sits beside it, and the panel needs none. */
         @media -moz-pref("sidebar.visibility", "expand-on-hover") {
           #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded]:not([sidebar-positionend]) {
             margin-inline-start: var(--sidebar-launcher-collapsed-width);
           }
           #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded][sidebar-positionend] {
             margin-inline-end: var(--sidebar-launcher-collapsed-width);
+          }
+          #sidebar-box[sidebar-panel-open][sidebar-launcher-expanded]:not([sidebar-positionend]) {
+            margin-inline-start: 0;
+          }
+          #sidebar-box[sidebar-panel-open][sidebar-launcher-expanded][sidebar-positionend] {
+            margin-inline-end: 0;
           }
         }
       }
