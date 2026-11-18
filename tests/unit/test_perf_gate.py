@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "perf"))
 
 import gate  # noqa: E402
+
+RUN_SPEC = importlib.util.spec_from_file_location("perf_run_for_gate", ROOT / "scripts" / "perf" / "run.py")
+perf_run = importlib.util.module_from_spec(RUN_SPEC)
+RUN_SPEC.loader.exec_module(perf_run)
 
 EVIDENCE = ROOT / "docs" / "research" / "evidence" / "perf-runner-noise-2026-11-18"
 
@@ -24,6 +30,8 @@ def results(**changes: tuple[float, tuple[float, float]]) -> dict:
         change, bounds = changes.get(name, (0.0, (-0.05, 0.05)))
         metrics[name] = {"build": [100 * (1 + change)] * 5, "baseline": [100.0] * 5}
         intervals[name] = list(bounds)
+        if name.startswith("pss_mib_"):
+            metrics[name.replace("pss_mib_", "unreadable_", 1)] = {"build": [0] * 5, "baseline": [0] * 5}
     return {"metrics": metrics, "intervals": intervals}
 
 
@@ -58,6 +66,35 @@ class PerfGateTest(unittest.TestCase):
         found = self.verdict(results(startup_first_ms=(0.15, (0.1, 0.2)), speedometer3_score=(-0.2, (-0.3, 0.01))))
         self.assertEqual(set(found.values()), {"pass"})
 
+    def test_exactly_at_the_threshold_passes_and_just_above_fails(self):
+        # 550 against 500 is exactly +10 %; in floats 550 / 500 - 1 is 0.10000000000000009, past 0.10.
+        def pss(build: float):
+            data = results(pss_mib_1_tabs=(0.0, (0.05, 0.2)))
+            data["metrics"]["pss_mib_1_tabs"] = {"build": [build] * 5, "baseline": [500.0] * 5}
+            return {n: (v, w) for n, v, w in gate.verdicts(data)}["pss_mib_1_tabs"]
+
+        self.assertEqual(pss(550.0)[0], "pass")
+        verdict, words = pss(550.01)
+        self.assertEqual(verdict, "fail")
+        # +10.002 %: the line is not "+10.0 % ... fails past +10 %"
+        self.assertIn("+10.002%", words)
+        self.assertEqual(pss(550.0 * (1 + 1e-12))[0], "fail")
+        self.assertEqual(self.verdict(results(speedometer3_score=(-0.1, (-0.2, -0.05))))["speedometer3_score"], "pass")
+
+    def test_memory_with_unreadable_processes_is_not_judged_whatever_it_reads(self):
+        for side in ("build", "baseline"):
+            for change in (-0.3, 0.3):  # a reading too low looks like an improvement on the release, a regression on the baseline
+                with self.subTest(side=side, change=change):
+                    data = results(pss_mib_10_tabs=(change, (-0.4, -0.2) if change < 0 else (0.2, 0.4)))
+                    data["metrics"]["unreadable_10_tabs"][side] = [0, 0, 2, 0, 0]
+                    found = self.verdict(data)
+                    self.assertEqual(found["pss_mib_10_tabs"], "missing")
+                    self.assertEqual(found["pss_mib_1_tabs"], "pass")
+                    self.assertEqual(self.gate(data, "--strict").returncode, 1)
+        data = results()
+        del data["metrics"]["unreadable_1_tabs"]  # no count: the reading cannot be trusted either
+        self.assertEqual(self.verdict(data)["pss_mib_1_tabs"], "missing")
+
     def gate(self, data: dict, *flags: str) -> subprocess.CompletedProcess:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "perf.json"
@@ -74,12 +111,35 @@ class PerfGateTest(unittest.TestCase):
         self.assertIn("- **not judged**: speedometer3_score", done.stdout)
 
     def test_the_measures_are_the_ones_run_py_writes(self):
-        """A name changed in run.py would leave the gate with nothing to judge (--strict then fails every run)."""
-        source = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")
+        """A name changed in run.py would leave the gate with nothing to judge (--strict then fails every run). One run
+        of one_run with `--tabs 1 10`, the engine and the readings faked, names every PSS measure and its unreadable
+        count."""
+        fake = mock.MagicMock()
+        fake.wait_until.side_effect = lambda check, _seconds: check()
+        session = mock.MagicMock()
+        session.process.pid = 1
+        session.start.return_value = session.restart.return_value = opened = mock.MagicMock()
+        added = []
+        opened.chrome.side_effect = lambda script, args=None: (
+            added.append(args) if script == perf_run.ADD_TAB else [len(added) + 1] * 2 if script == perf_run.SHOWN else None
+        )
+        fake.GeckoProfileSession.return_value = session
+        server = mock.MagicMock()
+        server.url.side_effect = lambda path: f"http://x{path}"
+        with (
+            mock.patch.dict(sys.modules, {"harness": fake}),
+            mock.patch.dict(perf_run.os.environ, {}),
+            mock.patch.object(perf_run, "startup_ms", return_value=1.0),
+            mock.patch.object(perf_run, "instance_pids", return_value=[1]),
+            mock.patch.object(perf_run, "pss_kib", return_value=(512 * 1024, 0)),
+            mock.patch.object(perf_run, "sandbox", return_value="on"),
+            mock.patch.object(perf_run.time, "sleep"),
+        ):
+            out = perf_run.one_run("engine", [1, 10], server, (("speedometer3_score", lambda m: 12.0),))
         for name in gate.THRESHOLDS:
             with self.subTest(name=name):
-                written = f'"{name}"' in source or (name.startswith("pss_mib_") and 'f"pss_mib_{count}_tabs"' in source)
-                self.assertTrue(written, name)
+                self.assertIn(name, out)
+        self.assertEqual((out["unreadable_1_tabs"], out["unreadable_10_tabs"]), (0, 0))
 
     def test_the_command_exits_1_on_a_failure_and_names_it(self):
         done = self.gate(results(pss_mib_1_tabs=(0.15, (0.11, 0.2))))
@@ -91,16 +151,20 @@ class PerfGateTest(unittest.TestCase):
         self.assertEqual(len(runs), 4)
         for run in runs:
             with self.subTest(run=run.name):
-                self.assertNotIn("fail", {v for _n, v, _w in gate.verdicts(json.loads(run.read_text()))})
+                self.assertEqual({v for _n, v, _w in gate.verdicts(json.loads(run.read_text()))}, {"pass"})
 
     def test_perf_yml_runs_the_gate_after_measuring_and_still_keeps_the_json(self):
         workflow = (ROOT / ".github" / "workflows" / "perf.yml").read_text(encoding="utf-8")
-        step = workflow[workflow.index("- name: The gate (#367)") : workflow.index("actions/upload-artifact")]
+        measure = workflow.index("id: measure")
+        gate_step = workflow.index("- name: The gate (#367)")
+        upload_at = workflow.index("actions/upload-artifact")
+        self.assertLess(measure, gate_step)
+        self.assertLess(gate_step, upload_at)
+        step = workflow[gate_step:upload_at]
         self.assertIn("python3 -I scripts/perf/gate.py --strict perf/perf.json", step)
         self.assertIn("steps.measure.outcome == 'success'", step)
         # GitHub's default shell has no pipefail: the pipe into tee would end with tee's status and pass.
         self.assertRegex(step, r"(?m)^\s+shell: bash\b")
-        self.assertLess(workflow.index("scripts/perf/gate.py"), workflow.index("actions/upload-artifact"))
         upload = workflow[workflow.index("actions/upload-artifact") :]
         self.assertIn("if: always()", upload.split("with:")[0])
 
