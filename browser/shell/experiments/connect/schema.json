@@ -49,17 +49,6 @@
             "maxLength": 64
           }
         ]
-      },
-      {
-        "name": "setKrunner",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "enabled",
-            "type": "boolean"
-          }
-        ]
       }
     ]
   }

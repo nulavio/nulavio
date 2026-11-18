@@ -114,6 +114,34 @@ class SettledMemoryTest(unittest.TestCase):
             perf_run.settled(lambda: (next(values),), wait=lambda: None)
 
 
+class FirstMinuteTest(unittest.TestCase):
+    def test_the_first_minute_keeps_the_highest_reading_of_the_whole_instance(self):
+        # #362: a new profile's first work peaked for seconds; the peak, not the last reading, is the number.
+        from unittest import mock
+
+        readings = iter([(400 * 1024, 0), (1250 * 1024, 0), (700 * 1024, 1), (300 * 1024, 0)])
+        now = [0.0]
+
+        def sleep(seconds):
+            now[0] += seconds
+
+        with (
+            mock.patch.object(perf_run, "pss_kib", side_effect=lambda pids: next(readings)),
+            mock.patch.object(perf_run, "instance_pids", return_value=[1, 2]),
+            mock.patch.object(perf_run.time, "monotonic", side_effect=lambda: now[0]),
+            mock.patch.object(perf_run.time, "sleep", side_effect=sleep),
+        ):
+            peak, count, unreadable = perf_run.peak_pss_mib(1, seconds=6.0, every=2.0)
+        self.assertEqual((peak, count, unreadable), (1250.0, 4, 1))  # the third reading missed one process
+
+    def test_the_option_reads_both_first_minutes_and_is_documented(self):
+        text = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")
+        self.assertIn('"--first-minute"', text)
+        for key in ("first_minute_peak_mib", "second_minute_peak_mib"):
+            self.assertIn(key, text.split("from __future__", 1)[0])  # the docstring names what it writes
+            self.assertIn(f'out["{key}"]', text)
+
+
 class FrameMetricsTest(unittest.TestCase):
     def test_each_scene_gets_its_median_interval_per_run_and_side(self):
         run = {"raw": {"tab_switch": [[16.0, 17.0], [18.0]], "sidebar_collapse": []}, "new_tab_poll_ms": [120.0, 140.0]}
