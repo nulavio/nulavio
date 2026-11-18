@@ -26,6 +26,12 @@ RATE_LIMITED = """FAILURE: Build failed with an exception.
 VERIFICATION = RATE_LIMITED + "Dependency verification failed for configuration ':app:releaseRuntimeClasspath'\n"
 LINT = "FAILURE: Build failed with an exception.\n> Lint found errors in the project; aborting build.\n"
 NOT_FOUND = "> Could not resolve com.example:gone:1.0.\n   > Could not find com.example:gone:1.0.\n"
+MIRROR_FORBIDDEN = """FAILURE: Build failed with an exception.
+> Could not resolve com.google.code.gson:gson:2.11.0.
+   > Could not GET 'https://maven-central.storage-download.googleapis.com/maven2/com/google/code/gson/gson/2.11.0/gson-2.11.0.pom'.
+      > Received status code 403 from server: Forbidden
+"""
+CENTRAL_FORBIDDEN = MIRROR_FORBIDDEN.replace("maven-central.storage-download.googleapis.com", "repo.maven.apache.org")
 MIRROR_REFUSED = """FAILURE: Build failed with an exception.
 > Could not resolve all artifacts for configuration 'classpath'.
    > Could not resolve com.google.code.gson:gson:2.11.0.
@@ -132,17 +138,33 @@ class GradleRetryTest(unittest.TestCase):
         self.assertEqual(self.runs, [run])
         self.assertIn(f"through the mirror {MIRROR} first", out)
 
-    def test_when_the_mirror_refuses_the_next_runs_go_to_maven_central(self):
-        code, count, out = self.run_with(MIRROR_REFUSED, RATE_LIMITED, mirror=MIRROR)
-        self.assertEqual((code, count), (0, 3))
-        self.assertIn("--init-script", self.runs[0])
-        for run in self.runs[1:]:
-            self.assertNotIn("--init-script", run)
-            self.assertTrue(run.endswith(" mirror="), run)
+    def test_after_the_mirror_fails_a_run_the_next_one_goes_to_maven_central(self):
+        code, count, out = self.run_with(MIRROR_REFUSED, mirror=MIRROR)
+        self.assertEqual((code, count), (0, 2))
+        self.assertEqual([("--init-script" in run) for run in self.runs], [True, False])
+        self.assertTrue(self.runs[1].endswith(" mirror="), self.runs[1])
         warnings = [line for line in out.splitlines() if line.startswith("::warning title=Gradle::")]
         self.assertIn("maven-central.storage-download.googleapis.com: Received status code 503", warnings[0])
         self.assertIn("without the mirror", warnings[0])
+
+    def test_one_failure_of_the_mirror_does_not_turn_it_off_for_good(self):
+        """The mirror fails run 1, Maven Central rate-limits run 2: run 3 goes through the mirror again."""
+        code, count, out = self.run_with(MIRROR_REFUSED, RATE_LIMITED, mirror=MIRROR)
+        self.assertEqual((code, count), (0, 3))
+        self.assertEqual([("--init-script" in run) for run in self.runs], [True, False, True])
+        self.assertTrue(self.runs[2].endswith(f" mirror={MIRROR}"), self.runs[2])
+        warnings = [line for line in out.splitlines() if line.startswith("::warning title=Gradle::")]
         self.assertNotIn("without the mirror", warnings[1])
+
+    def test_a_403_from_the_mirror_falls_back_to_maven_central(self):
+        code, count, out = self.run_with(MIRROR_FORBIDDEN, mirror=MIRROR)
+        self.assertEqual((code, count), (0, 2))
+        self.assertEqual([("--init-script" in run) for run in self.runs], [True, False])
+        self.assertIn("Received status code 403 from server); running Gradle again in 0 s, without the mirror", out)
+
+    def test_a_403_from_maven_central_is_not_retried(self):
+        self.assertEqual(self.run_with(CENTRAL_FORBIDDEN, mirror=MIRROR)[:2], (7, 1))
+        self.assertEqual(self.run_with(CENTRAL_FORBIDDEN)[:2], (7, 1))
 
     def test_when_maven_central_refuses_the_mirror_stays(self):
         self.assertEqual(self.run_with(RATE_LIMITED, mirror=MIRROR)[:2], (0, 2))
@@ -152,10 +174,52 @@ class GradleRetryTest(unittest.TestCase):
         self.assertEqual(self.run_with(VERIFICATION, mirror=MIRROR)[:2], (7, 1))
 
 
+def gradle_launcher() -> Path | None:
+    """The Gradle of android/gradlew's pinned version, if the wrapper has already unpacked it (CI's earlier Gradle step
+    has); never downloaded here."""
+    props = (ROOT / "android" / "gradle" / "wrapper" / "gradle-wrapper.properties").read_text(encoding="utf-8")
+    version = re.search(r"distributions/gradle-([0-9.]+)-bin\.zip", props).group(1)
+    home = Path(os.environ.get("GRADLE_USER_HOME") or Path.home() / ".gradle")
+    found = sorted(home.glob(f"wrapper/dists/gradle-{version}-bin/*/gradle-{version}/bin/gradle"))
+    return found[0] if found else None
+
+
+GRADLE = gradle_launcher()
+if os.environ.get("NULAVIO_REQUIRE_GRADLE") == "1" and GRADLE is None:
+    raise RuntimeError("NULAVIO_REQUIRE_GRADLE=1 but the wrapper's Gradle is not unpacked under GRADLE_USER_HOME")
+
+
 class MirrorInitScriptTest(unittest.TestCase):
-    """What the init script does is tried with Gradle in the pull request (#535); this checks what must not drift."""
+    """The init script's own checks. Its effect on the Companion's build is tried with Gradle in #552."""
 
     text = INIT.read_text(encoding="utf-8")
+
+    def url_pattern(self) -> re.Pattern[str]:
+        """The Groovy pattern the script matches NULAVIO_MAVEN_MIRROR against (`==~`: the whole string)."""
+        found = re.findall(r"mirror ==~ /((?:[^/\\]|\\.)+)/\)", self.text)
+        self.assertEqual(len(found), 1, "one URL check in the init script")
+        return re.compile(found[0].replace("\\/", "/"))
+
+    def test_it_takes_only_a_plain_https_url_ending_in_a_slash(self):
+        self.assertIn("System.getenv('NULAVIO_MAVEN_MIRROR')", self.text)
+        pattern = self.url_pattern()
+        for url in (MIRROR, "https://maven-central-eu.storage-download.googleapis.com/maven2/", "https://example.org/m2/"):
+            with self.subTest(url=url):
+                self.assertIsNotNone(pattern.fullmatch(url))
+        for url in (
+            "https://user:pass@example.org/maven2/",  # credentials
+            "http://example.org/maven2/",  # no TLS
+            "example.org/maven2/",  # no scheme
+            "file:///srv/maven2/",
+            "https://example.org/maven2",  # no final slash
+            "https://example.org:8443/maven2/",
+            "https://example.org/maven 2/",
+            "https://example.org/maven2/?x=/",
+            "https://example.org/maven2/\nhttps://other.example/",
+            "",
+        ):
+            with self.subTest(url=url):
+                self.assertIsNone(pattern.fullmatch(url))
 
     def test_it_puts_the_mirror_right_before_maven_central_in_both_lists(self):
         self.assertIn("settings.pluginManagement.repositories", self.text)
@@ -175,10 +239,64 @@ class MirrorInitScriptTest(unittest.TestCase):
             self.assertNotIn(word, code)
 
     def test_local_f_droid_and_release_builds_do_not_use_it(self):
-        for path in [*(ROOT / "android").rglob("*.kts"), *(ROOT / "scripts" / "release").iterdir()]:
-            if path.is_file():
-                self.assertNotIn("maven-mirror", path.read_text(encoding="utf-8", errors="replace"), path)
-                self.assertNotIn("NULAVIO_MAVEN_MIRROR", path.read_text(encoding="utf-8", errors="replace"), path)
+        """Only ci.yml's two Gradle steps: not android/ (local and F-Droid builds), not scripts/release/, and no other
+        workflow (release.yml builds the APK it attests from Maven Central)."""
+        workflows = [p for p in (ROOT / ".github" / "workflows").glob("*.y*ml") if p.name != "ci.yml"]
+        self.assertIn(ROOT / ".github" / "workflows" / "release.yml", workflows)
+        paths = [*(ROOT / "android").rglob("*"), *(ROOT / "scripts" / "release").rglob("*"), *workflows]
+        self.assertTrue(any(p.parent != ROOT / "scripts" / "release" for p in paths if "scripts/release/" in p.as_posix()))
+        for path in paths:
+            if path.is_file() and "/build/" not in path.as_posix() and "/.gradle/" not in path.as_posix():
+                text = path.read_text(encoding="utf-8", errors="replace")
+                self.assertNotIn("maven-mirror", text, path)
+                self.assertNotIn("NULAVIO_MAVEN_MIRROR", text, path)
+
+
+@unittest.skipIf(GRADLE is None, "the wrapper's Gradle is not unpacked (CI sets NULAVIO_REQUIRE_GRADLE=1)")
+class MirrorInitScriptGradleTest(unittest.TestCase):
+    """The init script in a real Gradle, offline, on a throwaway build: the order it gives, and that it fails closed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.tmp.cleanup)
+
+    def gradle(self, repositories: str, mirror: str = MIRROR) -> subprocess.CompletedProcess[str]:
+        build = Path(tempfile.mkdtemp(dir=self.tmp.name))
+        (build / "settings.gradle").write_text(
+            f"pluginManagement {{ repositories {{ google(); mavenCentral(); gradlePluginPortal() }} }}\n"
+            f"dependencyResolutionManagement {{ repositories {{ {repositories} }} }}\n"
+            "rootProject.name = 'mirror-check'\n"
+        )
+        show = build / "show.init.gradle"
+        show.write_text(
+            "settingsEvaluated { s ->\n"
+            "  println 'PLUGINS ' + s.pluginManagement.repositories*.name.join(',')\n"
+            "  println 'DEPENDENCIES ' + s.dependencyResolutionManagement.repositories*.name.join(',')\n"
+            "}\n"
+        )
+        env = {**os.environ, "GRADLE_USER_HOME": str(Path(self.tmp.name) / "home"), "NULAVIO_MAVEN_MIRROR": mirror}
+        if os.environ.get("JAVA_HOME_21_X64"):
+            env["JAVA_HOME"] = os.environ["JAVA_HOME_21_X64"]
+        argv = [str(GRADLE), "-p", str(build), "--offline", "--no-daemon", "-q", "--init-script", str(INIT),
+                "--init-script", str(show), "help"]  # fmt: skip
+        return subprocess.run(argv, env=env, capture_output=True, text=True, timeout=300)
+
+    def test_the_mirror_goes_right_before_maven_central(self):
+        done = self.gradle("google(); mavenCentral()")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("PLUGINS Google,MavenCentralMirror,MavenRepo,Gradle Central Plugin Repository", done.stdout)
+        self.assertIn("DEPENDENCIES Google,MavenCentralMirror,MavenRepo", done.stdout)
+
+    def test_a_list_without_maven_central_stops_the_build(self):
+        done = self.gradle("google()")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("maven-mirror.init.gradle: no Maven Central among the dependencies repositories", done.stderr)
+
+    def test_a_url_with_credentials_stops_the_build(self):
+        done = self.gradle("google(); mavenCentral()", mirror="https://user:pass@example.org/maven2/")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("NULAVIO_MAVEN_MIRROR must be an https URL ending in /", done.stderr)
 
 
 class WorkflowTest(unittest.TestCase):

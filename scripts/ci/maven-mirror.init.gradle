@@ -4,9 +4,12 @@
 // them with 429 Too Many Requests for long enough that waiting does not help (#516, #535).
 //
 // Only where the bytes come from changes. Every artifact and POM is still checked against
-// android/gradle/verification-metadata.xml, whichever repository served it, and the lockfiles still fix the
-// versions. android/settings.gradle.kts is not changed: local, F-Droid and release builds read Maven Central as
-// before.
+// android/gradle/verification-metadata.xml, whichever repository served it: bytes that differ fail the build with
+// "Dependency verification failed", and gradle.sh does not then ask Maven Central. The lockfiles fix the APK's
+// classpaths (nv1's runtimeClasspath, the app's releaseRuntimeClasspath); the plugin, lint, test and debug
+// classpaths have no lock, and a version range there would be resolved from the mirror's maven-metadata.xml, which
+// verification does not check (none in the graph on 2026-11-18). android/settings.gradle.kts is not changed: local,
+// F-Droid and release builds read Maven Central as before.
 //
 // The mirror goes right before Maven Central in each list of repositories that has it, so Google's Maven repository
 // still comes first for the Android artifacts. A list without Maven Central stops the build, so a change to the
