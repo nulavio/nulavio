@@ -401,8 +401,6 @@ class CommandsTest(unittest.TestCase):
                 "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
                 "copy-link-to-highlight": "Ctrl+Alt+C",  # #157, #469
-                "toggle-page-editing": "Ctrl+Alt+E",  # #161
-                "toggle-keep-above": "Ctrl+Alt+K",  # #170
             },
         )
         self.assertEqual(len(set(keys.values())), len(keys))

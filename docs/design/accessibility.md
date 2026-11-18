@@ -70,11 +70,10 @@ both native tab orientations. Requested 630 px windows remain 638 px wide in
 some scaled vertical-tab scenes because of Gecko's native minimum; the
 [measurements](screenshots/ux3a/geometry-pt.json) retain actual dimensions.
 
-Temporary/private and agent/raw/Guard combinations are checked through real
-owners. The composition test uses a real registry and retained Guard findings,
-plus a synthetic live-PID raw marker read by the AI owner; separate Bridge
-tests cover actual raw endpoint handover, latch retention, pause and global
-stop. This is not evidence that Guard audits new AI Workspaces. Protection
+Temporary/private and agent/Guard combinations are checked through real
+owners. The composition test uses a real registry and retained Guard findings;
+separate Bridge tests cover pause and global stop. (The raw-automation state,
+its marker and its endpoint handover went with raw automation, #463.) This is not evidence that Guard audits new AI Workspaces. Protection
 includes a real encrypted/unlocked profile that relocks after its window ends.
 The [evidence inventory](screenshots/ux3a/verification.json) distinguishes these
 fixtures from real backend operations and records en/pt-BR checks.

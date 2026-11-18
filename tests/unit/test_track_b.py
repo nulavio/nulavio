@@ -749,13 +749,76 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("libavcodec-free", re.findall(r"(?m)^Recommends:\s+(\S+)$", spec))
         deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
         codecs = re.search(r'(?m)^codecs="([^"]+)"$', deb).group(1)
-        self.assertIn("\nRecommends: libsodium23, gocryptfs, fuse3, $codecs\n", deb)
+        self.assertIn("\nRecommends: libsodium23, gocryptfs, fuse3, pkexec, $codecs\n", deb)
         names = [name.strip() for name in codecs.split("|")]
         # One alternative per version of the library the engine loads, newest first, each with Debian's fuller build.
         self.assertEqual(names, [f"libavcodec{extra}{major}" for major in (62, 61, 60, 59, 58) for extra in ("", "-extra")])
         # Recommended, not required: a person may have the library from elsewhere.
         for field in re.findall(r"(?m)^(?:Requires|Depends):.*$", spec + deb):
             self.assertNotIn("libavcodec", field)
+
+    def test_automatic_updates_are_shipped_off_and_need_no_install_script(self):
+        """#241: a timer and a service updating only nulavio, enabled by the package's own link (no script at install),
+        doing nothing until /etc/nulavio/automatic-updates exists; one polkit-guarded helper creates or removes it."""
+        updates = ROOT / "packaging" / "linux" / "updates"
+        flag = "ConditionPathExists=/etc/nulavio/automatic-updates"
+        timer = (updates / "nulavio-update.timer").read_text(encoding="utf-8")
+        service = (updates / "nulavio-update.service").read_text(encoding="utf-8")
+        for unit in (timer, service):
+            self.assertIn(f"\n{flag}\n", unit)
+        self.assertIn("\nWantedBy=timers.target\n", timer)
+        self.assertIn("\nExecStart=/usr/libexec/nulavio/update-nulavio\n", service)
+        self.assertNotIn("[Install]", service)  # started by the timer only
+        # Both packages carry the same files at the same places, the timer's link included.
+        installed = {
+            "/usr/lib/systemd/system/nulavio-update.timer",
+            "/usr/lib/systemd/system/nulavio-update.service",
+            "/usr/lib/systemd/system/timers.target.wants/nulavio-update.timer",
+            "/usr/libexec/nulavio/automatic-updates",
+            "/usr/libexec/nulavio/update-nulavio",
+            "/usr/share/polkit-1/actions/net.nulavio.automatic-updates.policy",
+        }
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8").replace("%{_datadir}", "/usr/share")
+        deb = (ROOT / "scripts" / "release" / "make_deb.sh").read_text(encoding="utf-8")
+        files = spec.split("\n%files\n", 1)[1]
+        for path in installed - {"/usr/libexec/nulavio/automatic-updates", "/usr/libexec/nulavio/update-nulavio"}:
+            self.assertIn(f"\n{path}\n", files, path)
+            self.assertIn(f'"$pkg{path}"', deb, path)
+        self.assertIn("\n/usr/libexec/nulavio\n", files)
+        for path in ("/usr/libexec/nulavio/automatic-updates", "/usr/libexec/nulavio/update-nulavio"):
+            self.assertIn(f"%{{buildroot}}{path}", spec)
+            self.assertIn(f'"$pkg{path}"', deb)
+        self.assertNotRegex(spec, r"(?m)^%(pre|post|preun|postun|posttrans)\b")  # nothing runs at install
+        # The policy: the helper only, with the administrator's password every time.
+        policy = (updates / "net.nulavio.automatic-updates.policy").read_text(encoding="utf-8")
+        self.assertIn('<annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/nulavio/automatic-updates</annotate>',
+                      policy)  # fmt: skip
+        defaults = re.findall(r"<(allow_\w+)>(\w+)<", policy)
+        self.assertEqual(defaults, [(who, "auth_admin") for who in ("allow_any", "allow_inactive", "allow_active")])
+        # The helper takes "on" or "off" and nothing else; anything else changes nothing.
+        helper = updates / "automatic-updates"
+        for args in ([], ["status"], ["on", "now"], ["--on"], ["../on"]):
+            with self.subTest(args=args):
+                done = subprocess.run(["sh", str(helper), *args], capture_output=True, text=True)
+                self.assertEqual(done.returncode, 2, done)
+                self.assertIn("usage: automatic-updates on|off", done.stderr)
+        # What runs as root updates the nulavio package and nothing else.
+        update = (updates / "update-nulavio").read_text(encoding="utf-8")
+        commands = [line.strip() for line in update.splitlines() if re.match(r"\s*(exec )?(dnf|apt-get) ", line)]
+        self.assertEqual(
+            commands,
+            [
+                "exec dnf -y --refresh upgrade --from-repo=nulavio nulavio",
+                'apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0',
+                "exec apt-get -q -y --no-remove -o Dpkg::Options::=--force-confold install --only-upgrade nulavio",
+            ],
+        )
+        self.assertNotRegex(update, r"(?m)^[^#]*\b(curl|wget)\b")
+        for weaker in ("gpgcheck", "allowerasing", "AllowUnauthenticated", "allow-unauthenticated",
+                       "allow-downgrades", "force-yes", "trusted=yes"):  # fmt: skip
+            self.assertNotIn(weaker, " ".join(commands))
+        timer_fields = dict(line.split("=", 1) for line in timer.splitlines() if "=" in line and not line.startswith("#"))
+        self.assertEqual((timer_fields["OnCalendar"], timer_fields["Persistent"]), ("*-*-* 00,12:00:00", "true"))
 
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")

@@ -68,14 +68,12 @@ class ShortcutsTest(unittest.TestCase):
         expected = [
             "alt,control+B",
             "alt,control+C",
-            "alt,control+E",
             "alt,control+F",
             "alt,control+I",
-            "alt,control+K",
             "alt,shift+A",
             "alt,shift+P",
         ]
-        # Ctrl+Alt+C: Copy Link to Highlight (#157, #469); Ctrl+Alt+E: edit the page (#161)
+        # Ctrl+Alt+C: Copy Link to Highlight (#157, #469); Ctrl+Alt+E (editing the page, #161) left in #459
         self.assertEqual(sorted(ours), expected)
         clashes = self.m.chrome(
             f"{NORM} const ours = {KEYSET}.map(combo);"
