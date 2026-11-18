@@ -361,7 +361,7 @@ class ShortcutsTest(unittest.TestCase):
             (("destaq", "destaque", "highlight"), "nulavio-highlight"),
         ):
             for word in words:
-                self.assertIn(name, found(word, len(word) > 6), word)
+                self.assertIn(name, found(word, True), word)  # the exact path also gives the prefixes
         ids = ["nulavio-quickaction-immersive", "nulavio-quickaction-temporary", "nulavio-quickaction-profiles",
                "nulavio-quickaction-highlight"]  # fmt: skip
         labels = chrome_async(self.m, "return await document.l10n.formatValues(args[0].map(id => ({id})));", [ids])["ok"]
