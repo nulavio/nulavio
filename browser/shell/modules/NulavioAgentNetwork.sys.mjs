@@ -19,7 +19,7 @@
    not checked (the proxy connects, not the engine), as Local Network Access
    does not check one either. A page from the HTTP cache carries no address
    when the check runs, so in these engines every top-level page is fetched,
-   never taken from the cache: each one skips it (a redirect hop inherits that),
+   never taken from the cache: each one, every redirect hop included, skips it,
    and one that comes from the cache all the same is cancelled.
 
    In the same engines it sets the engine's Local Network Access to refuse a
@@ -32,9 +32,10 @@
 const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
 const LOCAL_ENV = "NULAVIO_AI_LOCAL"; // workspace.py LOCAL_ENV
 const READY_FILE = "nulavio-ai-guard"; // workspace.py GUARD_READY
-const OPENING = "http-on-opening-request";
+// Both come before the cache is looked at; a redirect hop gets only the second.
+const BEFORE_CACHE = Object.freeze(["http-on-opening-request", "http-on-modify-request"]);
 const FROM_CACHE = Object.freeze(["http-on-examine-cached-response", "http-on-examine-merged-response"]);
-const TOPICS = Object.freeze([OPENING, "http-on-examine-response", ...FROM_CACHE]);
+const TOPICS = Object.freeze([...BEFORE_CACHE, "http-on-examine-response", ...FROM_CACHE]);
 // What the AI Workspace also has in its user.js (workspace.py WORKSPACE_PREFS).
 export const LOCAL_NETWORK_PREFS = Object.freeze([
   ["network.lna.enabled", true],
@@ -144,9 +145,8 @@ class AgentNetwork {
     if (loadInfo.externalContentPolicyType !== Ci.nsIContentPolicy.TYPE_DOCUMENT) {
       return; // frames and a page's own requests: the engine's Local Network Access, set above
     }
-    if (topic === OPENING) {
-      // Before the cache is looked at, whatever the method: a page from it would come with no address to check, and
-      // a redirect hop, which this topic does not see, inherits the flag.
+    if (BEFORE_CACHE.includes(topic)) {
+      // Whatever the method, and on every redirect hop: a page from the cache would come with no address to check.
       channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
       return;
     }
