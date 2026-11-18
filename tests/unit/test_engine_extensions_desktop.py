@@ -201,6 +201,65 @@ class EngineCommandTest(unittest.TestCase):
         with self.assertRaises(engine.EngineError):
             engine.check_supported(replace(FAKE_ENGINE, version="115.0esr"))
 
+    def test_installed_tools_use_the_engine_beside_them(self):
+        # The installed tools use the engine of their own install, whatever other browser the system has (known
+        # paths or PATH); an explicit NULAVIO_ENGINE still names another build.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def program(path: Path, output: str) -> Path:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f"#!/bin/sh\necho '{output}'\n")
+                path.chmod(0o755)
+                return path
+
+            install = tmp / "usr" / "lib64" / "nulavio"
+            nulavio = program(install / "nulavio", "Nulavio Nulavio 160.0.1")
+            (install / "application.ini").write_text("[App]\nVersion=160.0.1\n")
+            (install / "nulavio-tools").mkdir()
+            firefox = program(tmp / "firefox" / "firefox", "Mozilla Firefox 160.0")
+            program(tmp / "bin" / "firefox", "Mozilla Firefox 160.0")
+            not_a_checkout = tmp / "src" / "nulavio"  # a source checkout cloned as "nulavio"
+            (not_a_checkout / "bin").mkdir(parents=True)
+            no_ini = tmp / "other"
+            program(no_ini / "nulavio", "Nulavio Nulavio 160.0.1")
+            (no_ini / "nulavio-tools").mkdir()
+            clean = {k: v for k, v in os.environ.items() if k != "NULAVIO_ENGINE"}
+
+            def lookup(root: Path, **extra) -> engine.Engine:
+                with (
+                    mock.patch.dict(os.environ, {**clean, "PATH": str(tmp / "bin"), **extra}, clear=True),
+                    mock.patch.object(engine, "KNOWN_BINARIES", (firefox,)),
+                    mock.patch("nulavio_launcher.paths.repo_root", return_value=root),
+                ):
+                    return engine.find_engine()
+
+            found = lookup(install / "nulavio-tools")
+            self.assertEqual((found.path, found.vendor), (nulavio.resolve(), "Nulavio"))
+            explicit = lookup(install / "nulavio-tools", NULAVIO_ENGINE=str(firefox))
+            self.assertEqual(explicit.path, firefox.resolve(), "an explicit NULAVIO_ENGINE still wins")
+            # A source checkout, even one cloned as "nulavio", is not an install: the usual lookup applies.
+            with mock.patch("nulavio_launcher.paths.repo_root", return_value=not_a_checkout):
+                self.assertIsNone(engine.bundled_engine())
+            self.assertEqual(lookup(not_a_checkout).vendor, "Mozilla Firefox")
+            # An install without its engine or application.ini is an error, never another browser.
+            for root in (tmp / "src" / "nulavio-tools", no_ini / "nulavio-tools"):
+                with self.subTest(root=root), self.assertRaisesRegex(engine.EngineError, "is incomplete"):
+                    lookup(root)
+
+    def test_installed_tools_do_not_take_the_harness_word(self):
+        # The harness's NULAVIO_TEST_DISTRIBUTION_FIREFOX is for a source checkout under test; the tools of an
+        # install drive only the Nulavio build, whatever their environment says.
+        harness = {engine.HARNESS_FIREFOX_ENV: "1"}
+        nulavio = replace(FAKE_ENGINE, vendor="Nulavio")
+        with mock.patch("nulavio_launcher.paths.repo_root", return_value=Path("/usr/lib64/nulavio/nulavio-tools")):
+            engine.require_nulavio(nulavio, harness)
+            for refusal in (engine.PREVIEW_GONE, engine.BRIDGE_NEEDS_NULAVIO):
+                with self.subTest(refusal=refusal[:20]), self.assertRaises(engine.EngineError):
+                    engine.require_nulavio(FAKE_ENGINE, harness, refusal=refusal)
+        with mock.patch("nulavio_launcher.paths.repo_root", return_value=Path("/home/dev/src/nulavio")):
+            engine.require_nulavio(FAKE_ENGINE, harness)
+
     def test_snap_engine_is_refused(self):
         with (
             mock.patch.dict(os.environ, {"NULAVIO_ENGINE": "/snap/bin/firefox"}),
