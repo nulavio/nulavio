@@ -730,6 +730,17 @@ class AiBridgeTest(unittest.TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         public = f"http://127.0.0.2:{server.server_address[1]}/moved"
+        # The stand-in public site is public to the engine too (its own address-space override, as in test_26): the
+        # engine checks the address it gets each page from as well (#243), and to it 127.0.0.2 is this computer. The
+        # listener, this test's one local site, gets the engine's per-site exception from its Local Network Access, so
+        # what is refused here is the Bridge's doing (test_26 is the engine's).
+        engine_side = {
+            "network.lna.address_space.public.override": f"127.0.0.2:{server.server_address[1]}",
+            "network.lna.skip-domains": "127.0.0.1",
+        }
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
         local_address = policy._local_address
         stand_in = mock.patch.object(policy, "_local_address", lambda text: text != "127.0.0.2" and local_address(text))
         stand_in.start()
