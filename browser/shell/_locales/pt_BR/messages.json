@@ -1,5 +1,5 @@
 {
-  "extName": { "message": "Nulavio Shell" },
+  "extName": { "message": "Nulavio" },
   "extDescription": { "message": "Componentes internos do Nulavio: nova aba, configurações de busca e de perfis e aviso de downloads perigosos." },
 
   "newtabTitle": { "message": "Nova aba" },

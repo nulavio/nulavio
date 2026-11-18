@@ -416,9 +416,7 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(self.m.chrome(pref))
 
     def test_07b_the_view_menu_turns_it_on_and_off_and_shows_a_lock(self):
-        # #167: a menu item next to Full Screen, reading the switch each time the menu opens. Before the pointer
-        # journeys (20, 21): their unfinished tab drags leave the engine's movingtab on the toolbox, which takes the
-        # pointer off the toolbar until a real drag ends.
+        # #167: a menu item next to Full Screen, reading the switch each time the menu opens.
         item = (
             "const popup = document.getElementById('menu_viewPopup');"
             "const item = document.getElementById('nulavio-menu-immersive');"
@@ -1175,7 +1173,12 @@ class ImmersiveTest(unittest.TestCase):
         drag = (
             "gBrowser.selectedTab.dispatchEvent(new DragEvent(arguments[0], {bubbles: true, dataTransfer: new DataTransfer()}));"
         )
+        # The synthetic drag never had a drag session, so the engine's own end of a drag (dragend, and its check for
+        # a stale drag) does not leave moving-tab mode: the cleanup ends it the way a drop does, so the toolbar takes
+        # the pointer again for what runs next (#398, test 22).
+        end = "gBrowser.tabContainer.tabDragAndDrop.finishAnimateTabMove();for (const tab of gBrowser.tabs) delete tab._dragData;"
         self.m.chrome(drag, ["dragstart"])
+        self.addCleanup(self.m.chrome, end)
         self.addCleanup(self.m.chrome, drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: "tabs" in (self.window()["hold"] or ""), 5), self.window())
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
@@ -1185,6 +1188,22 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(drag, ["dragend"])
         self.assertTrue(harness.wait_until(lambda: self.window()["hold"] is None, 5), self.window())
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+
+    def test_22_after_the_tab_drags_the_toolbar_takes_the_pointer_again(self):
+        """#398: the journeys above (21) drag a tab with events of their own and no drag session. When they are done,
+        the engine's moving-tab state is gone from the toolbox, and the toolbar takes the pointer again: a test after
+        them sees the window a person has after a real drag ends."""
+        state = (
+            "return { moving: gNavToolbox.hasAttribute('movingtab') || gBrowser.tabContainer.hasAttribute('movingtab'),"
+            " pointer: getComputedStyle(document.getElementById('nav-bar')).pointerEvents };"
+        )
+        self.assertFalse(self.m.chrome(state)["moving"], self.m.chrome(state))
+        # With Imersivo on, a hidden toolbar takes no pointer by design: the check is the window with it off.
+        self.m.chrome("Services.prefs.setBoolPref('nulavio.layout.immersive', false);")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.layout.immersive');")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome(state) == {"moving": False, "pointer": "auto"}, 5), self.m.chrome(state)
+        )
 
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
