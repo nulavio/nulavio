@@ -14,6 +14,14 @@ this.nulavioAI = class extends ExtensionAPI {
     return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI;
   }
 
+  onStartup() {
+    // In an engine an agent drives: its check of local addresses (#243). The Bridge waits for it; a failure here
+    // means that engine is never used, so it is only logged.
+    ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs")
+      .NulavioAgentNetwork.arm()
+      .catch(e => console.error("Nulavio: the agent's check of local addresses did not start", e));
+  }
+
   getAPI(context) {
     const ai = this.module();
     // The browser window around the calling page (the sidebar's or a tab's): its selected tab is "this page".

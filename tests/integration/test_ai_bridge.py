@@ -33,6 +33,11 @@ from nulavio_launcher.vault import sodium, storage
 from nulavio_launcher.vault.core import Vault
 
 
+def prefs_lines(values: dict) -> str:
+    """user.js lines for a test's own profile fixture."""
+    return "".join(f"user_pref({json.dumps(k)}, {json.dumps(v)});\n" for k, v in values.items())
+
+
 def engine_processes(marker: str) -> list[int]:
     pids = []
     for entry in Path("/proc").iterdir():
@@ -857,6 +862,191 @@ class AiBridgeTest(unittest.TestCase):
         # The Bridge let 127.0.0.3 through (it read a public address): what refused it was the engine.
         logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         self.assertEqual([e for e in logged if "127.0.0.3" in str(e.get("target"))], [])
+
+    def serve(self, address: str, handler) -> int:
+        server = http.server.ThreadingHTTPServer((address, 0), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        return server.server_address[1]
+
+    def rebinding(self, public_port_prefs: dict, public_port: int) -> None:
+        """As with a name that answers the Bridge and the engine differently (test_26): the Bridge reads 127.0.0.2 and
+        127.0.0.3 as public, the engine reads 127.0.0.2's port as public and 127.0.0.3 as this computer."""
+        public_port_prefs["network.lna.address_space.public.override"] = f"127.0.0.2:{public_port}"
+        local_address = policy._local_address
+        stand_in = mock.patch.object(
+            policy, "_local_address", lambda text: text not in ("127.0.0.2", "127.0.0.3") and local_address(text)
+        )
+        stand_in.start()
+        self.addCleanup(stand_in.stop)
+
+    def test_27_what_the_agent_opens_is_shown_only_from_an_address_it_may_reach(self):
+        # #243 (R29): the engine's Local Network Access lets through what its driver opens, and a redirect on the way
+        # there; the Shell checks those pages on the address the engine got them from. The agent opens an address the
+        # Bridge reads as public and the engine as this computer, directly and through a public site's redirect. The
+        # request goes out (the engine knows the address only once it has connected); the page reaches neither the
+        # tab nor the agent. A public page still opens, and once the agent may reach local resources so does that one.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = b"<!doctype html><title>Local</title><p>only on this computer"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        secret = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/secret"
+        page = b"<!doctype html><title>Public</title><p>a public page"
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/page":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(page)))
+                    self.end_headers()
+                    self.wfile.write(page)
+                    return
+                self.send_response(302)
+                self.send_header("Location", f"{secret}-redirect")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        engine_side: dict = {}
+        self.rebinding(engine_side, port)
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-agent-local", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
+        self.assertFalse(opened["isError"], opened)
+        self.assertEqual(opened["structuredContent"]["title"], "Public")
+        tab = opened["structuredContent"]["tab"]
+        for url in (f"{secret}-agent", f"http://127.0.0.2:{port}/moved"):
+            with self.subTest(url=url):
+                went = bridge.call("navigate", {"tab": tab, "url": url})
+                self.assertNotIn("only on this computer", json.dumps(went))
+                read = bridge.call("page_read", {"tab": tab})
+                self.assertNotIn("only on this computer", json.dumps(read))
+        self.assertEqual(sorted(hits), ["/secret-agent", "/secret-redirect"])  # sent, and the pages were not shown
+        logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        self.assertEqual([e for e in logged if e.get("tool") == "network"], [])  # the Bridge refused nothing
+        registry.grant(agent["id"], "local_resources", "allow")
+        allowed = bridge.call("navigate", {"tab": tab, "url": f"{secret}-allowed"})
+        self.assertFalse(allowed["isError"], allowed)
+        self.assertEqual(allowed["structuredContent"]["title"], "Local")
+        self.assertIn("only on this computer", bridge.call("page_read", {"tab": tab})["structuredContent"]["text"])
+
+    def test_28_a_place_the_user_allowed_by_asking_opens_during_that_call(self):
+        # #243: the Shell lets a local page through when the Bridge allowed its place, here by asking (an address the
+        # Bridge reads as local itself, 127.0.0.4), and only during that call.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = b"<!doctype html><title>Asked</title><p>allowed by asking"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        url = f"http://127.0.0.4:{self.serve('127.0.0.4', Local)}/asked"
+
+        class Once(registry.Approver):
+            def ask(self, agent, capability, target, place="", cancel=None):
+                return "once"
+
+        agent, _ = self.agent("autonomous", local=False)
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-asked", approver=Once(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": url})
+        self.assertFalse(opened["isError"], opened)
+        self.assertEqual(opened["structuredContent"]["title"], "Asked")
+        self.assertEqual(hits, ["/asked"])
+
+    def test_29_a_users_profile_opened_for_an_agent_refuses_a_public_pages_local_requests_and_keeps_nothing(self):
+        # #243: in one of the user's own profiles the engine asked, and let a page's pop-up through. The Shell sets the
+        # engine's Local Network Access there as in the AI Workspace (refused, no prompt, a pop-up's included), on the
+        # default branch and locked: a value the user had stays theirs, and none of these values is left in prefs.js.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "6")
+                self.end_headers()
+                self.wfile.write(b"secret")
+
+            def log_message(self, *_args):
+                pass
+
+        secret = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/secret"
+        page = (
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
+            f'<script>fetch("{secret}-fetch").then(() => "sent", () => "refused")'
+            '.then(how => fetch("/ran?fetch=" + how));'
+            f'fetch("/ran?popup=" + (window.open("{secret}-popup") ? "opened" : "blocked"));</script>'
+        ).encode()
+        ran: list[str] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/ran"):
+                    ran.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        fixture: dict = {"dom.disable_open_during_load": False}  # the page opens its pop-up without a click
+        self.rebinding(fixture, port)
+        agent, _ = self.agent("autonomous", local=False)
+        work = self.home / "user-profiles" / "work"
+        work.mkdir(parents=True)
+        own = 'user_pref("permissions.default.local-network", 1);'  # the user's own choice in this profile
+        accepted = 'user_pref("termsofuse.acceptedVersion", 4);\nuser_pref("termsofuse.acceptedDate", "1761436800000");'
+        (work / "prefs.js").write_text(f"{accepted}\n{own}\n")
+        (work / "user.js").write_text(prefs_lines(fixture))
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
+        bridge = tools.Bridge(agent["id"], "s-profile-local", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page", "profile": "Trabalho"})
+        self.assertFalse(opened["isError"], opened)
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?popup=opened"])
+        time.sleep(2)
+        self.assertEqual(hits, [])
+        bridge.close()
+        kept = (work / "prefs.js").read_text()
+        self.assertIn(own, kept)
+        for name in ("network.lna.enabled", "network.lna.blocking", "network.lna.allow_top_level_navigation",
+                     "permissions.default.loopback-network"):  # fmt: skip
+            self.assertNotIn(f'"{name}"', kept)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,159 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* This computer and the local network, in an engine an agent drives (#243, R29).
+
+   The AI Bridge decides on its own DNS lookup of a name, and the engine connects
+   to its own answer: a name can answer the Bridge with a public address and the
+   engine with a local one (rebinding). The engine's Local Network Access decides
+   on the address it connects to, but it lets through what its driver opens (the
+   agent's own navigation runs as the system principal) and a redirect on the way
+   there. So, in an engine the Bridge started (its environment says so, which
+   nothing in the browser can change), this module checks every top-level page
+   on the address the engine got it from: a response from an address the engine
+   reads as this computer or the local network is cancelled before the tab shows
+   it, unless the agent may reach that place now, as the Bridge's file says
+   (launcher/nulavio_launcher/ai/tools.py, Bridge._write_local). The request has
+   been sent by then: what is held back is the page. A load through a proxy is
+   not checked (the proxy connects, not the engine), as Local Network Access
+   does not check one either.
+
+   In the same engines it sets the engine's Local Network Access to refuse a
+   public page's requests to local addresses with no prompt, a pop-up's
+   included, on the default branch and locked: nothing reaches the profile's
+   prefs.js, which matters in the user's own profiles opened for an agent. Both
+   are on before the Shell writes READY_FILE in the profile, and the Bridge uses
+   the engine only once it is there (workspace.py, GUARD_READY). */
+
+const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
+const LOCAL_ENV = "NULAVIO_AI_LOCAL"; // workspace.py LOCAL_ENV
+const READY_FILE = "nulavio-ai-guard"; // workspace.py GUARD_READY
+const TOPICS = Object.freeze(["http-on-examine-response", "http-on-examine-cached-response", "http-on-examine-merged-response"]);
+// What the AI Workspace also has in its user.js (workspace.py WORKSPACE_PREFS).
+export const LOCAL_NETWORK_PREFS = Object.freeze([
+  ["network.lna.enabled", true],
+  ["network.lna.blocking", true],
+  ["network.lna.allow_top_level_navigation", false],
+  ["permissions.default.local-network", 2],
+  ["permissions.default.loopback-network", 2],
+]);
+const MAX_FILE_BYTES = 65536;
+const MAX_PLACES = 1024;
+
+/** {all, places} from the Bridge's file, or null for anything else (then no local place is allowed). */
+export function parseAllowed(text) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data) || data.v !== 1 || typeof data.all !== "boolean"
+      || !Array.isArray(data.places) || data.places.length > MAX_PLACES) {
+    return null;
+  }
+  const places = new Set();
+  for (const place of data.places) {
+    if (!Array.isArray(place) || place.length !== 2) {
+      return null;
+    }
+    const [host, port] = place;
+    if (typeof host !== "string" || !host || host.length > 255 || !Number.isInteger(port) || port < 1 || port > 65535) {
+      return null;
+    }
+    places.add(`${host} ${port}`);
+  }
+  return { all: data.all, places };
+}
+
+/** The place a page comes from, as the Bridge writes it (policy.canonical_host, Bridge._request_place): host in
+    lower case without brackets or a final dot, and the port, the scheme's when the address has none. */
+export function placeOf(uri) {
+  if (uri.scheme !== "http" && uri.scheme !== "https") {
+    return null;
+  }
+  const host = uri.asciiHost.toLowerCase().replace(/^\[(.*)\]$/, "$1").replace(/\.$/, "");
+  return host ? [host, uri.port === -1 ? (uri.scheme === "https" ? 443 : 80) : uri.port] : null;
+}
+
+/** Whether the agent may reach this place now: Bridge._request_allowed for a local one (an http place allowed
+    by asking covers the engine's upgrade of it to https). */
+export function placeAllowed(allowed, place) {
+  if (!allowed || !place) {
+    return false;
+  }
+  const [host, port] = place;
+  return allowed.all || allowed.places.has(`${host} ${port}`) || (port === 443 && allowed.places.has(`${host} 80`));
+}
+
+class AgentNetwork {
+  #armed = false;
+  #file = "";
+
+  /** An engine the Bridge started: its environment names the agent (the same check as NulavioAI.workspaceAgent). */
+  driven() {
+    return Boolean(Services.env.get(WORKSPACE_ENV));
+  }
+
+  /** At the Shell's start. Elsewhere than in an engine the Bridge started, nothing. */
+  async arm() {
+    if (this.#armed || !this.driven()) {
+      return false;
+    }
+    this.#armed = true;
+    this.#file = Services.env.get(LOCAL_ENV) || "";
+    const defaults = Services.prefs.getDefaultBranch("");
+    for (const [name, value] of LOCAL_NETWORK_PREFS) {
+      if (Services.prefs.prefIsLocked(name)) {
+        continue; // an enterprise policy decided it: not this module's to change
+      }
+      if (typeof value === "boolean") {
+        defaults.setBoolPref(name, value);
+      } else {
+        defaults.setIntPref(name, value);
+      }
+      Services.prefs.lockPref(name); // the default wins over a value of the user's, and the lock is never saved
+    }
+    for (const topic of TOPICS) {
+      Services.obs.addObserver(this, topic);
+    }
+    await IOUtils.writeUTF8(PathUtils.join(PathUtils.profileDir, READY_FILE), String(Services.appinfo.processID));
+    return true;
+  }
+
+  observe(subject) {
+    let channel;
+    try {
+      channel = subject.QueryInterface(Ci.nsIHttpChannel);
+    } catch (e) {
+      return;
+    }
+    const loadInfo = channel.loadInfo;
+    if (loadInfo.externalContentPolicyType !== Ci.nsIContentPolicy.TYPE_DOCUMENT) {
+      return; // frames and a page's own requests: the engine's Local Network Access, set above
+    }
+    // The engine's reading of the address it got the page from (its address-space overrides included), set once it
+    // connected, or from the cache entry. A proxied load has none: the proxy connected.
+    const space = loadInfo.ipAddressSpace;
+    if (space !== Ci.nsILoadInfo.Local && space !== Ci.nsILoadInfo.Private) {
+      return;
+    }
+    const place = placeOf(channel.URI);
+    channel.suspend();
+    this.#allowed(place).then(
+      ok => ok || channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY),
+      () => channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY),
+    ).finally(() => channel.resume());
+  }
+
+  async #allowed(place) {
+    if (!this.#file || !place) {
+      return false;
+    }
+    const bytes = await IOUtils.read(this.#file, { maxBytes: MAX_FILE_BYTES });
+    return placeAllowed(parseAllowed(new TextDecoder().decode(bytes)), place);
+  }
+}
+
+export const NulavioAgentNetwork = new AgentNetwork();
