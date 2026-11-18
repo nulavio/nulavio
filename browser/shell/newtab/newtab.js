@@ -523,13 +523,14 @@ async function showDns() {
 // Each answer applies at once and is never asked again; a tab closed midway resumes at the first
 // step not yet answered. Private windows, temporary profiles and AI Workspaces never see it
 // (NulavioPrivacy.firstRun).
-const QUESTIONS = ["layout", "dns", "passwords", "default-browser", "profile"];
+const QUESTIONS = ["layout", "dns", "passwords", "default-browser", "updates", "profile"];
 const STEP_CARDS = {
   welcome: "firstrun-welcome",
   layout: "layout-choice",
   dns: "dns-choice",
   passwords: "firstrun-passwords",
   "default-browser": "firstrun-default",
+  updates: "firstrun-updates",
   profile: "firstrun-profile",
   finished: "firstrun-done",
 };
@@ -539,6 +540,7 @@ const FIRST_CONTROL = {
   dns: "dns-choice-heading",
   passwords: "firstrun-passwords-heading",
   "default-browser": "firstrun-default-make",
+  updates: "firstrun-updates-heading",
   profile: "firstrun-profile-heading",
   finished: "firstrun-finish",
 };
@@ -564,13 +566,14 @@ async function firstRun() {
   const connect = browser.nulavioConnect;
   const passwords = browser.nulavioPasswords;
   const done = new Set(start.done);
-  const [layout, dns, defaultBrowser, here, vault, profileList] = await Promise.all([
+  const [layout, dns, defaultBrowser, here, vault, profileList, updates] = await Promise.all([
     layoutApi?.state().catch(() => null),
     privacy.dns().catch(() => null),
     connect?.defaultBrowserState?.().catch(() => null),
     browser.nulavioProfiles?.here?.().catch(() => null),
     browser.nulavioVault?.capabilities().catch(() => null),
     browser.nulavioProfiles?.list?.().catch(() => null),
+    connect?.updatesState?.().catch(() => null),
   ]);
   const profileCount = profileList?.profiles?.length ?? 1;
   // The steps that apply here: asked now, or answered earlier in this same sequence (so "Etapa N de M"
@@ -580,6 +583,8 @@ async function firstRun() {
     dns: done.has("dns") || dns?.chosen === false,
     passwords: true,
     "default-browser": done.has("default-browser") || defaultBrowser?.state === "available",
+    // #241: an install from the packages, with the updates still off (never asked in a temporary profile).
+    updates: done.has("updates") || Boolean(updates?.available && !updates.on && !here?.temporary),
     // Only where a protected profile can really be made, and only while this one has no password.
     profile: done.has("profile") || Boolean(vault?.storage && vault?.sodium && here?.protection === "plain" && !here.temporary),
   };
@@ -788,10 +793,11 @@ async function firstRun() {
 
   async function fillSummary() {
     await refresh().then(summarise).catch(() => {}); // read again: the filter may have arrived since the first frame
-    const [layoutNow, dnsNow, defaultNow] = await Promise.all([
+    const [layoutNow, dnsNow, defaultNow, updatesNow] = await Promise.all([
       layoutApi?.state().catch(() => null),
       privacy.dns().catch(() => null),
       applies["default-browser"] ? connect.defaultBrowserState().catch(() => null) : null,
+      applies.updates ? connect.updatesState().catch(() => null) : null,
     ]);
     const presetKey = { lateral: "layoutLateral", top: "layoutTop", focus: "layoutFocus" }[layoutNow?.preset];
     // #240: Imersivo, when it is on, after the arrangement it goes with.
@@ -805,6 +811,7 @@ async function firstRun() {
       [t("statusPasswords"), fact("passwords").textContent],
       [t("statusFilter"), fact("filter").textContent],
       defaultNow ? [t("firstrunSummaryDefault"), t(defaultNow.state === "enabled" ? "firstrunDefaultIsNulavio" : "firstrunDefaultIsOther")] : null,
+      updatesNow?.available ? [t("firstrunUpdatesTitle"), t(updatesNow.on ? "updatesOn" : "updatesOff")] : null,
     ].filter(Boolean);
     document.getElementById("firstrun-summary").replaceChildren(
       ...rows.map(([name, value]) => h("div", {}, h("dt", { text: name }), h("dd", { text: value })))
@@ -842,6 +849,37 @@ async function firstRun() {
     }
   });
   document.getElementById("firstrun-default-later").addEventListener("click", () => advance("default-browser"));
+  // #241: polkit asks for the administrator's password; a dismissed prompt changes nothing and the card stays.
+  // Where nothing can ask (no pkexec, no polkit agent), the card shows the command instead.
+  const updatesOn = document.getElementById("firstrun-updates-on");
+  const updatesByHand = state => {
+    document.getElementById("firstrun-updates-code").textContent = state?.command ?? "";
+    document.getElementById("firstrun-updates-command").hidden = !state?.command;
+  };
+  if (updates?.available && !updates.canAsk) {
+    updatesByHand(updates);
+    updatesOn.hidden = true;
+  }
+  updatesOn.addEventListener("click", async () => {
+    const error = document.getElementById("firstrun-updates-error");
+    error.textContent = "";
+    updatesOn.setAttribute("aria-busy", "true");
+    updatesOn.disabled = true;
+    try {
+      await connect.setAutomaticUpdates(true);
+      await advance("updates");
+    } catch (e) {
+      error.textContent = errorText(e);
+      if (e?.message === "no-polkit") {
+        updatesByHand(updates);
+        updatesOn.hidden = true;
+      }
+    } finally {
+      updatesOn.removeAttribute("aria-busy");
+      updatesOn.disabled = false;
+    }
+  });
+  document.getElementById("firstrun-updates-later").addEventListener("click", () => advance("updates"));
   // A protected profile is made in the Vault's own steps (password, recovery code), in its own tab:
   // this one goes on to "Tudo pronto" and is here when the person comes back.
   document.getElementById("firstrun-profile-create").addEventListener("click", async () => {

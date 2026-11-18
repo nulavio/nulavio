@@ -21,7 +21,7 @@
         "name": "firstRunDone", "type": "function", "async": true,
         "parameters": [{
           "name": "steps", "type": "array", "maxItems": 7,
-          "items": { "type": "string", "enum": ["welcome", "layout", "dns", "passwords", "default-browser", "profile", "finished"] }
+          "items": { "type": "string", "enum": ["welcome", "layout", "dns", "passwords", "default-browser", "updates", "profile", "finished"] }
         }]
       }
     ],

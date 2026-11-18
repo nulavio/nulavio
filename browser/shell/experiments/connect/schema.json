@@ -16,6 +16,18 @@
         "parameters": []
       },
       {
+        "name": "updatesState",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "setAutomaticUpdates",
+        "type": "function",
+        "async": true,
+        "parameters": [{ "name": "on", "type": "boolean" }]
+      },
+      {
         "name": "setDefaultBrowser",
         "type": "function",
         "async": true,
