@@ -150,6 +150,9 @@ class Workspace:
         if self.engine is None:
             self.engine = engine_mod.find_engine()
             engine_mod.check_supported(self.engine)
+        # Before anything is written to the profile: the band, the lock and the guards an agent's window relies on
+        # are in the Nulavio build, so another browser is never driven in its place (engine.BRIDGE_NEEDS_NULAVIO).
+        engine_mod.require_nulavio(self.engine, refusal=engine_mod.BRIDGE_NEEDS_NULAVIO)
         self._write_prefs()
         port_file = self.profile_dir / "WebDriverBiDiServer.json"
         port_file.unlink(missing_ok=True)

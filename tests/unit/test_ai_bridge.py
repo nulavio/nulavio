@@ -1824,7 +1824,7 @@ class WorkspaceTest(Home):
             seen.update(env)
             raise Started
 
-        engine = mock.Mock(path=Path("/opt/engine/nulavio"))
+        engine = mock.Mock(path=Path("/opt/engine/nulavio"), vendor="Nulavio")  # the Bridge drives only Nulavio's
         targets = (
             (Workspace("ag-1", engine=engine, headless=True), "ag-1"),
             (
@@ -1908,6 +1908,60 @@ class WorkspaceTest(Home):
         self.assertIn('user_pref("nulavio.ai.target.label", "Trabalho");', user_js)
         target._remove_temporary()
         self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
+
+    def test_the_bridge_drives_only_the_nulavio_build(self):
+        # The band and lock of an agent's window, the forms guard and Nulavio's pages refusing permission requests
+        # live in the Nulavio build: another browser (the distribution's Firefox) is refused before the profile is
+        # touched or anything starts, for the AI Workspace and for the user's own profile alike.
+        from nulavio_launcher import engine as engine_mod
+        from nulavio_launcher.ai import workspace
+
+        firefox = engine_mod.Engine(path=Path("/usr/lib64/firefox/firefox"), version="160.0", vendor="Mozilla Firefox")
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "user.js").write_text('user_pref("browser.startup.page", 3);\n')
+        clean = {k: v for k, v in os.environ.items() if k != engine_mod.HARNESS_FIREFOX_ENV}
+
+        def targets(engine):
+            return (
+                Workspace("ag-1", engine=engine, headless=True),
+                ProfileTarget("ag-2", "Trabalho", folder, downloads_dir=self.home / "dl", engine=engine),
+                Workspace("ag-3", headless=True),  # the engine found by the lookup
+            )
+
+        with (
+            mock.patch.dict(os.environ, clean, clear=True),
+            mock.patch.object(engine_mod, "find_engine", return_value=firefox),
+            mock.patch.object(workspace.subprocess, "Popen") as popen,
+        ):
+            for target in targets(firefox):
+                with (
+                    self.subTest(target=type(target).__name__),
+                    self.assertRaisesRegex(engine_mod.EngineError, "AI Bridge drives only Nulavio's own engine"),
+                ):
+                    target.start()
+            popen.assert_not_called()
+            self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
+            self.assertEqual([p for p in self.home.rglob("user.js") if p != folder / "user.js"], [])
+
+            # The agent is told why, as a tool error, not an internal one.
+            agent, _ = registry.add("probe", "other", "autonomous")
+            bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+            answer = bridge.call("tabs_list", {})
+            self.assertTrue(answer["isError"])
+            self.assertIn("is not the Nulavio build", answer["content"][0]["text"])
+            popen.assert_not_called()
+
+        class Started(Exception):
+            pass
+
+        # The test harness, which says so, still runs the distribution's Firefox (pull-request CI).
+        with (
+            mock.patch.dict(os.environ, {**clean, engine_mod.HARNESS_FIREFOX_ENV: "1"}, clear=True),
+            mock.patch.object(workspace.subprocess, "Popen", side_effect=Started),
+            self.assertRaises(Started),
+        ):
+            Workspace("ag-4", engine=firefox, headless=True).start()
 
     def test_disposable_workspace_is_deleted(self):
         ws = Workspace("ag-2", disposable=True, engine=mock.Mock(path=Path("/x")))

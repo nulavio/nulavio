@@ -76,7 +76,7 @@ Session markers (UX5-I2): while `nulavio ai serve` runs, `<state>/ai/sessions/<s
 ## Integration points
 
 - **Engine**: no patch. The bridge uses the engine's standard BiDi endpoint. Normal profiles keep refusing remote-control flags.
-- **Launcher**: `nulavio ai` subcommands, `paths` (state, data), `engine.find_engine`/`launch_env`, the baseline prefs.
+- **Launcher**: `nulavio ai` subcommands, `paths` (state, data), `engine.find_engine`/`launch_env`, the baseline prefs. Installed tools use the engine of their own install (`engine.bundled_engine`), and a workspace refuses an engine that is not the Nulavio build (`engine.require_nulavio`), except under the test harness.
 - **Shell (S7)**: Settings → AI & Automation reads and writes the same registry through the launcher; the activity indicator reads the audit.
 - **Profiles and routing (S8)**: agent rules in Smart Profile Routing ("Codex opens localhost in Development"); access to a real profile is a separate grant per profile, and an unlock always comes from the user.
 

@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..engine import EngineError
 from . import audit, policy, registry
 from .bidi import Bidi, BidiError, Cancelled, script_result
 from .workspace import ProfileTarget, TargetError, Workspace
@@ -540,7 +541,7 @@ class Bridge:
             result = self._error(f"Denied by Nulavio: '{policy.CAPABILITIES.get(d.capability, d.capability)}' is "
                                  f"{_why(d)}.{who}" + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
             outcome, decision, reason = "denied", "deny", d.reason
-        except ToolError as exc:
+        except (ToolError, EngineError) as exc:  # EngineError: no engine, or one the Bridge does not drive
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None
         except BidiError as exc:
             result, outcome, decision, reason = self._error(f"Browser error: {exc}"), f"error:{exc.error}", "allow", None

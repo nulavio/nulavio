@@ -201,6 +201,49 @@ class EngineCommandTest(unittest.TestCase):
         with self.assertRaises(engine.EngineError):
             engine.check_supported(replace(FAKE_ENGINE, version="115.0esr"))
 
+    def test_installed_tools_use_the_engine_beside_them(self):
+        # The browser runs its tools (and an agent's configuration runs `ai serve`) with no NULAVIO_ENGINE: they
+        # must find the engine of their own install, not a Firefox the system also has (known paths or PATH).
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+
+            def program(path: Path, output: str) -> Path:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f"#!/bin/sh\necho '{output}'\n")
+                path.chmod(0o755)
+                return path
+
+            install = tmp / "usr" / "lib64" / "nulavio"
+            nulavio = program(install / "nulavio", "Nulavio Nulavio 160.0.1")
+            (install / "application.ini").write_text("[App]\nVersion=160.0.1\n")
+            (install / "nulavio-tools").mkdir()
+            firefox = program(tmp / "firefox" / "firefox", "Mozilla Firefox 160.0")
+            program(tmp / "bin" / "firefox", "Mozilla Firefox 160.0")
+            not_a_checkout = tmp / "src" / "nulavio"  # a source checkout cloned as "nulavio"
+            (not_a_checkout / "bin").mkdir(parents=True)
+            no_ini = tmp / "other"
+            program(no_ini / "nulavio", "Nulavio Nulavio 160.0.1")
+            (no_ini / "nulavio-tools").mkdir()
+            clean = {k: v for k, v in os.environ.items() if k != "NULAVIO_ENGINE"}
+
+            def lookup(root: Path, **extra) -> engine.Engine:
+                with (
+                    mock.patch.dict(os.environ, {**clean, "PATH": str(tmp / "bin"), **extra}, clear=True),
+                    mock.patch.object(engine, "KNOWN_BINARIES", (firefox,)),
+                    mock.patch("nulavio_launcher.paths.repo_root", return_value=root),
+                ):
+                    return engine.find_engine()
+
+            found = lookup(install / "nulavio-tools")
+            self.assertEqual((found.path, found.vendor), (nulavio.resolve(), "Nulavio"))
+            explicit = lookup(install / "nulavio-tools", NULAVIO_ENGINE=str(firefox))
+            self.assertEqual(explicit.path, firefox.resolve(), "an explicit NULAVIO_ENGINE still wins")
+            for root in (not_a_checkout, tmp / "src" / "nulavio-tools", no_ini / "nulavio-tools"):
+                with self.subTest(root=root):
+                    with mock.patch("nulavio_launcher.paths.repo_root", return_value=root):
+                        self.assertIsNone(engine.bundled_engine())
+                    self.assertEqual(lookup(root).vendor, "Mozilla Firefox")
+
     def test_snap_engine_is_refused(self):
         with (
             mock.patch.dict(os.environ, {"NULAVIO_ENGINE": "/snap/bin/firefox"}),

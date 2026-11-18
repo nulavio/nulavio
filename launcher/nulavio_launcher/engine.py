@@ -83,10 +83,31 @@ def _is_script(path: Path) -> bool:
         return False
 
 
+def bundled_engine() -> Path | None:
+    """The engine of the install these tools belong to, or None in a source checkout.
+
+    A Nulavio install carries its tools at <install>/nulavio-tools, beside the engine <install>/nulavio and its
+    application.ini (the RPM, the .deb, the Flatpak and the tarball alike). The place comes from this file's own
+    path, never from PATH or the environment: the browser runs the tools with its own environment, which has no
+    NULAVIO_ENGINE, and an agent's MCP configuration has none either."""
+    from . import paths
+
+    tools = paths.repo_root()
+    if tools.name != "nulavio-tools":
+        return None
+    candidate = tools.parent / "nulavio"
+    if candidate.is_file() and (tools.parent / "application.ini").is_file():
+        return candidate
+    return None
+
+
 def _candidates() -> list[Path]:
     explicit = os.environ.get("NULAVIO_ENGINE")
     if explicit:
         return [Path(explicit)]
+    bundled = bundled_engine()
+    if bundled is not None:
+        return [bundled]  # the installed tools use their own engine, never another browser found on the system
     found = [p for p in KNOWN_BINARIES if p.exists()]
     on_path = shutil.which("firefox")
     if on_path:
@@ -157,14 +178,22 @@ PREVIEW_GONE = (
 )
 
 
-def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None) -> None:
+# The AI Bridge's refusal: what keeps an agent's session visible and contained lives in the Nulavio build (the window's
+# band and lock, the guard that holds forms a page sends by itself, Nulavio's pages refusing permission requests).
+BRIDGE_NEEDS_NULAVIO = (
+    "{label} is not the Nulavio build, and the AI Bridge drives only Nulavio's own engine. Install the Nulavio "
+    "package (https://nulavio.net/en/download/), or set NULAVIO_ENGINE to a Nulavio build."
+)
+
+
+def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None, *, refusal: str = PREVIEW_GONE) -> None:
     """Refuse an engine that is not the Nulavio build, unless the test harness asked for the distribution's Firefox."""
     environ = os.environ if environ is None else environ
     if engine.vendor == "Nulavio" or environ.get(HARNESS_FIREFOX_ENV) == "1":
         return
     from . import paths
 
-    raise EngineError(PREVIEW_GONE.format(label=engine.label, profiles=paths.profiles_root()))
+    raise EngineError(refusal.format(label=engine.label, profiles=paths.profiles_root()))
 
 
 def validate_url(url: str) -> str:
