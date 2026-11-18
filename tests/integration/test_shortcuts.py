@@ -376,11 +376,15 @@ class ShortcutsTest(unittest.TestCase):
         self.m.chrome(pick, ["nulavio-immersive"])
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(immersive), 10))
         # The profile menu, as its button opens it.
-        self.m.chrome(pick, ["nulavio-profiles"])
         popup = (
             "return [...document.querySelectorAll('browser')]"
             "  .some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html'));"
         )
+        # The button's own action toggles: the menu an earlier test opened and hid can still count as open, and the
+        # first pick then closes it. A second pick opens it; an action that never opens the menu still fails here.
+        self.m.chrome(pick, ["nulavio-profiles"])
+        if not harness.wait_until(lambda: self.m.chrome(popup), 3):
+            self.m.chrome(pick, ["nulavio-profiles"])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(popup), 10))
         # Closed as Escape closes it: the keyboard goes back to the page (headless keeps it in the closed panel).
         self.m.chrome(
