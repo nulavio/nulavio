@@ -60,12 +60,6 @@
       },
       "description": "__MSG_commandCopyLinkToHighlight__"
     },
-    "toggle-page-editing": {
-      "suggested_key": {
-        "default": "Ctrl+Alt+E"
-      },
-      "description": "__MSG_commandTogglePageEditing__"
-    },
     "lock-profile": {
       "suggested_key": {
         "default": "Ctrl+Alt+B"
