@@ -29,6 +29,7 @@ from nulavio_launcher.ai import audit, mcp, policy, registry, tools
 from nulavio_launcher.ai import bidi as bidi_mod
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
+from nulavio_launcher.engine import EngineError
 from nulavio_launcher.ai.workspace import OLD_RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
 
 
@@ -1966,10 +1967,16 @@ class WorkspaceTest(Home):
             ready["write"] = True
             self.assertIs(ws.start(timeout=5), bidi.return_value)
             ws.bidi = None
-            # The test harness's distribution Firefox has no Shell: nothing to wait for (it is not a way to use Nulavio).
+            # Any other browser is refused before it starts (#563, engine.require_nulavio)...
             ready["write"] = False
-            ws.engine = mock.Mock(path=Path("/usr/lib64/firefox/firefox"), vendor="Mozilla")
-            self.assertIs(ws.start(timeout=5), bidi.return_value)
+            ws.engine = mock.Mock(path=Path("/usr/lib64/firefox/firefox"), vendor="Mozilla", label="Mozilla Firefox 160.0")
+            seen.clear()
+            with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": ""}), self.assertRaises(EngineError):
+                ws.start(timeout=5)
+            self.assertEqual(seen, {})  # never started
+            # ...except the test harness's distribution Firefox in a source checkout, which has no Shell to wait for.
+            with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": "1"}):
+                self.assertIs(ws.start(timeout=5), bidi.return_value)
 
     def test_the_shell_reads_what_the_bridge_writes(self):
         # #243: the Shell's check (NulavioAgentNetwork.sys.mjs) and the Bridge name the same environment variables and

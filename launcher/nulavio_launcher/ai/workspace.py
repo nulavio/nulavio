@@ -197,9 +197,10 @@ class Workspace:
         raise WorkspaceError("the engine's automation endpoint, or its check of local addresses, did not start")
 
     def guarded(self) -> bool:
-        """The engine carries the Shell, which checks local addresses (GUARD_READY). Only the Nulavio build does;
-        the test harness's distribution Firefox (engine.HARNESS_FIREFOX_ENV) does not, and it is not offered as a
-        way to use Nulavio."""
+        """The engine carries the Shell, which checks local addresses (GUARD_READY). start() drives only the Nulavio
+        build (engine.require_nulavio, #563); the one other engine it accepts is the test harness's distribution
+        Firefox in a source checkout (engine.HARNESS_FIREFOX_ENV), which has no Shell, so there is nothing to wait
+        for, and test_27, test_29 and test_30 need the Nulavio build."""
         return getattr(self.engine, "vendor", None) == "Nulavio"
 
     def stop(self) -> None:
