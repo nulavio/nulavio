@@ -384,7 +384,11 @@ class ShortcutsTest(unittest.TestCase):
             "  .some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html'));"
         )
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(popup), 10))
-        self.m.chrome("for (const p of document.querySelectorAll('panel[panelopen], panel[open]')) p.hidePopup?.();")
+        # Closed as Escape closes it: the keyboard goes back to the page (headless keeps it in the closed panel).
+        self.m.chrome(
+            "for (const p of document.querySelectorAll('panel[panelopen], panel[open]')) p.hidePopup?.();"
+            "gBrowser.selectedBrowser.focus();"
+        )
         # Nothing selected: the link is not copied, and the window says why (as Ctrl+Alt+C does).
         self.m.chrome(pick, ["nulavio-highlight"])
         said = harness.wait_until(self.announced, 10)
