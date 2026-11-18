@@ -1,7 +1,7 @@
 """perf.yml's gate (#367): which measures of a release got worse than the runner's own noise allows.
 
 A measure fails when its 95 % interval against the release before it excludes 0 on the worse side **and** its median
-change is worse than its threshold. The thresholds are two to three times the largest change seen between runs of the
+change is worse than its threshold. The thresholds are two to four times the largest change seen between runs of the
 same comparison on GitHub's runner (docs/architecture/performance.md, "Thresholds"). Prints one line per measure for the
 job summary and exits 1 when one fails; the release is already published, and the maintainer reads the result.
 
