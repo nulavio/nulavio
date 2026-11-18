@@ -7,6 +7,8 @@
   no Dependabot alerts for SHA-pinned actions or Gradle, so this is their vulnerability signal.
 * The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced file for the
   pinned version, and how long the lock has lagged behind AMO's current version.
+* The pinned extensions against the security advisories their repositories publish on GitHub (the table in
+  docs/security/extension-advisory-sources.json): an advisory whose range covers the pinned version fails at once.
 * The base images' tag@digest pins against their registries (a newer build is reported, not failed).
 
 A finding someone has looked at and accepted goes in docs/security/vulnerability-exceptions.json,
@@ -16,10 +18,12 @@ for one package version, with a reason and an expiry (docs/security/dependency-u
     python3 -I scripts/release/watch_dependencies.py --list     # the inventory only, no network
 
 Exit status: 0 nothing to act on, 1 action needed (a known vulnerability without a valid exception,
-a blocked or replaced extension, a lock more than 30 days behind AMO), 2 some data was unavailable and
-nothing else needs action. The three checks run independently: one source being down does not hide
+a blocked or replaced extension, a published advisory that covers a pinned extension, a lock more
+than 30 days behind AMO), 2 some data was unavailable and
+nothing else needs action. The four checks run independently: one source being down does not hide
 what the others found.
-Sends only public package names and versions to api.osv.dev, addons.mozilla.org and the registries.
+Sends only public package names and versions to api.osv.dev, addons.mozilla.org, api.github.com (a GET of a
+repository's advisories, with the workflow's read-only token) and the registries.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ import datetime as _dt
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,9 +44,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OSV = "https://api.osv.dev/v1/"
 AMO = "https://addons.mozilla.org/api/v5/"
+GITHUB = "https://api.github.com/"
+ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json"
+MIN_REQUEST_SECONDS = 10
+RETRY_DELAYS = (2, 8, 30)  # a transient GitHub failure is retried before it is reported (as watch_upstream.py does)
+GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step ends and writes its summary in time
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
 EXTENSION_LAG_DAYS = 30
+EXTENSION_ECOSYSTEM = "Browser extension"  # in vulnerability-exceptions.json: package = the lock's key, version = the pin
 UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
 INDEX_TYPES = ", ".join([
@@ -74,20 +85,35 @@ class Row:
 class Net:
     """The only code here that touches the network (the unit tests replace it)."""
 
-    def __init__(self, timeout: int = 30):
+    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep, clock=time.monotonic, wall=time.time):
         self.timeout = timeout
+        self.token = token  # the workflow's read-only GITHUB_TOKEN: only for api.github.com, it raises the rate limit
+        self.sleep = sleep
+        self.clock = clock
+        self.wall = wall  # the epoch clock, for the rate limit's reset time
+        self.github_started: float | None = None
 
-    def _open(self, url: str, data: dict | None = None, headers: dict | None = None, method: str | None = None):
+    def _open(
+        self,
+        url: str,
+        data: dict | None = None,
+        headers: dict | None = None,
+        method: str | None = None,
+        timeout: float | None = None,
+    ):
         if not url.startswith("https://"):
             raise ValueError(f"refusing a non-https URL: {url}")
         body = json.dumps(data).encode() if data is not None else None
         request = urllib.request.Request(url, data=body, method=method)  # noqa: S310 - https only, checked above
         request.add_header("User-Agent", "nulavio-dependency-watch")
         for key, value in (headers or {}).items():
-            request.add_header(key, value)
+            if key.lower() == "authorization":
+                request.add_unredirected_header(key, value)  # never follows a redirect to another host
+            else:
+                request.add_header(key, value)
         if body is not None:
             request.add_header("Content-Type", "application/json")
-        return urllib.request.urlopen(request, timeout=self.timeout)  # noqa: S310 - https only, checked above
+        return urllib.request.urlopen(request, timeout=timeout or self.timeout)  # noqa: S310 - https only, checked above
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
         try:
@@ -97,6 +123,55 @@ class Net:
             if missing_ok and exc.code == 404:
                 return None
             raise
+
+    def github_json(self, url: str):
+        """A GET against api.github.com, retried on a server error, rate limit or network failure."""
+        if not url.startswith(GITHUB):
+            raise ValueError(f"refusing a non-GitHub URL: {url}")
+        headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
+        if self.github_started is None:
+            self.github_started = self.clock()
+        deadline = self.github_started + GITHUB_BUDGET
+        for attempt in range(len(RETRY_DELAYS) + 1):
+            # the budget covers the requests too: a request may not outlast it (but gets a few seconds at least)
+            timeout = max(MIN_REQUEST_SECONDS, min(self.timeout, deadline - self.clock()))
+            try:
+                with self._open(url, headers=headers, timeout=timeout) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as exc:
+                delay = self.backoff(exc, RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
+                failure = exc
+                if delay is None:
+                    raise
+            except OSError as exc:  # a reset, a timeout, DNS (HTTPError is handled above)
+                failure = exc
+                delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+            if attempt == len(RETRY_DELAYS) or self.clock() + delay >= deadline:  # checked after the failure
+                raise failure
+            self.sleep(delay)
+
+    def backoff(self, exc: urllib.error.HTTPError, default: float) -> float | None:
+        """Seconds to wait before retrying this HTTP error, or None when it is not worth retrying.
+
+        Server errors and 429 are; a 403 only when it is GitHub's rate limit (Retry-After, or no calls left until the
+        reset time), whose own backoff is honoured when it fits the budget; any other 403 (authorization) is not.
+        """
+        headers = exc.headers or {}
+        limited = exc.code == 429 or (
+            exc.code == 403 and (headers.get("retry-after") or headers.get("x-ratelimit-remaining") == "0")
+        )
+        if exc.code not in (500, 502, 503, 504) and not limited:
+            return None
+        try:
+            if headers.get("retry-after"):
+                return max(float(headers["retry-after"]), 1)
+            if headers.get("x-ratelimit-remaining") == "0":
+                return max(float(headers["x-ratelimit-reset"]) - self.wall(), 1)
+        except (KeyError, ValueError):
+            pass
+        return default
 
     def head(self, url: str, headers: dict) -> tuple[int, dict[str, str]]:
         try:
@@ -274,7 +349,7 @@ def vulnerability_rows(findings: list[tuple[Dep, str]], details: dict[str, dict]
             detail["exception"] = item
             rows.append(Row("osv", "accepted", f"{text} (accepted until {until})", detail))
     for item in exceptions:
-        if id(item) not in used:
+        if id(item) not in used and item["ecosystem"] != EXTENSION_ECOSYSTEM:  # advisory_rows reports those
             what = f"{item['id']} for {item['ecosystem']} {item['package']} {item['version']}"
             rows.append(Row("exception", "warn", f"exception {what} matches nothing now: remove it"))
     return rows
@@ -321,6 +396,217 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
             )
             continue
         rows.append(Row("extension", state, text, {"key": entry["key"], "pinned": entry["version"], "amo": current["version"]}))
+    return rows
+
+
+# Extension advisories ----------------------------------------------------------------------------
+
+STRICT_VERSION = re.compile(r"v?(\d+(?:\.\d+)*)")
+RANGE_CLAUSE = re.compile(r"(<=|>=|<|>|==|=)\s*(v?\d+(?:\.\d+)*)")
+RANGE_OR_LOWER = re.compile(r"(v?\d+(?:\.\d+)*)\s+(?:and|or)\s+(?:lower|below|earlier|older)")
+
+
+def strict_version(text: str) -> tuple[int, ...]:
+    """Dotted numbers only (1.75.2, 1.10.4.1, 2026.10.2); anything else raises, so the caller fails closed."""
+    match = STRICT_VERSION.fullmatch(text.strip())
+    if not match:
+        raise ValueError(f"not a dotted version: {text!r}")
+    numbers = [int(p) for p in match.group(1).split(".")]
+    while numbers and numbers[-1] == 0:
+        numbers.pop()  # 1.10 == 1.10.0
+    return tuple(numbers)
+
+
+def range_covers(text: str | None, version: str) -> bool:
+    """Does an advisory's `vulnerable_version_range` cover the version? ValueError when it cannot be read.
+
+    GitHub stores the range as free text: "<= 1.9.6", ">= 1.2, < 1.4", "1.75.2 and lower". Clauses joined by
+    commas must all hold. Any other form is refused instead of guessed at.
+    """
+    if not text or not text.strip():
+        raise ValueError("empty vulnerable_version_range")
+    key = strict_version(version)
+    clauses = []
+    for clause in text.split(","):  # every clause is read before any is judged, so a bad one is never skipped
+        clause = clause.strip()
+        if match := RANGE_CLAUSE.fullmatch(clause):
+            clauses.append((match.group(1), strict_version(match.group(2))))
+        elif match := RANGE_OR_LOWER.fullmatch(clause):
+            clauses.append(("<=", strict_version(match.group(1))))
+        else:
+            raise ValueError(f"cannot read the range {text!r} (at {clause!r})")
+    for op, bound in clauses:
+        holds = {
+            "<": key < bound,
+            "<=": key <= bound,
+            ">": key > bound,
+            ">=": key >= bound,
+            "==": key == bound,
+            "=": key == bound,
+        }
+        if not holds[op]:
+            return False
+    return True
+
+
+def load_advisory_sources(path: Path = ADVISORY_SOURCES) -> dict[str, dict]:
+    """key -> {"repo", "packages"} or {"reason"}; a malformed table stops the run here."""
+    items = json.loads(path.read_text(encoding="utf-8"))["sources"]
+    table: dict[str, dict] = {}
+    for item in items:
+        if item.get("key") in table or not item.get("key"):
+            raise ValueError(f"{path.name}: duplicate or missing key: {item}")
+        if item.get("repo"):
+            ok = re.fullmatch(r"[\w.-]+/[\w.-]+", item["repo"]) and isinstance(item.get("monorepo"), bool)
+            if not ok or set(item) != {"key", "repo", "monorepo", *(["packages"] if item.get("monorepo") else [])}:
+                raise ValueError(
+                    f"{path.name}: a source needs key, repo, monorepo (true or false) and, for a monorepo, packages: {item}"
+                )
+            if item["monorepo"] and not item["packages"]:
+                raise ValueError(f"{path.name}: a monorepo needs the package names of its extension: {item}")
+        elif set(item) != {"key", "repo", "reason"} or item["repo"] is not None or not str(item["reason"]).strip():
+            raise ValueError(f"{path.name}: an extension without a source needs repo null and a reason: {item}")
+        table[item["key"]] = item
+    return table
+
+
+def advisory_row(
+    entry: dict,
+    source: dict,
+    advisories: list,
+    exceptions: list[dict] = (),
+    today: _dt.date | None = None,
+    used: set | None = None,
+) -> list[Row]:
+    """Rows for one extension from its repository's advisories: fail when one covers the pinned version.
+
+    A repository of one product accepts any package name (the names are free text); a monorepo is filtered by the
+    names in the table, and a name not in it fails like a range that cannot be read. An exception for the advisory,
+    this extension and this pinned version turns a failure into "accepted" until its date.
+    """
+    key, version = entry["key"], entry["version"]
+    today = today or _dt.datetime.now(_dt.UTC).date()
+    used = used if used is not None else set()
+    packages = {p.lower() for p in source.get("packages", [])}
+    dep = Dep(EXTENSION_ECOSYSTEM, key, version, ())
+    rows = []
+
+    def finding(advisory: dict, text: str) -> None:
+        ident, link = advisory["ghsa_id"], advisory["html_url"]
+        detail = {"key": key, "pinned": version, "id": ident, "url": link}
+        item = matching_exception({ident, *filter(None, [advisory.get("cve_id")])}, dep, exceptions)
+        if item is None:
+            rows.append(Row("advisory", "fail", text, detail))
+            return
+        used.add(id(item))
+        until = _dt.date.fromisoformat(item["until"])
+        if until < today:
+            rows.append(Row("advisory", "fail", f"{text} (exception expired {until}: look at it again)", detail))
+        else:
+            rows.append(Row("advisory", "accepted", f"{text} (accepted until {until})", {**detail, "exception": item}))
+
+    for advisory in advisories:
+        if (
+            not isinstance(advisory, dict)
+            or not isinstance(advisory.get("state"), str)
+            or not all(isinstance(advisory.get(k), str) and advisory[k] for k in ("ghsa_id", "html_url"))
+        ):  # a malformed reply is an error row, never a silent skip
+            raise ValueError("an advisory without a state, id or link")
+        if advisory["state"] != "published" or advisory.get("withdrawn_at"):
+            continue
+        ident, link = advisory["ghsa_id"], advisory["html_url"]
+        covered, problems = None, []
+        vulns = advisory.get("vulnerabilities")
+        if not isinstance(vulns, list) or not vulns:
+            problems.append("it lists no affected package or range")
+        for vuln in vulns if isinstance(vulns, list) else []:
+            if not isinstance(vuln, dict) or not isinstance(vuln.get("package") or {}, dict):
+                raise ValueError(f"{ident}: a vulnerability or its package is not an object")
+            name = str((vuln.get("package") or {}).get("name", ""))
+            if source["monorepo"] and name.lower() not in packages:
+                problems.append(f"it names package {name!r}, which is not this extension's in the table")
+                continue
+            try:
+                if range_covers(vuln.get("vulnerable_version_range"), version):
+                    covered = covered or vuln
+            except ValueError as exc:
+                problems.append(f"a range cannot be read ({exc})")
+        if covered:
+            fixed = covered.get("patched_versions") or "no fixed version listed"
+            finding(
+                advisory,
+                f"{key} {version} is covered by {ident} [{advisory.get('severity') or 'unrated'}] "
+                f"{str(advisory.get('summary', '')).strip()} (range {covered['vulnerable_version_range']!r}, "
+                f"fixed in {fixed}): {link}",
+            )
+        elif problems:
+            finding(advisory, f"{key} {version}: {ident} cannot be matched, {'; '.join(problems)}; look at it by hand: {link}")
+    return rows
+
+
+def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = None, today: _dt.date | None = None) -> list[Row]:
+    lock = json.loads((root / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
+    table = load_advisory_sources(root / "docs" / "security" / "extension-advisory-sources.json")
+    today = today or _dt.datetime.now(_dt.UTC).date()
+    if exceptions is None:
+        exceptions = load_exceptions(root / "docs" / "security" / "vulnerability-exceptions.json")
+    used: set = set()
+    keys = [e["key"] for e in lock["extensions"]]
+    rows = [
+        Row(
+            "advisory",
+            "fail",
+            f"{k} is not in docs/security/extension-advisory-sources.json: add it, with a repository or a reason",
+        )
+        for k in keys
+        if k not in table
+    ]
+    rows += [
+        Row("advisory", "fail", f"docs/security/extension-advisory-sources.json lists {k}, which the lock no longer pins")
+        for k in table
+        if k not in keys
+    ]
+    for entry in lock["extensions"]:
+        source = table.get(entry["key"])
+        if source is None:
+            continue
+        if not source["repo"]:
+            rows.append(
+                Row(
+                    "advisory",
+                    "ok",
+                    f"{entry['key']}: no public advisory source ({source['reason']})",
+                    {"key": entry["key"], "source": None},
+                )
+            )
+            continue
+        try:
+            advisories = net.github_json(f"{GITHUB}repos/{source['repo']}/security-advisories?per_page=100")
+            if not isinstance(advisories, list) or len(advisories) >= 100:
+                raise ValueError("expected a list of fewer than 100 advisories")
+            found = advisory_row(entry, source, advisories, exceptions, today, used)
+        except UNAVAILABLE as exc:  # the other extensions are still checked
+            rows.append(
+                Row(
+                    "advisory",
+                    "error",
+                    f"{entry['key']}: no advisory data from api.github.com ({source['repo']}): {exc}",
+                    {"key": entry["key"]},
+                )
+            )
+            continue
+        rows += found or [
+            Row(
+                "advisory",
+                "ok",
+                f"{entry['key']} {entry['version']}: no published advisory of {source['repo']} covers it",
+                {"key": entry["key"]},
+            )
+        ]
+    for item in exceptions:
+        if item["ecosystem"] == EXTENSION_ECOSYSTEM and id(item) not in used:
+            what = f"{item['id']} for {item['package']} {item['version']}"
+            rows.append(Row("exception", "warn", f"exception {what} matches nothing now: remove it"))
     return rows
 
 
@@ -400,6 +686,7 @@ def run(net: Net, now: _dt.datetime, root: Path = ROOT, exceptions: list[dict] |
     sections = (
         ("osv", "OSV.dev", lambda: osv_rows(deps, net, exceptions, now.date())),
         ("extension", "addons.mozilla.org", lambda: extension_rows(net, now, root)),
+        ("advisory", "api.github.com", lambda: advisory_rows(net, root, exceptions, now.date())),
         ("image", "the registries", lambda: image_rows(net, root)),
     )
     rows: list[Row] = []
@@ -424,11 +711,18 @@ def report(deps: list[Dep], rows: list[Row]) -> str:
     shipped = sum(d.ships for d in deps)
     extensions = sum(r.check == "extension" and r.state != "error" for r in rows)
     images = sum(r.check == "image" and r.state != "error" for r in rows)
+    sourceless = sorted(r.detail["key"] for r in rows if r.check == "advisory" and r.detail.get("source", 1) is None)
+    watched = len({r.detail["key"] for r in rows if r.check == "advisory" and r.state != "error" and "key" in r.detail}) - len(
+        sourceless
+    )
     osv_down = any(r.check == "osv" and r.state == "error" for r in rows)
     head = (
         f"{'Could not check' if osv_down else 'Checked'} {len(deps)} pinned packages against OSV.dev ({shipped} ship in the APK)"
     )
-    lines = [f"{head}; checked {extensions} extensions and {images} base images."]
+    advisories = f"{watched} extensions' repositories for security advisories" + (
+        f" ({', '.join(sourceless)}: no public source)" if sourceless else ""
+    )
+    lines = [f"{head}; checked {extensions} extensions, {advisories} and {images} base images."]
     lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
     return "\n".join(lines)
 
@@ -439,10 +733,21 @@ def markdown(deps: list[Dep], rows: list[Row]) -> str:
     return "### Pinned dependencies\n\n" + head + "\n\n" + "\n".join(items or ["- nothing to act on"]) + "\n"
 
 
+def read_token(stream=None) -> str | None:
+    """The GitHub token, from the first line of stdin: it travels there, not in argv or a child's environment (I3)."""
+    line = (stream or sys.stdin).readline().strip()
+    return line or None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--summary", type=Path, help="append a Markdown summary (GitHub job summary)")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--token-stdin",
+        action="store_true",
+        help="read a GitHub token from the first line of stdin (never argv or the environment)",
+    )
     parser.add_argument("--list", action="store_true", help="print the inventory and exit (no network)")
     args = parser.parse_args()
     if args.list:
@@ -450,7 +755,7 @@ def main() -> int:
             print(dep.label())
         return 0
     try:
-        deps, rows = run(Net(), _dt.datetime.now(_dt.UTC))
+        deps, rows = run(Net(token=read_token() if args.token_stdin else None), _dt.datetime.now(_dt.UTC))
     except UNAVAILABLE as exc:  # the repository's own files (inventory, exceptions) could not be read
         print(f"watch_dependencies: cannot read the pins: {exc}", file=sys.stderr)
         if args.summary:
