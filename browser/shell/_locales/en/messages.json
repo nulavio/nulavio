@@ -1115,7 +1115,7 @@
   "methodsRekeyDropped": {"message": "No longer works: $LIST$.", "placeholders": {"list": {"content": "$1"}}},
   "methodsRekeyNewCode": {"message": "The profile has no recovery code now: the new one is on this page, for you to keep and confirm."},
   "err_rekey_unfinished": {"message": "A new key was made for this profile, but putting it in place did not finish; it is finished the next time the profile is used. Methods that were not carried into the new key no longer work: check the methods on this page, and make a new recovery code if it is not listed."},
-  "err_lock_current": {"message": "The profile you are using locks only after its windows close. Use Lock now: it closes them first."},
+  "err_lock_current": {"message": "The profile you are using locks only after its windows close. Use “Lock now”: it closes them first."},
   "err_rekey_current": {"message": "A new key needs the profile closed: close its windows and make the key from another profile."},
   "methodsRekeyInterrupted": {"message": "Making the new key was interrupted. What holds is what this page shows now: the methods above and the key's date. If the key did not change, nothing was changed; if it did, make a new recovery code."},
   "methodRemovedKeeps": {"message": "A copy of the key file made before now still accepts it, outside Nulavio, until the profile gets a new key."},

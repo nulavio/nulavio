@@ -1115,7 +1115,7 @@
   "methodsRekeyDropped": {"message": "Deixou de valer: $LIST$.", "placeholders": {"list": {"content": "$1"}}},
   "methodsRekeyNewCode": {"message": "O perfil ficou sem código de recuperação: o novo está nesta página, para você guardar e confirmar."},
   "err_rekey_unfinished": {"message": "Uma nova chave foi criada para este perfil, mas a troca não terminou; ela é concluída no próximo uso do perfil. Os métodos que não foram levados para a nova chave deixaram de valer: confira os métodos desta página e gere um novo código de recuperação se ele não estiver na lista."},
-  "err_lock_current": {"message": "O perfil que você está usando só bloqueia depois que as janelas dele fecham. Use Bloquear agora: ele as fecha antes."},
+  "err_lock_current": {"message": "O perfil que você está usando só bloqueia depois que as janelas dele fecham. Use “Bloquear agora”: ele as fecha antes."},
   "err_rekey_current": {"message": "Para criar uma nova chave o perfil precisa estar fechado: feche as janelas dele e crie a chave a partir de outro perfil."},
   "methodsRekeyInterrupted": {"message": "A criação da nova chave foi interrompida. O que vale é o que esta página mostra agora: os métodos acima e a data da chave. Se a chave não mudou, nada foi alterado; se mudou, gere um novo código de recuperação."},
   "methodRemovedKeeps": {"message": "Uma cópia do arquivo de chaves feita antes de agora ainda o aceita, fora do Nulavio, até o perfil ganhar uma nova chave."},
