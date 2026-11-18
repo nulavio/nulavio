@@ -1122,9 +1122,10 @@ class AiBridgeTest(unittest.TestCase):
         snap = bridge.call("page_snapshot", {"tab": tab})
         sent = bridge.call("click", {"tab": tab, "element": self.element(snap, name="Send")})
         self.assertNotIn("only on this computer", json.dumps(sent))
-        read = bridge.call("page_read", {"tab": tab})
-        self.assertNotIn("only on this computer", json.dumps(read))
-        self.assertEqual(posted, ["/post"])  # the form went, and was answered with the redirect; its page is not shown
+        # The form goes, and is answered with the redirect (the click may return before the engine sends it).
+        self.assertTrue(harness.wait_until(lambda: posted == ["/post"], timeout=15), posted)
+        time.sleep(2)  # a page taken from the cache would be there by now (it was without the change)
+        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
 
 
 if __name__ == "__main__":
