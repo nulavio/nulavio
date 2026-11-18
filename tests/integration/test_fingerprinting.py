@@ -717,8 +717,12 @@ class FingerprintingTest(unittest.TestCase):
 
     def needs_the_engines_screen(self) -> None:
         """The constant screen is the engine's alone (patch 0012's ScreenSizeConstant; ADR 0016, #468)."""
-        if not self.patched():
-            self.skipTest("this engine is from before patch 0012: pages read the display's size")
+        if self.patched():
+            return
+        with self.unprotected():
+            plain = self.measure()["screen"]["size"]
+        self.assertEqual(self.measure()["screen"]["size"], plain)  # what the docs say of such an engine
+        self.skipTest("this engine is from before patch 0012: pages read the display's size")
 
     def test_11_rendered_audio_differs_per_site_and_stays_the_same_within_one(self):
         first, other, again = self.measure("127.0.0.1"), self.measure("localhost"), self.measure("127.0.0.1")

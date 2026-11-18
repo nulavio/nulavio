@@ -250,6 +250,8 @@ class PrivacyTestsProbes(unittest.TestCase):
             self.assertNotIn(probe, gaps, f"it passes now: remove its line from the gaps. {read}")
             return
         if probe in gaps:
+            if group == "Screen":  # before the patch nothing hides the display's size, and nothing changes it
+                self.assertEqual(self.values(group, probe), self.values(group, probe, "plain"), read)
             self.skipTest(f"known gap (#79): {gaps[probe]}. {read}")
         self.fail(f"neither different on the three sites in both runs nor stable between them. {read}")
 
