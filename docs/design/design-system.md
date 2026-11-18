@@ -933,8 +933,14 @@ other apps, without lowering a protection.
   Shell"), "Restaurar" puts the default back, and a link opens about:keyboard. The menu hint and the
   new tab's "Atalhos e ajuda" read the keys from `commands.getAll()`.
 - **Ações rápidas** after ">": "Abrir as configurações do Nulavio" and "Ligar ou desligar o layout
-  Foco", next to the assistant's; none in an AI Workspace, none that locks, unlocks, resumes, grants
-  or turns anything off.
+  Foco", next to the assistant's; since #321 also "Ligar ou desligar o modo Imersivo", "Nova janela
+  temporária", "Trocar de perfil" (the profile menu, which filters by name) and "Copiar um link para o
+  texto selecionado", each what its key or button already does. Ctrl+Alt+P opens the address bar in
+  that actions mode (">"), with the engine's own actions next to Nulavio's; it is free in the engine,
+  the Shell, the local Plasma keybindings and the password managers' keys. None in an AI Workspace,
+  none that locks, unlocks, resumes, grants or turns anything off. Open tabs are the address bar's own
+  results (`%`); a result per profile would need an engine patch (the engine's list of action
+  providers is private to its module).
 - **Destino padrão** for links from other apps with no rule (ADR 0003, step 4 for M4a only): the last
   profile used (default) or a chosen profile, through the M4a hand-off (unlock page for a locked
   profile, warning page for a missing one), announced in the target's band.

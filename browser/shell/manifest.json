@@ -65,6 +65,12 @@
         "default": "Ctrl+Alt+B"
       },
       "description": "__MSG_commandLockProfile__"
+    },
+    "open-actions": {
+      "suggested_key": {
+        "default": "Ctrl+Alt+P"
+      },
+      "description": "__MSG_commandOpenActions__"
     }
   },
   "omnibox": {
