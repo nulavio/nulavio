@@ -118,6 +118,30 @@
       </div>
     </section>
 
+    <!-- #241: only on an install from Nulavio's RPM or .deb, which carry the update timer (off until here). -->
+    <section class="card firstrun" id="firstrun-updates" aria-labelledby="firstrun-updates-heading" hidden>
+      <div class="firstrun__say">
+        <h2 class="layout-choice__title" id="firstrun-updates-heading" data-i18n="firstrunUpdatesTitle"></h2>
+        <p class="firstrun__lead" data-i18n="firstrunUpdatesLead"></p>
+      </div>
+      <div class="firstrun__show">
+        <dl class="facts firstrun__summary">
+          <div><dt data-i18n="firstrunUpdatesWhatTerm"></dt><dd data-i18n="firstrunUpdatesWhat"></dd></div>
+          <div><dt data-i18n="firstrunUpdatesWhenTerm"></dt><dd data-i18n="firstrunUpdatesWhen"></dd></div>
+          <div><dt data-i18n="firstrunUpdatesAskTerm"></dt><dd data-i18n="firstrunUpdatesAsk"></dd></div>
+        </dl>
+      </div>
+      <div class="firstrun__do">
+        <p class="form-error" id="firstrun-updates-error" role="alert"></p>
+        <p class="hint" id="firstrun-updates-said" data-i18n="updatesSaidOn" hidden></p>
+        <p class="hint" id="firstrun-updates-command" hidden><span data-i18n="updatesByHand"></span> <code translate="no" id="firstrun-updates-code"></code></p>
+        <div class="actions">
+          <button class="button button--primary" type="button" id="firstrun-updates-on" data-i18n="firstrunUpdatesOn"></button>
+          <button class="button button--quiet" type="button" id="firstrun-updates-later" data-i18n="firstrunNotNow"></button>
+        </div>
+      </div>
+    </section>
+
     <!-- The last question: this profile has no password; a protected one is a new profile (the Vault's own steps). -->
     <section class="card firstrun" id="firstrun-profile" aria-labelledby="firstrun-profile-heading" hidden>
       <div class="firstrun__say">

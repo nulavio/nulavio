@@ -1,0 +1,24 @@
+{
+ "command": "scripts/perf/run.py --baseline-engine <same build> --runs 1 --tabs 1 --first-minute",
+ "engine": "Nulavio 160.0, the locally built engine with main's Shell (dev_sync)",
+ "runs": [
+  {
+   "side": "build",
+   "startup_first_ms": 1035.0,
+   "first_minute_peak_mib": 1862.083984375,
+   "startup_second_ms": 559.0,
+   "second_minute_peak_mib": 952.75,
+   "pss_mib_1_tabs": 500.0849609375,
+   "processes_1_tabs": 8
+  },
+  {
+   "side": "baseline",
+   "startup_first_ms": 1058.0,
+   "first_minute_peak_mib": 1824.404296875,
+   "startup_second_ms": 533.0,
+   "second_minute_peak_mib": 931.4599609375,
+   "pss_mib_1_tabs": 499.828125,
+   "processes_1_tabs": 8
+  }
+ ]
+}

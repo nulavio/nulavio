@@ -127,6 +127,21 @@ function fail(code, message) {
   throw new ProfilesError(code, message);
 }
 
+/**
+ * The new profile's carried search choice, checked by NulavioSearch. Its refusal of the choice's shape is the
+ * chooser's code, whose message speaks of the chooser's list, so it becomes this module's own (#495).
+ */
+function checkSearchChoice(search) {
+  try {
+    return lazy.validatePending(search);
+  } catch (error) {
+    if (error?.code === "invalid-search-choice") {
+      fail("invalid-profile-search");
+    }
+    throw error;
+  }
+}
+
 export function normalizeProfileName(raw) {
   const name = String(raw ?? "").trim().replace(/\s+/g, " ");
   if (!name || name.length > 60 || /[\u0000-\u001f\u007f/\\]/.test(name)) {
@@ -804,7 +819,7 @@ class NulavioProfilesClass {
       fail("unknown-template");
     }
     // #151: the new profile's search, applied at its first start (NulavioSearch's PENDING_FILE); none keeps ADR 0002's.
-    const searchChoice = search === null ? null : lazy.validatePending(search);
+    const searchChoice = search === null ? null : checkSearchChoice(search);
     name = normalizeProfileName(name);
     avatar = checkAvatar(avatar ?? template?.avatar ?? AVATARS[0]);
     color = checkColor(color ?? template?.color ?? COLORS[0]);

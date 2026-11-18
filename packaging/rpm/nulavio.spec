@@ -26,6 +26,12 @@ License:        MPL-2.0 AND GPL-3.0-only
 URL:            https://nulavio.net
 Source0:        nulavio-tree.tar
 Source1:        nulavio.desktop
+# Automatic updates (#241), off until the person turns them on in Nulavio: packaging/linux/updates/.
+Source2:        nulavio-update.timer
+Source3:        nulavio-update.service
+Source4:        automatic-updates
+Source5:        update-nulavio
+Source6:        net.nulavio.automatic-updates.policy
 ExclusiveArch:  x86_64
 
 # The Nulavio tools (Vault, AI Bridge, temporary profiles) run on the system Python.
@@ -39,6 +45,8 @@ Recommends:     libavcodec-free
 Recommends:     libsodium
 Recommends:     gocryptfs
 Recommends:     fuse3
+# Turning automatic updates on asks for the administrator's password through polkit (pkexec).
+Recommends:     polkit
 
 %description
 Nulavio is a browser for Linux that keeps your data with you: tracking
@@ -76,6 +84,15 @@ for size in 16 32 48 64 128; do
   install -Dm0644 nulavio/browser/chrome/icons/default/default${size}.png \
     %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/nulavio.png
 done
+# Automatic updates (#241). The timer is enabled by its own link in the package, not by a script at install, and
+# runs only while /etc/nulavio/automatic-updates exists, which only the polkit helper creates.
+install -Dm0644 %{SOURCE2} %{buildroot}/usr/lib/systemd/system/nulavio-update.timer
+install -Dm0644 %{SOURCE3} %{buildroot}/usr/lib/systemd/system/nulavio-update.service
+mkdir -p %{buildroot}/usr/lib/systemd/system/timers.target.wants
+ln -s ../nulavio-update.timer %{buildroot}/usr/lib/systemd/system/timers.target.wants/nulavio-update.timer
+install -Dm0755 %{SOURCE4} %{buildroot}/usr/libexec/nulavio/automatic-updates
+install -Dm0755 %{SOURCE5} %{buildroot}/usr/libexec/nulavio/update-nulavio
+install -Dm0644 %{SOURCE6} %{buildroot}%{_datadir}/polkit-1/actions/net.nulavio.automatic-updates.policy
 
 %files
 %license nulavio/LICENSE*
@@ -84,6 +101,11 @@ done
 %{_bindir}/nulavio-doctor
 %{_datadir}/applications/nulavio.desktop
 %{_datadir}/icons/hicolor/*/apps/nulavio.png
+/usr/lib/systemd/system/nulavio-update.timer
+/usr/lib/systemd/system/nulavio-update.service
+/usr/lib/systemd/system/timers.target.wants/nulavio-update.timer
+/usr/libexec/nulavio
+%{_datadir}/polkit-1/actions/net.nulavio.automatic-updates.policy
 
 %changelog
 * Mon Oct 26 2026 Caio Barbieri <caio@lombello.com> - %{nulavio_version}-%{nulavio_release}
