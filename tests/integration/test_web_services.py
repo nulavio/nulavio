@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -50,6 +51,28 @@ if (!open) return null;
 return [...open.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")].map(item => ({
   label: item.getAttribute('label'), disabled: item.disabled,
   shown: !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' }));
+"""
+# For a failure's message (#543): every service item the engine holds in a window's page menu, its element id (which
+# carries the background page's drawing number) and label, and whether the Shell's event page is running.
+DRAWN = """
+return { background: WebExtensionPolicy.getByID('shell@nulavio.net').extension.backgroundState,
+  items: [...Services.wm.getEnumerator('navigator:browser')].flatMap(w =>
+    [...w.document.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")]
+      .map(item => [item.id.replace(/^.*-menuitem-_/, ''), item.getAttribute('label'), item.hidden])) };
+"""
+# Where the Shell's items on a selection are (#483): the assistant's item, and whether it sits in the menu itself or in
+# the submenu the engine makes, named after the add-on, once the Shell has more than one item there.
+ARRANGEMENT = """
+const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
+  .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+if (!d) return null;
+const drawn = i => !i.hidden && i.ownerDocument.defaultView.getComputedStyle(i).display !== 'none';
+const shell = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-']")].filter(drawn);
+const ask = shell.find(i => i.id.endsWith('-menuitem-_nulavio-ask-selection'));
+if (!ask) return null;
+const popup = ask.parentNode;
+return { submenu: popup.id === 'contentAreaContextMenu' ? null : popup.parentNode.getAttribute('label'),
+         items: shell.filter(i => i.parentNode === popup).map(i => i.getAttribute('label')) };
 """
 ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
@@ -129,10 +152,21 @@ class WebServicesTest(unittest.TestCase):
     def error(self, body: str, *args):
         return self.sv(body, *args).get("error")
 
-    def open_menu_on_text(self, path: str = "/service-links", expect: str | None = None) -> list[dict]:
-        """The menu on the selected text. With `expect`, the item with that label: the background page draws its
-        items a moment after the settings change (one drawing for several changes), so a menu opened before that is
-        closed and opened again, a few times."""
+    def open_menu_on_text(
+        self, path: str = "/service-links", expect: str | None = None, services: list[str] | None = None
+    ) -> list[dict]:
+        """The menu on the selected text. With `expect`, the item with that label; with `services`, exactly these
+        services' items, no more: the background page draws its items a moment after the settings change (one drawing
+        for changes that come together, but two for changes a slow machine spaces out, #543), so a menu opened before
+        the last drawing is closed and opened again, a few times. A menu from an earlier drawing can still show an
+        earlier test's service, and its items stop answering once the next drawing replaces them."""
+
+        def ready(items: list[dict]) -> bool:
+            labels = [i["label"] for i in items]
+            if services is not None:
+                return sorted(labels) == sorted(services)
+            return expect is None or expect in labels
+
         self.m.navigate(self.server.url(path))
         self.m.execute(
             "const p = document.getElementById('text'); const r = document.createRange(); r.selectNodeContents(p);"
@@ -143,7 +177,7 @@ class WebServicesTest(unittest.TestCase):
             self.m.context_click("#text")
             self.assertTrue(harness.wait_until(self.m.menu_open, 10))
             harness.wait_until(lambda: self.m.chrome(MENU) is not None, 5)
-            if expect is None or harness.wait_until(lambda: any(i["label"] == expect for i in self.m.chrome(MENU) or []), 2):
+            if harness.wait_until(lambda: ready(self.m.chrome(MENU) or []), 2):
                 break
             self.m.chrome(CLOSE_MENU)
         return self.m.chrome(MENU)
@@ -325,7 +359,8 @@ class WebServicesTest(unittest.TestCase):
         self.m.chrome(GUARD_START, [list(WATCHED)])
         self.addCleanup(self.m.chrome, GUARD_STOP)
         tabs = self.m.chrome("return gBrowser.tabs.length;")
-        items = self.open_menu_on_text(expect="Traduzir seleção com DeepL")
+        # Both services drawn: the item clicked below is the last drawing's, which the click handler knows (#543).
+        items = self.open_menu_on_text(services=["Traduzir seleção com DeepL", "Traduzir seleção com Google Translate"])
         by_label = {item["label"]: item for item in items}
         self.assertIn("Traduzir seleção com DeepL", by_label, items)
         self.assertTrue(
@@ -334,7 +369,9 @@ class WebServicesTest(unittest.TestCase):
         self.assertEqual(self.m.chrome(GUARD_SEEN), [], "something left before the click")
         self.activate("Traduzir seleção com DeepL", self.open_menu_on_text)
         want = f"https://www.deepl.com/translator#xx/pt-BR/{enc('Olá & mundo/?#')}"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10))
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return gBrowser.tabs.length;") == tabs + 1, 10), self.m.chrome(DRAWN)
+        )
         # Whatever else fails below, the service's tab goes (the next tests read the page's tab).
         self.addCleanup(
             self.m.chrome, "while (gBrowser.tabs.length > arguments[0]) gBrowser.removeTab(gBrowser.tabs.at(-1));", [tabs]
@@ -401,11 +438,45 @@ class WebServicesTest(unittest.TestCase):
         self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
         return handles
 
+    def test_04c_the_menus_arrangement_with_zero_one_and_two_services(self):
+        """#483: with no service the assistant's item is in the page's menu itself. With one or more services the
+        engine groups the Shell's items in a submenu named after the add-on: that name is "Nulavio", the product's, not
+        "Nulavio Shell". The add-on is hidden from the add-ons manager; the name also shows in the engine's extension
+        shortcuts view (test_shortcuts 07), where "Nulavio" reads right too."""
+        ask = "Perguntar ao assistente sobre a seleção"
+        deepl, google = "Traduzir seleção com DeepL", "Traduzir seleção com Google Translate"
+        cases = ((None, None, [ask]), ("deepl", "Nulavio", [ask, deepl]), ("google", "Nulavio", [ask, deepl, google]))
+        for key, submenu, items in cases:
+            with self.subTest(service=key):
+                expect = None
+                if key:
+                    self.ok("return SV.NulavioServices.addTranslator({key: args[0]});", key)
+                    expect = {"deepl": "Traduzir seleção com DeepL", "google": "Traduzir seleção com Google Translate"}[key]
+                # The background page draws its items a moment after the services change (open_menu_on_text): the
+                # menu is opened again until it shows what is expected, the services' items included or gone.
+                seen = None
+                for _ in range(6):
+                    self.open_menu_on_text(expect=expect)
+                    seen = harness.wait_until(lambda: self.m.chrome(ARRANGEMENT), 5)
+                    if seen and (seen["submenu"] is None) == (submenu is None):
+                        break
+                    self.m.chrome(CLOSE_MENU)
+                    time.sleep(0.5)
+                self.assertTrue(seen, "the assistant's item is not in the menu")
+                self.assertEqual(seen["submenu"], submenu, seen)
+                self.assertEqual(sorted(seen["items"]), sorted(items), seen)
+                self.m.chrome(CLOSE_MENU)
+        shell = "const {AddonManager} = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');"
+        shell += " const a = await AddonManager.getAddonByID('shell@nulavio.net');"
+        addon = self.sv(shell + " return {name: a.name, hidden: a.hidden};")
+        self.assertEqual(addon, {"ok": {"name": "Nulavio", "hidden": True}})
+
     def test_06_private_windows_offer_them_only_when_allowed(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
         label = "Traduzir seleção com DeepL"
-        # Drawn first, as a normal window shows: what follows is about private windows, not about a late drawing.
-        self.assertIn(label, [i["label"] for i in self.open_menu_on_text(expect=label)])
+        # Drawn first, as a normal window shows, with no service of an earlier test left (#543): what follows is about
+        # private windows, not about a late drawing.
+        self.assertEqual([i["label"] for i in self.open_menu_on_text(services=[label])], [label])
         self.m.chrome(CLOSE_MENU)
         handles = self.private_window()
         self.addCleanup(self.m.switch_to, handles[0])
@@ -413,7 +484,7 @@ class WebServicesTest(unittest.TestCase):
         self.open_menu_on_text()
         # Hidden: the engine does not draw an item that is not visible, so none is shown.
         self.assertTrue(
-            harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5), self.m.chrome(MENU)
+            harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5), self.m.chrome(DRAWN)
         )
         self.m.chrome(CLOSE_MENU)
         self.ok("return SV.NulavioServices.setPrivateToo(true);")
@@ -425,11 +496,13 @@ class WebServicesTest(unittest.TestCase):
         normal window's menu."""
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")
         label = "Traduzir seleção com DeepL"
-        self.assertIn(label, [i["label"] for i in self.open_menu_on_text(expect=label)])
+        self.assertEqual([i["label"] for i in self.open_menu_on_text(services=[label])], [label])
         self.m.chrome(CLOSE_MENU)
         handles = self.private_window()
         self.open_menu_on_text()
-        self.assertTrue(harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5))
+        self.assertTrue(
+            harness.wait_until(lambda: not any(i["shown"] for i in self.m.chrome(MENU) or []), 5), self.m.chrome(DRAWN)
+        )
         self.m.chrome(CLOSE_MENU)
         self.m.chrome("window.close();")
         self.m.switch_to(handles[0])

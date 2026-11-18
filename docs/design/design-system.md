@@ -97,7 +97,7 @@ The minimum target is 24×24 CSS px (WCAG 2.5.8); `test_06` measures the real bu
 | Row | `.row`, `.row__main`, `.row__end` | Engine and profile lists; one primary action per row, destructive action quiet and confirmed |
 | Switch | `.check--switch input[role=switch]` | Track `border.control` (off) / `accent.default` (on); the label and a hint say what turning it on sends, and to whom; native checkbox in forced colours |
 | Disclosure | `details.more` | Less frequent edits (alias, profile name/icon/colour) |
-| Confirmation | `<dialog>` via `confirmDialog()` | Native modal; Cancel focused first; destructive verb in critical text. **Critical variant** (`critical: true`, `.dialog--critical`) for consents that raise what an agent may do (full control, raw automation): critical icon before the title, which names the agent; body in `text.primary`; `role="alertdialog"` with `aria-describedby` on the body; the text is always the Shell's locale key, never text from the tools |
+| Confirmation | `<dialog>` via `confirmDialog()` | Native modal; Cancel focused first; destructive verb in critical text. **Critical variant** (`critical: true`, `.dialog--critical`) for consents that raise what an agent may do (full control): critical icon before the title, which names the agent; body in `text.primary`; `role="alertdialog"` with `aria-describedby` on the body; the text is always the Shell's locale key, never text from the tools |
 | Badge | `.badge`, `.badge--quiet` | `accent.tint` / `bg.sunken` with `text.primary`. Agent levels read "Nível: …": `.badge--warning` (Controle total: `status.warningTint`, warning icon), `.badge--outline` (Autônomo: 1 px `status.warning` ring), plain for Restrito and Assistido; Pausado and Revogado are `.badge--quiet` with a pause or blocked icon. Icons come from `icon()` in `lib/ui.js` and sit next to words |
 | Callout | `.callout--critical`, `--warning`, `--info` | Icon (`.callout__icon`) + words + level colour (`status.criticalTint`, `status.warningTint`, `bg.sunken`); a 1 px `CanvasText` border in forced colours. `.callout__action` puts one button at the end, as in the emergency-stop callout ("Retomar") |
 | Status line | `#status[role=status]` | `announce(text, level)`: `info` (no mark), `progress` (spinner), `ok` (✓, only for a result that happened), `warn` (⚠, `status.warning`), `error` (`status.criticalText` + octagon icon). A hint already on the page is not repeated there |
@@ -933,8 +933,14 @@ other apps, without lowering a protection.
   Shell"), "Restaurar" puts the default back, and a link opens about:keyboard. The menu hint and the
   new tab's "Atalhos e ajuda" read the keys from `commands.getAll()`.
 - **Ações rápidas** after ">": "Abrir as configurações do Nulavio" and "Ligar ou desligar o layout
-  Foco", next to the assistant's; none in an AI Workspace, none that locks, unlocks, resumes, grants
-  or turns anything off.
+  Foco", next to the assistant's; since #321 also "Ligar ou desligar o modo Imersivo", "Nova janela
+  temporária", "Trocar de perfil" (the profile menu, which filters by name) and "Copiar um link para o
+  texto selecionado", each what its key or button already does. Ctrl+Alt+P opens the address bar in
+  that actions mode (">"), with the engine's own actions next to Nulavio's; it is free in the engine,
+  the Shell, the local Plasma keybindings and the password managers' keys. None in an AI Workspace,
+  none that locks, unlocks, resumes, grants or turns anything off. Open tabs are the address bar's own
+  results (`%`); a result per profile would need an engine patch (the engine's list of action
+  providers is private to its module).
 - **Destino padrão** for links from other apps with no rule (ADR 0003, step 4 for M4a only): the last
   profile used (default) or a chosen profile, through the M4a hand-off (unlock page for a locked
   profile, warning page for a missing one), announced in the target's band.
@@ -1000,6 +1006,18 @@ change no measured scene):
   the same distribution, and without extensions every one of these lines passes. A first comparison
   against an extracted package that had no `distribution/` read this as a Nulavio regression;
   `frame_scene.py` now records each build's extensions and refuses to compare builds that differ.
+
+**The page-loading line (#397, 2026-11-18).** `frame_scene.py --load-line` measured one engine, the Nulavio 160.0 build (BuildID 20261116132313) with the Shell at `a64888d3`, as shipped (uBlock Origin installed). It ran with the line on (`nulavio.window.loadLine`) against the same engine with it off, 5 runs × 10 samples a side. The new `page_load` scene loads a local page whose body arrives over 1.2 s in the selected tab, and records the chrome's frames while it loads ([perf.json](../research/evidence/load-line-frames-2026-11-18/perf.json)).
+
+| Gate | Budget | Line on | Line off | Result |
+|---|---|---|---|---|
+| A page loading, frame interval | p95 ≤ 20 ms, max ≤ 50 ms | p95 18.2, max 35.3 (4361 intervals) | p95 34.9, max 53.1 (3508) | Pass |
+| Against the line off | flag a median > 10 % worse when the runs do not overlap | none flagged in any scene | — | Pass |
+| 60 s idle | 0 chrome reflows, 0 frames constructed | 0 and 0 | 0 and 0 | Pass |
+
+With the line off, nothing in the chrome animates while the page loads. The compositor then composites only when the page changes, and its intervals are longer: 33 ms at p95. That is not jank. With the line on, it composites every frame, and the intervals stay at the display's 17 ms.
+
+The other scenes of this run read as shipped, with uBlock Origin's first-run work, on both sides alike: sidebar collapse p95 34 ms, the tab switch max 120–135 ms. They are covered by the exceptions above, and the line changes none of them.
 
 The sidebar scenes measure the curve and durations of patch 0008 (Horizon since Firefox 160) on both builds, so they compare like
 with like. Re-run with:

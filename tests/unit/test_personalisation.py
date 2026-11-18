@@ -401,8 +401,7 @@ class CommandsTest(unittest.TestCase):
                 "toggle-immersive": "Ctrl+Alt+I",
                 "lock-profile": "Ctrl+Alt+B",
                 "copy-link-to-highlight": "Ctrl+Alt+C",  # #157, #469
-                "toggle-page-editing": "Ctrl+Alt+E",  # #161
-                "toggle-keep-above": "Ctrl+Alt+K",  # #170
+                "open-actions": "Ctrl+Alt+P",  # #321
             },
         )
         self.assertEqual(len(set(keys.values())), len(keys))
@@ -427,10 +426,14 @@ class QuickActionsTest(unittest.TestCase):
         names = [json.loads(a) if a.startswith('"') else "nulavio-assistant" for a in added]
         declared = next(o for o in options() if o["id"] == "quickActions")
         self.assertEqual(sorted(names), sorted(declared["values"]))
+        # The list stop() removes is the list start() added (#321): none is left in the engine after the Shell stops.
+        listed = re.search(r"const QUICK_ACTIONS = Object\.freeze\(\[(.*?)\]\)", source, re.S).group(1)
+        removed = ["nulavio-assistant" if n.strip() == "QUICK_ACTION" else json.loads(n) for n in listed.split(",") if n.strip()]
+        self.assertEqual(sorted(removed), sorted(names))
         block = source[source.index('addAction("nulavio-settings"') : source.index("  stop() {")]
         for forbidden in ("NulavioVault", "unlock", "setStopped", "grant", "autonomy", "NulavioGuard", "Services.prefs.set"):
             self.assertNotIn(forbidden, block)
-        for name in ("nulavio-quickaction-settings", "nulavio-quickaction-focus"):
+        for name in [f"nulavio-quickaction-{n.removeprefix('nulavio-')}" for n in declared["values"]]:
             for ftl in (
                 ROOT / "browser" / "branding" / "nulavio" / "locales" / "en-US" / "brand.ftl",
                 ROOT / "browser" / "l10n" / "pt-BR" / "browser" / "branding" / "nulavio" / "brand.ftl",

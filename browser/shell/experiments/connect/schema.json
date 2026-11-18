@@ -16,6 +16,18 @@
         "parameters": []
       },
       {
+        "name": "updatesState",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "setAutomaticUpdates",
+        "type": "function",
+        "async": true,
+        "parameters": [{ "name": "on", "type": "boolean" }]
+      },
+      {
         "name": "setDefaultBrowser",
         "type": "function",
         "async": true,
@@ -26,40 +38,6 @@
         "type": "function",
         "async": true,
         "parameters": []
-      },
-      {
-        "name": "kdeDevices",
-        "type": "function",
-        "async": true,
-        "parameters": []
-      },
-      {
-        "name": "sendLink",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "url",
-            "type": "string",
-            "maxLength": 8192
-          },
-          {
-            "name": "device",
-            "type": "string",
-            "maxLength": 64
-          }
-        ]
-      },
-      {
-        "name": "setKrunner",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "enabled",
-            "type": "boolean"
-          }
-        ]
       }
     ]
   }

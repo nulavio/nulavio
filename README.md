@@ -76,10 +76,10 @@ The build itself runs in a disposable container limited to 16 GiB of memory and 
 
 ```sh
 git clone https://github.com/nulavio/nulavio.git && cd nulavio
-scripts/build/build_nulavio.sh 160.0
+scripts/build/build_nulavio.sh 160.0.1
 ```
 
-The script checks Mozilla's signed checksums before it builds anything, applies the [patch stack](browser/patches/series), and writes `nulavio-160.0.en-US.linux-x86_64.tar.xz`. Packaging, signing and the release rehearsal are described in [build](docs/architecture/build.md) and the [update policy](docs/architecture/update-policy.md).
+The script checks Mozilla's signed checksums before it builds anything, applies the [patch stack](browser/patches/series), and writes `nulavio-160.0.1.en-US.linux-x86_64.tar.xz`. Packaging, signing and the release rehearsal are described in [build](docs/architecture/build.md) and the [update policy](docs/architecture/update-policy.md).
 
 ### If you used the preview
 

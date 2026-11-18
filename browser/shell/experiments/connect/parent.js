@@ -16,6 +16,8 @@ this.nulavioConnect = class extends ExtensionAPI {
 
   getAPI() {
     const connect = this.module();
+    const updates = () =>
+      ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioUpdates.sys.mjs").NulavioUpdates;
     const call = fn => async (...args) => {
       try {
         return await fn(...args);
@@ -32,10 +34,10 @@ this.nulavioConnect = class extends ExtensionAPI {
         discover: call(() => connect.discover()),
         defaultBrowserState: call(() => connect.defaultBrowserState()),
         setDefaultBrowser: call(() => connect.setDefaultBrowser()),
+        // #241: the packages' automatic updates; switching them asks for the administrator's password (polkit).
+        updatesState: call(() => updates().state()),
+        setAutomaticUpdates: call(on => updates().set(on)),
         restoreDefaultBrowser: call(() => connect.restoreDefaultBrowser()),
-        kdeDevices: call(() => connect.kdeDevices()),
-        sendLink: call((url, device) => connect.sendLink(url, device)),
-        setKrunner: call(enabled => connect.setKrunner(enabled)),
       },
     };
   }

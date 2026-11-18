@@ -8,7 +8,8 @@ One command, [`scripts/perf/run.py`](../../scripts/perf/run.py), measures a Nula
 
 - **Startup:** from the process to the engine's "session restored", on the profile's first start and on its second.
 - **Memory:** the proportional memory (PSS) of every process of the instance, with 1 and 10 tabs of a local page, after the engine's own "Minimize memory usage".
-  - It is read on the profile's third start. The second start runs 60 s first: a new profile's first work held the extension process at up to 1.2 GiB for about 30 s after each of the first two starts (#362).
+  - It is read on the profile's third start. The second start runs 60 s first: a new profile's first work, uBlock Origin compiling its lists, held the extension process at up to 1.3 GiB for about 40 s ([below](#a-new-profiles-first-minute-2026-11-17), #362).
+- **First minute** (`--first-minute`): the highest PSS of the whole instance in the 60 s after a new profile's first start, and in the 60 s its second start runs anyway.
   - It is read until two readings in a row agree within 3 %.
 - **Frame time** (`--frames`): the UX7 scenes of [`frame_scene.py`](../../scripts/research/frame_scene.py) on a private Xvfb. These are the sidebar, a tab switch, a Settings dialog and the new tab ([budget](../design/design-system.md#ux7-motion-and-performance-budget-2026-11-04)).
 - **Benchmarks:** Speedometer 3.1, JetStream 3.0 and MotionMark 1.3.2. Each is pinned to an upstream commit and its archive's SHA-256, served from the machine, and run in a start of its own.
@@ -122,3 +123,36 @@ What the numbers say:
 - **Nulavio's LTO is not Mozilla's.** Both are cross-language; Mozilla's Linux x86_64 release builds are full LTO with PGO, and Nulavio's is thin without PGO. The engine's configure chooses: `--enable-lto=cross` alone becomes full only in a PGO build in Mozilla's automation, where its comment says the pair is what pays on Speedometer (`build/moz.configure/lto-pgo.configure`). Full LTO without PGO was not tried here; it needs more memory at the link than thin.
 - **What it cost:** the build takes 20 min 26 s on the build machine where it took 17 min 49 s, with the same room in memory; and the engine's own networking check no longer runs in the build that ships, with Nulavio's reading and its attestation in its place ([build](build.md#the-networking-check-on-rust-code), [R79](../security/residual-risks.md)).
 - Not measured here: frame time, JetStream and MotionMark.
+
+## A new profile's first minute, 2026-11-17
+
+#362 asked what holds the extension process at about 1.2 GiB in a new profile's first minute, and whether it can be lowered.
+
+- Machine: the same as the baseline's. Nulavio 160.0, the locally built engine with `main`'s Shell, headless, a new profile.
+- How:
+  - the PSS of every process every few seconds for 60 s after each of the first three starts;
+  - an `about:memory` dump of every process at the extension process's peak;
+  - `scripts/perf/run.py --first-minute` once, the build against itself.
+- Raw results: [evidence](../research/evidence/first-minute-2026-11-17/). The memory dump itself is not kept: it holds local paths.
+
+| start | extension process, peak | whole instance, peak | when |
+|---|---|---|---|
+| first | 1318 MiB | 1941 MiB | about 8 s after the start, back to about 170 MiB after about 40 s |
+| second | 457 MiB | 936 MiB | |
+| third | 644 MiB | 1179 MiB | about 56 s after the start (a list update, below) |
+
+`run.py --first-minute` gave a peak of 1862 MiB (build) and 1824 MiB (baseline) for the whole instance in the first minute, and 953 and 931 MiB in the second. The same build with one tab settles at about 500 MiB.
+
+What it is:
+- **It is uBlock Origin compiling its filter lists**, in its background page (`background.html`) in the extension process.
+- At the peak, that page's window objects held about 337 MiB, and one more JavaScript zone of the process about 130 MiB. The large strings are the lists in uBlock Origin's compiled format (`#block-start-NETWORK_FILTERS:GOOD`).
+- **The largest single item is one list:** the "Online Malicious URL Blocklist" (URLhaus, `urlhaus-1`) compiled into one string of 76 million characters, about 164 MiB. The next lists take 12, 8, 7 and 5 MiB.
+- On 2026-11-15, with uBlock Origin 1.75.0 and the 0.4 package, the peak came after the first two starts. Here, with 1.76.4, it comes after the first only. Why it moved was not looked into.
+- The third start's peak is uBlock Origin updating its lists a minute after the start and compiling them again, so every list update brings it back.
+
+Why Nulavio does not lower it now:
+- **The heaviest list is the content filter's only malware list.** uBlock Origin turns the same list on by default for everyone. Taking it out, or a lighter set first, weakens a protection, which CONTRIBUTING's non-negotiables forbid without the maintainer's decision.
+- **uBlock Origin offers no way to ship its compiled lists with an install** (its "selfie" is written by itself, after a first compile), **nor to delay or spread that compile.** Both are changes to uBlock Origin's own code; asking its maintainers is the maintainer's to decide.
+- So a person's first minute in Nulavio costs about 1.3 GiB more than a settled one, for about 40 s, and again for a moment whenever the lists update. On a machine with 4 GiB that can mean swap during the first pages.
+
+`scripts/perf/run.py --first-minute` now gives this as a number (`first_minute_peak_mib`, `second_minute_peak_mib`), so a change to the content filter's lists, or a new uBlock Origin, shows up in it.

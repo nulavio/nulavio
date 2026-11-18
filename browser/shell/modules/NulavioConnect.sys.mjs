@@ -322,23 +322,6 @@ class NulavioConnectClass {
     }
   }
 
-  /** KDE Connect devices reachable now: [{id, name}]. */
-  async kdeDevices() {
-    return (await this.#tools({ op: "devices" })).devices ?? [];
-  }
-
-  /** Share one web address with one device, on the user's click (link menu). */
-  async sendLink(url, device) {
-    if (!/^https?:\/\//.test(String(url))) {
-      fail("bad-url");
-    }
-    return this.#tools({ op: "send-link", url: String(url), device: String(device) });
-  }
-
-  /** Install or remove the KRunner plugin (two user-level files). */
-  async setKrunner(enabled) {
-    return this.#tools({ op: enabled ? "krunner-enable" : "krunner-disable" });
-  }
 
   /** The user clicked "Make Nulavio the default browser". */
   /** The default-browser check alone, for the new tab's first run (no other probe, no tools). */
