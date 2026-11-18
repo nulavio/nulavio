@@ -1,0 +1,16 @@
+# Updates the nulavio package only, from its signed repository (#241); the package manager checks the signatures
+# as for a manual update. Runs only while /etc/nulavio/automatic-updates exists.
+[Unit]
+Description=Update Nulavio from its signed repository
+Documentation=https://nulavio.net/baixar/
+ConditionPathExists=/etc/nulavio/automatic-updates
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/nulavio/update-nulavio
+Nice=10
+IOSchedulingClass=idle
+PrivateTmp=yes
+ProtectHome=yes
