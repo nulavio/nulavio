@@ -487,7 +487,7 @@ class PrefWriterInventoryTest(unittest.TestCase):
              ("network.lna.allow_top_level_navigation", "false"), ("permissions.default.local-network", "2"),
              ("permissions.default.loopback-network", "2")],
         )  # fmt: skip
-        body = source[source.index("  async arm() {") : source.index("  observe(subject) {")]
+        body = source[source.index("  async arm() {") : source.index("  observe(subject, topic) {")]
         self.assertIn("if (this.#armed || !this.driven()) {", body)
         self.assertIn('const defaults = Services.prefs.getDefaultBranch("");', body)
         self.assertIn("for (const [name, value] of LOCAL_NETWORK_PREFS) {", body)
