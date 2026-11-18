@@ -76,8 +76,10 @@ jobs:
             sbom.cdx.json
             companion.cdx.json
           retention-days: 14 # artifacts count against the plan's storage; releases keep their own SBOM
-      - name: Pinned dependencies against OSV.dev, the AMO blocklist and the registries (daily in upstream.yml too)
+      - name: Pinned dependencies against OSV.dev, the AMO blocklist, extension advisories and the registries (daily in upstream.yml too)
         if: ${{ !cancelled() }} # reported even when an earlier step failed
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # read-only here; only raises api.github.com's rate limit for the advisory reads
         run: |
           status=0
           python3 -I scripts/release/watch_dependencies.py --summary "$GITHUB_STEP_SUMMARY" || status=$?

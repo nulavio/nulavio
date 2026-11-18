@@ -273,6 +273,10 @@ class FakeNet:
             return {"current_version": self.amo.get(guid, current)}
         raise AssertionError(f"unexpected URL {url}")
 
+    def github_json(self, url):
+        self.unreachable(url)
+        return []  # no published advisory (test_extension_advisories.py has the recorded ones)
+
     def head(self, url, headers):
         self.unreachable(url)
         return 200, {"docker-content-digest": self.digests.get(url, self.pinned[url])}
@@ -337,7 +341,7 @@ class WatcherTest(unittest.TestCase):
         self.assertGreater(len(deps), 200)
         self.assertEqual([r.text for r in rows if r.state != "ok"], [])
         self.assertEqual(watch.exit_status(rows), 0)
-        self.assertEqual({r.check for r in rows}, {"extension", "image"})
+        self.assertEqual({r.check for r in rows}, {"advisory", "extension", "image"})
 
     def test_a_vulnerability_without_a_valid_exception_fails(self):
         net = FakeNet(
