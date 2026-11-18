@@ -18,8 +18,9 @@
    been sent by then: what is held back is the page. A load through a proxy is
    not checked (the proxy connects, not the engine), as Local Network Access
    does not check one either. A page from the HTTP cache carries no address
-   when the check runs, so a top-level GET in these engines skips the cache,
-   and any other top-level page that comes from it is cancelled.
+   when the check runs, so in these engines every top-level page is fetched,
+   never taken from the cache: each one skips it (a redirect hop inherits that),
+   and one that comes from the cache all the same is cancelled.
 
    In the same engines it sets the engine's Local Network Access to refuse a
    public page's requests to local addresses with no prompt, a pop-up's
@@ -32,8 +33,8 @@ const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/wo
 const LOCAL_ENV = "NULAVIO_AI_LOCAL"; // workspace.py LOCAL_ENV
 const READY_FILE = "nulavio-ai-guard"; // workspace.py GUARD_READY
 const OPENING = "http-on-opening-request";
-const CACHED = "http-on-examine-cached-response";
-const TOPICS = Object.freeze([OPENING, "http-on-examine-response", CACHED, "http-on-examine-merged-response"]);
+const FROM_CACHE = Object.freeze(["http-on-examine-cached-response", "http-on-examine-merged-response"]);
+const TOPICS = Object.freeze([OPENING, "http-on-examine-response", ...FROM_CACHE]);
 // What the AI Workspace also has in its user.js (workspace.py WORKSPACE_PREFS).
 export const LOCAL_NETWORK_PREFS = Object.freeze([
   ["network.lna.enabled", true],
@@ -112,6 +113,12 @@ class AgentNetwork {
       if (Services.prefs.prefIsLocked(name)) {
         continue; // an enterprise policy decided it: not this module's to change
       }
+      const current = typeof value === "boolean" ? Services.prefs.getBoolPref(name) : Services.prefs.getIntPref(name);
+      if (Services.prefs.prefHasUserValue(name) && current === value) {
+        // The person's own value is already this one. A default equal to it would keep it out of prefs.js when the
+        // profile is saved (the engine writes only values that differ from the default): it stays as it is.
+        continue;
+      }
       if (typeof value === "boolean") {
         defaults.setBoolPref(name, value);
       } else {
@@ -138,19 +145,18 @@ class AgentNetwork {
       return; // frames and a page's own requests: the engine's Local Network Access, set above
     }
     if (topic === OPENING) {
-      // Before the cache is looked at: a page from it would come with no address to check.
-      if (channel.requestMethod === "GET" || channel.requestMethod === "HEAD") {
-        channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
-      }
+      // Before the cache is looked at, whatever the method: a page from it would come with no address to check, and
+      // a redirect hop, which this topic does not see, inherits the flag.
+      channel.loadFlags |= Ci.nsIRequest.LOAD_BYPASS_CACHE;
+      return;
+    }
+    if (FROM_CACHE.includes(topic)) {
+      channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY); // a top-level page is never taken from the cache here
       return;
     }
     // The engine's reading of the address it got the page from (its address-space overrides included), set once it
-    // has connected. A proxied load has none (the proxy connected); a page from the cache has none yet.
+    // has connected. A proxied load has none: the proxy connected.
     const space = loadInfo.ipAddressSpace;
-    if (topic === CACHED && space === Ci.nsILoadInfo.Unknown) {
-      channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY); // only a page sent with a body (a form's answer) gets here
-      return;
-    }
     if (space !== Ci.nsILoadInfo.Local && space !== Ci.nsILoadInfo.Private) {
       return;
     }

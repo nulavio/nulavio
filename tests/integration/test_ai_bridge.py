@@ -1038,9 +1038,11 @@ class AiBridgeTest(unittest.TestCase):
         agent, _ = self.agent("autonomous", local=False)
         work = self.home / "user-profiles" / "work"
         work.mkdir(parents=True)
-        own = 'user_pref("permissions.default.local-network", 1);'  # the user's own choice in this profile
+        # The user's own choices in this profile: one the agent's run overrides, one it already agrees with.
+        own = ('user_pref("permissions.default.local-network", 1);',
+               'user_pref("network.lna.allow_top_level_navigation", false);')  # fmt: skip
         accepted = 'user_pref("termsofuse.acceptedVersion", 4);\nuser_pref("termsofuse.acceptedDate", "1761436800000");'
-        (work / "prefs.js").write_text(f"{accepted}\n{own}\n")
+        (work / "prefs.js").write_text(f"{accepted}\n" + "\n".join(own) + "\n")
         (work / "user.js").write_text(prefs_lines(fixture))
         registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
         bridge = tools.Bridge(agent["id"], "s-profile-local", approver=registry.Approver(), headless=True)
@@ -1053,10 +1055,74 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(hits, [])
         bridge.close()
         kept = (work / "prefs.js").read_text()
-        self.assertIn(own, kept)
-        for name in ("network.lna.enabled", "network.lna.blocking", "network.lna.allow_top_level_navigation",
-                     "permissions.default.loopback-network"):  # fmt: skip
+        for line in own:
+            self.assertIn(line, kept)  # both stay the user's, the one equal to the agent's value included
+        for name in ("network.lna.enabled", "network.lna.blocking", "permissions.default.loopback-network"):
             self.assertNotIn(f'"{name}"', kept)
+
+    @unittest.skipUnless(harness.nulavio_engine(), "the check of what the agent opens is the Nulavio Shell's")
+    def test_30_every_top_level_page_is_fetched_never_taken_from_the_cache(self):
+        # #243: a page from the cache comes with no address to check. A form sent with POST and answered with a
+        # redirect to a page the cache still holds: that page is fetched again, and not shown once the agent may not
+        # reach it any more.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = b"<!doctype html><title>Local</title><p>only on this computer"
+                self.send_response(200)
+                self.send_header("Cache-Control", "max-age=3600")
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        held = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/held"
+        form = b'<!doctype html><title>Form</title><form method="post" action="/post"><button>Send</button></form>'
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(form)))
+                self.end_headers()
+                self.wfile.write(form)
+
+            def do_POST(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(303)
+                self.send_header("Location", held)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        engine_side: dict = {}
+        self.rebinding(engine_side, port)
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        agent, _ = self.agent("autonomous")  # local_resources allowed: the page is shown, and kept in the cache
+        registry.grant(agent["id"], "submit_forms", "allow")
+        bridge = tools.Bridge(agent["id"], "s-cache", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": held})
+        self.assertFalse(opened["isError"], opened)
+        self.assertEqual(opened["structuredContent"]["title"], "Local")
+        tab = opened["structuredContent"]["tab"]
+        registry.grant(agent["id"], "local_resources", "block")
+        self.assertFalse(bridge.call("navigate", {"tab": tab, "url": f"http://127.0.0.2:{port}/form"})["isError"])
+        snap = bridge.call("page_snapshot", {"tab": tab})
+        sent = bridge.call("click", {"tab": tab, "element": self.element(snap, name="Send")})
+        self.assertNotIn("only on this computer", json.dumps(sent))
+        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+        self.assertEqual(hits.count("/held"), 2)  # fetched again, not taken from the cache
 
 
 if __name__ == "__main__":

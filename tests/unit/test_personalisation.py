@@ -492,6 +492,9 @@ class PrefWriterInventoryTest(unittest.TestCase):
         self.assertIn('const defaults = Services.prefs.getDefaultBranch("");', body)
         self.assertIn("for (const [name, value] of LOCAL_NETWORK_PREFS) {", body)
         self.assertIn("if (Services.prefs.prefIsLocked(name)) {", body)
+        # a value of the person's equal to the forced one is left alone: a default equal to it would drop it from prefs.js
+        self.assertIn("if (Services.prefs.prefHasUserValue(name) && current === value) {", body)
+        self.assertLess(body.index("current === value"), body.index("defaults.setBoolPref"))
         self.assertIn("return Boolean(Services.env.get(WORKSPACE_ENV));", source)
 
     def test_the_meetings_module_writes_only_the_meeting_apps_switches(self):
