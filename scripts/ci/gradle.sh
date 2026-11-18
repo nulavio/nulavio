@@ -23,7 +23,7 @@ trap 'rm -f "$log"' EXIT
 
 # A repository that refused or dropped the request: worth a second run. "Could not resolve" or
 # "Could not parse POM" alone are not: they are also what a wrong coordinate or a bad POM say.
-refused='Received status code (429|5[0-9][0-9]) from server|Read timed out|Connect timed out|Connection reset|Connection refused|Remote host terminated the handshake'
+refused='Received status code (429|5[0-9][0-9]) from server|Server returned HTTP response code: (429|5[0-9][0-9])|Read timed out|Connect timed out|Connection reset|Connection refused|Remote host terminated the handshake'
 
 attempt=1
 while :; do
@@ -37,7 +37,9 @@ while :; do
         exit "$status"
     fi
     wait=${waits[attempt - 1]}
-    what=$(grep -Eo "Could not (GET|HEAD) 'https?://[^/']+|$refused" "$log" | head -n 2 | sed -E "s/^Could not (GET|HEAD) '//" | paste -sd ' ' - || true)
+    host=$(grep -Eo "Could not (GET|HEAD) 'https?://[^/']+" "$log" | head -n 1 | sed -E "s/^Could not (GET|HEAD) '//" || true)
+    why=$(grep -Eo "$refused" "$log" | head -n 1 || true)
+    what="${host:+$host: }$why"
     echo "::warning title=Gradle::a repository refused the build (${what}); running Gradle again in ${wait} s (run $((attempt + 1)) of $(( ${#waits[@]} + 1 )))"
     sleep "$wait"
     attempt=$((attempt + 1))
