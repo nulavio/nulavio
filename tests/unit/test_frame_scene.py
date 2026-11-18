@@ -44,6 +44,11 @@ class FrameSceneTest(unittest.TestCase):
                 "tab_switch": False,
                 "page_load": False,  # #397: no samples either
                 "dialog_open": False,
+                "tab_open": False,  # #319, the motion map's scenes: no samples either
+                "tab_close": False,
+                "menu_open": False,
+                "sidebar_panel_open": False,
+                "sidebar_panel_close": False,
                 "new_tab": True,
                 "idle": False,
             },
