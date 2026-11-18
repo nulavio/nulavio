@@ -473,9 +473,15 @@ class Bridge:
             self.require(capability, url, checked=checked)
 
     def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
-        if url:  # an internal page is refused before the tool's own question (independent review of #504)
-            with contextlib.suppress(policy.UrlRefused):
-                self._refuse_internal(policy.classify_url(url), url, checked)
+        """A tool acting on the tab where it is. An address agents never act on (data:, blob:, an internal page) is
+        refused before the tool's own question: asking first could only end in a refusal, and a "for this session"
+        answer would stay (#508; the internal pages since the independent review of #504)."""
+        if url:
+            try:
+                target = policy.classify_url(url)
+            except policy.UrlRefused as exc:
+                raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
+            self._refuse_internal(target, url, checked)
         self.require(capability, url, checked=checked)
         self.require_needs(url, checked=checked)
 

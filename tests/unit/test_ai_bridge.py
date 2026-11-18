@@ -805,6 +805,25 @@ class AuditTest(Home):
         self.assertEqual((listed[0]["url"], listed[0]["outside_sites"]), (None, True))
         title.assert_not_called()
 
+    def test_an_address_agents_never_act_on_is_refused_before_the_tools_question(self):
+        # #508: a tab already at data: or blob: was refused only after the tool's own question (interact, execute_js),
+        # and a "for this session" answer stayed for a capability the agent could not use there.
+        for level, tool, args in (("restricted", "dialog", {"tab": "t1", "accept": True}),
+                                  ("autonomous", "evaluate", {"tab": "t1", "expression": "1"})):  # fmt: skip
+            for url in ("data:text/html,<p>hi", "blob:https://example.org/3f6c"):
+                agent, _ = registry.add(f"{level}-{url[:4]}", "other", level)
+                asks = Approve("session")
+                with (
+                    self.subTest(tool=tool, url=url),
+                    mock.patch.object(tools.Bridge, "_url_of", return_value=url),
+                    mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("acted")),
+                ):
+                    result = tools.Bridge(agent["id"], "s-1", approver=asks).call(tool, args)
+                    self.assertTrue(result["isError"])
+                    self.assertIn("an address agents do not act on", result["content"][0]["text"])
+                    self.assertEqual(asks.asked, [])
+                    self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+
     def test_a_tab_that_needs_more_than_reading_is_not_described(self):
         # LESIS 83a648d8, c6bc7acd: a redirect leaves the tab on the local network; page_read then
         # asks for local_resources (audit A1), but tabs_list still gave its address and title.
