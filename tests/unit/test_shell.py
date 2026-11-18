@@ -340,6 +340,73 @@ class VaultMethodsPageErrorsTest(unittest.TestCase):
         self.assertNotIn("refresh", locale("en")["methodsMethodGone"]["message"].lower())
 
 
+class FailureAnnouncementsTest(unittest.TestCase):
+    """#546: a temporary window that cannot be launched after its profile was made, and a link that cannot be written to
+    the clipboard, are announced as what they are, by the module itself so every entry point says the same."""
+
+    def test_a_launch_that_fails_after_the_profile_was_made_says_so_without_nothing_was_changed(self):
+        body = module_text("NulavioProfiles.sys.mjs")
+        body = body[body.index("async openTemporary()") :]
+        body = body[: body.index("\n  }\n")]
+        self.assertLess(body.index('{ op: "create" }'), body.index("runw("))
+        launch = body[body.index("try {") : body.index("return {")]
+        self.assertIn("runw(", launch)
+        self.assertIn('fail("temporary-not-opened")', launch.split("catch", 1)[1])
+        for name in ("en", "pt_BR"):
+            self.assertIn("err_temporary_not_opened", locale(name))
+        self.assertNotIn("nothing was changed", locale("en")["err_temporary_not_opened"]["message"].lower())
+        self.assertNotIn("nada foi alterado", locale("pt_BR")["err_temporary_not_opened"]["message"].lower())
+
+    def test_a_link_that_cannot_be_copied_is_announced_by_the_function_every_caller_uses(self):
+        body = module_text("NulavioLayout.sys.mjs")
+        body = body[body.index("async copyLinkToHighlight(") :]
+        body = body[: body.index("\n  },\n")]
+        copy = body[body.index("try {\n      lazy.ClipboardHelper.copyString") :]
+        self.assertLess(copy.index('announce("linkHighlightNotCopied")'), copy.index('announce("linkHighlightCopied")'))
+        self.assertIn("return false;", copy.split("catch", 1)[1].split('announce("linkHighlightCopied")')[0])
+        for name in ("en", "pt_BR"):
+            self.assertIn("linkHighlightNotCopied", locale(name))
+        self.assertEqual(locale("pt_BR")["linkHighlightNotCopied"]["message"], "O link não pôde ser copiado.")
+
+
+class VaultOtherPagesErrorsTest(unittest.TestCase):
+    """#547: the same as #519 for the phone, unlock and create pages. `not-found` is a profile that is gone or one of
+    its ways to unlock that is gone, and "the list was refreshed" is true of neither on a page that lists nothing."""
+
+    def helpers_of(self, text, names):
+        spans = []
+        for name in names:
+            start = re.search(rf"(?:async )?function {name}\(", text).start()
+            spans.append((start, text.index("\n}\n", start)))
+        return spans
+
+    def assert_errortext_only_in(self, page, names):
+        text = (SHELL / "vault" / page).read_text(encoding="utf-8")
+        spans = self.helpers_of(text, names)
+        outside = [m.start() for m in re.finditer(r"errorText\(", text) if not any(a < m.start() < b for a, b in spans)]
+        self.assertEqual(outside, [], f"{page}: errorText is reached only through {names}")
+        return text
+
+    def test_no_page_shows_the_shared_words_for_a_failure_after_it_loaded(self):
+        phone = self.assert_errortext_only_in("phone.js", ["readText", "failure"])
+        self.assertIn('t("phoneMethodGone")', phone)
+        self.assertIn('t("vaultGone")', phone)
+        unlock = self.assert_errortext_only_in("unlock.js", ["failureText", "unreadable"])
+        self.assertIn('t("vaultMethodGone")', unlock)
+        create = self.assert_errortext_only_in("create.js", ["failureText"])
+        self.assertIn('t("vaultCreateGone")', create)
+
+    def test_the_words_exist_in_both_languages_and_say_nothing_about_a_refreshed_list(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                for key in ("phoneMethodGone", "vaultMethodGone", "vaultCreateGone", "vaultGone"):
+                    self.assertIn(key, messages)
+        for key in ("phoneMethodGone", "vaultMethodGone", "vaultCreateGone"):
+            self.assertNotIn("refresh", locale("en")[key]["message"].lower())
+            self.assertNotIn("atualizada", locale("pt_BR")[key]["message"].lower())
+
+
 class SearchProvidersTest(unittest.TestCase):
     """docs/adr/0002-nulavio-search.md: who search goes to, and when."""
 

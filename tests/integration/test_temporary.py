@@ -304,6 +304,55 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
         self.assertEqual(door["label"], "Nova janela temporária")
         self.assertIn("apagado ao fechar", door["description"])
 
+    def announced(self) -> str | None:
+        return self.m.chrome("return document.querySelector('#a11y-announcement > label')?.getAttribute('aria-label') ?? null;")
+
+    def test_04_a_window_that_cannot_be_launched_after_its_profile_was_made_says_so(self):
+        """#546: `openTemporary()` made the profile and its watcher, then the engine could not be started. The profile
+        menu's item and the address bar's action both said "Something went wrong. Nothing was changed.", which is not
+        true. The engine's path is made to point at nothing, so the launch fails after the profile exists."""
+        words = (
+            "Não foi possível abrir a janela temporária. O perfil dela já tinha sido criado: "
+            "as ferramentas do Nulavio o apagam em cerca de dois minutos."
+        )
+        before = len(self.temporaries())
+        self.m.chrome(
+            "window.__engineExe = Services.dirsvc.get('XREExeF', Ci.nsIFile).path;"
+            "const missing = Cc['@mozilla.org/file/local;1'].createInstance(Ci.nsIFile);"
+            "missing.initWithPath(arguments[0]);"
+            "Services.dirsvc.undefine('XREExeF'); Services.dirsvc.set('XREExeF', missing);",
+            [str(self.session.tmp / "no-such-engine")],
+        )
+        self.addCleanup(
+            self.m.chrome,
+            "const real = Cc['@mozilla.org/file/local;1'].createInstance(Ci.nsIFile); real.initWithPath(window.__engineExe);"
+            "Services.dirsvc.undefine('XREExeF'); Services.dirsvc.set('XREExeF', real);",
+        )
+        first = self.m.window_handles()[0]
+        # The profile menu's item.
+        handle = self.m.send("WebDriver:NewWindow", {"type": "tab"})["handle"]
+        self.m.switch_to(handle)
+        self.m.navigate(self.shell_url + "profiles/popup.html")
+        self.assertTrue(harness.wait_until(lambda: self.ready(self.m), timeout=15))
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#new-temporary")})
+        status = "return [document.getElementById('status').textContent, document.getElementById('status').dataset.level];"
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.execute(status) == [words, "error"], timeout=30), self.m.execute(status)
+        )
+        self.m.switch_to(first)
+        self.assertTrue(harness.wait_until(lambda: len(self.temporaries()) == before + 1, timeout=30), "no profile was made")
+        # The address bar's action, in the window it was picked in.
+        pick = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+            "Q.getAction('nulavio-temporary').onPick(null, {browserWindow: window});"
+        )
+        self.m.chrome(pick)
+        self.assertTrue(harness.wait_until(lambda: self.announced() == words, timeout=30), self.announced())
+        self.assertTrue(harness.wait_until(lambda: len(self.temporaries()) == before + 2, timeout=30), "no profile was made")
+        for path in self.temporaries()[before:]:
+            self.assertFalse(self.instances(path), "an engine started for a launch that failed")
+
 
 @unittest.skipUnless(harness.engine_available(), "needs a Gecko engine")
 class TemporaryFromTheLauncherTest(unittest.TestCase):

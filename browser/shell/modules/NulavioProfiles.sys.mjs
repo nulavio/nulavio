@@ -585,10 +585,17 @@ class NulavioProfilesClass {
     if (typeof answer?.path !== "string" || !answer.path.startsWith("/") || answer.path.includes("\0")) {
       fail("helper-failed");
     }
-    const process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
-    process.init(Services.dirsvc.get("XREExeF", Ci.nsIFile));
-    const args = ["--profile", answer.path];
-    process.runw(false, args, args.length);
+    try {
+      const process = Cc["@mozilla.org/process/util;1"].createInstance(Ci.nsIProcess);
+      process.init(Services.dirsvc.get("XREExeF", Ci.nsIFile));
+      const args = ["--profile", answer.path];
+      process.runw(false, args, args.length);
+    } catch (e) {
+      // The profile and its watcher already exist: "nothing was changed" would not be true. The watcher deletes a
+      // profile whose engine never starts after two minutes, and the message says so (#546).
+      console.error(e);
+      fail("temporary-not-opened");
+    }
     return { inMemory: answer.inMemory === true, swapOnDisk: answer.swapOnDisk !== false };
   }
 

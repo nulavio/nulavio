@@ -14,9 +14,36 @@ const byId = id => document.getElementById(id);
 let session = null;
 let timer = null;
 
+let gone = false;
+
 function setState(state, message = "", level = "info") {
-  document.body.dataset.state = state;
+  document.body.dataset.state = gone ? "unavailable" : state; // a profile that is gone does not come back
   announce(message, level);
+}
+
+const isGone = e => String(e?.message ?? e) === "not-found";
+
+/** The page of a profile that no longer exists: what it loads with, and what any action finds (#547). */
+function showGone() {
+  gone = true;
+  clearInterval(timer);
+  timer = null;
+  session = null;
+  byId("headline").textContent = t("vaultGoneHeadline");
+  for (const id of ["explain", "phones", "start-form", "pairing"]) {
+    byId(id).hidden = true;
+  }
+  document.querySelector("details.why").hidden = true;
+  setState("unavailable", t("vaultGone"), "error");
+}
+
+/** Why the list could not be read again. For a read, `not-found` is the profile: it no longer exists. */
+function readText(e) {
+  if (isGone(e)) {
+    showGone();
+    return t("vaultGone");
+  }
+  return errorText(e);
 }
 
 /** A result, with the warning when the change was saved but not recorded inside the profile (#177). The
@@ -29,7 +56,7 @@ async function settle(state, text, answer) {
   });
   const unrecorded = answer?.warning === "not-recorded" ? t("err_not_recorded") : "";
   if (readFailed) {
-    setState(state, [text, unrecorded, errorText(readFailed)].filter(Boolean).join(" "), "error");
+    setState(state, [text, unrecorded, readText(readFailed)].filter(Boolean).join(" "), "error");
   } else if (unrecorded) {
     setState(state, `${text} ${unrecorded}`, "warn");
   } else {
@@ -54,8 +81,25 @@ const FAILURES = {
   "needs-two-methods": "phoneNeedsTwoMethods",
 };
 
-function failure(code) {
-  return FAILURES[code] ? t(FAILURES[code]) : errorText(new Error(code));
+/** The words for a failure, by its code. `not-found` is the profile or one of its phones, and the code does not say
+    which: the list is read again, and what it finds says (#547). */
+async function failure(code) {
+  if (FAILURES[code]) {
+    return t(FAILURES[code]);
+  }
+  if (code !== "not-found") {
+    return errorText(new Error(code));
+  }
+  try {
+    await render();
+  } catch (again) {
+    return readText(again);
+  }
+  return t("phoneMethodGone");
+}
+
+async function fail(e) {
+  setState("error", await failure(String(e?.message ?? e)), "error");
 }
 
 /* The secret was refused or is missing: the field is marked and the status line, which says why, is
@@ -74,7 +118,7 @@ function stopPairing() {
   session = null;
   byId("pairing").hidden = true;
   byId("compare").hidden = true;
-  byId("start-form").hidden = false;
+  byId("start-form").hidden = gone; // a profile that is gone has nothing to start
 }
 
 let polling = false;
@@ -112,7 +156,7 @@ async function look() {
     await settle("paired", t("phonePaired", [status.phone ?? ""]), status); // the list first, then the announcement
   } else if (status.state === "failed") {
     stopPairing();
-    setState("error", failure(status.error), "error");
+    setState("error", await failure(status.error), "error");
   } else if (status.state === "cancelled" || status.state === "gone") {
     stopPairing();
     setState("idle", t("phoneCancelled"));
@@ -132,10 +176,10 @@ async function start(current) {
     byId("start-form").hidden = true;
     byId("current").value = "";
     setState("waiting", t("phoneScanStatus"), "progress");
-    timer = setInterval(() => poll().catch(e => setState("error", errorText(e), "error")), 1000);
+    timer = setInterval(() => poll().catch(fail), 1000);
   } catch (e) {
     const code = String(e?.message ?? e);
-    setState("error", failure(code), "error");
+    await fail(e);
     if (code === "wrong-secret") {
       refuseCurrent();
     } else {
@@ -161,7 +205,7 @@ function phoneRow(method) {
       await settle("idle", t("phoneRemoved", [method.label]), result);
     } catch (e) {
       const code = String(e?.message ?? e);
-      setState("error", failure(code), "error");
+      await fail(e);
       if (code === "wrong-secret") {
         refuseCurrent();
       }
@@ -207,14 +251,14 @@ byId("start-form").addEventListener("submit", event => {
 });
 byId("match").addEventListener("click", () => {
   setState("waiting", t("phoneWaitingConfirm"), "progress");
-  vault.phoneSession(session, "confirm", true).catch(e => setState("error", errorText(e), "error"));
+  vault.phoneSession(session, "confirm", true).catch(fail);
 });
 byId("differ").addEventListener("click", () => vault.phoneSession(session, "confirm", false).catch(() => null));
 byId("cancel").addEventListener("click", () => vault.phoneSession(session, "cancel").catch(() => null).finally(stopPairing));
 
 localize();
 render()
-  .catch(e => setState("error", errorText(e), "error"))
+  .catch(e => setState("error", readText(e), "error"))
   .finally(() => {
     document.documentElement.dataset.ready = "true";
   });

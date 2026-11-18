@@ -10,7 +10,8 @@ name: upstream
 # does not verify, or when that issue could not be written (upstream_issue.py
 # exits 4), so GitHub's failure notice is a second alert, or the only one.
 # A second step checks every other pinned dependency against OSV.dev, the AMO
-# blocklist and the base-image digests (scripts/release/watch_dependencies.py);
+# blocklist, the GitHub security advisories of each pinned extension's repository
+# and the base-image digests (scripts/release/watch_dependencies.py);
 # the job summary says which step failed.
 #
 # 04:47 UTC catches releases Mozilla staged overnight (signed checksums usually
@@ -37,7 +38,7 @@ jobs:
   firefox-release:
     name: Firefox release and pinned dependencies
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 14 # the Firefox check and issue steps, then the dependency watch (its own step: 8)
     permissions:
       contents: read
       issues: write # one tracking issue per newer Firefox release (scripts/release/upstream_issue.py)
@@ -70,7 +71,10 @@ jobs:
             3) echo "::error::A Mozilla signature did not verify: nothing may be built from that release."; exit 1 ;;
             *) echo "::error::watch_upstream.py exited with $RC."; exit 1 ;;
           esac
-      - name: Pinned dependencies (OSV.dev, AMO blocklist, base-image digests)
+      - name: Pinned dependencies (OSV.dev, AMO blocklist, extension advisories, base-image digests)
         if: ${{ !cancelled() }}
-        timeout-minutes: 3
-        run: python3 -I scripts/release/watch_dependencies.py --summary "$GITHUB_STEP_SUMMARY"
+        timeout-minutes: 8
+        env:
+          NV_GITHUB_TOKEN: ${{ github.token }} # contents: read is enough for public advisories; it only raises the rate limit
+        # the token goes to the script on stdin (I3), and the script's own environment does not have it
+        run: printf '%s\n' "$NV_GITHUB_TOKEN" | env -u NV_GITHUB_TOKEN python3 -I scripts/release/watch_dependencies.py --token-stdin --summary "$GITHUB_STEP_SUMMARY"
