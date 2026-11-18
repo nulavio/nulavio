@@ -379,6 +379,7 @@
   "vaultNotLocked": {"message": "It is already open or not protected, so there is nothing to unlock."},
   "vaultGoneHeadline": {"message": "This profile no longer exists"},
   "vaultGone": {"message": "It may have been deleted. Nothing was changed."},
+  "methodsMethodGone": {"message": "That unlock method is already gone. The list now shows what is left. Nothing was changed."},
   "vaultUnreadHeadline": {"message": "This profile could not be read"},
   "vaultOpenProfile": {"message": "Open $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},
   "vaultNoMasterKey": {"message": "Nulavio has no master key: without one of this profile's ways to unlock it, nobody can open it, including Nulavio."},

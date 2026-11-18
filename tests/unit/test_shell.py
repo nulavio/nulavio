@@ -296,7 +296,7 @@ class PrivilegedApiTest(unittest.TestCase):
             "locked",
             "name-taken",
             "no-window",
-            "not-found",  # not on the Vault's methods page: "the list was refreshed" (#519)
+            "not-found",
             "unknown-provider",
         }
     )
@@ -312,6 +312,29 @@ class PrivilegedApiTest(unittest.TestCase):
         shared = {code: sorted(names) for code, names in modules.items() if len(names) > 1}
         self.assertEqual({code: names for code, names in shared.items() if code not in self.SHARED_ERROR_CODES}, {})
         self.assertEqual(self.SHARED_ERROR_CODES - set(shared), set(), "an allowed code is no longer shared")
+
+
+class VaultMethodsPageErrorsTest(unittest.TestCase):
+    """#519: `not-found` is the Vault's code for a profile that is gone and for a method that is gone, and the shared
+    message ("the list was refreshed") is true of neither on the methods page, which refreshes nothing."""
+
+    def test_the_methods_page_never_shows_the_shared_words_for_a_change_that_failed(self):
+        text = (SHELL / "vault" / "methods.js").read_text(encoding="utf-8")
+        uses = [m.start() for m in re.finditer(r"errorText\(", text)]
+        helpers = [text.index(f"function {name}(") for name in ("readText", "failureText")]
+        helpers = [(start, text.index("\n}\n", start)) for start in helpers]
+        outside = [i for i in uses if not any(start < i < end for start, end in helpers)]
+        self.assertEqual(outside, [], "errorText is called through readText (a read) or failureText (a change)")
+        self.assertIn('isGone(e) ? t("vaultGone") : errorText(e)', text)
+        self.assertIn('t("methodsMethodGone")', text)
+
+    def test_the_words_exist_in_both_languages_and_say_nothing_about_a_refreshed_list(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                self.assertIn("methodsMethodGone", messages)
+                self.assertIn("vaultGone", messages)
+        self.assertNotIn("refresh", locale("en")["methodsMethodGone"]["message"].lower())
 
 
 class SearchProvidersTest(unittest.TestCase):
