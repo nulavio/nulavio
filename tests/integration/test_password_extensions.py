@@ -98,10 +98,10 @@ class PasswordExtensionSmokeTest(unittest.TestCase):
             self.m.switch_to(handle)
             try:
                 self.m.navigate(popup)
-                harness.wait_until(lambda: self.m.execute(BODY_COUNT) > 5, timeout=15)
+                harness.wait_until(lambda: (self.m.execute(BODY_COUNT) or 0) > 5, timeout=15)
                 time.sleep(1)  # the framework's first paint is there; let it settle for the capture
                 text = self.m.execute("return (document.body && document.body.innerText || '').trim().slice(0, 240);")
-                return text, self.m.title(), self.m.execute(BODY_COUNT), self.m.screenshot_png()
+                return text, self.m.title(), self.m.execute(BODY_COUNT) or 0, self.m.screenshot_png()
             except MarionetteError as error:
                 if "discarded" not in str(error):
                     raise
