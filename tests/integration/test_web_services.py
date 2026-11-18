@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -427,8 +428,16 @@ class WebServicesTest(unittest.TestCase):
                 if key:
                     self.ok("return SV.NulavioServices.addTranslator({key: args[0]});", key)
                     expect = {"deepl": "Traduzir seleção com DeepL", "google": "Traduzir seleção com Google Translate"}[key]
-                self.open_menu_on_text(expect=expect)
-                seen = harness.wait_until(lambda: self.m.chrome(ARRANGEMENT), 5)
+                # The background page draws its items a moment after the services change (open_menu_on_text): the
+                # menu is opened again until it shows what is expected, the services' items included or gone.
+                seen = None
+                for _ in range(6):
+                    self.open_menu_on_text(expect=expect)
+                    seen = harness.wait_until(lambda: self.m.chrome(ARRANGEMENT), 5)
+                    if seen and (seen["submenu"] is None) == (submenu is None):
+                        break
+                    self.m.chrome(CLOSE_MENU)
+                    time.sleep(0.5)
                 self.assertTrue(seen, "the assistant's item is not in the menu")
                 self.assertEqual(seen["submenu"], submenu, seen)
                 if items is not None:
