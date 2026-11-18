@@ -42,6 +42,7 @@ class FrameSceneTest(unittest.TestCase):
                 "sidebar_collapse": True,
                 "sidebar_expand": False,  # no samples: the scene did not run, which is not a pass
                 "tab_switch": False,
+                "page_load": False,  # #397: no samples either
                 "dialog_open": False,
                 "new_tab": True,
                 "idle": False,

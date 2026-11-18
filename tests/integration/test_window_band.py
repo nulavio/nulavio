@@ -291,8 +291,9 @@ class WindowBandTest(unittest.TestCase):
 
     def test_02b_the_address_bar_names_shell_pages_as_the_browsers_own(self):
         """ADR 0011: on a page of the built-in Shell the identity label is the brand, as on the engine's internal
-        pages, never "Extensão (Nulavio Shell)". The page stays unprivileged; an add-on with the Shell's name keeps
-        the engine's label; a site is untouched; without the window module the engine's own label is back."""
+        pages, never "Extensão (Nulavio)". The page stays unprivileged; an add-on with the Shell's name (#483:
+        "Nulavio", the brand's too) keeps the engine's label; a site is untouched; without the window module the
+        engine's own label is back."""
         identity = """
           const box = document.getElementById('identity-box'), label = document.getElementById('identity-icon-label');
           const principal = gBrowser.selectedBrowser.contentPrincipal;
@@ -324,7 +325,7 @@ class WindowBandTest(unittest.TestCase):
                 json.dumps(
                     {
                         "manifest_version": 3,
-                        "name": "Nulavio Shell",
+                        "name": "Nulavio",  # the Shell's own display name since #483
                         "version": "1.0",
                         "browser_specific_settings": {"gecko": {"id": "shell-lookalike@example.invalid"}},
                     }
@@ -337,9 +338,9 @@ class WindowBandTest(unittest.TestCase):
             )
             other = seen("extensionPage")
             self.assertEqual((other["kind"], other["says"]), ("extensionPage", "extension"))
-            self.assertIn("Nulavio Shell", other["label"])
+            self.assertIn("Nulavio", other["label"])
             self.assertNotEqual(other["label"], brand)
-            self.assertIn("Nulavio Shell", other["tooltip"])
+            self.assertIn("Nulavio", other["tooltip"])
         # Without the window module (the Shell stopped) the engine's own label is back; started again, the name is.
         self.m.navigate(base + "vault/unlock.html?p=0")
         self.assertEqual(seen("chromeUI"), own)
@@ -347,7 +348,9 @@ class WindowBandTest(unittest.TestCase):
         try:
             stopped = seen("extensionPage")
             self.assertEqual((stopped["kind"], stopped["says"]), ("extensionPage", "extension"))
-            self.assertIn("Nulavio Shell", stopped["label"])
+            # The engine's extension label with the Shell's name: the same words as the lookalike's, never the brand.
+            self.assertEqual(stopped["label"], other["label"])
+            self.assertNotEqual(stopped["label"], brand)
         finally:
             self.assertNotIn("error", chrome_async(self.m, f"const ui = {WINDOW}; ui.start(); await ui.refresh();"))
         self.assertEqual(seen("chromeUI"), own)
@@ -895,7 +898,18 @@ class ProtectedWindowBandTest(unittest.TestCase):
             """,
                 [profile_id],
             )
-            self.assertEqual(lock, {"error": "is-current"})
+            self.assertEqual(lock, {"error": "lock-current"})
+            # #495: a new key for the profile in use is refused with its own code, before the tools are asked.
+            rekey = chrome_async(
+                child,
+                """
+              return ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs')
+                .NulavioVault.rekey(args[0], {current: 'synthetic farol vault password'});
+            """,
+                [profile_id],
+            )
+            self.assertEqual(rekey, {"error": "rekey-current"})
+            self.assertTrue(storage.Container(path).mounted(), "the profile in use was touched")
         finally:
             child.quit()
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), 30))

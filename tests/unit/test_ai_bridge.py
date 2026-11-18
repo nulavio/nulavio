@@ -805,6 +805,28 @@ class AuditTest(Home):
         self.assertEqual((listed[0]["url"], listed[0]["outside_sites"]), (None, True))
         title.assert_not_called()
 
+    def test_an_address_agents_never_act_on_is_refused_before_the_tools_question(self):
+        # #508: a tab already at data: or blob: was refused only after the tool's own question (interact, execute_js),
+        # and a "for this session" answer stayed for a capability the agent could not use there.
+        for level, tool, args in (("restricted", "dialog", {"tab": "t1", "accept": True}),
+                                  ("autonomous", "evaluate", {"tab": "t1", "expression": "1"})):  # fmt: skip
+            for url in ("data:text/html,<p>hi", "blob:https://example.org/3f6c"):
+                agent, _ = registry.add(f"{level}-{url[:4]}", "other", level)
+                asks = Approve("session")
+                with (
+                    self.subTest(tool=tool, url=url),
+                    mock.patch.object(tools.Bridge, "_url_of", return_value=url),
+                    mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("acted")),
+                ):
+                    result = tools.Bridge(agent["id"], "s-1", approver=asks).call(tool, args)
+                    self.assertTrue(result["isError"])
+                    self.assertIn("an address agents do not act on", result["content"][0]["text"])
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    self.assertEqual((entry["tool"], entry["outcome"]), (tool, "error:tool"))
+                    self.assertTrue(entry.get("target", "").startswith(url.split(":")[0] + ":"), entry)
+                    self.assertEqual(asks.asked, [])
+                    self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+
     def test_a_tab_that_needs_more_than_reading_is_not_described(self):
         # LESIS 83a648d8, c6bc7acd: a redirect leaves the tab on the local network; page_read then
         # asks for local_resources (audit A1), but tabs_list still gave its address and title.
@@ -1852,6 +1874,16 @@ class WorkspaceTest(Home):
         self.assertFalse(set(WORKSPACE_PREFS) - set(re.findall(r'user_pref\("([^"]+)"', user_js)))
         self.assertTrue(str(ws.profile_dir).startswith(str(self.home)))
         self.assertIn('user_pref("nulavio.ai.target", "workspace");', user_js)
+        # #243: the engine refuses a public page's requests to this computer and the local network itself, a
+        # pop-up's included, with no prompt (LESIS 929cb094: what the Bridge's own DNS lookup cannot see).
+        lna = (
+            ("network.lna.blocking", "true"),
+            ("network.lna.allow_top_level_navigation", "false"),
+            ("permissions.default.local-network", "2"),
+            ("permissions.default.loopback-network", "2"),
+        )
+        for name, value in lna:
+            self.assertIn(f'user_pref("{name}", {value});', user_js)
 
     def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
         """#463: the marker the window read while raw automation was on is not written any more; one left in a

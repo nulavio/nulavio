@@ -255,7 +255,7 @@ class ConnectTest(unittest.TestCase):
 
         listed = harness.wait_until(rows, timeout=20)
         p0 = ["plasma-browser-integration", "xdg-portals", "secret-service", "default-browser"]
-        later = ["kde-connect", "screen-cast", "security-keys", "notifications", "krunner", "activities"]
+        later = ["kde-connect", "screen-cast", "security-keys", "notifications", "activities"]
         # Every integration is listed once: what works or can be turned on first, in priority order, then
         # what this computer lacks, folded (audit 2026-11 SET-05).
         order = p0 + later
@@ -285,73 +285,25 @@ class ConnectTest(unittest.TestCase):
         self.assertEqual((found["notifications"]["state"], found["notifications"]["reason"]), ("available", "ready"))
         self.assertEqual(found["activities"]["reason"], "not-used")
         self.assertIn(found["security-keys"]["reason"], {"none", "usable", "no-permission"})  # the real hardware
-        self.assertIn(found["krunner"]["reason"], {"available", "no-krunner", "no-gi"})
         self.assertEqual(found["screen-cast"]["priority"], "P1")
 
-    def test_06_send_one_link_and_krunner_on_request(self):
-        self.call("return C.sendLink(args[0], args[1]);", "https://example.org/shared", "abc123_def")
-        self.assertIn("--device abc123_def --share https://example.org/shared", self.kdeconnect_log.read_text())
-        self.assertEqual(
-            chrome_async(self.m, "return C.sendLink(args[0], args[1]);", ["file:///etc/passwd", "abc123_def"]).get("error"),
-            "bad-url",
-        )
-        if self.found()["krunner"]["state"] != "available":
-            self.skipTest("KRunner or Python's GLib bindings are not installed")
-        data = Path(self.session.env["XDG_DATA_HOME"])
-        self.call("return C.setKrunner(true);")
-        self.assertTrue((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
-        self.assertEqual(self.found()["krunner"]["state"], "enabled")
-        self.call("return C.setKrunner(false);")
-        self.assertFalse((data / "krunner" / "dbusplugins" / "net.nulavio.krunner.desktop").exists())
+    def test_06_no_send_link_and_no_krunner_plugin(self):
+        # #462: sending a link to a KDE Connect device is left to Plasma Browser Integration.
+        for name in ("sendLink", "kdeDevices"):
+            self.assertEqual(chrome_async(self.m, f"return typeof C.{name};").get("ok"), "undefined", name)
+        # #461: the KRunner plugin is gone: no status row and no way to add it.
+        self.assertNotIn("krunner", self.found())
+        self.assertEqual(chrome_async(self.m, "return typeof C.setKrunner;").get("ok"), "undefined")
 
-    def test_07_link_menu_offers_reachable_devices_and_sends_one_link(self):
-        # The item starts hidden and appears once the reachable devices are known; the
-        # engine leaves hidden items out of onShown's menuIds, so it once never appeared.
+    def test_07_the_link_menu_has_no_send_to_device_item(self):
         page = 'data:text/html,<a id="go" href="https://example.org/from-menu">link</a>'
         self.m.navigate(page)
         self.m.context_click("#go")
-        devices = harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15)
-        self.assertEqual(devices, ["Pixel", "Tablet"], "the link menu has no 'Send link to device' item")
-        clicked = self.m.chrome(
-            "const item = document.querySelector(`[id$='nulavio-send-link']`);"
-            "[...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === 'Pixel').click();"
-            "document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';"
-        )
-        self.assertEqual(clicked, "clicked")
-        self.assertTrue(
-            harness.wait_until(
-                lambda: "--device abc123_def --share https://example.org/from-menu" in self.kdeconnect_log.read_text(),
-                timeout=15,
-            ),
-            "the link was not sent to the chosen device",
-        )
-
-        # Never offered in a private window, and back in the normal window afterwards.
-        handles = set(self.m.window_handles())
-        main = self.m.send("WebDriver:GetWindowHandle")["value"]
-        self.m.chrome("OpenBrowserWindow({private: true});")
-        self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - handles, timeout=20))
-        private = (set(self.m.window_handles()) - handles).pop()
-        self.m.switch_to(private)
-        try:
-            harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20)
-            self.m.navigate(page)
-            self.m.context_click("#go")
-            self.assertTrue(harness.wait_until(self.m.menu_open))
-            time.sleep(2)  # longer than the device lookup takes in the normal window
-            self.assertIsNone(self.m.menu_entries("nulavio-send-link"), "offered in a private window")
-            self.m.close_menu()
-        finally:
-            self.m.send("WebDriver:CloseWindow")
-            self.m.switch_to(main)
-        listed = self.kdeconnect_log.read_text().count("--list-available")
-        self.m.context_click("#go")
-        self.assertEqual(
-            harness.wait_until(lambda: self.m.menu_entries("nulavio-send-link") or None, timeout=15), ["Pixel", "Tablet"]
-        )
+        self.assertTrue(harness.wait_until(self.m.menu_open))
+        time.sleep(2)  # longer than the device lookup took when the item existed
+        self.assertIsNone(self.m.menu_entries("nulavio-send-link"))
         self.m.close_menu()
-        # A recent answer is reused: the next menus do not wait for KDE Connect's tool again.
-        self.assertEqual(self.kdeconnect_log.read_text().count("--list-available"), listed)
+        self.assertNotIn("--share", self.kdeconnect_log.read_text())
 
     def test_99_real_desktop_settings_untouched(self):
         time.sleep(0.5)

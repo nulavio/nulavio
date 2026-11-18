@@ -27,7 +27,7 @@ from mcp_client import McpClient
 from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
-from nulavio_launcher.ai import audit, policy, registry, tools
+from nulavio_launcher.ai import audit, policy, registry, tools, workspace
 from nulavio_launcher.ai.bidi import Bidi, script_result
 from nulavio_launcher.vault import sodium, storage
 from nulavio_launcher.vault.core import Vault
@@ -762,6 +762,90 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(bridge.call("tab_new", {"url": public.replace("/moved", "/page")})["isError"])
         wanted = {"/sub-img", "/sub-frame", "/sub-fetch", "/sub-socket", "/sub-worker"}
         self.assertTrue(harness.wait_until(lambda: wanted <= set(self.fx.hits), timeout=10), self.fx.hits)
+
+    def test_26_an_address_the_bridge_reads_as_public_reaches_nothing_local_from_a_public_page(self):
+        # LESIS 929cb094 (R29, #243): the Bridge decides on its own reading of an address, the engine on the address it
+        # connects to. With DNS rebinding the two differ: the Bridge's lookup says public, the engine's says this
+        # computer. Here the Bridge is told that 127.0.0.2 and 127.0.0.3 are public (its only stand-in, as in
+        # test_25), and the engine is told that 127.0.0.2's port is public (its address-space override) while
+        # 127.0.0.3 stays what it is: this computer. A public page on 127.0.0.2 reaches for 127.0.0.3 by fetch, a
+        # frame and a pop-up: the Bridge lets each through, and the engine's Local Network Access refuses each, with
+        # no prompt for anyone to answer, the pop-up included. (Addresses, not names: HTTPS-Only stays on and never
+        # upgrades a loopback address.)
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "6")
+                self.end_headers()
+                self.wfile.write(b"secret")
+
+            def log_message(self, *_args):
+                pass
+
+        local = http.server.ThreadingHTTPServer(("127.0.0.3", 0), Local)
+        threading.Thread(target=local.serve_forever, daemon=True).start()
+        self.addCleanup(local.server_close)
+        self.addCleanup(local.shutdown)
+        secret = f"http://127.0.0.3:{local.server_address[1]}/secret"
+        # The page reports back to its own (public) server what happened: that the fetch was refused at once (not
+        # left waiting on a prompt) and that the pop-up was opened (not stopped by the pop-up blocker).
+        page = (
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
+            f'<script>fetch("{secret}-fetch").then(() => "sent", () => "refused")'
+            '.then(how => fetch("/ran?fetch=" + how));'
+            f'fetch("/ran?popup=" + (window.open("{secret}-popup") ? "opened" : "blocked"));</script>'
+        ).encode()
+        ran: list[str] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/ran"):
+                    ran.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+
+            def log_message(self, *_args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.2", 0), Public)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port = server.server_address[1]
+        # The page opens its pop-up without a click (the agent could click; the question is the address, not the
+        # gesture), and the engine reads the public page's port as public.
+        engine_side = {
+            "network.lna.address_space.public.override": f"127.0.0.2:{port}",
+            "dom.disable_open_during_load": False,
+        }
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        local_address = policy._local_address
+        public_to_the_bridge = ("127.0.0.2", "127.0.0.3")
+        stand_in = mock.patch.object(
+            policy, "_local_address", lambda text: text not in public_to_the_bridge and local_address(text)
+        )
+        stand_in.start()
+        self.addCleanup(stand_in.stop)
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-rebind", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
+        self.assertFalse(opened["isError"], opened)
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?popup=opened"])
+        time.sleep(2)
+        self.assertEqual(hits, [])
+        # The Bridge let 127.0.0.3 through (it read a public address): what refused it was the engine.
+        logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        self.assertEqual([e for e in logged if "127.0.0.3" in str(e.get("target"))], [])
 
 
 if __name__ == "__main__":
