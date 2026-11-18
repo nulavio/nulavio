@@ -122,8 +122,12 @@ class WorkflowTest(unittest.TestCase):
             for flag in ("--refresh-dependencies", "--write-verification-metadata", "--dependency-verification", "--offline",
                          "dependency.verification"):  # fmt: skip
                 self.assertNotIn(flag, text)
-            # Their short forms: -U, -M, -F (Gradle 9.8.2), and --offline's none.
-            self.assertNotRegex(text, r"gradle\.sh[^\n]* -[UMF]\b")
+        # Their short forms (Gradle 9.8.2: -U, -M, -F), alone or among other letters, on every line that runs Gradle.
+        lines = [line for line in self.text.splitlines() if "scripts/ci/gradle.sh " in line]
+        lines += [line for line in script.splitlines() if '"$gradlew"' in line]
+        self.assertEqual(len(lines), 3)
+        for line in lines:
+            self.assertEqual([t for t in line.split() if re.fullmatch(r"-[A-Za-z]*[UMF][A-Za-z]*", t)], [], line)
 
 
 if __name__ == "__main__":
