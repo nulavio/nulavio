@@ -895,7 +895,7 @@ class ProtectedWindowBandTest(unittest.TestCase):
             """,
                 [profile_id],
             )
-            self.assertEqual(lock, {"error": "is-current"})
+            self.assertEqual(lock, {"error": "lock-current"})
         finally:
             child.quit()
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), 30))
