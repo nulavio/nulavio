@@ -129,10 +129,10 @@ if (!window.nvTraceMove) {
 }
 const box = id => {
   const e = document.getElementById(id), b = e.getBoundingClientRect(), s = getComputedStyle(e);
-  // The right side as far as the window goes: a part past the right edge (#346, the tab list on the right) is out
-  // of view as one past the left edge is.
-  return [Math.round(b.left), Math.round(b.top), Math.round(Math.min(b.right, innerWidth)), Math.round(b.bottom), +s.opacity,
-          e.checkVisibility() ? 1 : 0];
+  // The bounds as they are, and last the right side as far as the window goes: a part past the right edge (#346, the
+  // tab list on the right) is out of view as one past the left edge is, and a page that grows past it still moved.
+  return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), +s.opacity,
+          e.checkVisibility() ? 1 : 0, Math.round(Math.min(b.right, innerWidth))];
 };
 const tick = () => {
   if (!t.on) return;
@@ -185,7 +185,8 @@ def pointer_path(points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]
 
 
 def visible(part: list) -> bool:
-    return part[5] == 1 and part[4] > 0.05 and part[2] > part[0] + 2 and part[2] > 2 and part[3] > part[1]
+    right = part[6] if len(part) > 6 else part[2]  # within the window (TRACE's last number)
+    return part[5] == 1 and part[4] > 0.05 and right > part[0] + 2 and right > 2 and part[3] > part[1]
 
 
 def covers(a: list, b: list) -> bool:
@@ -1046,6 +1047,13 @@ class ImmersiveTest(unittest.TestCase):
             for preset, start in (("lateral", True), ("focus", True), ("top", True), ("lateral", False)):
                 self.apply_preset(preset)
                 self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+                # The engine can move the column at the end of a view transition: wait for its side, then stillness.
+                side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+                self.assertTrue(
+                    harness.wait_until(
+                        lambda side=side, start=start: self.m.chrome(side) is not start and self.m.chrome(STILL), 10
+                    )
+                )
                 for panel, show in PANELS.items():
                     self.m.chrome(show, [chatbot])
                     if panel != "none":
@@ -1227,12 +1235,18 @@ class ImmersiveTest(unittest.TestCase):
         rest = self.m.chrome(geometry)
         self.assertGreaterEqual(rest["list"][0], rest["width"], rest)  # out of view, past the right edge
         self.assertEqual(round(rest["edge"][1]), rest["width"], rest)  # the edge that brings it back is the right one
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.m.chrome(TRACE)  # every frame while the pointer is at the left edge, not one look after it
         self.m.chrome(EDGE)  # the left edge
         time.sleep(1)
-        self.assertFalse(self.m.chrome(PARTS)["tabs"]["shown"], "the left edge brought the list on the right")
+        frames = self.trace_end()
+        self.assertGreater(len(frames), 10)
+        flashed = [f["tabs"] for f in frames if visible(f["tabs"])]
+        self.assertEqual(flashed, [], "the left edge brought the list on the right")
         self.m.chrome(AWAY)
         self.m.chrome("window.synthesizeMouseEvent('mousemove', innerWidth - 2, Math.round(innerHeight / 2), {}, {});")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(STILL), 5))  # in place, past its slide
         shown = self.m.chrome(geometry)
         self.assertAlmostEqual(shown["list"][1], shown["width"], delta=1, msg=shown)
         self.assertEqual(shown["page"], rest["page"], "the page moved when the list came in")
@@ -1259,6 +1273,10 @@ class ImmersiveTest(unittest.TestCase):
         for preset, start in (("lateral", False), ("top", True)):
             self.apply_preset(preset)
             self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+            side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+            self.assertTrue(
+                harness.wait_until(lambda side=side, start=start: self.m.chrome(side) is not start and self.m.chrome(STILL), 10)
+            )
             for dark in (0, 1):
                 with self.subTest(preset=preset, right=not start, dark=bool(dark)):
                     self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])

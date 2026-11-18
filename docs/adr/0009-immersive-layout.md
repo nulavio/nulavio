@@ -127,7 +127,7 @@ Raw automation was removed from the AI Bridge ([ADR 0007](0007-ai-bridge.md), am
 
 ## Amendment 2026-11-18: the tab list on either side, and tabs on top (#346)
 
-The maintainer left tabs on top and a tab list on the right for after 1.0 (2026-11-14); #346 brings them into "Barras". Each part leaves entirely and comes back from its own edge:
+The maintainer left tabs on top and a tab list on the right for after 1.0 (2026-11-14); #346 brings them into "Barras". Each part leaves entirely and comes back from its own edge. Left and right below are for a left-to-right interface; in a right-to-left one each side is the other (the start and the end of the line), and the rules follow it (not run in RTL):
 
 - **The tab list on the left** (the default) leaves by the left edge and comes back from it, as before.
 - **The tab list on the right** (`sidebar.position_start` false, the engine's own setting) leaves by the right edge and only the right edge brings it back; the left edge brings nothing. It is drawn over the page, which does not move. `test_immersive` 23, and every pointer journey of 20 mirrored by the right edge.
