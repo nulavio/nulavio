@@ -238,18 +238,41 @@ class MirrorInitScriptTest(unittest.TestCase):
                      "content {", "exclusiveContent", "metadataSources"):  # fmt: skip
             self.assertNotIn(word, code)
 
-    def test_local_f_droid_and_release_builds_do_not_use_it(self):
-        """Only ci.yml's two Gradle steps: not android/ (local and F-Droid builds), not scripts/release/, and no other
-        workflow (release.yml builds the APK it attests from Maven Central)."""
-        workflows = [p for p in (ROOT / ".github" / "workflows").glob("*.y*ml") if p.name != "ci.yml"]
-        self.assertIn(ROOT / ".github" / "workflows" / "release.yml", workflows)
-        paths = [*(ROOT / "android").rglob("*"), *(ROOT / "scripts" / "release").rglob("*"), *workflows]
-        self.assertTrue(any(p.parent != ROOT / "scripts" / "release" for p in paths if "scripts/release/" in p.as_posix()))
-        for path in paths:
+    @staticmethod
+    def mirror_mentions(root: Path) -> list[Path]:
+        """Files that name the mirror where only ci.yml's two Gradle steps may: anything under android/ (local and F-Droid
+        builds) or scripts/release/, subfolders included, and any workflow but ci.yml (release.yml builds the APK it
+        attests from Maven Central). Build outputs are left out."""
+        workflows = [p for p in (root / ".github" / "workflows").glob("*.y*ml") if p.name != "ci.yml"]
+        found = []
+        for path in [*(root / "android").rglob("*"), *(root / "scripts" / "release").rglob("*"), *workflows]:
             if path.is_file() and "/build/" not in path.as_posix() and "/.gradle/" not in path.as_posix():
                 text = path.read_text(encoding="utf-8", errors="replace")
-                self.assertNotIn("maven-mirror", text, path)
-                self.assertNotIn("NULAVIO_MAVEN_MIRROR", text, path)
+                if "maven-mirror" in text or "NULAVIO_MAVEN_MIRROR" in text:
+                    found.append(path.relative_to(root))
+        return found
+
+    def test_local_f_droid_and_release_builds_do_not_use_it(self):
+        self.assertTrue((ROOT / ".github" / "workflows" / "release.yml").is_file())
+        self.assertEqual(self.mirror_mentions(ROOT), [])
+
+    def test_the_check_reads_subfolders_and_the_other_workflows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            planted = {
+                "android/app/src/x/settings.gradle.kts": "maven-mirror",
+                "scripts/release/sub/dir/build.sh": "NULAVIO_MAVEN_MIRROR=1",
+                ".github/workflows/release.yml": "NULAVIO_MAVEN_MIRROR: x",
+                ".github/workflows/ci.yml": "NULAVIO_MAVEN_MIRROR: x",  # allowed
+                "android/app/build/out.txt": "maven-mirror",  # a build output
+            }
+            for name, text in planted.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(text)
+            self.assertEqual(
+                sorted(self.mirror_mentions(root)),
+                sorted(Path(name) for name in list(planted)[:3]),
+            )
 
 
 @unittest.skipIf(GRADLE is None, "the wrapper's Gradle is not unpacked (CI sets NULAVIO_REQUIRE_GRADLE=1)")
