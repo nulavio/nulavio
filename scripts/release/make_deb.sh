@@ -56,6 +56,16 @@ NOTE
     cat "$repo/LICENSE"
 } > "$pkg/usr/share/doc/nulavio/copyright"
 cp "$repo/LICENSES.md" "$pkg/usr/share/doc/nulavio/LICENSES.md"
+# Automatic updates (#241), as in the RPM: the timer is enabled by its own link in the package, not by a maintainer
+# script, and runs only while /etc/nulavio/automatic-updates exists, which only the polkit helper creates.
+updates="$repo/packaging/linux/updates"
+install -Dm0644 "$updates/nulavio-update.timer" "$pkg/usr/lib/systemd/system/nulavio-update.timer"
+install -Dm0644 "$updates/nulavio-update.service" "$pkg/usr/lib/systemd/system/nulavio-update.service"
+mkdir -p "$pkg/usr/lib/systemd/system/timers.target.wants"
+ln -s ../nulavio-update.timer "$pkg/usr/lib/systemd/system/timers.target.wants/nulavio-update.timer"
+install -Dm0755 "$updates/automatic-updates" "$pkg/usr/libexec/nulavio/automatic-updates"
+install -Dm0755 "$updates/update-nulavio" "$pkg/usr/libexec/nulavio/update-nulavio"
+install -Dm0644 "$updates/net.nulavio.automatic-updates.policy" "$pkg/usr/share/polkit-1/actions/net.nulavio.automatic-updates.policy"
 # Ubuntu 24.04+: without a profile the engine may not create the user namespaces its content sandbox uses.
 install -Dm0644 "$repo/packaging/linux/apparmor-nulavio" "$pkg/etc/apparmor.d/nulavio"
 printf '/etc/apparmor.d/nulavio\n' > "$pkg/DEBIAN/conffiles"
@@ -88,7 +98,7 @@ Section: web
 Priority: optional
 Homepage: https://nulavio.net
 Depends: @SHLIBS@, python3 (>= 3.12), util-linux
-Recommends: libsodium23, gocryptfs, fuse3, $codecs
+Recommends: libsodium23, gocryptfs, fuse3, pkexec, $codecs
 Provides: www-browser
 Description: Private, calm web browser built on the Gecko engine
  Nulavio keeps your data with you: strict tracking protection, uBlock Origin

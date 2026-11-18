@@ -269,12 +269,52 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(self.manifest["action"]["default_popup"], "profiles/popup.html")
         self.assertEqual(self.manifest["commands"]["_execute_action"]["suggested_key"]["default"], "Alt+Shift+P")
 
+    def test_the_first_run_steps_are_the_same_in_the_api_and_the_module(self):
+        """ "Usar os padrões" sends every step at once: a schema that allows fewer than there are refuses it, and the
+        first run never ends (#241 added "updates", and maxItems had stayed at 7)."""
+        steps = json.loads(
+            re.search(r"FIRSTRUN_STEPS = Object\.freeze\((\[.*?\])\)", module_text("NulavioPrivacy.sys.mjs")).group(1)
+        )
+        schema = json.loads((SHELL / "experiments" / "privacy" / "schema.json").read_text(encoding="utf-8"))[0]
+        param = next(f for f in schema["functions"] if f["name"] == "firstRunDone")["parameters"][0]
+        self.assertEqual(param["items"]["enum"], steps)
+        self.assertEqual(param["maxItems"], len(steps))
+
     def test_every_module_error_has_a_message(self):
         en = locale("en")
         text = "".join(module_text(n.name) for n in MODULES.glob("*.sys.mjs"))
         codes = set(re.findall(r'fail\("([a-z-]+)"', text)) | {"disabled", "unregistered", "unexpected"}
         for code in codes:
             self.assertIn(f"err_{code.replace('-', '_')}", en, code)
+
+    # Codes whose one message reads right for every module that throws them. Add one here only when its message
+    # does; otherwise give the module a code of its own.
+    SHARED_ERROR_CODES = frozenset(
+        {
+            "bad-request",
+            "credentials-in-url",
+            "invalid-name",
+            "invalid-profile",
+            "invalid-url",
+            "locked",
+            "name-taken",
+            "no-window",
+            "not-found",  # not on the Vault's methods page: "the list was refreshed" (#519)
+            "unknown-provider",
+        }
+    )
+
+    def test_no_module_throws_another_modules_error_code(self):
+        """One code is one message: a code two modules throw shows one module's words for the other's error (#486;
+        #495 found the delete page's words for locking the profile in use). It only sees `fail("code")`: a code a
+        module passes through from another, as NulavioProfiles did with NulavioSearch's (#495), is not seen."""
+        modules: dict[str, set[str]] = {}
+        for path in MODULES.glob("*.sys.mjs"):
+            for code in re.findall(r'fail\("([a-z-]+)"', path.read_text(encoding="utf-8")):
+                modules.setdefault(code, set()).add(path.name)
+        shared = {code: sorted(names) for code, names in modules.items() if len(names) > 1}
+        self.assertEqual({code: names for code, names in shared.items() if code not in self.SHARED_ERROR_CODES}, {})
+        self.assertEqual(self.SHARED_ERROR_CODES - set(shared), set(), "an allowed code is no longer shared")
 
 
 class SearchProvidersTest(unittest.TestCase):

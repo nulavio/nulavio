@@ -175,12 +175,15 @@ class ProfilesTest(unittest.TestCase):
             "invalid-color": "return P.create({name: 'X1', color: 'red'});",
             "invalid-avatar": "return P.create({name: 'X2', avatar: '../../etc/passwd'});",
             "unknown-template": "return P.create({name: 'X3', templateId: 'temporary'});",
+            # #495: the profile's own code, not the search chooser's ("the list was refreshed").
+            "invalid-profile-search": "return P.create({name: 'X4', search: {provider: 'duckduckgo', extra: 1}});",
+            "unknown-provider": "return P.create({name: 'X5', search: {provider: 'nowhere'}});",
         }
         for code, body in cases.items():
             with self.subTest(code=code):
                 self.assertEqual(self.profiles_error(body), code)
         self.assertEqual(self.profiles_error("return P.create({name: 'a/b'});"), "invalid-name")
-        self.assertFalse({"X1", "X2", "X3"} & set(self.listed()), "a rejected profile was created")
+        self.assertFalse({"X1", "X2", "X3", "X4", "X5"} & set(self.listed()), "a rejected profile was created")
 
     def test_04_update(self):
         self.profiles("await P.update(args[0], {name: 'Trabalho cliente', color: 'violet', avatar: 'star'});", self.work)

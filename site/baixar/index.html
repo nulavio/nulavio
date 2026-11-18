@@ -124,11 +124,13 @@ sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
 <p class="prose">No Fedora:</p>
 <!--/apt:on-->
 <div class="pre-scroll" role="region" aria-label="Comandos de remoção" tabindex="0"><pre translate="no"><code>sudo dnf remove nulavio
-sudo rm /etc/yum.repos.d/nulavio.repo</code></pre></div>
+sudo rm /etc/yum.repos.d/nulavio.repo
+sudo rm -f /etc/nulavio/automatic-updates</code></pre></div>
 <!--apt:on-->
 <p class="prose">No Ubuntu:</p>
 <div class="pre-scroll" role="region" aria-label="Comandos de remoção no Ubuntu" tabindex="0"><pre translate="no"><code>sudo apt remove nulavio
-sudo rm /etc/apt/sources.list.d/nulavio.sources</code></pre></div>
+sudo rm /etc/apt/sources.list.d/nulavio.sources
+sudo rm -f /etc/nulavio/automatic-updates</code></pre></div>
 <!--/apt:on-->
 <p class="prose">O pacote Flatpak de uma versão anterior:</p>
 <div class="pre-scroll" role="region" aria-label="Comando de remoção do Flatpak" tabindex="0"><pre translate="no"><code>flatpak uninstall --user net.nulavio.Nulavio</code></pre></div>

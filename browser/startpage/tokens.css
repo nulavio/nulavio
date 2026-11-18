@@ -96,7 +96,6 @@
   --nv-security-pattern-temporary: dashed;
   --nv-security-pattern-private: dotted;
   --nv-security-pattern-agent: double;
-  --nv-security-pattern-raw: diagonal-stripes;
   --nv-security-pattern-guard: solid;
   --nv-security-opacity: 1;
   --nv-security-duration: 0ms;
@@ -176,8 +175,6 @@
   --nv-color-security-private-meta: #E8E2EE;
   --nv-color-security-agent-ink: #0B1623;
   --nv-color-security-agent-on: #F1F7F5;
-  --nv-color-security-raw-fill: #A8323A;
-  --nv-color-security-raw-text: #FFFFFF;
   --nv-color-security-guard-fill: #FBEBD3;
   --nv-color-security-guard-edge: #8A5A10;
   --nv-color-security-guard-text: #8A5A10;
@@ -205,7 +202,6 @@
   --nv-color-downloads-attention-warning: #8A5A10;
   --nv-color-route-vertical: #0F7A68;
   --nv-color-fullscreen-ink: #0B1623;
-  --nv-color-fullscreen-automation: #E26D70;
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
@@ -299,8 +295,6 @@
     --nv-color-security-private-meta: #E8E2EE;
     --nv-color-security-agent-ink: #F1F7F5;
     --nv-color-security-agent-on: #0B1623;
-    --nv-color-security-raw-fill: #E26D70;
-    --nv-color-security-raw-text: #0B1623;
     --nv-color-security-guard-fill: #3A2A12;
     --nv-color-security-guard-edge: #E7AE61;
     --nv-color-security-guard-text: #E7AE61;
@@ -328,7 +322,6 @@
     --nv-color-downloads-attention-warning: #E7AE61;
     --nv-color-route-vertical: #6FE0C5;
     --nv-color-fullscreen-ink: #0B1623;
-    --nv-color-fullscreen-automation: #E26D70;
     --nv-color-fullscreen-acting: #6FE0C5;
     --nv-color-fullscreen-private: #2A1745;
     --nv-color-fullscreen-foreground: #F1F7F5;
@@ -423,8 +416,6 @@
   --nv-color-security-private-meta: #E8E2EE;
   --nv-color-security-agent-ink: #F1F7F5;
   --nv-color-security-agent-on: #0B1623;
-  --nv-color-security-raw-fill: #E26D70;
-  --nv-color-security-raw-text: #0B1623;
   --nv-color-security-guard-fill: #3A2A12;
   --nv-color-security-guard-edge: #E7AE61;
   --nv-color-security-guard-text: #E7AE61;
@@ -452,7 +443,6 @@
   --nv-color-downloads-attention-warning: #E7AE61;
   --nv-color-route-vertical: #6FE0C5;
   --nv-color-fullscreen-ink: #0B1623;
-  --nv-color-fullscreen-automation: #E26D70;
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
@@ -546,8 +536,6 @@
   --nv-color-security-private-meta: #E8E2EE;
   --nv-color-security-agent-ink: #0B1623;
   --nv-color-security-agent-on: #F1F7F5;
-  --nv-color-security-raw-fill: #A8323A;
-  --nv-color-security-raw-text: #FFFFFF;
   --nv-color-security-guard-fill: #FBEBD3;
   --nv-color-security-guard-edge: #8A5A10;
   --nv-color-security-guard-text: #8A5A10;
@@ -575,7 +563,6 @@
   --nv-color-downloads-attention-warning: #8A5A10;
   --nv-color-route-vertical: #0F7A68;
   --nv-color-fullscreen-ink: #0B1623;
-  --nv-color-fullscreen-automation: #E26D70;
   --nv-color-fullscreen-acting: #6FE0C5;
   --nv-color-fullscreen-private: #2A1745;
   --nv-color-fullscreen-foreground: #F1F7F5;
