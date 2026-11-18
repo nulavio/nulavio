@@ -821,6 +821,9 @@ class AuditTest(Home):
                     result = tools.Bridge(agent["id"], "s-1", approver=asks).call(tool, args)
                     self.assertTrue(result["isError"])
                     self.assertIn("an address agents do not act on", result["content"][0]["text"])
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    self.assertEqual((entry["tool"], entry["outcome"]), (tool, "error:tool"))
+                    self.assertTrue(entry.get("target", "").startswith(url.split(":")[0] + ":"), entry)
                     self.assertEqual(asks.asked, [])
                     self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
 

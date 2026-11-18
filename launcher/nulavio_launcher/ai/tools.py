@@ -452,6 +452,7 @@ class Bridge:
         try:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
+            self._target = url
             raise ToolError(str(exc)) from None
         self._refuse_internal(target, url, checked)
         self.require("navigate", url, checked=checked)
@@ -480,6 +481,7 @@ class Bridge:
             try:
                 target = policy.classify_url(url)
             except policy.UrlRefused as exc:
+                self._target = url  # the activity record names the address, as for an internal page
                 raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
             self._refuse_internal(target, url, checked)
         self.require(capability, url, checked=checked)
