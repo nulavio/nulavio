@@ -1231,6 +1231,47 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(AWAY)
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PARTS)["tabs"]["shown"], 5), self.m.chrome(PARTS))
 
+    def test_24_the_security_cues_are_the_engines_with_the_tab_list_anywhere(self):
+        """#346: the first part of the matrix (09) with the tab list on the right and with tabs on top, in both themes:
+        out of view no cue is restyled, and back in view every cue is drawn where and as with the mode off."""
+
+        def cues() -> dict:
+            return {cue["id"]: cue for cue in self.m.chrome(CUES)}
+
+        def drawn(now: dict) -> dict:
+            return {name: (cue.get("display"), cue.get("visibility"), cue.get("opacity")) for name, cue in now.items()}
+
+        def sized(now: dict) -> dict:
+            return {name: (cue.get("width"), cue.get("height"), cue.get("inside")) for name, cue in now.items()}
+
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        for preset, start in (("lateral", False), ("top", True)):
+            self.apply_preset(preset)
+            self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+            for dark in (0, 1):
+                with self.subTest(preset=preset, right=not start, dark=bool(dark)):
+                    self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+                    self.m.chrome("Services.prefs.clearUserPref('nulavio.layout.immersive');")
+                    self.assertTrue(self.settled(True)["toolbar"])
+                    reference = cues()
+                    self.assertTrue(reference["trust-icon-container"]["inside"], reference)
+                    self.m.chrome(
+                        "Services.prefs.setBoolPref('nulavio.layout.immersive', true); gBrowser.selectedBrowser.focus();"
+                    )
+                    self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+                    self.assertFalse(self.settled(False)["toolbar"])
+                    self.assertEqual(drawn(cues()), drawn(reference))
+                    self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+                    self.assertTrue(self.settled(True)["toolbar"])
+                    back = cues()
+                    self.assertEqual(drawn(back), drawn(reference))
+                    self.assertEqual(sized(back), sized(reference))
+                    self.m.chrome("gBrowser.selectedBrowser.focus();")
+                    self.assertFalse(self.settled(False)["toolbar"])
+
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
         self.m.set_context("chrome")
