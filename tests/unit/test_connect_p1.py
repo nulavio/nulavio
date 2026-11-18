@@ -27,16 +27,6 @@ esac
 """
 
 
-def gi_available() -> bool:
-    try:
-        import gi
-
-        gi.require_version("Gio", "2.0")
-        return True
-    except (ImportError, ValueError):
-        return False
-
-
 class SecurityKeysTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="nv-hid-"))

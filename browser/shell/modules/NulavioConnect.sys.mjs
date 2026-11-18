@@ -335,7 +335,6 @@ class NulavioConnectClass {
     return this.#tools({ op: "send-link", url: String(url), device: String(device) });
   }
 
-
   /** The user clicked "Make Nulavio the default browser". */
   /** The default-browser check alone, for the new tab's first run (no other probe, no tools). */
   async defaultBrowserState() {
