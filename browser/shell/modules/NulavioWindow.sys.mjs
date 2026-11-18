@@ -567,7 +567,11 @@ class WindowUI {
     const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
     // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
-    const opened = event => this.#backgroundTab(win, event.target);
+    // ...and every tab that opens arrives in the list once (the motion map, #319).
+    const opened = event => {
+      this.#arriving(win, event.target);
+      this.#backgroundTab(win, event.target);
+    };
     win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
     // ...and a tab being dragged in it: the engine's drag session takes the hover away from the list, which left
     // under the pointer before the drop (#344).
@@ -1026,6 +1030,25 @@ class WindowUI {
       // as a click outside the toolbar gives it (#239).
       win.gBrowser.selectedBrowser.focus();
     }
+  }
+
+  /** The motion map (#319, docs/design/motion-map.md): a tab that has just opened in the vertical list is marked for
+      its one movement, which the window theme draws (horizon.css). Only an opening is marked: the engine puts a tab
+      that is moved in the list back as the same node, and a mark left on it would make it arrive again. So the mark
+      goes when the movement ends, or two frames later when nothing moves (the theme off). Nothing is marked where
+      nothing would move: with the tabs on top, which the engine animates itself, and under reduced motion. The
+      window is not asked for its styles while the tab opens: by the second frame the movement exists or never will. */
+  #arriving(win, tab) {
+    if (win.gReduceMotion || !win.gBrowser.tabContainer.verticalMode) {
+      return;
+    }
+    tab.toggleAttribute("nulavio-arriving", true);
+    win.requestAnimationFrame(() =>
+      win.requestAnimationFrame(() => {
+        const moving = tab.getAnimations({ subtree: true }).filter(animation => animation.animationName === "nulavio-tab-in");
+        Promise.allSettled(moving.map(animation => animation.finished)).then(() => tab.removeAttribute("nulavio-arriving"));
+      })
+    );
   }
 
   /** A tab opened in the background, with the mode on: the tab list at the side (or the toolbar, with the tabs on
