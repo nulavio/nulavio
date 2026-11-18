@@ -419,9 +419,11 @@ class WebServicesTest(unittest.TestCase):
     def test_04c_the_menus_arrangement_with_zero_one_and_two_services(self):
         """#483: with no service the assistant's item is in the page's menu itself. With one or more services the
         engine groups the Shell's items in a submenu named after the add-on: that name is "Nulavio", the product's, not
-        "Nulavio Shell". The add-on itself is hidden from the add-ons manager, so the name shows nowhere else."""
+        "Nulavio Shell". The add-on is hidden from the add-ons manager; the name also shows in the engine's extension
+        shortcuts view (test_shortcuts 07), where "Nulavio" reads right too."""
         ask = "Perguntar ao assistente sobre a seleção"
-        cases = ((None, None, [ask]), ("deepl", "Nulavio", None), ("google", "Nulavio", None))
+        deepl, google = "Traduzir seleção com DeepL", "Traduzir seleção com Google Translate"
+        cases = ((None, None, [ask]), ("deepl", "Nulavio", [ask, deepl]), ("google", "Nulavio", [ask, deepl, google]))
         for key, submenu, items in cases:
             with self.subTest(service=key):
                 expect = None
@@ -440,11 +442,7 @@ class WebServicesTest(unittest.TestCase):
                     time.sleep(0.5)
                 self.assertTrue(seen, "the assistant's item is not in the menu")
                 self.assertEqual(seen["submenu"], submenu, seen)
-                if items is not None:
-                    self.assertEqual(seen["items"], items)
-                else:
-                    self.assertIn(ask, seen["items"])
-                    self.assertIn(expect, seen["items"])
+                self.assertEqual(sorted(seen["items"]), sorted(items), seen)
                 self.m.chrome(CLOSE_MENU)
         shell = "const {AddonManager} = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');"
         shell += " const a = await AddonManager.getAddonByID('shell@nulavio.net');"
