@@ -131,8 +131,8 @@ class FirstMinuteTest(unittest.TestCase):
             mock.patch.object(perf_run.time, "monotonic", side_effect=lambda: now[0]),
             mock.patch.object(perf_run.time, "sleep", side_effect=sleep),
         ):
-            peak, count = perf_run.peak_pss_mib(1, seconds=6.0, every=2.0)
-        self.assertEqual((peak, count), (1250.0, 4))
+            peak, count, unreadable = perf_run.peak_pss_mib(1, seconds=6.0, every=2.0)
+        self.assertEqual((peak, count, unreadable), (1250.0, 4, 1))  # the third reading missed one process
 
     def test_the_option_reads_both_first_minutes_and_is_documented(self):
         text = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")

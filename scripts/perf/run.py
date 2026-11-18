@@ -52,7 +52,8 @@ and benchmark measures; the frame-time scenes are Nulavio's own and run on the t
 
 With --first-minute, also a new profile's first minutes (#362): the highest PSS of the whole instance, read every 2 s
 for 60 s after the profile's first start (first_minute_peak_mib, one more minute a run) and during the 60 s its second
-start already runs (second_minute_peak_mib). The content filter's first compile of its lists showed up there; a change
+start already runs (second_minute_peak_mib), with *_unreadable: the most running processes one reading could not
+read (counted, as for memory, never silently a lower peak). The content filter's first compile of its lists showed up there; a change
 to the lists shows up as this number.
 
 With --cli, the tools the browser runs for its pages (nulavio-tools/bin/nulavio next to each Nulavio engine, started
@@ -672,16 +673,17 @@ class FirefoxSession:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
 
-def peak_pss_mib(root: int, seconds: float, every: float = FIRST_MINUTE_EVERY_S) -> tuple[float, int]:
-    """(the highest PSS of the instance's process tree in MiB, how many readings) over `seconds`, read every `every`
-    seconds (#362: a new profile's first work held the extension process at up to 1.2 GiB for about 30 s)."""
-    peak, readings = 0, 0
+def peak_pss_mib(root: int, seconds: float, every: float = FIRST_MINUTE_EVERY_S) -> tuple[float, int, int]:
+    """(the highest PSS of the instance's process tree in MiB, how many readings, the most processes one reading could
+    not read) over `seconds`, read every `every` seconds (#362: a new profile's first work held the extension process at
+    up to 1.3 GiB for about 40 s). A reading that missed a running process is counted, never silently a lower peak."""
+    peak, readings, unreadable = 0, 0, 0
     deadline = time.monotonic() + seconds
     while True:
-        total, _unreadable = pss_kib(instance_pids(root))
-        peak, readings = max(peak, total), readings + 1
+        total, missed = pss_kib(instance_pids(root))
+        peak, readings, unreadable = max(peak, total), readings + 1, max(unreadable, missed)
         if time.monotonic() >= deadline:
-            return peak / 1024, readings
+            return peak / 1024, readings, unreadable
         time.sleep(min(every, max(0.0, deadline - time.monotonic())))
 
 
@@ -706,7 +708,8 @@ def one_run(
         m = session.start()
         out = {"engine": str(session.engine.path), "version": session.engine.version, "startup_first_ms": startup_ms(m)}
         if first_minute:  # the new profile's first minute, as a person's first minute in Nulavio (#362)
-            out["first_minute_peak_mib"], out["first_minute_readings"] = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            peak = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            out["first_minute_peak_mib"], out["first_minute_readings"], out["first_minute_unreadable"] = peak
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
@@ -714,7 +717,8 @@ def one_run(
         # extension process held up to 1.2 GiB for about 30 s after the first two starts, 130 to 330 MiB after
         # later ones. Memory is a later start's, as a person's profile is every day.
         if first_minute:  # read during the minute the second start runs anyway
-            out["second_minute_peak_mib"], out["second_minute_readings"] = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            peak = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            out["second_minute_peak_mib"], out["second_minute_readings"], out["second_minute_unreadable"] = peak
         else:
             time.sleep(FIRST_RUN_S)
         session.stop()
