@@ -38,8 +38,6 @@ this.nulavioConnect = class extends ExtensionAPI {
         updatesState: call(() => updates().state()),
         setAutomaticUpdates: call(on => updates().set(on)),
         restoreDefaultBrowser: call(() => connect.restoreDefaultBrowser()),
-        kdeDevices: call(() => connect.kdeDevices()),
-        sendLink: call((url, device) => connect.sendLink(url, device)),
       },
     };
   }
