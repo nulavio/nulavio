@@ -117,7 +117,7 @@ Not seen in the captures, and not measured:
 
 - **The mechanism:** the 13-line patch to `setPosition()`, behind `nulavio.sidebar.panelOpposite`. It applied without conflict to six releases, and it fails at build time rather than silently. The no-patch route (a `MutationObserver` in `NulavioWindow`) is the wrap [#242](https://github.com/nulavio/nulavio/issues/242) rules out.
 - **Nulavio's CSS:** about six rules under `:root[nulavio-panel-opposite]` in `horizon.css` and `window-band.css`, the two defects above. An integration test reads the geometry for each layout, for both `position_start` values and in Imersivo:
-  - the panel after the page;
+  - the panel on the side opposite the tabs: after the page with the tabs on the left, before it with the tabs on the right (`position_start` false);
   - the margin at the window's edge;
   - the gap between page and panel;
   - the page's width the same as with the setting off.
