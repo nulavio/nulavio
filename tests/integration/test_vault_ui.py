@@ -956,6 +956,39 @@ class VaultUiTest(unittest.TestCase):
         self.assertEqual(methods["headline"], msg("vaultGoneHeadline"))
         self.assertEqual((methods["status"], methods["level"]), (msg("vaultGone"), "error"))
 
+    def test_16b_a_change_on_a_method_or_profile_that_went_meanwhile_says_which(self):
+        """#519: `not-found` is the profile or one of its methods. The list is read again: a method that went is said
+        so with the list as it is now; a profile that went is said as the page says it on load. Never "the list was
+        refreshed", which is the other modules' words for the code."""
+        msg = lambda key: self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])  # noqa: E731
+        profile_id, _code = self.create_via_api("Some", password=PASSWORD, keyring=False)
+        self.open_page(f"vault/methods.html?p={profile_id}")
+        self.wait_state("idle")
+        recovery = self.m.execute("return document.querySelector('#methods > li[data-method=recovery-code]').dataset.envelope;")
+        # The method goes behind the page's back; the page still lists it.
+        self.call(
+            "await V.change(args[0], 'remove-method', {current: args[1], envelope: args[2]});", profile_id, PASSWORD, recovery
+        )
+        self.type_into("current", PASSWORD)
+        self.click(f"#methods > li[data-envelope='{recovery}'] button")
+        self.click("dialog[open] button[value=confirm]")
+        gone = lambda: self.status_text() == msg("methodsMethodGone")  # noqa: E731
+        self.assertTrue(harness.wait_until(gone, 30), self.status_text())
+        self.assertEqual(self.status_line()["level"], "error")
+        self.assertNotIn(msg("err_not_found"), self.status_text())
+        self.wait_state("idle")
+        rows = self.m.execute("return [...document.querySelectorAll('#methods > li')].map(li => li.dataset.method);")
+        self.assertEqual(rows, ["password"])
+        # The profile goes behind the page's back: the page says what it says when it loads, and offers nothing.
+        self.call("await P.remove(args[0]);", profile_id)
+        self.type_into("current", PASSWORD)
+        self.click("#new-code")
+        self.click("dialog[open] button[value=confirm]")
+        self.wait_state("unavailable")
+        self.assertEqual(self.status_text(), msg("vaultGone"))
+        self.assertEqual(self.m.execute("return document.getElementById('headline').textContent;"), msg("vaultGoneHeadline"))
+        self.assertFalse(self.m.execute("return document.getElementById('current').closest('.field').checkVisibility();"))
+
     def test_17_an_unfinished_recovery_code_replacement_is_undone_and_the_unlock_page_says_so(self):
         """#187: a new recovery code never typed back (the page left) is undone by the next unlock with
         the password; the page says so and stays open to be read."""
