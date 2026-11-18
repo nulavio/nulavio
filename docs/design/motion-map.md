@@ -124,7 +124,7 @@ Lateral, the vertical list (5 runs, [perf-lateral.json](../research/evidence/mot
 | A sidebar panel opens (re-timed here) | p95 21.9, max 36.7 (804) | 21.3, 36.8 (850) | p95 over on both, the same. Below |
 | A sidebar panel closes (re-timed here) | p95 33.6, max 35.2 (650) | 33.5, 35.2 (750) | p95 over on both, the same. Below |
 | The main menu opens | 18.1, 35.2 (494) | 18.1, 35.3 (492) | Within |
-| Sidebar collapse | 20.0, 21.3 (750) | 20.1, 23.8 (748) | At the line on both |
+| Sidebar collapse | 20.01, 21.3 (750) | 20.12, 23.8 (748) | p95 over the line by hundredths of a millisecond on both; UX7's own run read 18.4 on 2026-11-04 |
 | Sidebar expand | 19.4, 21.4 (908) | 19.5, 22.5 (909) | Within |
 | Tab switch | 18.9, 123.0 (539) | 18.8, 122.7 (540) | UX7's accepted exception, unchanged |
 | A page loading (#397) | 34.8, 52.7 (3596) | 34.7, 53.5 (3598) | Unchanged (the line is off in a new profile) |
