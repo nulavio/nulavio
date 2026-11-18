@@ -1643,7 +1643,7 @@ class LocalRequestsTest(Home):
         with mock.patch.object(policy.socket, "getaddrinfo", return_value=public) as resolve:
             self.assertEqual(held("https://example.org/a"), ("network.continueRequest", {"request": "r1"}))
             held("https://example.org/b")
-            self.assertEqual(resolve.call_count, 1)  # a name's answer is kept for the requests that follow
+            self.assertEqual(resolve.call_count, 2)  # a public answer is not kept: each request has its own lookup
             for url in ("http://127.0.0.1:8080/hit", "http://192.168.1.1/reboot", "http://[::1]/", "ws://localhost:9/",
                         "http://printer.local/", "file:///etc/passwd", "http://user@/", "http://[64:ff9b::c0a8:101]/",
                         "http://[::ffff:192.168.1.1]/"):  # fmt: skip
@@ -1699,7 +1699,7 @@ class LocalRequestsTest(Home):
             self.assertTrue(wait_for(lambda: ("network.continueRequest", {"request": "r1"}) in commands))
         self.assertNotIn("r3", json.dumps(commands))
 
-    def test_a_name_that_does_not_answer_in_time_fails_its_request_and_its_late_answer_is_kept(self):
+    def test_a_name_that_does_not_answer_in_time_fails_its_request_and_a_late_local_answer_is_kept(self):
         _agent, bridge = self.bridge("ask")
         connection, commands, _ = self.engine()
         asked = []
@@ -1707,7 +1707,7 @@ class LocalRequestsTest(Home):
         def resolve(host, *_a, **_k):
             asked.append(host)
             time.sleep(0.4)
-            return [(0, 0, 0, "", ("93.184.215.14", 0))]
+            return [(0, 0, 0, "", ("192.168.1.20", 0))]
 
         with (
             mock.patch.object(tools, "LOCAL_LOOKUP_TIMEOUT", 0.1),
@@ -1717,9 +1717,36 @@ class LocalRequestsTest(Home):
             bridge._decide(connection, {"request": "r2", "url": "https://late.example/b"})  # the same lookup, not another
             self.assertEqual(commands, [("network.failRequest", {"request": "r1"}), ("network.failRequest", {"request": "r2"})])
             self.assertTrue(wait_for(lambda: "late.example" in bridge._local_hosts))
-            bridge._decide(connection, {"request": "r3", "url": "https://late.example/c"})
-        self.assertEqual(commands[-1], ("network.continueRequest", {"request": "r3"}))
+            bridge._decide(connection, {"request": "r3", "url": "https://late.example/c"})  # known local: no lookup
+        self.assertEqual(commands[-1], ("network.failRequest", {"request": "r3"}))
         self.assertEqual(asked, ["late.example"])
+
+    def test_a_public_answer_is_never_reused_so_a_name_that_turns_local_is_failed(self):
+        # LESIS 929cb094 (R29): a rebinding name answers "public" for the page, then a local address for the
+        # page's next request. The Bridge looks it up again for that request instead of trusting the first answer.
+        _agent, bridge = self.bridge("ask")
+        connection, commands, _ = self.engine()
+        answers = iter(["93.184.215.14", "192.168.0.1", "169.254.169.254"])
+        asked = []
+
+        def resolve(host, *_a, **_k):
+            asked.append(host)
+            return [(0, 0, 0, "", (next(answers), 0))]
+
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=resolve):
+            bridge._decide(connection, {"request": "r1", "url": "http://rebind.example/"})
+            self.assertIsNone(bridge._request_allowed("http://rebind.example/x", wait=False))  # nothing remembered
+            bridge._decide(connection, {"request": "r2", "url": "http://rebind.example/x"})
+            bridge._decide(connection, {"request": "r3", "url": "http://rebind.example:8080/y"})
+        self.assertEqual(
+            commands,
+            [
+                ("network.continueRequest", {"request": "r1"}),
+                ("network.failRequest", {"request": "r2"}),
+                ("network.failRequest", {"request": "r3"}),  # local now, and kept as local without a lookup
+            ],
+        )
+        self.assertEqual(asked, ["rebind.example", "rebind.example"])
 
     def test_while_many_names_are_out_a_new_one_counts_as_local(self):
         # Review: a page that asks for many names that never answer must not make the Bridge wait for each;
@@ -1739,7 +1766,7 @@ class LocalRequestsTest(Home):
             mock.patch.object(tools, "LOCAL_LOOKUP_TIMEOUT", 0.05),
             mock.patch.object(policy.socket, "getaddrinfo", side_effect=resolve),
         ):
-            bridge._local_hosts["known.example"] = (time.monotonic(), False)
+            bridge._local_hosts["known.example"] = time.monotonic()  # known local: answered without a lookup
             for name in ("hang1", "hang2"):
                 bridge._decide(connection, {"request": name, "url": f"https://{name}.example/"})
             started = time.monotonic()
@@ -1748,11 +1775,12 @@ class LocalRequestsTest(Home):
             bridge._decide(connection, {"request": "ip", "url": "https://93.184.215.14/"})
             self.assertLess(time.monotonic() - started, 0.5)
         self.assertEqual(commands[-3:], [("network.failRequest", {"request": "new"}),
-                                         ("network.continueRequest", {"request": "known"}),
+                                         ("network.failRequest", {"request": "known"}),
                                          ("network.continueRequest", {"request": "ip"})])  # fmt: skip
         entries = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
-        self.assertEqual(reasons, ["local-requests-busy"])  # one line, not a public site taken for a local one
+        # One line for the names that were out, not a public site taken for a local one; the known local name's own.
+        self.assertEqual(reasons, ["local-requests-busy", "local-request"])
 
     def test_the_activity_lists_a_few_refused_places_then_says_there_were_more(self):
         # Review: a page that tries a whole network (or a port scan of this computer) wrote a line per
