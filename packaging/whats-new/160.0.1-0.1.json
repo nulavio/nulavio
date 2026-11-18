@@ -21,7 +21,7 @@
       "Diagnóstico pelo terminal numa instalação por pacote: nulavio-doctor confere o motor do pacote, os codecs, o chaveiro do sistema e a ligação com os gerenciadores de senha. O comando nulavio continua abrindo o navegador."
     ],
     "fixed": [
-      "O motor passa ao Firefox 160.0.1, que corrige falhas de segurança de gravidade alta (aviso da Mozilla mfsa2026-130).",
+      "O motor passa ao Firefox 160.0.1, com as correções de segurança do aviso da Mozilla mfsa2026-130, de gravidade alta.",
       "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando nulavio-doctor avisa quando ela falta e o que instalar.",
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
     ],
@@ -50,7 +50,7 @@
       "Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser."
     ],
     "fixed": [
-      "The engine moves to Firefox 160.0.1, which fixes security flaws of high severity (Mozilla's advisory mfsa2026-130).",
+      "The engine moves to Firefox 160.0.1, with the security fixes of Mozilla's advisory mfsa2026-130, of high severity.",
       "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the nulavio-doctor command says when it is missing and what to install.",
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
     ],
