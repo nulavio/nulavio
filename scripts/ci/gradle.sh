@@ -10,14 +10,14 @@
 #
 #   scripts/ci/gradle.sh <gradle argument>...
 #
-# NULAVIO_GRADLE_RETRY_WAITS: the waits in seconds before each new run (default "60 120": three
+# NULAVIO_GRADLE_RETRY_WAITS: the waits in seconds before each new run (default "120 300": three
 # runs at most). NULAVIO_GRADLEW: the Gradle wrapper (default android/gradlew; the tests use a stub).
 set -euo pipefail
 (( $# )) || { echo "usage: gradle.sh <gradle argument>..." >&2; exit 2; }
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 gradlew=${NULAVIO_GRADLEW:-$root/android/gradlew}
-read -r -a waits <<< "${NULAVIO_GRADLE_RETRY_WAITS-60 120}"
+read -r -a waits <<< "${NULAVIO_GRADLE_RETRY_WAITS-120 300}"
 log=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gradle.XXXXXX")
 trap 'rm -f "$log"' EXIT
 
