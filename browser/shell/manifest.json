@@ -60,12 +60,6 @@
       },
       "description": "__MSG_commandCopyLinkToHighlight__"
     },
-    "toggle-keep-above": {
-      "suggested_key": {
-        "default": "Ctrl+Alt+K"
-      },
-      "description": "__MSG_commandToggleKeepAbove__"
-    },
     "lock-profile": {
       "suggested_key": {
         "default": "Ctrl+Alt+B"

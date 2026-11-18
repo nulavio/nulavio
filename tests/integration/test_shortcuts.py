@@ -70,7 +70,6 @@ class ShortcutsTest(unittest.TestCase):
             "alt,control+C",
             "alt,control+F",
             "alt,control+I",
-            "alt,control+K",
             "alt,shift+A",
             "alt,shift+P",
         ]

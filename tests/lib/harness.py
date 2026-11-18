@@ -779,8 +779,7 @@ class GeckoProfileSession:
     Nothing touches the real home or the real profiles.ini.
     """
 
-    def __init__(self, name: str = "Pessoal", desktop_bus: bool = False):
-        self.desktop_bus = desktop_bus  # the caller's own session bus instead of a private one (test_keep_above on Plasma)
+    def __init__(self, name: str = "Pessoal"):
         self.engine = nulavio_engine()
         if self.engine is None:
             raise RuntimeError("GeckoProfileSession needs the Nulavio build (NULAVIO_ENGINE)")
@@ -852,12 +851,7 @@ class GeckoProfileSession:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
     def start(self) -> Marionette:
-        if self.desktop_bus and os.environ.get("NULAVIO_TEST_PLASMA") == "1" and os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
-            # Only for a test that asks the real desktop for something (KWin's "keep above", #170), run by hand
-            # on a Plasma session with NULAVIO_TEST_HEADFUL=1: the engine's window and the window manager meet there.
-            self.env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
-        else:
-            self._start_private_bus()
+        self._start_private_bus()
         self.profile_dir.parent.mkdir(parents=True)
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():
