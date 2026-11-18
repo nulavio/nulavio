@@ -257,6 +257,37 @@ class PanelOppositeTest(unittest.TestCase):
                             self.assertEqual((back["page"], back["panel"]), (off["page"], off["panel"]), name + ", off again")
                             self.m.chrome("SidebarController.hide();")
 
+    def test_03b_without_a_launcher_the_panel_keeps_the_window_margin_too(self):
+        """The engine's "hide tabs and sidebar" (tabs on top, no launcher): the panel opposite still has the window's
+        margin on its outer side and one gap to the page, and the page is as wide as with the setting off."""
+        self.needs_the_patch()
+        self.addCleanup(self.restore)
+        self.addCleanup(self.apply, "lateral")
+        self.apply("top")
+        self.m.chrome("Services.prefs.setStringPref('sidebar.visibility', 'hide-sidebar');")
+        for start in (True, False):
+            with self.subTest(start=start):
+                self.m.chrome(f"Services.prefs.clearUserPref('{PREF}');")
+                self.side(f"no launcher, {start}", start, False)
+                self.show()
+                off = self.settle(lambda g: g["panel"] is not None and not g["opposite"], "no launcher, off")
+                self.assertIsNone(off["launcher"], off)
+                on = self.opposite(True)
+                at = f"off {off}, on {on}"
+                page, panel = on["page"], on["panel"]
+                if start:
+                    self.assertGreaterEqual(panel[0], page[1], at)
+                    edge, gap, other = on["width"] - panel[1], panel[0] - page[1], page[0]
+                else:
+                    self.assertLessEqual(panel[1], page[0], at)
+                    edge, gap, other = panel[0], page[0] - panel[1], on["width"] - page[1]
+                self.assertEqual((edge, other), (on["frame"], on["frame"]), "the margins at the window's edges: " + at)
+                self.assertEqual(gap, width(on["splitter"]), "one gap between the page and the panel: " + at)
+                self.assertEqual(width(page), width(off["page"]), "the page's width: " + at)
+                self.capture(f"no-launcher-{'left' if start else 'right'}")
+                self.opposite(False)
+                self.m.chrome("SidebarController.hide();")
+
     def test_04_foco_the_launcher_expanded_over_the_page_moves_neither_the_page_nor_the_panel(self):
         """In Foco the launcher opens over the page on hover. The engine keeps the collapsed launcher's room beside it,
         where it takes the panel to be; with the panel opposite, the page is there and must not move under it."""

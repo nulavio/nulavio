@@ -168,6 +168,12 @@
         #sidebar-box[sidebar-panel-open] { margin-inline: 0 var(--nv-space-3); }
         &[sidebar-positionend] #tabbrowser-tabbox[sidebar-panel-open] { margin-inline: 0; }
         &[sidebar-positionend] #sidebar-box[sidebar-panel-open] { margin-inline: var(--nv-space-3) 0; }
+        /* No launcher in the window (the engine's "hide tabs and sidebar"): the page keeps its margin on the window's
+           side only. As specific as the rule above that gives it one on both sides, and after it. */
+        &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) {
+          #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) { margin-inline-end: 0; }
+          #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] { margin-inline-start: 0; }
+        }
         /* Foco: while the launcher is expanded over the page, the engine keeps the collapsed launcher's width as a margin
            of what sits beside it, which it takes to be the panel. Here the page sits beside it, and the panel needs none. */
         @media -moz-pref("sidebar.visibility", "expand-on-hover") {
