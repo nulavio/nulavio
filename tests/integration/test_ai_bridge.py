@@ -1082,6 +1082,7 @@ class AiBridgeTest(unittest.TestCase):
 
         held = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/held"
         form = b'<!doctype html><title>Form</title><form method="post" action="/post"><button>Send</button></form>'
+        posted: list[str] = []
 
         class Public(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
@@ -1093,6 +1094,7 @@ class AiBridgeTest(unittest.TestCase):
 
             def do_POST(self):
                 self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                posted.append(self.path)
                 self.send_response(303)
                 self.send_header("Location", held)
                 self.send_header("Content-Length", "0")
@@ -1122,7 +1124,7 @@ class AiBridgeTest(unittest.TestCase):
         self.assertNotIn("only on this computer", json.dumps(sent))
         read = bridge.call("page_read", {"tab": tab})
         self.assertNotIn("only on this computer", json.dumps(read))
-        self.assertEqual(read["structuredContent"]["url"], held)  # the redirect was followed; its page is not shown
+        self.assertEqual(posted, ["/post"])  # the form went, and was answered with the redirect; its page is not shown
 
 
 if __name__ == "__main__":
