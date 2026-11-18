@@ -12,7 +12,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 lib=$(cd "$here/../../tests/lib" && pwd)
 image=${NULAVIO_CHECK_IMAGE:-$("$here/base_image.sh" fedora-build)}
 
-podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$here/doctor_probe.py:/checks/doctor_probe.py:ro" -v "$lib:/checks/lib:ro" -v "$rpm:/pkg/nulavio.rpm:ro" "$image" bash -euc '
+podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/sysdir_probe.py:ro" -v "$here/doctor_probe.py:/checks/doctor_probe.py:ro" -v "$here/updates_probe.sh:/checks/updates_probe.sh:ro" -v "$lib:/checks/lib:ro" -v "$rpm:/pkg/nulavio.rpm:ro" "$image" bash -euc '
     dnf -y -q install /pkg/nulavio.rpm >/dev/null
     echo "installed: $(rpm -q nulavio)"
     # What the package recommends, as a desktop installs it with the package: each name is one Fedora has, and
@@ -39,4 +39,6 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     su tester -c "nulavio-doctor --json" > /tmp/doctor.json || true
     python3 -I /checks/doctor_probe.py /usr/lib64/nulavio < /tmp/doctor.json
     test -f /usr/share/applications/nulavio.desktop && test -f /usr/share/icons/hicolor/128x128/apps/nulavio.png && echo "desktop entry and icons: present"
+    # Automatic updates (#241), last: it removes the package.
+    sh /checks/updates_probe.sh dnf -y -q remove nulavio
 '

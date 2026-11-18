@@ -393,6 +393,22 @@ The item was removed before it shipped (#460, 2026-11-17): Nulavio no longer ask
 | Tests | `test_web_services` (addresses, refusals, the request recorded and cancelled, private windows) |
 | Residual | Medium for the token in a query; listed as R80 |
 
+
+### S24 — Nulavio's automatic updates run as root (#241)
+
+| Field | |
+|---|---|
+| Assets | The system: what runs as root; the installed browser's version |
+| Adversary | T-LOCAL: a program of the person's account; a repository or mirror answering for Nulavio's |
+| Preconditions | The RPM or .deb package is installed and the person turned automatic updates on (the administrator's password, through polkit) |
+| Boundary | TB24 |
+| Impact | At midnight and noon, as root, the package manager updates the `nulavio` package: with dnf from Nulavio's repository only (`--from-repo=nulavio`), with APT from the highest version among the system's sources |
+| Preventive | Off after the install; nothing runs at install. Turning it on or off is the only privileged step, with the administrator's password every time, and runs one fixed helper that takes only `on` or `off`. The service and the timer require the flag file, update only the `nulavio` package, and use the package manager's own signature checks (`gpgcheck` and `repo_gpgcheck` in Nulavio's RPM repository, `Signed-By` in its APT source) |
+| Detective | `systemctl status nulavio-update.timer`, `journalctl -u nulavio-update`; the package manager's own history |
+| Limitations | With APT the update trusts every source the system has: one the administrator added that also offers a `nulavio` package could provide it (R83). An update may pull in new dependencies from the system's repositories, as a manual update does; it never removes a package (`--no-remove`; dnf refuses without `--allowerasing`). With `-y`, dnf may import a new signing key from the repository's `gpgkey` address at a key change without showing its fingerprint (not verified). The flag file survives the package's removal, so a later install updates again without asking unless it was deleted (the download pages' removal steps delete it). A program of the person's account can start `pkexec` too, but gets nothing without the administrator's password |
+| Tests | `test_track_b`, `check_rpm.sh`, `check_deb.sh` |
+| Residual | Low: the same trust as a manual `dnf upgrade nulavio` or `apt upgrade`, on a schedule; R83 |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.
