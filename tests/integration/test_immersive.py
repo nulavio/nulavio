@@ -129,7 +129,9 @@ if (!window.nvTraceMove) {
 }
 const box = id => {
   const e = document.getElementById(id), b = e.getBoundingClientRect(), s = getComputedStyle(e);
-  return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom), +s.opacity,
+  // The right side as far as the window goes: a part past the right edge (#346, the tab list on the right) is out
+  // of view as one past the left edge is.
+  return [Math.round(b.left), Math.round(b.top), Math.round(Math.min(b.right, innerWidth)), Math.round(b.bottom), +s.opacity,
           e.checkVisibility() ? 1 : 0];
 };
 const tick = () => {
@@ -975,6 +977,9 @@ class ImmersiveTest(unittest.TestCase):
         and dark at the narrowest window.
         The tab list is drawn over the panel as it is over the page: it comes and goes without moving either."""
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        # Last, once the window has its size back: the pointer on the page, away from where any part comes in (the
+        # mirrored journeys end at the left quarter, where the tab list on the left would be).
+        self.addCleanup(self.rest_pointer)
         self.addCleanup(
             self.m.chrome,
             "Services.prefs.clearUserPref('browser.ml.chat.enabled'); Services.prefs.clearUserPref('browser.ml.chat.provider');",
@@ -1271,6 +1276,17 @@ class ImmersiveTest(unittest.TestCase):
                     self.assertEqual(sized(back), sized(reference))
                     self.m.chrome("gBrowser.selectedBrowser.focus();")
                     self.assertFalse(self.settled(False)["toolbar"])
+
+    def rest_pointer(self):
+        """The pointer on the page, three quarters across and halfway down, through the engine's own event path."""
+        w, h = self.m.chrome("return [innerWidth, innerHeight];")
+        self.m.set_context("chrome")
+        try:
+            move = {"type": "pointerMove", "duration": 0, "origin": "viewport", "x": w * 3 // 4, "y": h // 2}
+            pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": [move]}
+            self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
+        finally:
+            self.m.set_context("content")
 
     def apply_preset(self, preset: str):
         layout = f"const d = arguments[arguments.length - 1]; {LAYOUT}.apply(window, arguments[0]).then(d, e => d(String(e)));"
