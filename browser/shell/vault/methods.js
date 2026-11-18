@@ -19,12 +19,44 @@ let capabilities = { keyring: false };
 
 const kindName = method => t(KINDS[method.method] ?? "methodOther");
 
+const isGone = e => String(e?.message) === "not-found";
+
+/** Why the list could not be read again. For a read, `not-found` is the profile: it no longer exists. */
+function readText(e) {
+  return isGone(e) ? t("vaultGone") : errorText(e);
+}
+
+/** The page of a profile that no longer exists: what the page loads with, and what any change finds (#519). */
+function showGone() {
+  byId("headline").textContent = t("vaultGoneHeadline");
+  unavailable("");
+}
+
+/** The words for a change that failed. `not-found` is the profile or one of its methods, and the code does not
+    say which: the list is read again, and what it finds says. The profile is gone: the page says so and leaves
+    nothing to try. A method is gone: the list drawn now is the one that is true, and the words say so (#519). */
+async function failureText(e) {
+  if (!isGone(e)) {
+    return errorText(e);
+  }
+  try {
+    await render();
+  } catch (again) {
+    if (isGone(again)) {
+      showGone();
+      return t("vaultGone");
+    }
+    return errorText(again);
+  }
+  return t("methodsMethodGone");
+}
+
 /** A change's result; one saved but not recorded inside the profile says so, as a warning (#177); and when
     the profile's state could not be read again afterwards, that too, after them, never instead (#258). */
 function announceDone(text, result, readFailed = null) {
   const unrecorded = result?.warning === "not-recorded" ? t("err_not_recorded") : "";
   if (readFailed) {
-    announce([text, unrecorded, errorText(readFailed)].filter(Boolean).join(" "), "error");
+    announce([text, unrecorded, readText(readFailed)].filter(Boolean).join(" "), "error");
   } else if (unrecorded) {
     announce(`${text} ${unrecorded}`, "warn");
   } else {
@@ -44,6 +76,9 @@ async function settleChange(text, result) {
 }
 
 function setState(state) {
+  if (document.body.dataset.state === "unavailable") {
+    return; // the profile is gone, or cannot be read: nothing here can work again, whatever finishes after
+  }
   document.body.dataset.state = state;
   for (const control of document.querySelectorAll("#add-actions button, #methods button, #key button")) {
     control.disabled = state === "busy" || control.dataset.keep === "disabled" || control.hasAttribute("data-no-confirmer");
@@ -75,7 +110,7 @@ async function change(op, extra = {}) {
       field.setAttribute("aria-invalid", "true");
       field.focus();
     } else {
-      announce(errorText(e), "error");
+      announce(await failureText(e), "error");
     }
     return null;
   } finally {
@@ -209,7 +244,7 @@ byId("rekey").addEventListener("click", async () => {
   try {
     check = await vault.rekeyCheck(profileId);
   } catch (e) {
-    announce(errorText(e), "error");
+    announce(await failureText(e), "error");
     return;
   }
   if (!check.closed || !check.enough) {
@@ -251,7 +286,7 @@ byId("rekey").addEventListener("click", async () => {
       field.setAttribute("aria-invalid", "true");
       field.focus();
     } else if (REFUSED_BEFORE.has(code)) {
-      announce(errorText(e), "error"); // refused before anything was made
+      announce(await failureText(e), "error"); // refused before anything was made
     } else {
       // Stopped part-way (the tools failed or were stopped, the switch did not finish): the next use of the
       // profile undoes it or finishes it, and reading it again here is such a use. What the page then shows
@@ -281,13 +316,13 @@ byId("rekey").addEventListener("click", async () => {
     });
     // Said before the code takes the focus, with the code's warning and a failed read when there is one (#258).
     const unrecorded = made.warning === "not-recorded" ? t("err_not_recorded") : "";
-    const said = [...done, t("methodsRekeyNewCode"), unrecorded, readFailed ? errorText(readFailed) : ""];
+    const said = [...done, t("methodsRekeyNewCode"), unrecorded, readFailed ? readText(readFailed) : ""];
     announce(said.filter(Boolean).join(" "), readFailed ? "error" : unrecorded ? "warn" : "ok");
     showNewCode(made.recoveryCode, true);
   } catch (e) {
     making = false;
     setState("idle");
-    announce([...done, errorText(e)].filter(Boolean).join(" "), "error"); // the new key stands; the code is still to make
+    announce([...done, await failureText(e)].filter(Boolean).join(" "), "error"); // the new key stands; the code is still to make
   }
 });
 
@@ -326,7 +361,7 @@ byId("code-step").addEventListener("submit", async event => {
   try {
     result = await vault.change(profileId, "confirm-recovery-code", { current: byId("code").dataset.code });
   } catch (e) {
-    announce(errorText(e), "error"); // the code stays on screen; the old one still opens the profile
+    announce(await failureText(e), "error"); // the code stays on screen; the old one still opens the profile
     return;
   } finally {
     submit.disabled = false;
@@ -362,7 +397,7 @@ byId("new-code").addEventListener("click", async () => {
     render().then(
       () => result.warning && announce(t("err_not_recorded"), "warn"),
       // The list could not be read again: said, and the warning with it, never instead of it.
-      e => announce([errorText(e), result.warning ? t("err_not_recorded") : ""].filter(Boolean).join(" "), "error")
+      e => announce([readText(e), result.warning ? t("err_not_recorded") : ""].filter(Boolean).join(" "), "error")
     );
   } else {
     making = false;
@@ -419,10 +454,13 @@ vault
   })
   .then(render)
   .catch(e => {
-    const gone = String(e?.message) === "not-found";
-    byId("headline").textContent = t(gone ? "vaultGoneHeadline" : "vaultUnreadHeadline");
-    unavailable("");
-    announce(gone ? t("vaultGone") : errorText(e), "error");
+    if (isGone(e)) {
+      showGone();
+    } else {
+      byId("headline").textContent = t("vaultUnreadHeadline");
+      unavailable("");
+    }
+    announce(readText(e), "error");
   })
   .finally(() => {
     document.documentElement.dataset.ready = "true";
