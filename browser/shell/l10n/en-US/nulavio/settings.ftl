@@ -30,6 +30,10 @@ nulavio-hide-page-title =
     .label = Hide the page title in the window title
     .description = The window's title bar, the taskbar, Alt+Tab and screen-sharing pickers see only "Nulavio" and the profile's name, never the page. It does not hide the titles on the tabs, inside the window, or the page itself.
 
+nulavio-load-line =
+    .label = Show a loading line at the top of the page
+    .description = A thin line along the top of the page while it loads. It does not say how far the load has gone; the tab shows the browser's own loading sign either way.
+
 nulavio-look-group =
     .label = Nulavio colours
     .description = Only how Nulavio's windows and pages look. Nothing here changes a protection.
@@ -191,6 +195,15 @@ nulavio-confirmed-group =
 
 ## Search
 
+nulavio-translate-group =
+    .label = Translation web services
+    .description = The browser's own translation, above, happens on your computer and stays the default. A web service is used only after you add it, and only on a click on the menu item that names it. The services' own extensions do not come with Nulavio; if you prefer one, install it from addons.mozilla.org.
+nulavio-translate-add-group =
+    .label = Add a translation service
+    .description = In alphabetical order, none marked; Nulavio has no partnership with any. Or a LibreTranslate instance of your own, or another service's address.
+nulavio-search-choose-group =
+    .label = Choose this profile's search provider
+    .description = One click on "Use" makes it this profile's search: added to the list if missing, and made the default. The order is alphabetical and none is marked; Nulavio has no partnership with any. Providers with accounts say whether this profile is signed in. A temporary profile forgets the sign-in when it closes.
 nulavio-search-group =
     .label = Suggestions: who receives what you type
     .description = With suggestions on, what you type in the address bar goes to the engine before you search. In Nulavio, only the engines switched on here receive it.

@@ -281,21 +281,11 @@ TOOLS: tuple[Tool, ...] = (
          "Put a file into a file field (from page_snapshot). Only files the user placed in this agent's uploads folder.",
          "files", _schema({"tab": TAB, "element": ELEMENT, "file": {"type": "string", "pattern": "^[^/\\\\]{1,255}$"}},
                           ("tab", "element", "file")), False),
-    Tool("raw_automation", "Raw automation endpoint",
-         "Hand over your AI Workspace's WebDriver BiDi endpoint, for your own automation library (Puppeteer, Selenium, "
-         "WebdriverIO). Nulavio does not check, ask about or log what is done through it; Nulavio's other tools stop "
-         "working for the workspace. Needs the user's separate 'Raw automation' option (not part of any level).",
-         policy.RAW_CAPABILITY, _schema({}), False),
     Tool("session_state", "Bridge status",
          "Who you are to Nulavio: agent, autonomy, the effective permission for each capability, workspace.",
          None, _schema({}), True),
 )  # fmt: skip
 BY_NAME = {t.name: t for t in TOOLS}
-RAW_WARNING = (
-    "Raw automation: from now on Nulavio does not check, ask about or log what is done through this endpoint. The "
-    "user's permissions, site list and activity log no longer apply to it; the user's emergency stop, pause and revoke "
-    "still end this AI Workspace. Use it only for the task the user gave you."
-)
 
 
 def validate(schema: dict, value, path: str = "arguments") -> None:
@@ -368,9 +358,8 @@ class Bridge:
         self._downloads_mode: dict[str, bool] = {}
         self._args: dict = {}  # the current call's arguments (where it acts, for permission requests)
         self._cancel: threading.Event | None = None  # the current call's cancel: a pending request is denied
-        self.raw = False  # the AI Workspace's endpoint was handed over (raw_automation)
         self.last_call: dict | None = None
-        # By connection, not by label: an engine that ended (raw automation, a pause) and its successor are two.
+        # By connection, not by label: an engine that ended (a pause) and its successor are two.
         self._forms_scripts: weakref.WeakKeyDictionary[Bidi, str] = weakref.WeakKeyDictionary()  # -> preload script id
         self._forms_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose guard was set up once
         self._forms_ever = False  # some document of this session may carry the guard
@@ -451,11 +440,20 @@ class Bridge:
         if capability == "local_resources" and self._may_reach_local():
             self._sync_network()  # "until the agent disconnects": nothing is held from now on, in this call too
 
+    def _refuse_internal(self, target: policy.Target, url: str, checked: list[str]) -> None:
+        """The browser's internal pages are offered to no agent (#463): refused before anything is asked, so the
+        person is never asked for local_resources for a page the agent could not open anyway."""
+        if policy.INTERNAL_CAPABILITY in target.needs:
+            self._target = url
+            checked.append(policy.INTERNAL_CAPABILITY)
+            raise Denied(policy.Decision(False, "block", policy.INTERNAL_CAPABILITY, "internal-pages-off"))
+
     def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
         try:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             raise ToolError(str(exc)) from None
+        self._refuse_internal(target, url, checked)
         self.require("navigate", url, checked=checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
@@ -470,10 +468,14 @@ class Bridge:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
+        self._refuse_internal(target, url, checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
 
     def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
+        if url:  # an internal page is refused before the tool's own question (independent review of #504)
+            with contextlib.suppress(policy.UrlRefused):
+                self._refuse_internal(policy.classify_url(url), url, checked)
         self.require(capability, url, checked=checked)
         self.require_needs(url, checked=checked)
 
@@ -524,9 +526,11 @@ class Bridge:
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
+            who = (
+                "" if d.reason == "internal-pages-off" else " Only the user can change this, in Nulavio (not through this tool)."
+            )
             result = self._error(f"Denied by Nulavio: '{policy.CAPABILITIES.get(d.capability, d.capability)}' is "
-                                 f"{_why(d)}. Only the user can change this, in Nulavio (not through this tool)."
-                                 + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
+                                 f"{_why(d)}.{who}" + (f" {denied.detail}" if denied.detail else ""))  # fmt: skip
             outcome, decision, reason = "denied", "deny", d.reason
         except ToolError as exc:
             result, outcome, decision, reason = self._error(str(exc)), "error:tool", "allow", None
@@ -570,8 +574,6 @@ class Bridge:
     # -- browser ---------------------------------------------------------------------
 
     def _workspace(self) -> Workspace:
-        if self.raw:
-            raise ToolError("your AI Workspace is under raw automation (raw_automation): Nulavio's tools are off for it")
         if self.workspace is None:
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
@@ -609,10 +611,6 @@ class Bridge:
         return self.owner[tab]
 
     def close(self) -> None:
-        if self.raw:
-            self.raw = False
-            why = "stopped" if registry.stopped() else "closed"
-            audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
         for target in self.profiles.values():
             target.stop()
         self.profiles.clear()
@@ -1095,41 +1093,6 @@ class Bridge:
 
     # -- tools -----------------------------------------------------------------------
 
-    def _t_raw_automation(self, args, cancel, checked):
-        self.require(policy.RAW_CAPABILITY, checked=checked)
-        bidi = self._workspace().start()
-        workspace = self.workspace
-        with contextlib.suppress(Exception):  # free the engine's single BiDi session for the agent's own client
-            bidi.command("session.end", {}, timeout=5)
-        bidi.ws.close()
-        workspace.bidi = None
-        self._downloads_mode.pop("", None)  # the next connection to this engine starts over
-        self.raw = True
-        workspace.mark_raw()  # the window now says "Automação bruta" (WCS-01), until it closes
-        self.elements.clear()
-        self.owner = {tab: label for tab, label in self.owner.items() if label}
-        threading.Thread(target=self._raw_watch, args=(workspace,), name="raw-watch", daemon=True).start()
-        endpoint = f"ws://127.0.0.1:{workspace.port}/session"
-        usage = "Puppeteer: puppeteer.connect({browserWSEndpoint, protocol: 'webDriverBiDi'}). One session at a time."
-        text = f"{RAW_WARNING}\n\nWebDriver BiDi endpoint: {endpoint}\n{usage}"
-        return self._ok({"endpoint": endpoint, "protocol": "webdriver-bidi", "policyApplies": False}, text), None
-
-    def _raw_watch(self, workspace: Workspace) -> None:
-        """While the endpoint is out, the user's stop, pause, revoke and a new key still end the AI Workspace."""
-        while self.raw and self.workspace is workspace:
-            try:
-                why = self._held()
-            except Exception:  # the registry could not be read: the endpoint does not stay out on that
-                why = "unreadable"
-            if why:
-                self.raw = False
-                self.workspace = None
-                self._downloads_mode.pop("", None)
-                workspace.stop()
-                audit.record(agent=self.agent_id, session=self.session_id, tool="raw_automation", event="raw-ended", reason=why)
-                return
-            time.sleep(1.0)
-
     def _t_session_state(self, args, cancel, checked):
         agent = self._agent()
         if agent is None:
@@ -1525,7 +1488,7 @@ def _why(decision: policy.Decision) -> str:
         "paused": "blocked for now: the user paused this agent",
         "out-of-scope": "blocked on this site: it is outside the sites this agent may use",
         "profile-not-authorized": "blocked: that profile is not one this agent may use",
-        "raw-automation-off": "off: raw automation is a separate option the user turns on for this agent in Nulavio",
+        "internal-pages-off": "blocked: the browser's internal pages are not offered to agents",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",
     }.get(decision.reason, f"blocked for this agent ({decision.reason})")

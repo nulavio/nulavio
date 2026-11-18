@@ -30,6 +30,10 @@ nulavio-hide-page-title =
     .label = Esconder o título da página na barra da janela
     .description = A barra da janela, a barra de tarefas, o Alt+Tab e quem escolhe uma janela para compartilhar a tela veem só "Nulavio" e o nome do perfil, nunca a página. Isso não esconde os títulos nas abas, dentro da janela, nem a página em si.
 
+nulavio-load-line =
+    .label = Mostrar uma linha de carregamento no topo da página
+    .description = Uma linha fina no topo da página enquanto ela carrega. Ela não diz quanto já carregou; a aba mostra o sinal de carregamento do próprio navegador de qualquer jeito.
+
 nulavio-look-group =
     .label = Cores do Nulavio
     .description = Só a aparência das janelas e páginas do Nulavio. Nada aqui muda uma proteção.
@@ -191,6 +195,15 @@ nulavio-confirmed-group =
 
 ## Pesquisa
 
+nulavio-translate-group =
+    .label = Serviços de tradução na web
+    .description = A tradução do próprio navegador, acima, acontece no seu computador e continua sendo a padrão. Um serviço na web só é usado depois que você o adiciona, e só num clique no item do menu que tem o nome dele. As extensões dos próprios serviços não vêm com o Nulavio; se preferir uma, instale-a em addons.mozilla.org.
+nulavio-translate-add-group =
+    .label = Adicionar um serviço de tradução
+    .description = Em ordem alfabética, nenhum marcado; o Nulavio não tem parceria com nenhum. Ou uma instância LibreTranslate sua, ou o endereço de outro serviço.
+nulavio-search-choose-group =
+    .label = Escolher o provedor de pesquisa deste perfil
+    .description = Um clique em "Usar" faz dele a pesquisa deste perfil: entra na lista se faltar e vira o padrão. A ordem é alfabética e nenhum vem marcado; o Nulavio não tem parceria com nenhum. Provedores com conta dizem se este perfil está conectado. Um perfil temporário esquece o login quando fecha.
 nulavio-search-group =
     .label = Sugestões: quem recebe o que você digita
     .description = Com as sugestões ligadas, o que você digita na barra de endereço vai ao mecanismo antes de você pesquisar. No Nulavio, só os mecanismos ligados aqui recebem.

@@ -31,17 +31,17 @@ CAPABILITIES: dict[str, str] = {
     "cookies_storage": "Read or change cookies and site storage",
     "multiple_profiles": "Work in more than one profile",
     "private_tabs": "Use private tabs",
-    "local_resources": "Reach this computer, the local network and internal pages",
+    "local_resources": "Reach this computer and the local network",
     "transactions": "Make purchases and payments",
     "account_settings": "Change account settings",
     "background": "Keep working in the background",
-    "debugging": "Raw automation and the browser's internal pages",
+    "debugging": "The browser's internal pages (not offered to agents)",
 }
 MODES = ("allow", "ask", "block")
-# Raw automation (the raw_automation tool) and privileged pages (about:, chrome:). No preset
-# includes it, Full control neither (ADR 0007, amendment of 2026-10-28): it is a separate
-# opt-in per agent, with its own confirmation, recorded as `raw_automation_accepted`.
-RAW_CAPABILITY = "debugging"
+# The browser's internal pages (about:, chrome:, the Shell's own pages, the source viewer, Reader View). Only raw
+# automation's separate opt-in ever turned this on; raw automation was removed (#463, ADR 0007 amendment of
+# 2026-11-17), so no preset, grant or stored opt-in does: an agent acts only through the tools and the policy.
+INTERNAL_CAPABILITY = "debugging"
 
 # How a permission request presents each capability (Shell page ai/request.html): critical for
 # money, code, the user's own data and places outside the AI Workspace; warning for what changes
@@ -85,22 +85,16 @@ PRESETS: dict[str, dict[str, str]] = {
         {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions", "background"},
         {"transactions", "account_settings", "local_resources", "execute_js", "network", "multiple_profiles", "private_tabs"},
     ),
-    # Everything without confirmations, except raw automation (a separate opt-in).
-    "full_control": _preset(set(CAPABILITIES) - {RAW_CAPABILITY}, set()),
+    # Everything without confirmations, except the internal pages, which no agent gets.
+    "full_control": _preset(set(CAPABILITIES) - {INTERNAL_CAPABILITY}, set()),
 }
-# For the CLI only: the browser shows its own localised text (aiFullControlBody, aiRawBody).
+# For the CLI only: the browser shows its own localised text (aiFullControlBody).
 FULL_CONTROL_WARNING = (
     "Full control: this agent will do without asking everything the other levels ask about: any action on "
     "pages, purchases and payments, account changes, private tabs, the profiles in its list and running "
-    "scripts in pages. Raw automation is not included: it is a separate option with its own confirmation. "
+    "scripts in pages. The browser's internal pages are never included. "
     "If the agent is compromised or makes a mistake, your data and accounts can be affected. You can revoke "
     "access later, but actions already taken may be irreversible."
-)
-RAW_AUTOMATION_WARNING = (
-    "Raw automation: this agent gets a direct WebDriver BiDi connection to its AI Workspace's browser and may "
-    "open the browser's internal pages. Nulavio does not check, ask about or record anything done through that "
-    "connection: your permissions, site list and activity log no longer apply to it. The emergency stop, pause "
-    "and revoke still close the AI Workspace. Never available in your own profiles."
 )
 
 
@@ -109,7 +103,7 @@ class Decision:
     allowed: bool
     mode: str  # allow / ask / block (the effective setting before any prompt)
     capability: str
-    # preset:<name>, grant, session-grant, raw-automation-off, approved-once, approved-session, denied,
+    # preset:<name>, grant, session-grant, internal-pages-off, approved-once, approved-session, denied,
     # no-approver, revoked, paused, stopped, out-of-scope
     reason: str
 
@@ -133,9 +127,10 @@ def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.dateti
     the session ends the capability goes back to what the user set, never to the preset."""
     if capability not in CAPABILITIES:
         return "block", "unknown-capability"
-    if capability == RAW_CAPABILITY and not agent.get("raw_automation_accepted"):
-        # Only the separate opt-in turns it on; a grant given without that confirmation does not count.
-        return "block", "raw-automation-off"
+    if capability == INTERNAL_CAPABILITY:
+        # No agent gets the internal pages since raw automation was removed (#463): not a grant, a session answer
+        # or the `raw_automation_accepted` an earlier version recorded.
+        return "block", "internal-pages-off"
     held = agent.get("session_grants", {}).get(capability)
     if held and session_id and held.get("session") == session_id:
         return "allow", "session-grant"
@@ -356,15 +351,15 @@ def classify_url(url: str, resolve: bool = True) -> Target:
         inner = wrapped(url)
         if inner is not None:
             # The source viewer and Reader View show another address's content: the page is an
-            # internal one (raw-automation opt-in, like about:config), and the address inside is
+            # internal one (never offered to agents, like about:config), and the address inside is
             # checked as if it were opened itself, so it has a host for the site list.
             if wrapped(inner) is not None:
                 raise UrlRefused("an address wrapped more than once is not opened")
             target = classify_url(inner, resolve)
             needs = ("local_resources", "debugging", *(n for n in target.needs if n not in ("local_resources", "debugging")))
             return Target(url, target.host, needs)
-        # moz-extension: is the Shell's own pages (Settings, Vault, profiles). They need the
-        # raw-automation opt-in, like about:config.
+        # moz-extension: is the Shell's own pages (Settings, Vault, profiles). Internal pages, like
+        # about:config: never offered to agents.
         privileged = scheme in ("chrome", "resource", "moz-extension", "view-source") or (
             scheme == "about" and url not in ("about:blank",)
         )

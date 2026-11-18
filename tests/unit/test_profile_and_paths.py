@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -130,9 +131,9 @@ class ProfileTest(TempHome):
         self.assertEqual(second, [])
         self.assertIs(prefs.read_user_prefs(prof.path / "prefs.js")["dom.security.https_only_mode"], False)
         user_js = prefs.read_user_prefs(prof.path / "user.js")
-        enforced = {p.name for p in profile.baseline_prefs() + profile.theme_prefs() if p.mode == "enforce"}
+        enforced = {p.name for p in profile.baseline_prefs() if p.mode == "enforce"}
         self.assertEqual(set(user_js), enforced)
-        self.assertEqual(mode(prof.path / "chrome" / "userChrome.css"), 0o600)
+        self.assertFalse((prof.path / "chrome").exists(), "the preview's chrome theme is gone (#464)")
 
     # -- a seeded value follows the baseline; a value the person chose stays (#384) --------------------
 
@@ -358,27 +359,19 @@ class ProfileTest(TempHome):
         with self.assertRaises(profile.ProfileError):
             profile.set_provider(prof, "made-up")
 
-    def test_builtin_theme_replaces_only_the_launchers_css(self):
-        # The Nulavio build ships its window theme: the preview userChrome.css would
-        # override it, so the launcher removes its own copy and never installs it.
+    def test_preview_theme_removed_and_users_css_kept(self):
+        # The preview's userChrome.css is no longer installed (#464); a copy an earlier launcher wrote would override
+        # the Nulavio build's window theme, so it is removed. A file the person wrote stays.
         prof = self.make()
         css = prof.path / "chrome" / "userChrome.css"
+        css.parent.mkdir(mode=0o700)
+        css.write_text(f"/* {profile.PREVIEW_THEME_MARKER} */\n#nav-bar {{ background: none; }}\n")
         profile.prepare_for_launch(prof, {})
-        self.assertTrue(css.exists())
-        profile.prepare_for_launch(prof, {}, builtin_theme=True)
         self.assertFalse(css.exists())
         self.assertNotIn("toolkit.legacyUserProfileCustomizations.stylesheets", prefs.read_user_prefs(prof.path / "user.js"))
         css.write_text("/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n")
-        profile.prepare_for_launch(prof, {}, builtin_theme=True)
+        profile.prepare_for_launch(prof, {})
         self.assertEqual(css.read_text(), "/* my own chrome tweaks */\n#nav-bar { opacity: 1; }\n", "user's file touched")
-
-    def test_theme_off_removes_css_and_pref(self):
-        prof = self.make()
-        profile.prepare_for_launch(prof, {})
-        profile.set_theme(prof, False)
-        profile.prepare_for_launch(prof, {})
-        self.assertFalse((prof.path / "chrome" / "userChrome.css").exists())
-        self.assertNotIn("toolkit.legacyUserProfileCustomizations.stylesheets", prefs.read_user_prefs(prof.path / "user.js"))
 
     def test_start_page_escapes_values_and_has_no_scripts(self):
         prof = self.make()
@@ -468,6 +461,121 @@ class ProfileTest(TempHome):
         profile.delete(prof)
         self.assertFalse(prof.path.exists())
         self.assertTrue(paths.profiles_root().exists())
+
+
+class OnePasswordDoctorTest(unittest.TestCase):
+    """#81: doctor says how the 1Password desktop app learns the Nulavio build, and never writes its file."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.app = self.tmp / "opt" / "1password"
+        self.allowed = self.tmp / "etc" / "1password" / "custom_allowed_browsers"
+        for name, value in (("ONEPASSWORD_APP", (self.app,)), ("ONEPASSWORD_ALLOWED", self.allowed)):
+            patcher = mock.patch.object(doctor, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.root_owned = mock.patch.object(doctor, "_root_owned", return_value=True)
+        self.root_owned.start()
+        self.addCleanup(self.root_owned.stop)
+
+    def test_nothing_without_the_desktop_app(self):
+        self.assertEqual(doctor.check_1password(Path("/usr/lib64/nulavio/nulavio")), [])
+
+    def test_a_name_that_is_not_plain_gets_no_command(self):
+        # The command is pasted into a root shell: a file name with shell characters never goes into it.
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/opt/x/nulavio;rm -rf ~"))
+        self.assertEqual(check.status, "warn")
+        self.assertNotIn("sudo", check.detail)
+
+    def test_firefox_needs_no_step(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/firefox/firefox"))
+        self.assertEqual(check.status, "ok")
+
+    def test_the_nulavio_build_gets_the_exact_command_and_the_file_is_never_written(self):
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "info")
+        self.assertIn(f"sudo install -d -m 0755 {self.allowed.parent} && echo nulavio | sudo tee -a {self.allowed}", check.detail)
+        self.assertFalse(self.allowed.exists(), "doctor wrote 1Password's file")
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`echo nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_text("librewolf\nnulavio\n", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "ok")
+        self.assertEqual(self.allowed.read_text(encoding="utf-8"), "librewolf\nnulavio\n")
+
+    def test_a_list_without_a_final_line_break_and_one_that_is_not_utf8(self):
+        """CodeRabbit on #478: the command keeps the names apart; a file that is not UTF-8 is a warning, not a crash."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        self.allowed.parent.mkdir(parents=True)
+        self.allowed.write_text("librewolf", encoding="utf-8")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertIn(f"`printf '\\n%s\\n' nulavio | sudo tee -a {self.allowed}`", check.detail)
+        self.allowed.write_bytes(b"librewolf\n\xff\n")
+        (check,) = doctor.check_1password(Path("/usr/lib64/nulavio/nulavio"))
+        self.assertEqual(check.status, "warn")
+        self.assertIn("cannot read", check.detail)
+
+    def test_an_engine_the_user_can_replace_gets_no_command(self):
+        """Review of #478: the line trusts a name; it is not offered for a tarball or a home-folder engine."""
+        self.app.parent.mkdir(parents=True)
+        self.app.touch()
+        engine = self.tmp / "nulavio" / "nulavio"
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        # The user's own files, whoever runs the test.
+        users = mock.Mock(st_uid=1000, st_mode=0o100755)
+        with (
+            mock.patch.object(doctor.os, "stat", return_value=users),
+            mock.patch.object(Path, "resolve", lambda p, strict=False: p),
+        ):
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertNotIn("sudo", check.detail)
+            self.assertIn("can be changed without root", check.detail)
+            # Already in 1Password's list: still said, not "ok".
+            self.allowed.parent.mkdir(parents=True)
+            self.allowed.write_text("nulavio\n", encoding="utf-8")
+            (check,) = doctor.check_1password(engine)
+            self.assertEqual(check.status, "warn")
+            self.assertIn("is in", check.detail)
+
+    def test_root_owned_needs_root_and_no_group_or_other_write_up_to_the_root(self):
+        engine = self.tmp / "nulavio"
+        engine.touch()
+        # Resolved before os.stat is replaced: resolving calls it (on some Python versions), and the fake must not.
+        real, tmp = engine.resolve(), self.tmp.resolve()
+
+        def fake(owner_of, mode_of):
+            def stat_of(path):
+                return mock.Mock(st_uid=owner_of(Path(path)), st_mode=mode_of(Path(path)))
+
+            return stat_of
+
+        self.root_owned.stop()
+        self.addCleanup(self.root_owned.start)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o100755)):
+            self.assertTrue(doctor._root_owned(engine))
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 1000 if p == real else 0, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(engine), "the engine is the user's")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o40777 if p == tmp else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it anyone can write")
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0, lambda p: 0o42775 if p == tmp else 0o40755)):
+            self.assertFalse(doctor._root_owned(engine), "a folder above it a group can write")
+        link = self.tmp / "link"
+        link.symlink_to(engine)
+        with mock.patch.object(doctor.os, "stat", fake(lambda p: 0 if p != real else 1000, lambda p: 0o100755)):
+            self.assertFalse(doctor._root_owned(link), "a link to the user's file is judged by the file")
+        self.assertFalse(doctor._root_owned(self.tmp / "missing"))
 
 
 if __name__ == "__main__":

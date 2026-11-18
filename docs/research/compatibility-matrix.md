@@ -12,6 +12,7 @@ Legend: ✅ verified by automated test or recorded evidence · 🟡 partially ve
 | **Proton Pass** 1.41.1 AMO (Firefox: MV3) / 1.42.0 CWS | ✅ install, signed, background, popup (sign-in screen). 🟡 login/autofill manual | ❌ loads; `setExtensionEnabled` segfaults | [gecko evidence](evidence/gecko-158-password-extensions.json) |
 | **KeePassXC-Browser** 1.10.4.1 | ✅ install, signed, background, popup. ✅ **association + autofill end to end** with KeePassXC 2.8.0 (Fedora 44 container) | ❌ loads; enabling crashes; native messaging undocumented | same |
 | **Bitwarden** 2026.10.0 | ✅ install, signed, background, popup (onboarding). 🟡 login/biometrics manual | ❌ loads; enabling crashes | same |
+| **1Password** 8.12.44.33 (AMO, proprietary) | 🟡 added 2026-11-16 (#81): install, signed, background, popup in `test_password_extensions` with the network; result recorded when it runs. **Not certified** (deferred by the maintainer, 2026-11-16): login, unlock with the desktop app, autofill are manual and need an account | not tried | — |
 
 ## Platform behaviour (Gecko, Track A)
 
@@ -53,7 +54,38 @@ By hand, on each engine release, with throwaway or family accounts and never in 
 | YouTube (paid films) | ⬜ | | | | |
 | The same in the Flatpak (`net.nulavio.Nulavio`) | ⬜ | | | | the plugin folder must be writable and the plugin process start inside the sandbox |
 
-Widevine on Linux is the software level (L3); services usually limit it to 720p or lower. Not run either: the Widevine network test (`NULAVIO_NETWORK_TESTS=1`) that installs Widevine from Mozilla's list and plays a public test stream.
+Widevine on Linux is the software level (L3); services usually limit it to 720p or lower.
+
+The Widevine network test (`test_drm` test 04 with `NULAVIO_NETWORK_TESTS=1`; never in CI, it downloads Widevine from Mozilla's list and plays from Google's test servers), run by hand on 2026-11-17 on a build of `main` at 68ec0575 (Firefox 160.0; not a released package), on the Fedora 44 host, three times:
+
+| Check | Result |
+|---|---|
+| DRM on: Widevine from the engine's own list | ✅ 4.10.3112.0 installed |
+| The Shaka Player demo's Widevine stream ("Angel One", H.264), **without** a licence | plays its clear start and stops at 7.8 s, waiting for a key: the rest is encrypted |
+| The same stream with a licence from Google's test licence server | ✅ plays past the clear start (12 s, 304 frames) |
+
+It says that Widevine installs, gets a licence and decrypts in the Nulavio build. It says nothing about a service: each one adds its own checks (the table above), and the Flatpak is not covered by it.
+
+## Video calls (#221)
+
+On every change, automated: a call on this computer with the engine's fake camera and microphone, and the question before a screen is shared (`tests/integration/test_webrtc.py`). By hand, on each engine release, per service; alphabetical, none preferred. Only what could be done with no account is run so far: Jitsi Meet.
+
+| Service | Join as a guest | Camera and microphone | Audio and video, both ways | Chat | Screen sharing | End-to-end encryption | Release, package | Notes |
+|---|---|---|---|---|---|---|---|---|
+| Google Meet | ⬜ | | | | | | | not run: no account was used |
+| Jitsi Meet | ✅ | 🟡 the engine's fake devices | ✅ | ✅ | ⬜ | not offered, as in Firefox 160.0 | Firefox 160.0, a build of `main` at 68ec0575 (not a released package), 2026-11-17 | below |
+| Microsoft Teams | ⬜ | | | | | | | not run: no account was used |
+| Proton Meet | ⬜ | | | | | | | not run: no account was used |
+| Webex | ⬜ | | | | | | | not run: no account was used |
+| Whereby | ⬜ | | | | | | | not run: no account was used |
+| Zoom | ⬜ | | | | | | | not run: no account was used |
+
+The Jitsi Meet row, 2026-11-17 ([evidence](evidence/calls-jitsi-2026-11-17.json)): two new profiles on one computer, driven by a script, headless, with a new profile's defaults (tracking protection Strict, only the default route's address offered to peers).
+
+- **On `meet.ffmuc.net`**, a public instance that asks for no account: each guest gets the page before the meeting with the camera's picture and the microphone working, types a name, joins; each sees two people; audio and video arrive on both sides (through the instance's bridge, over UDP, reached directly); a chat message arrives.
+- **End-to-end encryption is not offered**: the page's own library says it is not supported, in Nulavio and in Fedora's Firefox 160.0 alike, with the same script. So it is not something Nulavio's settings take away. It is the instance's setting: Jitsi's library (read in the instance's own copy) offers it to a browser with Chromium's encoded-streams interface, and to one with `RTCRtpScriptTransform`, which the engine has, only when the instance sets `enableEncodedTransformSupport`; this one leaves it off. Not tried: an instance that sets it.
+- **On `meet.jit.si`** the page before the meeting works the same, and then the guest waits: a room there starts only when someone signs in ("no moderator has arrived yet"). That is the service's rule, not a failure of the browser; the whole call was not run there.
+- **Not run:** screen sharing, background blur, noise suppression, reactions, a real camera and microphone, a call through a VPN or proxy route (#217), the temporary profile, a call that needs a relay, more than two people.
 
 ## Environments
 

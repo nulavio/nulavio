@@ -67,6 +67,9 @@ SEARCH_HOSTS = (
     "wikipedia.org",
     "kagi.com",
     "kagisuggest.com",
+    "ecosia.org",
+    "qwant.com",
+    "startpage.com",
     "mercadolivre.com.br",
 )
 
@@ -544,6 +547,217 @@ class SearchPrivacyTest(unittest.TestCase):
                 self.assertEqual(alias() or "", stored or "")
         finally:
             self.search("await S.setAlias(args[0], args[1]); return true;", ddg, before or "")
+
+    def test_14_a_provider_is_chosen_in_one_step_and_nothing_reaches_it_before(self):
+        """#151: one call adds the provider when it is missing and makes it the default, for private windows too
+        unless asked otherwise, and sends typed text to it only when that is chosen. Choosing contacts nobody."""
+        self.require_nulavio()
+        before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        normal = next(e[0] for e in before if e[1])
+        private = next(e[0] for e in before if e[2])
+        restore = "await S.setDefault(args[0]); await S.setDefault(args[1], {private: true});"
+        self.addCleanup(self.search, restore, normal, private)
+        self.m.chrome(NET_START)
+        try:
+            # Listed by name, alphabetically, with the ones that have accounts marked.
+            providers = self.search("return (await S.state()).providers.map(p => [p.name, p.account]);")
+            self.assertEqual([name for name, _ in providers], sorted(name for name, _ in providers))
+            self.assertEqual([name for name, account in providers if account], ["Kagi"])
+            # A provider the profile does not have: added, and the default in both kinds of window.
+            qwant = self.search("return S.choose({provider: 'qwant'});")
+            self.addCleanup(self.search, "await S.remove(args[0]);", qwant)
+            listed = self.search("return (await S.list()).find(e => e.id === args[0]);", qwant)
+            seen_as = (listed["name"], listed["alias"], listed["isDefault"], listed["isDefaultPrivate"])
+            self.assertEqual(seen_as, ("Qwant", "@qwant", True, True))
+            self.assertFalse(listed["suggestOptIn"], "choosing a provider is not consent to send it typed text")
+            # One the profile has, for normal windows only, with its suggestions: private windows keep theirs.
+            mojeek = self.search("return (await S.list()).find(e => e.alias === '@mojeek').id;")
+            brave = self.search("return S.choose({provider: 'brave', privateToo: false, suggest: true});")
+            now = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate, e.suggestOptIn]);")
+            self.assertIn([brave, True, False, True], now)
+            self.assertIn([qwant, False, True, False], now)
+            self.assertTrue(self.pref("browser.search.suggest.enabled"))
+            # Chosen again without suggestions: the consent is taken back, and the engine's own switch with it.
+            self.search("return S.choose({id: args[0], privateToo: false, suggest: false});", brave)
+            self.assertEqual(self.pref("nulavio.search.suggest.optin", ""), "")
+            self.assertIs(self.pref("browser.search.suggest.enabled"), False)
+            # An engine of the person's own (a SearXNG instance), chosen by its id.
+            searx = self.search("return S.addSearxng({url: 'https://searx.example.org/'});")
+            self.addCleanup(self.search, "await S.remove(args[0]);", searx)
+            self.assertEqual(self.search("return S.choose({id: args[0]});", searx), searx)
+            both = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+            self.assertIn([searx, True, True], both)
+            # Refused: no target, two targets, an unknown provider, suggestions from one that has none.
+            for body, code in (
+                ("return S.choose({});", "invalid-search-choice"),
+                ("return S.choose({provider: 'brave', id: args[0]});", "invalid-search-choice"),
+                ("return S.choose({provider: 'nope'});", "unknown-provider"),
+                ("return S.choose({id: args[1], suggest: true});", "no-suggestions"),
+                ("return S.choose({provider: 'brave', suggest: 'yes'});", "invalid-search-choice"),
+            ):
+                with self.subTest(code=code, body=body):
+                    self.assertEqual(self.search_error(body, searx, mojeek), code)
+        finally:
+            seen = self.m.chrome(NET_STOP)
+        self.assert_nothing_about(seen, "\u0000", hosts=(*SEARCH_HOSTS, "searx.example.org"))
+
+    def test_14b_the_host_that_gets_typed_text_is_the_chosen_engines_own(self):
+        """#151: an engine of the person's that has a curated provider's name is the one chosen, and the host named for
+        its suggestions is that engine's, not the curated provider's."""
+        self.require_nulavio()
+        before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        normal = next(e[0] for e in before if e[1])
+        private = next(e[0] for e in before if e[2])
+        restore = "await S.setDefault(args[0]); await S.setDefault(args[1], {private: true});"
+        self.addCleanup(self.search, restore, normal, private)
+        own = self.search(
+            "return S.addCustom({name: 'Ecosia', url: 'https://other.example/?q=%s', suggestUrl: 'https://other.example/s?q=%s'});"
+        )
+        self.addCleanup(self.search, "await S.remove(args[0]);", own)
+        chosen = self.search("return S.choose({provider: 'ecosia', privateToo: false});")
+        self.assertEqual(chosen, own, "the profile's own engine of that name was the one chosen")
+        self.assertEqual(self.search("return S.suggestHostOf(args[0]);", chosen), "other.example")
+
+    def test_15_signed_in_is_read_from_the_session_cookies_name_and_survives_a_restart(self):
+        """#151: whether the profile is signed in to a provider with accounts is the presence of its session cookie
+        (Kagi: kagi_session), never its value. A cookie of another name does not count, and a sign-in kept by the
+        profile is still there after a restart. Stand-in cookies: the tests never sign in anywhere. A profile of the
+        engine's own (the launcher's guard refuses to start this class's profile again, with the harness's
+        automation preferences in it)."""
+        self.require_nulavio()
+        session = harness.GeckoProfileSession(name="Conta")
+        self.addCleanup(session.cleanup)
+        m = session.start()
+
+        def run(body: str, *args):
+            result = chrome_async(m, f"const S = {MODULE}; {body}", args)
+            self.assertNotIn("error", result, result)
+            return result["ok"]
+
+        add = (
+            "Services.cookies.add('kagi.com', '/', args[0], 'stand-in', true, true, false, Date.now() + 86400000, {},"
+            " Ci.nsICookie.SAMESITE_LAX, Ci.nsICookie.SCHEME_HTTPS); return true;"
+        )
+        signed = "return S.accounts().kagi;"
+        self.assertEqual(run(signed), {"signedIn": False, "signIn": "https://kagi.com/signin", "host": "kagi.com"})
+        run(add, "kagi_search")  # Kagi's CSRF cookie, set before signing in
+        self.assertFalse(run(signed)["signedIn"])
+        run(add, "kagi_session")
+        self.assertTrue(run(signed)["signedIn"])
+        self.assertNotIn("accounts", run("return S.state();"), "the experiment's state carries nothing read from cookies")
+        m = session.restart()
+        self.assertTrue(harness.wait_until(lambda: run(signed)["signedIn"], 15), run(signed))
+
+    def test_16_a_choice_left_by_another_profile_is_applied_once_at_start(self):
+        """#151: another profile's Shell leaves a choice in this profile's folder; this profile applies it at its start
+        (here: called as its first start does) and deletes the file. Only a provider Nulavio offers by name can be
+        named, never with suggestion consent; any other file is deleted and changes nothing."""
+        self.require_nulavio()
+        before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        normal = next(e[0] for e in before if e[1])
+        private = next(e[0] for e in before if e[2])
+        restore = "await S.setDefault(args[0]); await S.setDefault(args[1], {private: true});"
+        self.addCleanup(self.search, restore, normal, private)
+        leave = (
+            "const path = PathUtils.join(PathUtils.profileDir, 'nulavio-search-choice.json');"
+            "await IOUtils.writeUTF8(path, args[0]); return path;"
+        )
+        exists = "return IOUtils.exists(PathUtils.join(PathUtils.profileDir, 'nulavio-search-choice.json'));"
+        mojeek = self.search("return (await S.list()).find(e => e.alias === '@mojeek').id;")
+        self.search(leave, '{"provider": "mojeek", "privateToo": false}')
+        self.assertEqual(self.search("return S.applyPending();"), mojeek)
+        self.assertFalse(self.search(exists), "the file was left to be applied again")
+        now = self.search("return (await S.list()).find(e => e.id === args[0]);", mojeek)
+        self.assertEqual((now["isDefault"], now["isDefaultPrivate"], now["suggestOptIn"]), (True, False, False))
+        self.assertIsNone(self.search("return S.applyPending();"), "nothing left: nothing applied")
+        for bad in (
+            '{"provider": "nope"}',
+            '{"searxng": "https://searx.example.org/"}',  # only a provider Nulavio offers by name
+            '{"engine": "google"}',
+            '{"provider": "brave", "privateToo": "yes"}',
+            "not json",
+            '{"provider": "brave", "engine": "x"}',
+            '{"provider": "brave", "suggest": true}',  # consent is never given by a file: one asking for it is refused whole
+        ):
+            with self.subTest(bad=bad):
+                self.search(leave, bad)
+                self.assertIsNone(self.search("return S.applyPending();"))
+                self.assertFalse(self.search(exists))
+                self.assertTrue(self.search("return (await S.list()).find(e => e.id === args[0]).isDefault;", mojeek))
+
+    def test_17_a_session_never_goes_in_a_search_address(self):
+        """#152 (ADR 0002, amendment of 2026-11-16): a search template that carries a session is refused, Kagi's
+        Session Link first; the parameter's name decides, in the query or the fragment, whatever its case."""
+        self.require_nulavio()
+        refused = (
+            "https://kagi.com/search?token=abc.def&q=%s",
+            "https://kagi.com/search?q={searchTerms}&Token=abc",
+            "https://example.org/?q=%s#session=abc",
+            "https://example.org/?q=%s&access_token=abc",
+            "https://example.org/?q=%s&sessionid=abc",
+        )
+        for url in refused:
+            with self.subTest(url=url):
+                self.assertEqual(
+                    self.search_error("return S.addCustom({name: 'Com sessão', url: args[0]});", url), "session-in-template"
+                )
+        self.assertNotIn("Com sessão", [e["name"] for e in self.search("return S.list();")])
+        # A parameter that only looks alike is not a session.
+        kept = self.search("return S.addCustom({name: 'Sem sessão', url: 'https://example.org/?q=%s&tokens=1&lang=pt'});")
+        self.search("await S.remove(args[0]);", kept)
+
+    def test_18_a_search_from_a_private_window_carries_no_cookie_of_the_normal_session(self):
+        """#152: an engine's cookie in the normal session (a stand-in for a provider's sign-in) goes with a search
+        from a normal window and never with one from a private window."""
+        self.require_nulavio()
+        engine = self.search(
+            "return S.addCustom({name: 'Fixture com conta', url: args[0]});", self.server.url("/search-cookie?q=%s")
+        )
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        self.m.chrome(
+            "Services.cookies.add('127.0.0.1', '/', 'sid', 'normal-session', false, false, false, Date.now() + 86400000, {},"
+            " Ci.nsICookie.SAMESITE_LAX, Ci.nsICookie.SCHEME_HTTP); return true;"
+        )
+        self.addCleanup(self.m.chrome, "Services.cookies.removeCookiesFromExactHost('127.0.0.1', '{}');")
+        search = (
+            "const { SearchService } = ChromeUtils.importESModule('moz-src:///toolkit/components/search/SearchService.sys.mjs');"
+            "const url = SearchService.getEngineById(arguments[0]).getSubmission(arguments[1]).uri.spec;"
+            "const win = arguments[2] ? [...Services.wm.getEnumerator('navigator:browser')].find(w =>"
+            " PrivateBrowsingUtils.isWindowPrivate(w)) : window;"
+            "win.openTrustedLinkIn(url, 'tab'); return url;"
+        )
+        self.m.chrome(search, [engine, "normal", False])
+        self.assertTrue(harness.wait_until(lambda: self.server.requests_to("/search-cookie"), 15))
+        self.assertEqual(self.server.cookies["/search-cookie"], "sid=normal-session", "the positive control: a normal search")
+        self.m.chrome("gBrowser.removeTab(gBrowser.selectedTab);")
+        before = len(self.server.requests_to("/search-cookie"))
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        windows = "[...Services.wm.getEnumerator('navigator:browser')]"
+        private = f"return {windows}.some(w => PrivateBrowsingUtils.isWindowPrivate(w) && w.gBrowser);"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(private), 10))
+        self.addCleanup(
+            self.m.chrome,
+            f"for (const w of {windows}) if (PrivateBrowsingUtils.isWindowPrivate(w)) w.close();",
+        )
+        self.m.chrome(search, [engine, "private", True])
+        self.assertTrue(harness.wait_until(lambda: len(self.server.requests_to("/search-cookie")) > before, 15))
+        self.assertIsNone(self.server.cookies["/search-cookie"], "a private window's search carried the normal session's cookie")
+
+    def test_19_an_opensearch_description_that_declares_a_session_is_not_kept(self):
+        """#152, review of #484: the addresses an OpenSearch description declares go through the session check once
+        the engine has read them; an engine whose search, suggestion or search-form address carries one is removed again."""
+        self.require_nulavio()
+        names = "return (await S.state()).engines.map(e => e.name);"
+        for name, param in (("Fixture OS busca", "search"), ("Fixture OS sugestao", "suggest"), ("Fixture OS form", "form")):
+            with self.subTest(declared_in=param):
+                url = self.server.url(f"/opensearch.xml?name={name.replace(' ', '+')}&{param}=token")
+                self.assertEqual(self.search_error("return S.addOpenSearch({url: args[0]});", url), "session-in-template")
+                self.assertNotIn(name, self.search(names))
+        # The positive control: the same description without the parameter is kept.
+        url = self.server.url("/opensearch.xml?name=Fixture+OS+limpo")
+        engine = self.search("return S.addOpenSearch({url: args[0]});", url)
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        self.assertIn("Fixture OS limpo", self.search(names))
 
 
 if __name__ == "__main__":

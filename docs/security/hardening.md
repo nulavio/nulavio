@@ -1,6 +1,6 @@
 # Hardening
 
-What the Track A preview applies today, how each item is verified, and which host-level options were evaluated. Nothing here disables or relaxes an upstream protection.
+What Nulavio applies today, how each item is verified (the Track A preview it was first written for is no longer offered, #464), and which host-level options were evaluated. Nothing here disables or relaxes an upstream protection.
 
 ## Applied now (verified)
 
@@ -32,7 +32,7 @@ What the Track A preview applies today, how each item is verified, and which hos
 | Safe Browsing (phishing, malware, downloads) | Removing it weakens anti-phishing. A privacy-preserving replacement must be proposed and evaluated first (ADR candidate) |
 | Remote Settings (OneCRL, CRLite, add-on blocklist) | Certificate revocation and malicious-extension blocking depend on it |
 | Extension auto-updates | Security fixes for extensions |
-| Engine updates | Delivered by the distribution package (Track A) or our SLA (Track B) |
+| Engine updates | Delivered by Nulavio's signed packages under the [update policy](../architecture/update-policy.md) |
 | DNS | Track A: Fedora disables DoH (`network.trr.mode=5`) to respect the system resolver, and Nulavio keeps that. Track B (S15): the new tab asks once how to look up sites: the computer's resolver (mode 5, "off by choice", which also keeps Mozilla's regional roll-out off), encrypted DNS with fallback (mode 2) or encrypted only (mode 3), through Cloudflare (the engine's default, [Mozilla's resolver program](https://wiki.mozilla.org/Security/DOH-resolver-policy)), [Quad9](https://quad9.net/doh-quad9-dns-servers/), [Mullvad](https://mullvad.net/en/help/dns-over-https-and-dns-over-tls) or an https:// address of the user's. Until the user answers, the engine's default applies. Nulavio runs no resolver; the UI says the chosen resolver sees the lookups. `test_dns` proves lookups reach the chosen resolver and that "encrypted only" fails closed |
 | `privacy.resistFingerprinting` | It fixes window sizes and breaks many sites, with no way out per site. The engine's fingerprinting protection for the Strict category is used instead, with Nulavio's additions ([measured](../research/fingerprinting.md)); of what RFP does, the UTC time zone is one of them since ADR 0017, with a switch per site. RFP may become an opt-in "hardened" mode |
 
@@ -48,7 +48,7 @@ What the Track A preview applies today, how each item is verified, and which hos
 ## User recommendations (shown in docs and onboarding)
 
 1. Prefer an external manager that locks (KeePassXC, Proton Pass, Bitwarden) over engine-stored passwords. If you keep engine passwords, set a **Primary Password**.
-2. Keep the system updated (`dnf upgrade`): in Track A, the engine's security fixes come from there.
+2. Keep the system updated (`dnf upgrade` or `apt upgrade`): Nulavio's security releases come from its repository. The Flatpak bundle that came with 160.0-0.4 to 0.6 has no update channel (R75): move to the package.
 3. Review extensions with "access your data for all websites" next to a password manager.
 4. Use a separate Nulavio profile for work (flow G).
 

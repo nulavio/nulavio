@@ -56,7 +56,7 @@
     },
     "copy-link-to-highlight": {
       "suggested_key": {
-        "default": "Ctrl+Shift+L"
+        "default": "Ctrl+Alt+C"
       },
       "description": "__MSG_commandCopyLinkToHighlight__"
     },
@@ -269,6 +269,20 @@
         ],
         "events": [
           "startup"
+        ]
+      }
+    },
+    "nulavioServices": {
+      "schema": "experiments/services/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "script": "experiments/services/parent.js",
+        "paths": [
+          [
+            "nulavioServices"
+          ]
         ]
       }
     }

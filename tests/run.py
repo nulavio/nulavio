@@ -13,6 +13,7 @@ NULAVIO_TEST_HEADFUL=1, NULAVIO_TEST_ARTIFACTS=<dir>.
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -30,6 +31,10 @@ def main(argv: list[str]) -> int:
     combined = unittest.TestSuite()
     for name in suites:
         combined.addTests(loader.discover(str(ROOT / "tests" / name), pattern=pattern, top_level_dir=str(ROOT / "tests" / name)))
+    if "integration" not in suites:
+        # tests/lib/harness.py sets this for the engines and tools it starts (#464); a unit module that imports it
+        # must not leave the launcher's refusal of the distribution's Firefox off for the whole unit run.
+        os.environ.pop("NULAVIO_TEST_DISTRIBUTION_FIREFOX", None)
     result = unittest.TextTestRunner(verbosity=2).run(combined)
     return 0 if result.wasSuccessful() else 1
 

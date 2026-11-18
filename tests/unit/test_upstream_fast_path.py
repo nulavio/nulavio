@@ -1017,9 +1017,12 @@ class AutobuildDecideTest(TempDirTest):
         return autobuild.decide(state or {"builds": {}}, report, facts, autobuild.Options(**options), NOW)
 
     def test_decide_table(self):
-        built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159}}}
-        ready = {"builds": {"159.0": {"phase": "ready-to-sign", "source_sha256": D159}}}
-        other = {"builds": {"159.0": {"phase": "built", "source_sha256": "e" * 64}}}
+        built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159, "precheck": "/x/precheck.json"}}}
+        ready = {"builds": {"159.0": {"phase": "ready-to-release", "source_sha256": D159, "precheck": "/x/precheck.json"}}}
+        other = {"builds": {"159.0": {"phase": "built", "source_sha256": "e" * 64, "precheck": "/x/precheck.json"}}}
+        # Records from before #430: a release rehearsal with a manifest, and no reading of the Rust library.
+        legacy_built = {"builds": {"159.0": {"phase": "built", "source_sha256": D159, "manifest": "/x/manifest.json"}}}
+        legacy_ready = {"builds": {"159.0": {"phase": "ready-to-sign", "source_sha256": D159, "manifest": "/x/manifest.json"}}}
         failed = {"builds": {"159.0": {"phase": "failed", "source_sha256": D159, "failed_step": "build"}}}
         rows = [
             ("staged, nothing built", self.staged, {}, GOOD, {}, ("build", 0)),
@@ -1027,6 +1030,8 @@ class AutobuildDecideTest(TempDirTest):
             ("staged and built: wait", self.staged, built, GOOD, {}, ("wait", 0)),
             ("published, same digest built", self.shipped, built, GOOD, {}, ("ready", 10)),
             ("already ready", self.shipped, ready, GOOD, {}, ("idle", 0)),
+            ("staged, built before the pre-check existed: checked again", self.staged, legacy_built, GOOD, {}, ("build", 0)),
+            ("published, ready-to-sign from before: checked again", self.shipped, legacy_ready, GOOD, {}, ("build", 0)),
             ("published, other digest built", self.shipped, other, GOOD, {}, ("build", 0)),
             ("failed before", self.shipped, failed, GOOD, {}, ("failed-before", 1)),
             ("failed before, --retry", self.shipped, failed, GOOD, {"retry": True}, ("build", 0)),
@@ -1089,9 +1094,11 @@ class AutobuildDecideTest(TempDirTest):
 class FakeMachine:
     """Stands in for git, bump_engine.py, systemd-inhibit and rehearse_release.sh."""
 
-    def __init__(self, *, bump_rc=0, bump_digest=D159, rehearse_rc=0, manifest_digest=D159, rehearse_error=None):
+    def __init__(self, *, bump_rc=0, bump_digest=D159, rehearse_rc=0, manifest_digest=D159, rehearse_error=None,
+                 networking="passed", leaves_manifest=False):  # fmt: skip
         self.calls: list = []
         self.bump_rc, self.bump_digest, self.manifest_digest = bump_rc, bump_digest, manifest_digest
+        self.networking, self.leaves_manifest = networking, leaves_manifest
         self.rehearse_rc, self.rehearse_error = rehearse_rc, rehearse_error
 
     def __call__(self, command, **kwargs):
@@ -1116,8 +1123,11 @@ class FakeMachine:
             step = "| build | 52 min 00 s | failed (logs/build.log) |" if self.rehearse_rc else "| build | 52 min 00 s | ok |"
             (out / "rehearsal.md").write_text(f"| Step | Time | Result |\n|---|---|---|\n{step}\n")
             if not self.rehearse_rc:
-                manifest = {"firefox": command[-2], "source_sha256": self.manifest_digest, "rehearsal": "ok"}
-                (out / "manifest.json").write_text(json.dumps(manifest))
+                result = {"precheck": "ok", "signable": False, "firefox": command[-2], "source_sha256": self.manifest_digest,
+                          "variant": "mozconfig.no-lto", "networking_check": {"result": self.networking}}  # fmt: skip
+                (out / "precheck.json").write_text(json.dumps(result))
+                if self.leaves_manifest:
+                    (out / "manifest.json").write_text("{}")
             done.returncode = self.rehearse_rc
             return done
         return done  # systemd-ac-power: on AC
@@ -1159,7 +1169,7 @@ class AutobuildRunTest(TempDirTest):
     def test_published_release_builds_in_a_separate_worktree_and_is_ready_to_sign(self):
         machine = FakeMachine()
         result, code = self.runner(self.shipped, machine).once()
-        self.assertEqual((code, result["action"], result["phase"]), (10, "build", "ready-to-sign"))
+        self.assertEqual((code, result["action"], result["phase"]), (10, "build", "ready-to-release"))
         commands = [call[0] for call in machine.calls]
         tree = str(self.tmp / "work" / "worktrees" / "firefox-159.0")
         self.assertIn(["git", "-C", str(self.tmp / "repo"), "worktree", "add", "--detach", tree, "main"], commands)
@@ -1167,17 +1177,28 @@ class AutobuildRunTest(TempDirTest):
         self.assertEqual(bump[1:], ["-I", f"{tree}/scripts/release/bump_engine.py", "159.0", "--allow-staged", "--json"])
         rehearse, kwargs = next(call for call in machine.calls if call[0][0] == "systemd-inhibit")
         self.assertEqual(
-            rehearse[-3:],
-            [f"{tree}/scripts/release/rehearse_release.sh", "159.0", str(self.tmp / "work" / "rehearsal" / "159.0")],
+            rehearse[-4:],
+            # A pre-check (#430): the variant whose Rust library can be read, and nothing that can be signed.
+            [
+                f"{tree}/scripts/release/rehearse_release.sh",
+                "--precheck",
+                "159.0",
+                str(self.tmp / "work" / "rehearsal" / "159.0"),
+            ],
         )
+        self.assertTrue(result["precheck"].endswith("precheck.json"))
+        self.assertNotIn("manifest", result)
+        self.assertFalse((self.tmp / "work" / "rehearsal" / "159.0" / "manifest.json").exists())
         self.assertNotIn("NULAVIO_ALLOW_NO_SAFEBROWSING_KEY", kwargs["env"])  # release builds need the key
         self.assertEqual(kwargs["cwd"], tree)
         self.assertFalse(any(word in command for command in commands for word in ("commit", "push", "fetch", "pull")))
         titles = [notice.title for notice in self.sent]
-        self.assertIn("READY TO SIGN: Nulavio with Firefox 159.0", titles)
+        self.assertIn("READY TO RELEASE: Nulavio with Firefox 159.0", titles)
+        self.assertFalse([title for title in titles if "SIGN" in title.upper()], titles)  # it made nothing to sign
+        self.assertIn("run release.yml", " ".join(notice.body for notice in self.sent))
         state = json.loads((self.tmp / "state" / "autobuild.json").read_text())
         self.assertEqual(
-            (state["builds"]["159.0"]["phase"], state["builds"]["159.0"]["base_commit"]), ("ready-to-sign", "0123abcd")
+            (state["builds"]["159.0"]["phase"], state["builds"]["159.0"]["base_commit"]), ("ready-to-release", "0123abcd")
         )
         again, code = self.runner(self.shipped, FakeMachine()).once()
         self.assertEqual((again["action"], code), ("idle", 0))
@@ -1190,7 +1211,7 @@ class AutobuildRunTest(TempDirTest):
         self.assertEqual((result["action"], code), ("wait", 0))
         machine = FakeMachine()
         result, code = self.runner(self.shipped, machine).once()
-        self.assertEqual((result["action"], result["phase"], code), ("ready", "ready-to-sign", 10))
+        self.assertEqual((result["action"], result["phase"], code), ("ready", "ready-to-release", 10))
         self.assertFalse(any("rehearse_release.sh" in " ".join(c[0]) for c in machine.calls))  # no rebuild
 
     def test_failures(self):
@@ -1198,8 +1219,10 @@ class AutobuildRunTest(TempDirTest):
             ("bad signature in the worktree", {"bump_rc": 5}, 3, "failed"),
             ("Mozilla unreachable: retried next run", {"bump_rc": 7}, 2, "interrupted"),
             ("digest moved between checks", {"bump_digest": "e" * 64}, 3, "failed"),
-            ("rehearsal failed", {"rehearse_rc": 1}, 1, "failed"),
-            ("manifest does not match", {"manifest_digest": "e" * 64}, 1, "failed"),
+            ("pre-check failed", {"rehearse_rc": 1}, 1, "failed"),
+            ("its result does not match", {"manifest_digest": "e" * 64}, 1, "failed"),
+            ("the networking check did not pass", {"networking": "failed"}, 1, "failed"),
+            ("it left a manifest", {"leaves_manifest": True}, 1, "failed"),
             ("a tool vanished: a failure, not 'building' forever", {"rehearse_error": FileNotFoundError("gone")}, 1, "failed"),
         ]
         for label, machine_options, code, phase in cases:
@@ -1315,6 +1338,10 @@ class ReleaseFilesTest(TempDirTest):
         repo = self.tmp / "repo"
         (repo / "browser" / "build").mkdir(parents=True)
         (repo / "browser" / "build" / "engine.json").write_text(json.dumps({"firefox": "159.0", "source_sha256": D159}))
+        # The manifest step asks the reading's own module which Rust compiler the build names (#472).
+        (repo / "scripts" / "build").mkdir(parents=True)
+        for name in ("networking_check.py", "apply_patches.py"):
+            shutil.copy(ROOT / "scripts" / "build" / name, repo / "scripts" / "build" / name)
         env = {"PATH": os.environ.get("PATH", "/usr/bin"), "HOME": str(self.tmp), "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C"}
         for command in (
             ["init", "-q"],
@@ -1336,6 +1363,9 @@ class ReleaseFilesTest(TempDirTest):
         tree = self.tmp / "build" / "firefox-159.0"  # the source tree the build compiled
         tree.mkdir(parents=True)
         (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+        config = tree / "obj-nulavio" / "config.status"  # the build's own configuration, which names its compiler
+        config.parent.mkdir()
+        config.write_text("substs = {'RUSTC_COMMIT': '" + "c0" * 20 + "', 'RUSTC_VERSION': '1.99.0'}\n")
         install = self.tmp / "install"  # what make_distribution.py packed (#198)
         (install / "distribution").mkdir(parents=True)
 
@@ -1348,6 +1378,7 @@ class ReleaseFilesTest(TempDirTest):
         manifest = json.loads((out / "manifest.json").read_text())
         self.assertEqual((manifest["firefox"], manifest["source_sha256"], manifest["signing_subkey"]), ("159.0", D159, SUBKEY))
         self.assertEqual(manifest["rehearsal"], "ok")
+        self.assertEqual(manifest["compiled_with"], {"rustc_version": "1.99.0", "rustc_commit": "c0" * 20})
         self.assertEqual(manifest["engine_json"], {"firefox": "159.0", "source_sha256": D159})
         self.assertRegex(manifest["nulavio_base_commit"], r"^[0-9a-f]{40}$")
         files = {entry["file"]: entry["sha256"] for entry in manifest["packages"]}
@@ -1369,6 +1400,23 @@ class ReleaseFilesTest(TempDirTest):
                 self.assertIn(error, run.stderr)
                 self.assertFalse((out / "manifest.json").exists())
         (tree / ".nulavio-source-sha256").write_text(D159 + "\n")
+        # A build whose configuration does not name its Rust compiler, or names it oddly: no manifest (#472).
+        for text in (
+            "substs = {'RUSTC_VERSION': '1.99.0'}\n",
+            "substs = {'RUSTC_COMMIT': 'x', 'RUSTC_VERSION': '1.99.0'}\n",
+            None,
+        ):
+            with self.subTest(config=text):
+                (out / "manifest.json").unlink(missing_ok=True)
+                config.unlink(missing_ok=True)
+                if text:
+                    config.write_text(text)
+                run = write()
+                self.assertNotEqual(run.returncode, 0)
+                self.assertIn("which Rust compiler built this release cannot be said", run.stderr)
+                self.assertFalse((out / "manifest.json").exists())
+        config.write_text("substs = {'RUSTC_COMMIT': '" + "c0" * 20 + "', 'RUSTC_VERSION': '1.99.0'}\n")
+        self.assertEqual(write().returncode, 0)
         (out / "logs" / "verify-source.log").write_text("FAILED\n")
         self.assertNotEqual(write().returncode, 0)
 

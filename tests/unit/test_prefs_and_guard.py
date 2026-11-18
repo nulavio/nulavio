@@ -41,14 +41,14 @@ class BaselineTest(unittest.TestCase):
         self.baseline = profile.baseline_prefs()
 
     def test_every_pref_is_documented(self):
-        for pref in self.baseline + profile.theme_prefs():
+        for pref in self.baseline:
             with self.subTest(pref=pref.name):
                 self.assertIn(pref.mode, prefs.VALID_MODES)
                 self.assertTrue(pref.category, "missing @category")
                 self.assertGreater(len(pref.why), 20, "missing or too short @why")
 
     def test_no_protection_is_weakened(self):
-        for pref in self.baseline + profile.theme_prefs():
+        for pref in self.baseline:
             check = FORBIDDEN.get(pref.name)
             if check:
                 self.assertFalse(check(pref.value), f"{pref.name}={pref.value!r} weakens a protection")
@@ -273,7 +273,7 @@ class ConfigFilesTest(unittest.TestCase):
                     self.assertIn(provider["extension"], lock)
                 self.assertIn("signon.rememberSignons", provider["prefs"])
         self.assertTrue(data["providers"]["builtin"]["prefs"]["signon.rememberSignons"])
-        for key in ("proton-pass", "keepassxc", "bitwarden"):
+        for key in ("proton-pass", "keepassxc", "bitwarden", "1password"):
             self.assertFalse(data["providers"][key]["prefs"]["signon.rememberSignons"])
 
     def test_config_dir_layout(self):

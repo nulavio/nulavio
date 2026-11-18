@@ -615,6 +615,72 @@ class MemoryKeyring:
         self.items.pop(tuple(sorted(attributes.items())), None)
 
 
+class MigrationLockTest(unittest.TestCase):
+    """#434: the lock between two protections of one profile is on a file that is removed when it is released.
+
+    Three runs: one holds the lock, one waits for it, one starts when the first ends. The one that waited got
+    its lock on the removed file, and the one that started made the file anew and locked that: both went on.
+    That is harmless when the first run succeeded (both see its key file and stop), and not when it failed and
+    was undone: then both protect the profile at once, which is what the lock is there to rule out (#433).
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="nv-lock-"))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.path = self.tmp / "work"
+        self.name = self.tmp / "work.migrating.lock"
+
+    def holds_the_named_file(self, fd: int) -> bool:
+        try:
+            named = os.stat(self.name)
+        except FileNotFoundError:
+            return False
+        held = os.fstat(fd)
+        return (named.st_dev, named.st_ino) == (held.st_dev, held.st_ino)
+
+    def test_a_run_that_waited_and_a_run_that_starts_then_never_both_hold_the_lock(self):
+        first = storage._migration_lock(self.path, wait=True)
+        self.assertTrue(self.holds_the_named_file(first))
+        got: list[int | None] = []
+        asked: list[int] = []
+        waiting = threading.Event()
+        real = storage.fcntl.flock
+
+        def flock(fd, how):
+            if threading.current_thread() is second:
+                asked.append(fd)
+                waiting.set()  # its file is open: from here on it waits on the file the first run holds
+            return real(fd, how)
+
+        second = threading.Thread(target=lambda: got.append(storage._migration_lock(self.path, wait=True)))
+        with mock.patch.object(storage.fcntl, "flock", flock):
+            second.start()
+            self.assertTrue(waiting.wait(10))
+            storage._release(self.path, first)  # the first run ends: its lock file is removed, then let go
+            second.join(10)
+            self.assertFalse(second.is_alive())
+        self.assertTrue(self.holds_the_named_file(got[0]), "the run that waited holds a file the name does not point to")
+        # A third run, starting now, finds the lock taken (as recover_interrupted asks: without waiting).
+        self.assertIsNone(storage._migration_lock(self.path, wait=False))
+        # And the run that waited really waited on the first run's file, then asked for the new one: otherwise
+        # this test would pass without having met the case.
+        self.assertEqual(len(asked), 2)
+        storage._release(self.path, got[0])
+        self.assertFalse(self.name.exists())
+        third = storage._migration_lock(self.path, wait=False)
+        self.assertIsNotNone(third)
+        self.assertTrue(self.holds_the_named_file(third))
+        storage._release(self.path, third)
+        self.assertFalse(self.name.exists())
+
+    def test_a_lock_that_is_refused_leaves_the_holders_file_alone(self):
+        first = storage._migration_lock(self.path, wait=True)
+        self.assertIsNone(storage._migration_lock(self.path, wait=False))
+        self.assertTrue(self.holds_the_named_file(first))
+        storage._release(self.path, first)
+        self.assertFalse(self.name.exists())
+
+
 class RekeyTest(StorageCase):
     """ADR 0015 (#204): a new key for a profile's volume. After it, a key file kept from before opens
     nothing, with any secret; before it, a removed secret still opens the files with that key file (R70)."""

@@ -159,7 +159,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("pull_request", self.text)
         self.assertIn("if: github.ref == 'refs/heads/main'", self.build)
         self.assertIn("environment: release\n", self.sign)
-        self.assertIn("needs: [build, flatpak, flatpak-check, companion]", self.sign)
+        self.assertIn("needs: [build, companion]", self.sign)
         self.assertIn("needs.build.result == 'success'", self.sign)  # a failed Flatpak never holds back a release
 
     def test_every_job_that_can_attest_runs_main_only(self):
@@ -331,8 +331,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertLess(publish.index('cp "$apk" "$apk.cdx.json" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
 
     def test_the_bundle_is_checked_against_the_attested_archive_in_a_job_that_cannot_sign(self):
-        # #324: built by Flathub's builder in a job with no attestation, parsed in a job with no token, and only its
-        # hash compared next to the signing role. Left out when it differs.
+        # #324: built by Flathub's builder in a job with no attestation, parsed in a job with no token.
         job = self.text[self.text.index("\n  flatpak-check:\n") : self.text.index("\n  companion:\n")]
         self.assertIn("scripts/release/check_flatpak_bundle.py --bundle", job)
         self.assertIn("contents: read", job)
@@ -341,31 +340,36 @@ class ReleaseWorkflowTest(unittest.TestCase):
         for later in (self.sign, self.publish):
             self.assertNotIn("check_flatpak_bundle.py", later)
             self.assertNotIn("apt_install.sh flatpak", later)
-        compare = self.sign.index("needs.flatpak-check.outputs.bundle-sha256")
-        self.assertLess(compare, self.sign.index("release_notes.py notes"))  # the notes name only an accepted bundle
-        self.assertLess(compare, self.sign.index("configure-aws-credentials"))
-        self.assertIn('rm -rf "$RUNNER_TEMP/flatpak-bundle"', self.sign[compare : self.sign.index("release_notes.py notes")])
         self.assertIn("-type f -name '*.flatpak'", job)  # one regular file, nothing else accepted
-        self.assertIn("GITHUB_ACTIONS", (RELEASE / "publish_release.sh").read_text(encoding="utf-8"))
-        self.assertIn("NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED", self.sign)
-        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
-        self.assertLess(script.index("NULAVIO_FLATPAK_BUNDLE_SHA256"), script.index('"$repo/scripts/release/sign_repo.sh"'))
-        self.assertLess(script.index("check_flatpak_bundle.py"), script.index('"$repo/scripts/release/sign_repo.sh"'))
+
+    def test_the_bundle_is_never_a_release_asset(self):
+        # #467: the bundle never updates itself (R75), so a release does not offer it until Flathub (#88-#91). The
+        # flatpak jobs stay as a check of Flathub's build; signing neither waits for them nor takes their bundle.
+        for job in (self.sign, self.publish):
+            for name in ("flatpak-bundle", "NULAVIO_FLATPAK_BUNDLE", "--flatpak ", "needs.flatpak", ".flatpak'"):
+                with self.subTest(name=name):
+                    self.assertNotIn(name, job)
+        self.assertNotIn("flatpak", self.sign.split("steps:", 1)[0].split("needs:", 1)[1].split("\n", 1)[0])
 
     def test_the_flatpak_is_composed_and_linted_as_flathub_does(self):
         self.assertIn("--compose-url-policy=full", self.text)
         self.assertIn("flatpak-builder-lint org.flatpak.Builder repo repo", self.text)
 
-    def test_the_bundle_is_attested_checked_and_signed_with_the_release(self):
+    def test_a_bundle_given_by_hand_is_still_checked_before_signing(self):
+        # publish_release.sh keeps NULAVIO_FLATPAK_BUNDLE for a run by hand (#467): the bundle is checked against the
+        # archive, or by the hash a check accepted, before anything is signed, refused in CI without that hash, and
+        # covered by SHA256SUMS.
+        script = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
+        signing = script.index('"$repo/scripts/release/sign_repo.sh"')
+        self.assertLess(script.index("if [[ -n ${NULAVIO_FLATPAK_BUNDLE_SHA256"), signing)  # the compare, not a comment
+        self.assertLess(script.index("check_flatpak_bundle.py"), signing)
+        self.assertIn("GITHUB_ACTIONS", script)
+        self.assertLess(script.index('cp "$bundle" "$stage/github/"'), script.index("sha256sum -- * >SHA256SUMS"))
+        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', script)
+
+    def test_the_flatpak_is_started_before_it_is_bundled(self):
         flatpak_job = self.text[self.text.index("\n  flatpak:\n") :]
         self.assertLess(flatpak_job.index("check_flatpak.sh"), flatpak_job.index("flatpak build-bundle"))
-        sign = self.sign.index(
-            "NULAVIO_FLATPAK_BUNDLE=$bundle NULAVIO_FLATPAK_BUNDLE_SHA256=$ACCEPTED NULAVIO_COMPANION_APK=$apk"
-        )
-        self.assertLess(sign, self.sign.index("subject-path: ${{ runner.temp }}/publish/github/*"))
-        publish = (RELEASE / "publish_release.sh").read_text(encoding="utf-8")
-        self.assertLess(publish.index('cp "$bundle" "$stage/github/"'), publish.index("sha256sum -- * >SHA256SUMS"))
-        self.assertIn('"nulavio-${tag#v}.x86_64.flatpak"', publish)
 
 
 class AsanWorkflowTest(unittest.TestCase):
@@ -397,6 +401,229 @@ class AsanWorkflowTest(unittest.TestCase):
         self.assertIn("never a release", out.stderr)
         build = (ROOT / "scripts" / "build" / "build_nulavio.sh").read_text(encoding="utf-8")
         self.assertIn("NULAVIO_MOZCONFIG_EXTRA =~ ^mozconfig", build)
+
+
+class PrecheckTest(unittest.TestCase):
+    """#430: `rehearse_release.sh --precheck` builds the variant whose Rust library can be read for the engine's
+    networking check. It is not a release rehearsal, and nothing it leaves can be signed."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.script = (RELEASE / "rehearse_release.sh").read_text(encoding="utf-8")
+
+    def test_the_precheck_chooses_its_one_variant_itself(self):
+        refusal = self.script.index("unset NULAVIO_MOZCONFIG_EXTRA: a variant build is never a release")
+        chosen = self.script.index("if (( precheck )); then export NULAVIO_MOZCONFIG_EXTRA=mozconfig.no-lto; fi")
+        self.assertLess(refusal, chosen)  # a caller's variant (a sanitised build) is refused first
+        self.assertEqual(self.script.count("export NULAVIO_MOZCONFIG_EXTRA="), 1)
+
+    def test_a_callers_variant_is_refused_in_a_precheck_too(self):
+        for variant in ("mozconfig.asan", "mozconfig.no-lto"):
+            out = subprocess.run(
+                ["bash", str(RELEASE / "rehearse_release.sh"), "--precheck", "160.0", "/nonexistent"],
+                env={**os.environ, "NULAVIO_MOZCONFIG_EXTRA": variant},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(out.returncode, 2, variant)
+            self.assertIn("never a release", out.stderr)
+
+    def test_the_library_is_read_right_after_the_build_and_before_the_tests(self):
+        order = [self.script.index(text) for text in (
+            'step build "$repo/scripts/build/build_nulavio.sh" "$version"',
+            'step networking-check python3 -I "$repo/scripts/build/networking_check.py" "$version" --work "$work" --write',
+            'step unit-tests python3 -I "$repo/tests/run.py" unit',
+            'step integration-tests "$repo/scripts/release/run_integration.sh" "$install"',
+            "step precheck-result precheck_result",
+            'step rpm "$repo/scripts/release/make_rpm.sh" "$out/packages"',
+        )]  # fmt: skip
+        self.assertEqual(order, sorted(order))
+
+    def test_a_precheck_stops_before_any_package_and_writes_no_manifest(self):
+        after_tests = self.script[self.script.index("step precheck-result precheck_result") :]
+        stop, packages = after_tests.index("    exit 0\nfi\n"), after_tests.index("step rpm ")
+        self.assertLess(stop, packages)  # it leaves before the first packaging step
+        self.assertLess(packages, after_tests.index("step manifest manifest"))  # which a release run reaches last
+        # The steps between the tests and that exit make nothing a release could use.
+        self.assertNotRegex(after_tests[:stop], r"step (rpm|deb|archive|sbom|manifest|signed-repository)")
+        self.assertIn('rm -f "$out/manifest.json" "$out/precheck.json"', self.script)
+        self.assertIn('"signable": False', self.script)
+        self.assertRegex(self.script, r"if \(\( precheck \)\); then\n    # Nothing a release run could take")
+        self.assertIn('mkdir -p "$out/packages"', self.script.split("else\n", 1)[1][:200])  # made for a rehearsal only
+
+    def test_the_last_step_writes_a_result_that_is_not_a_manifest(self):
+        # The pre-check's own code for its last step, run as the script runs it (the manifest step is tested the same way).
+        match = re.search(
+            r"precheck_result\(\) \{\n    python3 -I - \"\$out\" \"\$version\" \"\$repo\" \"\$work/firefox-\$version\" <<'EOF'\n"
+            r"(.*?)\nEOF\n\}\n",
+            self.script,
+            re.S,
+        )
+        self.assertIsNotNone(match, "rehearse_release.sh must define precheck_result as a Python heredoc")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            writer, out, repo, tree = tmp / "writer.py", tmp / "out", tmp / "repo", tmp / "firefox-199.0"
+            writer.write_text(match.group(1))
+            for path in (out, repo / "browser" / "build", tree):
+                path.mkdir(parents=True)
+            git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
+            subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "base"], check=True)
+            (tree / ".nulavio-source-sha256").write_text("ab" * 32 + "\n")
+            record = {"firefox": "199.0", "source_sha256": "ab" * 32, "result": "passed", "checked": "2026-11-17", "how": "read"}
+            (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(record))
+
+            def run() -> subprocess.CompletedProcess:
+                return subprocess.run(
+                    [sys.executable, "-I", str(writer), str(out), "199.0", str(repo), str(tree)], capture_output=True, text=True
+                )
+
+            done = run()
+            self.assertEqual(done.returncode, 0, done.stderr)
+            result = json.loads((out / "precheck.json").read_text())
+            self.assertEqual((result["precheck"], result["signable"], result["variant"]), ("ok", False, "mozconfig.no-lto"))
+            self.assertEqual((result["firefox"], result["source_sha256"]), ("199.0", "ab" * 32))
+            self.assertEqual(result["networking_check"]["result"], "passed")
+            self.assertRegex(result["nulavio_base_commit"], r"^[0-9a-f]{40}$")
+            self.assertFalse((out / "manifest.json").exists())
+            for key in ("packages", "sboms", "rehearsal", "engine_json"):  # what release_manifest.py asks of a manifest
+                self.assertNotIn(key, result)
+            # A record that is not this build's passing one: no result is written.
+            for wrong in ({**record, "firefox": "198.0"}, {**record, "source_sha256": "cd" * 32}, {**record, "result": "failed"}):
+                (out / "precheck.json").unlink(missing_ok=True)
+                (repo / "browser" / "build" / "networking-check.json").write_text(json.dumps(wrong))
+                done = run()
+                self.assertNotEqual(done.returncode, 0, wrong)
+                self.assertIn("not this build's passing record", done.stderr)
+                self.assertFalse((out / "precheck.json").exists())
+
+    def test_no_workflow_runs_a_precheck_and_one_builds_the_variant_to_read_it(self):
+        # networking-check.yml builds the variant so that the reading is a workflow's and can be attested (#455).
+        # Nothing else may: a variant is never a release, and nothing that packages, signs or publishes builds one.
+        for workflow in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            text = workflow.read_text(encoding="utf-8")
+            self.assertNotIn("--precheck", text, workflow.name)
+            if workflow.name != "networking-check.yml":
+                self.assertNotIn("mozconfig.no-lto", text, workflow.name)
+
+
+class NetworkingAttestationTest(unittest.TestCase):
+    """#455: a release is signed only when a workflow, not a committed record, says the Rust code was read."""
+
+    @classmethod
+    def setUpClass(cls):
+        workflows = ROOT / ".github" / "workflows"
+        cls.check = (workflows / "networking-check.yml").read_text(encoding="utf-8")
+        cls.release = (workflows / "release.yml").read_text(encoding="utf-8")
+        body = cls.release.split("\njobs:\n", 1)[1]
+        cls.jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+        cls.verify = '--signer-workflow "$GITHUB_REPOSITORY/.github/workflows/networking-check.yml" --source-ref refs/heads/main'
+        # Only an attestation made on a GitHub-hosted runner counts: the attesting job, never the build machine.
+        cls.hosted = re.compile(re.escape(cls.verify) + r" \\\n +--deny-self-hosted-runners ")
+
+    def test_the_workflow_reads_its_own_build_and_attests_only_the_claim(self):
+        text = self.check
+        self.assertIn("NULAVIO_MOZCONFIG_EXTRA: mozconfig.no-lto", text)
+        self.assertIn("if: github.ref == 'refs/heads/main'", text)
+        self.assertRegex(
+            text,
+            r"(?m)^  push:\n    branches: \[main\]\n    paths:\n      - \"browser/build/\*\*\"\n      - \"browser/patches/\*\*\"",
+        )
+        steps = [text.index(part) for part in (
+            'scripts/build/build_nulavio.sh "$firefox"',
+            'scripts/build/networking_check.py "$firefox" --claim-out "$RUNNER_TEMP/claim/networking-claim.json"',
+            'scripts/build/networking_check.py "$firefox" --expected-claim \\\n',
+            '--compiler-from "$RUNNER_TEMP/claim/networking-claim.json" > "$RUNNER_TEMP/expected.json"',
+            'cmp "$RUNNER_TEMP/claim/networking-claim.json" "$RUNNER_TEMP/expected.json"',
+            "actions/attest-build-provenance@",
+            'gh attestation verify "$RUNNER_TEMP/expected.json"',
+        )]  # fmt: skip
+        self.assertEqual(steps, sorted(steps))
+        self.assertIn("subject-path: ${{ runner.temp }}/expected.json", text)  # bytes the attesting job made itself
+        self.assertIn('      - "scripts/build/**"', text)  # what makes the reading is in the claim, so it starts a run too
+        self.assertIn('      - ".github/workflows/networking-check.yml"', text)
+        self.assertIn('      - "ci/containers/fedora-build.Containerfile"', text)
+        # Every file whose digest is in the claim starts a run when it changes on main.
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import networking_check
+
+        watched = re.findall(r'(?m)^      - "([^"]+)"', text.split("\n  workflow_dispatch:", 1)[0])
+        for path in networking_check.READ_WITH:
+            self.assertTrue(any(path == w or (w.endswith("/**") and path.startswith(w[:-2])) for w in watched), path)
+        for path in (networking_check.MOZCONFIG, networking_check.VARIANT, networking_check.SERIES):
+            self.assertTrue(any(w.endswith("/**") and path.startswith(w[:-2]) for w in watched), path)
+        self.assertEqual(text.count("subject-path:"), 1)  # the claim, and nothing else
+        # The job that runs the build cannot sign; the job that signs builds nothing.
+        body = text.split("\njobs:\n", 1)[1]
+        jobs = {m.group(1): m.group(2) for m in re.finditer(r"^  ([\w-]+):\n(.*?)(?=^  [\w-]+:\n|\Z)", body, re.M | re.S)}
+        self.assertEqual(sorted(jobs), ["attest", "read"])
+        self.assertNotIn("id-token", jobs["read"])
+        self.assertNotIn("attestations", jobs["read"])
+        self.assertIn("blacksmith-16vcpu-ubuntu-2404", jobs["read"])
+        self.assertIn("needs: read", jobs["attest"])
+        self.assertIn("runs-on: ubuntu-24.04", jobs["attest"])
+        for word in ("build_nulavio", "secrets.", "environment:", "podman"):
+            self.assertNotIn(word, jobs["attest"], word)
+        for name, job in jobs.items():
+            self.assertIn("if: github.ref == 'refs/heads/main'", job, name)
+        self.assertRegex(text, self.hosted)  # found here as the signing job will look for it
+        commands = "\n".join(line for line in text.split("\njobs:\n", 1)[1].splitlines() if not line.lstrip().startswith("#"))
+        self.assertNotIn("--write", commands)  # it changes nothing in the checkout
+        self.assertNotIn("networking-check.json", commands)  # nor reads the committed record
+        # Nothing a release could use leaves this workflow.
+        for word in (
+            "rehearse_release",
+            "make_rpm",
+            "make_deb",
+            "make_archive",
+            "publish_release",
+            "sign_repo",
+            "R2_",
+            "AWS_",
+            "manifest.json",
+        ):
+            self.assertNotIn(word, text, word)
+
+    def test_no_other_workflow_shares_the_signer_workflows_name(self):
+        # `gh attestation verify --signer-workflow` matches by prefix: another file whose name starts the same
+        # way could sign a claim the release would take.
+        names = [path.name for path in (ROOT / ".github" / "workflows").iterdir()]
+        self.assertEqual([name for name in names if name.startswith("networking-check")], ["networking-check.yml"])
+
+    def test_the_signing_job_requires_the_attestation_before_it_signs(self):
+        sign = self.jobs["sign"]
+        gate = sign.index(
+            'release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo . > "$RUNNER_TEMP/networking-claim.json"'
+        )
+        verify = sign.index('gh attestation verify "$RUNNER_TEMP/networking-claim.json"')
+        role = sign.index("aws-actions/configure-aws-credentials@")
+        self.assertLess(gate, verify)
+        self.assertLess(verify, role)  # before the signing role is taken
+        step = sign[gate : sign.index("- name:", gate)]  # this step alone
+        self.assertRegex(step, self.hosted)
+        self.assertIn("exit 1", step)
+        self.assertNotIn("|| true", step)
+        self.assertNotIn("continue-on-error", step)
+        self.assertNotIn("accepted", step.replace('says "accepted"', ""))  # no way round it for an accepted record
+
+    def test_the_build_job_only_gives_notice(self):
+        build = self.jobs["build"]
+        start = build.index("Is the Rust networking reading attested")
+        step = build[start : build.index("- name:", start + 10)]
+        # After the build: the claim names the Rust compiler the build used (#472), which nothing knows before it.
+        self.assertLess(build.index('scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"'), start)
+        self.assertIn('release_manifest.py networking-claim "$RUNNER_TEMP/rehearsal" --repo .', step)
+        self.assertRegex(step, self.hosted)
+        self.assertIn("::warning", step)
+        self.assertNotIn("exit 1", step)  # a rehearsal is not stopped by it; the signing job is where it is required
+        self.assertNotIn("--expected-claim", build)  # nothing asks before the build, when the compiler is not known
+
+    def test_the_prebuild_tool_only_ever_prechecks(self):
+        tool = (RELEASE / "autobuild.py").read_text(encoding="utf-8")
+        self.assertIn('"rehearse_release.sh"), "--precheck", version, str(out)]', tool)
+        self.assertEqual(tool.count('/ "rehearse_release.sh")'), 1)  # one call, and it is the pre-check
+        self.assertNotIn("READY TO SIGN", tool)
+        self.assertIn('"the pre-check left a manifest.json: it must not"', tool)
 
 
 class RepeatableBuildTest(unittest.TestCase):

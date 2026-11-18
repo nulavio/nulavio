@@ -1,9 +1,12 @@
 """Locate the Gecko engine and build a safe command line for it.
 
-Track A (preview) runs the distribution-packaged, unmodified Firefox. The
-launcher never forwards arbitrary engine flags: only a validated URL and a
-fixed set of options, so remote-control or debugging switches cannot be
-smuggled in through a desktop file or a crafted link.
+`setup` and `run` need the Nulavio build: the preview that ran Nulavio's
+profile on the distribution's unmodified Firefox (Track A) is no longer offered
+(#464). The test harness still runs the distribution's Firefox in pull-request
+CI and says so with HARNESS_FIREFOX_ENV. The launcher never forwards arbitrary
+engine flags: only a validated URL and a fixed set of options, so
+remote-control or debugging switches cannot be smuggled in through a desktop
+file or a crafted link.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-# Oldest engine major version the preview is tested against. Raise it when a
+# Oldest engine major version the test harness runs against. Raise it when a
 # new ESR becomes the floor (docs/architecture/update-policy.md).
 MIN_ENGINE_MAJOR = 140
 APP_ID = "nulavio-preview"
@@ -94,14 +97,14 @@ def _candidates() -> list[Path]:
 def find_engine() -> Engine:
     candidates = _candidates()
     if not candidates:
-        raise EngineError("no Gecko engine found: install the distribution 'firefox' package or set NULAVIO_ENGINE")
+        raise EngineError("no Gecko engine found: install the Nulavio package, or set NULAVIO_ENGINE to a Nulavio build")
     path = None
     for candidate in candidates:
         resolved = candidate.resolve()
         if "/snap/" in str(resolved):
             raise EngineError(
                 "the Snap Firefox cannot read profiles under hidden directories such as ~/.local/share; "
-                "install Firefox from the Mozilla APT repository or set NULAVIO_ENGINE"
+                "install the Nulavio package, or set NULAVIO_ENGINE to a Nulavio build"
             )
         if resolved.exists() and not _is_script(resolved):
             path = resolved
@@ -141,6 +144,27 @@ def parse_version_output(text: str) -> tuple[str, str]:
 def check_supported(engine: Engine) -> None:
     if engine.major < MIN_ENGINE_MAJOR:
         raise EngineError(f"{engine.label} is older than the supported floor ({MIN_ENGINE_MAJOR}); update the engine package")
+
+
+# Set by the test harness (tests/lib/harness.py) only: pull-request CI runs the integration suite on the
+# distribution's Firefox, with no Nulavio build. It is not a way to use Nulavio, and nothing documents it as one.
+HARNESS_FIREFOX_ENV = "NULAVIO_TEST_DISTRIBUTION_FIREFOX"
+PREVIEW_GONE = (
+    "{label} is not the Nulavio build. The preview that ran Nulavio's profile on the distribution's Firefox is no "
+    "longer offered: install the Nulavio package (https://nulavio.net/en/download/). Profiles made with the preview "
+    "stay in {profiles}; to bring their bookmarks and passwords along, see "
+    "https://github.com/nulavio/nulavio/blob/main/README.md#if-you-used-the-preview"
+)
+
+
+def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None) -> None:
+    """Refuse an engine that is not the Nulavio build, unless the test harness asked for the distribution's Firefox."""
+    environ = os.environ if environ is None else environ
+    if engine.vendor == "Nulavio" or environ.get(HARNESS_FIREFOX_ENV) == "1":
+        return
+    from . import paths
+
+    raise EngineError(PREVIEW_GONE.format(label=engine.label, profiles=paths.profiles_root()))
 
 
 def validate_url(url: str) -> str:

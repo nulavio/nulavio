@@ -23,7 +23,9 @@ Nulavio is a Gecko-based browser ([ADR 0001](../adr/0001-engine-selection.md)) b
 
 ## Modules
 
-| Module | Responsibility | Track A (now) | Track B (planned) | Interface | Tests |
+Track A, the preview on the distribution's unmodified Firefox, is no longer offered since 2026-11-17 (#464): its column says what it was. The distribution's Firefox stays the test harness's engine in pull-request CI; its chrome theme (`browser/theme/userChrome.css`) is removed, and the start page (`browser/startpage/`) stays because launcher profiles on the Nulavio build still open it.
+
+| Module | Responsibility | Track A (removed in #464) | Track B (the Nulavio build) | Interface | Tests |
 |---|---|---|---|---|---|
 | **Nulavio Core** | Web engine, sandbox, site isolation, network, WebExtensions | Distribution Firefox, unmodified | Firefox release source + minimal patch stack, own branding | Engine command line (allow-listed), prefs, policies | `tests/integration/test_engine_slice.py` |
 | **Nulavio Shell** | Identity, launcher, start page, onboarding, settings UI, chrome theme | `launcher/` CLI, `browser/startpage/`, `browser/theme/userChrome.css` | **Horizon window theme** (tab strip, toolbar, address bar; `content/theme/`, loaded by patch 0003) and **built-in add-on `shell@nulavio.net`** (`browser/shell/`): new tab, download warning, search settings (patch 0004 enforces per-provider consent for suggestions) and the profile selector (done; [ADR 0002](../adr/0002-nulavio-search.md), [ADR 0003](../adr/0003-nulavio-profiles-and-routing.md)); Privacy Center, profile routing, integrations and onboarding next ([design](../design/architecture.md)) | CLI; generated local pages; Shell pages (`moz-extension://`) | unit + `test_01`, `test_shell`, `test_search`, `test_profiles` |
@@ -58,5 +60,5 @@ There is no Nulavio server. Nothing is sent to the project.
 ## Process model notes (verified on Firefox 158, Fedora 44)
 
 - Web content, RDD, utility and socket processes each run with seccomp-bpf on every thread and their own user namespace. The fork server (spawner) is not sandboxed by design.
-- The window's Wayland app_id is `nulavio-preview` (via `MOZ_APP_REMOTINGNAME`, `--name` and `--class`), so KDE associates it with `nulavio-preview.desktop`.
+- A window the launcher starts has the Wayland app_id `nulavio-preview` (via `MOZ_APP_REMOTINGNAME`, `--name` and `--class`). The `nulavio-preview.desktop` entry that matched it was the preview's `nulavio desktop install`, removed with the preview (#465); the packages' entry is `nulavio.desktop`.
 - A second `nulavio run` for a running profile is forwarded to the running instance through the engine's remoting.

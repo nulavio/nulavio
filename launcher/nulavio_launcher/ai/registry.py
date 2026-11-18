@@ -31,8 +31,7 @@ from .policy import (
     FULL_CONTROL_WARNING,
     MODES,
     PRESETS,
-    RAW_AUTOMATION_WARNING,
-    RAW_CAPABILITY,
+    INTERNAL_CAPABILITY,
     RISK,
     Decision,
     effective_mode,
@@ -223,17 +222,17 @@ def set_autonomy(agent_id: str, autonomy: str, accept_full_control: bool = False
     _update(apply)
 
 
-def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None,
-          accept_raw_automation: bool = False) -> dict:  # fmt: skip
+def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = None) -> dict:
     """The user sets one capability to allow/ask/block, forever or for N minutes. It replaces an
     "allow for this session" answer for that capability (grant_session), so what the user sets wins.
 
-    Raw automation (policy.RAW_CAPABILITY) is a separate opt-in: allowing or asking for it needs
-    `accept_raw_automation` (the user saw its own warning) unless the agent already has it on;
-    blocking it turns the opt-in off, so turning it on again shows the warning again.
+    The internal pages (policy.INTERNAL_CAPABILITY) are offered to no agent since raw automation was removed (#463).
     """
     if capability not in CAPABILITIES:
         raise RegistryError(f"unknown capability {capability}")
+    if capability == INTERNAL_CAPABILITY and mode != "block":
+        raise RegistryError("the browser's internal pages are not offered to agents (raw automation was removed)",
+                            "internal-pages-off")  # fmt: skip
     if mode not in MODES:
         raise RegistryError(f"mode must be one of {', '.join(MODES)}")
     entry = {"mode": mode, "set": now().isoformat(timespec="seconds"), "until": None, "session": None}
@@ -246,14 +245,6 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
         agent = data["agents"].get(agent_id)
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
-        if capability == RAW_CAPABILITY:
-            if mode == "block":
-                agent["raw_automation_accepted"] = None
-            elif accept_raw_automation:
-                agent["raw_automation_accepted"] = now().isoformat(timespec="seconds")
-            elif not agent.get("raw_automation_accepted"):
-                raise RegistryError("raw automation needs an explicit acceptance: " + RAW_AUTOMATION_WARNING,
-                                    "raw-automation-not-accepted")  # fmt: skip
         agent["grants"][capability] = entry
         agent.get("session_grants", {}).pop(capability, None)
 
@@ -263,7 +254,7 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
 
 def grant_session(agent_id: str, capability: str, session_id: str) -> None:
     """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them."""
-    if capability not in CAPABILITIES or not session_id:
+    if capability not in CAPABILITIES or capability == INTERNAL_CAPABILITY or not session_id:
         raise RegistryError("bad session grant")
 
     def apply(data):
@@ -287,12 +278,19 @@ def end_session(agent_id: str, session_id: str) -> None:
     _update(apply)
 
 
-def set_raw_automation(agent_id: str, enabled: bool, accept: bool = False) -> None:
-    """The per-agent "Raw automation" option: on (allowed until changed, after its warning) or off."""
-    if enabled:
-        grant(agent_id, RAW_CAPABILITY, "allow", accept_raw_automation=accept)
-    else:
-        clear_grant(agent_id, RAW_CAPABILITY)
+def forget_raw_automation(agent_id: str) -> None:
+    """The person read that raw automation was removed (#463): the opt-in an earlier version recorded, and any grant
+    of the internal pages, leave the registry. They granted nothing since the update (policy.effective_mode)."""
+
+    def apply(data):
+        agent = data["agents"].get(agent_id)
+        if agent is None:
+            raise RegistryError(f"no agent {agent_id}")
+        agent.pop("raw_automation_accepted", None)
+        agent.get("grants", {}).pop(INTERNAL_CAPABILITY, None)
+        agent.get("session_grants", {}).pop(INTERNAL_CAPABILITY, None)
+
+    _update(apply)
 
 
 def _change(agent_id: str, fn) -> None:
@@ -388,8 +386,6 @@ def clear_grant(agent_id: str, capability: str) -> None:
         agent = data["agents"].get(agent_id, {})
         agent.get("grants", {}).pop(capability, None)
         agent.get("session_grants", {}).pop(capability, None)
-        if capability == RAW_CAPABILITY and agent:
-            agent["raw_automation_accepted"] = None  # back to the level's default: off
 
     _update(apply)
 

@@ -30,8 +30,10 @@ const MAX_URL_LENGTH = 2048;
 const SUGGEST_TYPE = "application/x-suggestions+json";
 
 /* Providers Nulavio offers by name. URLs come from each provider's own
-   OpenSearch description (checked 2026-10-25). `firstRun` providers are
-   added to every new profile; the others only when the user asks. */
+   OpenSearch description (checked 2026-10-25; Ecosia, Qwant and Startpage
+   2026-11-16, docs/research/search-providers.md). `firstRun` providers are
+   added to every new profile; the others only when the user asks. Listed to
+   the person by name, alphabetically (#151): this order means nothing. */
 export const PROVIDERS = Object.freeze({
   duckduckgo: Object.freeze({
     name: "DuckDuckGo",
@@ -62,7 +64,69 @@ export const PROVIDERS = Object.freeze({
     suggest: "https://kagisuggest.com/api/autosuggest?q={searchTerms}",
     firstRun: false,
   }),
+  ecosia: Object.freeze({
+    name: "Ecosia",
+    alias: "@ecosia",
+    search: "https://www.ecosia.org/search?q={searchTerms}",
+    suggest: "https://ac.ecosia.org/autocomplete?q={searchTerms}&type=list",
+    firstRun: false,
+  }),
+  qwant: Object.freeze({
+    name: "Qwant",
+    alias: "@qwant",
+    search: "https://www.qwant.com/?q={searchTerms}",
+    suggest: "https://api.qwant.com/v3/suggest/?q={searchTerms}&client=opensearch",
+    firstRun: false,
+  }),
+  startpage: Object.freeze({
+    name: "Startpage",
+    alias: "@startpage",
+    search: "https://www.startpage.com/sp/search?query={searchTerms}",
+    suggest: "https://www.startpage.com/osuggestions?q={searchTerms}",
+    firstRun: false,
+  }),
 });
+
+/* Providers with accounts (#151). Whether this profile is signed in is read from the presence of the provider's
+   session cookie, by name: its value is never read and nothing is sent. The name and the sign-in page are the
+   provider's own (Kagi: help.kagi.com/kagi/privacy/cookies.html, checked 2026-11-16). */
+export const ACCOUNTS = Object.freeze({
+  kagi: Object.freeze({ host: "kagi.com", cookie: "kagi_session", signIn: "https://kagi.com/signin" }),
+});
+
+/* #151: a new profile's search. The profile that creates it writes the choice into the new profile's folder (mode
+   0600, through a new temporary file, never through a link), and the new profile's Shell applies it at its first start
+   only, then deletes the file. At any later start such a file is deleted unread: it never changes a profile that has
+   already run. Only a provider of PROVIDERS can be named, never an address, and it carries no consent for suggestions. */
+export const PENDING_FILE = "nulavio-search-choice.json";
+
+/** Whether `path` is a symbolic link (never followed), false for another file, null when nothing is there. */
+export function isLink(path) {
+  const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
+  file.initWithPath(path);
+  try {
+    return file.isSymlink(); // lstat: true for a link, dangling or not
+  } catch {
+    return null; // NS_ERROR_FILE_NOT_FOUND
+  }
+}
+
+/** The checked form of a carried choice, or the error "invalid-search-choice" / "unknown-provider". */
+export function validatePending(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    fail("invalid-search-choice");
+  }
+  if (Object.keys(raw).some(key => key !== "provider" && key !== "privateToo")) {
+    fail("invalid-search-choice");
+  }
+  if (typeof raw.provider !== "string" || !Object.hasOwn(PROVIDERS, raw.provider)) {
+    fail("unknown-provider");
+  }
+  if (raw.privateToo !== undefined && typeof raw.privateToo !== "boolean") {
+    fail("invalid-search-choice");
+  }
+  return { provider: raw.provider, privateToo: raw.privateToo !== false };
+}
 
 /** An error the settings page can translate: `code` is stable, `message` is for logs. */
 export class SearchSettingsError extends Error {
@@ -90,6 +154,18 @@ function isLoopback(hostname) {
  * @param {boolean} [options.requireTerms=true] - Whether {searchTerms} is required.
  * @returns {string} The normalised template.
  */
+/* #152 (ADR 0002, amendment of 2026-11-16): a search address never carries a session. A provider's session token in
+   the address would end up in the engine list, the history, the address bar and anything that copies the address;
+   the provider's own sign-in is the way in. The parameters below are the names known to carry one (Kagi's Session
+   Link: `token`) and the common names for the same thing. */
+const SESSION_PARAMS = new Set(["token", "session", "session_token", "sessiontoken", "sessionid", "session_id", "auth_token", "access_token"]);
+
+/** Whether an address has a session parameter in its query or fragment. */
+export function carriesSession(url) {
+  const keys = [...url.searchParams.keys(), ...new URLSearchParams(url.hash.slice(1)).keys()];
+  return keys.some(key => SESSION_PARAMS.has(key.toLowerCase()));
+}
+
 export function validateTemplate(raw, { requireTerms = true } = {}) {
   if (typeof raw !== "string") {
     fail("invalid-url");
@@ -109,6 +185,9 @@ export function validateTemplate(raw, { requireTerms = true } = {}) {
   }
   if (url.username || url.password) {
     fail("credentials-in-url");
+  }
+  if (carriesSession(url)) {
+    fail("session-in-template");
   }
   if (!url.hostname) {
     fail("invalid-url");
@@ -276,8 +355,70 @@ class NulavioSearchClass {
       separatePrivateDefault:
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.featureGate", false) &&
         Services.prefs.getBoolPref("browser.search.separatePrivateDefault.enabled", false),
-      providers: Object.entries(PROVIDERS).map(([key, p]) => ({ key, name: p.name, alias: p.alias })),
+      providers: Object.entries(PROVIDERS)
+        .map(([key, p]) => ({
+          key,
+          name: p.name,
+          alias: p.alias,
+          account: key in ACCOUNTS,
+          suggests: Boolean(p.suggest),
+          suggestHost: p.suggest ? new URL(p.suggest.replace("{searchTerms}", "x")).host : null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     };
+  }
+
+  /** The host an engine sends typed text to for suggestions, or null: the engine's own, whatever its name. */
+  suggestHostOf(id) {
+    const engine = lazy.SearchService.getEngineById(String(id));
+    return engine ? suggestHost(engine) : null;
+  }
+
+  /**
+   * #151: whether this profile is signed in to each provider that has accounts, from the presence of its session
+   * cookie in this profile's normal (not private) cookie jar. `signedIn` is null when the cookies could not be read.
+   */
+  accounts() {
+    const result = {};
+    for (const [key, account] of Object.entries(ACCOUNTS)) {
+      let signedIn = null;
+      try {
+        signedIn = Services.cookies.getCookiesFromHost(account.host, {}).some(cookie => cookie.name === account.cookie);
+      } catch (e) {
+        console.error(`Nulavio Search: cookies of ${account.host}`, e);
+      }
+      result[key] = { signedIn, signIn: account.signIn, host: account.host };
+    }
+    return result;
+  }
+
+  /**
+   * #151: one engine becomes this profile's search in one step. Either `provider`, a curated key (added when the
+   * profile does not have it), or `id`, an engine already in the list (a SearXNG instance, a custom engine, an
+   * OpenSearch one). It becomes the default for normal windows and, unless `privateToo` is false, for private
+   * windows. `suggest` true or false allows or stops sending what is typed to it (the per-provider consent);
+   * left out, the consent stays as it is. Nothing is sent to the provider by choosing it.
+   */
+  async choose({ provider = null, id = null, privateToo = true, suggest = undefined } = {}) {
+    await lazy.SearchService.init();
+    if ((provider === null) === (id === null) || (suggest !== undefined && typeof suggest !== "boolean")) {
+      fail("invalid-search-choice");
+    }
+    if (provider !== null && !Object.hasOwn(PROVIDERS, provider)) {
+      fail("unknown-provider");
+    }
+    const engine = await this.#engine(provider !== null ? await this.addProvider(provider) : id);
+    if (suggest === true && !engine.supportsResponseType(SUGGEST_TYPE)) {
+      fail("no-suggestions");
+    }
+    await lazy.SearchService.setDefault(engine, lazy.SearchService.CHANGE_REASON.USER);
+    if (privateToo) {
+      await lazy.SearchService.setDefaultPrivate(engine, lazy.SearchService.CHANGE_REASON.USER_PRIVATE_SPLIT);
+    }
+    if (suggest !== undefined) {
+      await this.setSuggestOptIn(engine.id, suggest);
+    }
+    return engine.id;
   }
 
   async #addUserEngine({ name, search, suggest, alias }) {
@@ -346,13 +487,36 @@ class NulavioSearchClass {
   async addOpenSearch({ url }) {
     await lazy.SearchService.init();
     const description = validateTemplate(url, { requireTerms: false });
+    let engine;
     try {
-      const engine = await lazy.SearchService.addOpenSearchEngine(description, null);
-      return engine.id;
+      engine = await lazy.SearchService.addOpenSearchEngine(description, null);
     } catch (e) {
       fail("opensearch-failed", String(e?.message ?? e));
     }
-    return null;
+    // The description declares its own addresses (search, suggestions, trending, visual search, search form, its
+    // own update address), which only the engine's parser reads (#484 review): each one the engine kept is checked as
+    // soon as it has them, and the engine is removed again when one carries a session or cannot be read.
+    let refused = "session-in-template";
+    try {
+      const declared = [];
+      for (const type of Object.values(lazy.SearchUtils.URL_TYPE)) {
+        if (type === lazy.SearchUtils.URL_TYPE.SEARCH_FORM) {
+          declared.push(engine.searchForm);
+        } else if (engine.supportsResponseType(type)) {
+          declared.push(engine.getSubmission("nulavio", type)?.uri?.spec);
+        }
+      }
+      if (!declared.some(address => address && carriesSession(new URL(address)))) {
+        refused = null;
+      }
+    } catch {
+      refused = "opensearch-failed";
+    }
+    if (refused) {
+      await lazy.SearchService.removeEngine(engine, lazy.SearchService.CHANGE_REASON.USER).catch(e => console.error("Nulavio Search: a refused OpenSearch engine", e));
+      fail(refused);
+    }
+    return engine.id;
   }
 
   async remove(id) {
@@ -463,10 +627,71 @@ class NulavioSearchClass {
   startup() {
     this.#started ??= (async () => {
       this.#observe();
-      return this.migrate();
+      // The first start of a profile is the one before its search migration has run.
+      const firstStart = Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION;
+      const result = await this.migrate();
+      if (firstStart) {
+        await this.applyPending();
+      } else {
+        await this.#dropPending();
+      }
+      return result;
     })();
     return this.#started;
   }
+
+  /**
+   * #151: the choice left for a new profile (PENDING_FILE), applied at its first start (`startup` calls this only
+   * then; at any later start the file is removed unread). The file is deleted before the choice is applied, so a
+   * choice that fails is not tried again; the failure is logged.
+   */
+  /** A choice file in a profile that has run before was not left by the profile that created it: removed unread. */
+  async #dropPending() {
+    try {
+      const path = PathUtils.join(PathUtils.profileDir, PENDING_FILE);
+      if (isLink(path) !== null) {
+        await IOUtils.remove(path, { ignoreAbsent: true });
+        console.warn("Nulavio Search: a search choice file in a profile that has run before was removed unread");
+      }
+    } catch (e) {
+      console.error("Nulavio Search: the search choice file", e);
+    }
+  }
+
+  async applyPending() {
+    let path;
+    try {
+      path = PathUtils.join(PathUtils.profileDir, PENDING_FILE);
+    } catch {
+      return null;
+    }
+    const link = isLink(path);
+    if (link === null) {
+      return null; // nothing there: the usual start
+    }
+    // Read once, then deleted whatever happens, so a bad file is not tried again at every start. A link is never
+    // followed: it is removed unread.
+    let raw = null;
+    try {
+      if (!link) {
+        raw = await IOUtils.readJSON(path);
+      }
+    } catch (e) {
+      console.error("Nulavio Search: the search choice left by another profile could not be read", e);
+    }
+    await IOUtils.remove(path, { ignoreAbsent: true }).catch(e => console.error("Nulavio Search: the search choice file", e));
+    if (raw === null) {
+      return null;
+    }
+    try {
+      const choice = validatePending(raw);
+      return await this.choose({ provider: choice.provider, privateToo: choice.privateToo });
+    } catch (e) {
+      console.error("Nulavio Search: the search choice left by another profile was not applied", e);
+      return null;
+    }
+  }
+
 
   #observe() {
     if (this.#observing) {

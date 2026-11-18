@@ -90,6 +90,9 @@
     get NulavioRouting() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs").NulavioRouting;
     },
+    get NulavioServices() {
+      return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs").NulavioServices;
+    },
     get NulavioSearch() {
       return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch;
     },
@@ -431,13 +434,14 @@
       get: () => (titleLock() ? titleLock().hidden : Boolean(lookNow()?.hidePageTitle)),
       disabled: () => Boolean(titleLock()) || lookLocked("hidePageTitle"),
     });
+    lookSetting("nulavio-load-line", "loadLine", Boolean); // #458: off in a new profile, NulavioLoadLine
     lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
       get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
       disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),
       getControlConfig: config => (solidBy() ? { ...config, l10nId: `nulavio-reduce-transparency-${solidBy()}` } : config),
     });
     // An option an administrator set cannot be changed here: said once, for the group.
-    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle"];
+    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle", "loadLine"];
     setting({ id: "nulavio-look-locked", setup: look.watch, visible: () => LOOK.some(lookLocked) });
     look.refresh();
     added.cleanups.push(shell.NulavioPersonalise.subscribe(look.refresh));
@@ -582,7 +586,7 @@
       return { state, show, watch, act, bar };
     };
     // The profiles' own: the row being edited and its unsaved values, and the new profile being typed.
-    const profileBench = workbench({ editing: null, draft: null, original: null, fresh: { name: "", template: "", suggested: "" } }, profileList);
+    const profileBench = workbench({ editing: null, draft: null, original: null, fresh: { name: "", template: "", suggested: "", search: "" } }, profileList);
     const { state: view, show, watch: viewWatch, act } = profileBench;
     /** After the list is drawn again, the keyboard goes where the person's action left off (never lost to the page). */
     const focusWhenDrawn = selector => {
@@ -724,6 +728,7 @@
       items: [
         { id: "nulavio-profile-new-name", control: "moz-input-text" },
         { id: "nulavio-profile-new-template", control: "moz-select" },
+        { id: "nulavio-profile-new-search", control: "moz-select" },
         { id: "nulavio-profile-new-create", control: "moz-button" },
       ],
     });
@@ -944,6 +949,33 @@
         options: [choice("", msg("profilesTemplateNone")), ...options.templates.map(template => choice(template.id, msg(TEMPLATE_NAMES[template.id])))],
       }),
     });
+    // #151: the new profile's search, from the same list as Settings › Search, alphabetical; "" keeps Nulavio's default.
+    const searchChoices = source(() => shell.NulavioSearch.state().then(state => state.providers));
+    setting({
+      id: "nulavio-profile-new-search",
+      setup(emitChange, stops) {
+        viewWatch(emitChange, stops);
+        stops.push(searchChoices.listen(emitChange));
+        searchChoices.refresh();
+      },
+      get: () => view.fresh.search ?? "",
+      set(value) {
+        show({ fresh: { ...view.fresh, search: value } });
+      },
+      getControlConfig: config => {
+        const providers = searchChoices.state.ready ? (searchChoices.state.value ?? []) : [];
+        // #152 (review of #484): said here too, before a provider with accounts is picked for the new profile.
+        const named = account => providers.filter(provider => Boolean(provider.account) === account).map(provider => provider.name);
+        const note = named(true).length
+          ? `${msg("profilesSearchNote")} ${msg("profilesSearchAccounts", named(true).join(", "), named(false).join(", "))}`
+          : msg("profilesSearchNote");
+        return {
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg("profilesSearch"), description: note },
+          options: [choice("", msg("profilesSearchDefault")), ...providers.map(provider => choice(provider.key, provider.name))],
+        };
+      },
+    });
     setting({
       id: "nulavio-profile-new-name",
       setup: viewWatch,
@@ -961,10 +993,18 @@
       id: "nulavio-profile-new-create",
       async onUserClick(event) {
         event.preventDefault();
-        const { name, template } = view.fresh;
-        const created = await act(() => shell.NulavioProfiles.create({ name, ...(template ? { templateId: template } : {}) }), msg("profilesCreated"));
+        const { name, template, search: provider } = view.fresh;
+        const created = await act(
+          () =>
+            shell.NulavioProfiles.create({
+              name,
+              ...(template ? { templateId: template } : {}),
+              ...(provider ? { search: { provider } } : {}),
+            }),
+          msg("profilesCreated")
+        );
         if (created) {
-          show({ fresh: { name: "", template: "", suggested: "" } });
+          show({ fresh: { name: "", template: "", suggested: "", search: "" } });
         }
       },
       setup: viewWatch,
@@ -1420,7 +1460,9 @@
     // -- search: what Nulavio adds to the engine's own Search pane. Which engines may receive what the person
     // types (suggestions, engine by engine: NulavioSearch keeps that list and the engine's patch reads it), and
     // the engines Nulavio knows how to add. Default engine, aliases and removal are the engine's own controls. --
-    const search = source(() => shell.NulavioSearch.state());
+    // The sign-in state (#151) is read here, by the settings page, and is not part of state(): Shell pages that ask the
+    // search experiment for its state do not get anything read from cookies.
+    const search = source(async () => ({ ...(await shell.NulavioSearch.state()), accounts: shell.NulavioSearch.accounts() }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
     const searchSetup = (emitChange, stops) => {
@@ -1512,7 +1554,14 @@
               control: "moz-button",
               slot: "actions",
               disabled: searchBench.state.busy,
-              controlAttrs: { label: msg("addProviderButton", provider.name), "data-action": "add", "data-provider": provider.key },
+              // The name is in the button's accessible name only: beside the row's name at 200 % text, "Adicionar
+              // Startpage" left the name too little room and broke it inside the word (#486).
+              controlAttrs: {
+                label: msg("addProviderShort"),
+                "aria-label": msg("addProviderButton", provider.name),
+                "data-action": "add",
+                "data-provider": provider.key,
+              },
             },
           ],
         }));
@@ -1526,6 +1575,151 @@
         }
       },
     });
+    // -- #151: choose the profile's search provider in one step. Every engine the profile has and every provider
+    // Nulavio knows, by name in alphabetical order, none marked: "Usar" adds it when missing and makes it the default,
+    // for private windows too unless the box says otherwise, and sends typed text to it only when that box is on.
+    // A provider with accounts says whether this profile is signed in (the presence of its session cookie). --
+    const chooseBench = workbench({ privateToo: true, suggest: false }, search);
+    const chooseSetup = (emitChange, stops) => {
+      stops.push(search.listen(emitChange));
+      chooseBench.watch(emitChange, stops);
+    };
+    const choices = () => {
+      const engines = enginesNow();
+      const curated = search.state.value?.providers ?? [];
+      const ofProvider = new Map(engines.filter(engine => engine.provider && engine.provider !== "searxng").map(engine => [engine.provider, engine]));
+      const rows = curated.map(provider => ({
+        key: `provider-${provider.key}`,
+        name: provider.name,
+        provider: provider.key,
+        engine: ofProvider.get(provider.key) ?? null,
+        account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
+        suggests: provider.suggests,
+      }));
+      const curatedKeys = new Set(curated.map(provider => provider.key));
+      for (const engine of engines) {
+        if (!curatedKeys.has(engine.provider)) {
+          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest });
+        }
+      }
+      return rows.sort((a, b) => a.name.localeCompare(b.name));
+    };
+    const choiceWords = row => {
+      const words = [];
+      if (row.engine?.isDefault) {
+        words.push(msg(row.engine.isDefaultPrivate ? "chooseInUseBoth" : "chooseInUse"));
+      } else if (row.engine?.isDefaultPrivate) {
+        words.push(msg("chooseInUsePrivate"));
+      } else if (!row.engine) {
+        words.push(msg("chooseNotAdded"));
+      }
+      if (row.account) {
+        // #152: said before the provider is chosen, with the providers that need no account, by name.
+        const free = (search.state.value?.providers ?? []).filter(provider => !provider.account).map(provider => provider.name);
+        words.push(msg("chooseAccountPrivate", free.join(", ")));
+        words.push(
+          row.account.signedIn === true
+            ? msg("chooseSignedIn", row.account.host)
+            : row.account.signedIn === false
+              ? msg("chooseSignedOut", row.account.host)
+              : msg("chooseSignedUnknown", row.account.host)
+        );
+      }
+      return words.join(" ");
+    };
+    setting({
+      id: "nulavio-search-choose",
+      setup(emitChange, stops) {
+        chooseSetup(emitChange, stops);
+        search.refresh();
+      },
+      visible: () => search.state.ready,
+      getControlConfig: config => ({
+        ...config,
+        options: choices().flatMap(row => stacked({
+          key: row.key,
+          control: "moz-box-item",
+          controlAttrs: { label: row.name, description: choiceWords(row), class: "nulavio-search-choice", "data-choice": row.key },
+          options: [
+            ...(row.account?.signedIn === false
+              ? [
+                  {
+                    key: `signin-${row.key}`,
+                    control: "moz-button",
+                    slot: "actions",
+                    controlAttrs: { label: msg("chooseSignIn"), "data-action": "signin", "data-choice": row.key },
+                  },
+                ]
+              : []),
+            {
+              key: `use-${row.key}`,
+              control: "moz-button",
+              slot: "actions",
+              disabled: chooseBench.state.busy,
+              controlAttrs: {
+                label: msg("chooseUse"),
+                "aria-label": msg("chooseUseNamed", row.name),
+                "data-action": "choose",
+                "data-choice": row.key,
+              },
+            },
+          ],
+        })),
+      }),
+      onUserClick(event) {
+        const button = event.target.closest?.("[data-action]");
+        const row = choices().find(each => each.key === button?.dataset.choice);
+        if (!row) {
+          return;
+        }
+        if (button.dataset.action === "signin" && row.account?.signIn) {
+          top().openTrustedLinkIn(row.account.signIn, "tab");
+          return;
+        }
+        if (button.dataset.action !== "choose") {
+          return;
+        }
+        const target = row.provider ? { provider: row.provider } : { id: row.engine.id };
+        // The box speaks for this provider only when it can receive typed text at all.
+        const suggest = row.suggests ? Boolean(chooseBench.state.suggest) : undefined;
+        // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
+        // chosen engine's own (an engine of the person's with a curated provider's name may send elsewhere).
+        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
+        const said = id => {
+          const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
+          return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
+        };
+        chooseBench.act(
+          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
+          said
+        );
+        // Consent is given for one provider at a time: the box is clear again for the next choice.
+        chooseBench.show({ suggest: false });
+      },
+    });
+    for (const [name, words] of [
+      ["privateToo", "choosePrivateToo"],
+      ["suggest", "chooseSuggest"],
+    ]) {
+      setting({
+        id: `nulavio-search-choose-${name}`,
+        setup: chooseSetup,
+        visible: () => search.state.ready,
+        get: () => Boolean(chooseBench.state[name]),
+        set(value) {
+          chooseBench.show({ [name]: Boolean(value) });
+        },
+        disabled: () => chooseBench.state.busy,
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(`${words}Label`), description: msg(`${words}Note`) },
+        }),
+      });
+    }
+    const chooseBars = [
+      chooseBench.bar("nulavio-search-choose-error", "error", () => chooseBench.state.error, () => Boolean(chooseBench.state.error)),
+      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said)),
+    ];
     // An instance of the person's own, or a site's own description: an address typed here, added by the module's rules.
     const addByAddress = (name, add, words) => {
       setting({
@@ -1576,6 +1770,189 @@
     const searchBars = [
       searchBench.bar("nulavio-search-error", "error", () => searchBench.state.error, () => Boolean(searchBench.state.error)),
       searchBench.bar("nulavio-search-said", "success", () => searchBench.state.said, () => Boolean(searchBench.state.said)),
+    ];
+
+    // -- #156: web services used on a click, for translation. Translation stays on the device (the engine's own group,
+    // above); a web service is used only after the person adds it here, only from a menu item that names it. Listed by
+    // name, alphabetically, none marked. --
+    const services = source(() => shell.NulavioServices.state());
+    const servicesBench = workbench({ fresh: { instance: "", name: "", selection: "", page: "" } }, services);
+    const servicesSetup = (emitChange, stops) => {
+      stops.push(services.listen(emitChange));
+      servicesBench.watch(emitChange, stops);
+    };
+    const servicesNow = () => (services.state.ready ? services.state.value : null);
+    setting({
+      id: "nulavio-translate-added",
+      setup(emitChange, stops) {
+        servicesSetup(emitChange, stops);
+        services.refresh();
+        try {
+          stops.push(shell.NulavioServices.subscribe(services.refresh));
+        } catch (e) {
+          console.error(e);
+        }
+      },
+      visible: () => Boolean(servicesNow()),
+      getControlConfig(config) {
+        const added = servicesNow()?.translators ?? [];
+        const rows = added.flatMap(service => stacked({
+          key: `translator-${service.id}`,
+          control: "moz-box-item",
+          controlAttrs: {
+            label: service.name,
+            description: msg(service.page ? "translateSendsBoth" : "translateSendsText"),
+            class: "nulavio-translator",
+            "data-service": service.id,
+          },
+          options: [
+            {
+              key: `remove-${service.id}`,
+              control: "moz-button",
+              slot: "actions",
+              disabled: servicesBench.state.busy,
+              controlAttrs: { label: msg("translateRemove"), "aria-label": msg("translateRemoveNamed", service.name), "data-action": "remove", "data-service": service.id },
+            },
+          ],
+        }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("translateNone"), class: "nulavio-translator-none" } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      onUserClick(event) {
+        const id = event.target.closest?.('[data-action="remove"]')?.dataset.service;
+        if ((servicesNow()?.translators ?? []).some(service => service.id === id)) {
+          servicesBench.act(() => shell.NulavioServices.removeTranslator(id), msg("doneRemoved"));
+        }
+      },
+    });
+    setting({
+      id: "nulavio-translate-known",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      getControlConfig(config) {
+        const have = new Set((servicesNow()?.translators ?? []).map(service => service.key));
+        const rows = (servicesNow()?.known ?? [])
+          .filter(service => (service.selection || service.page) && !service.instance && !have.has(service.key))
+          .flatMap(service => stacked({
+            key: `known-${service.key}`,
+            control: "moz-box-item",
+            controlAttrs: {
+              label: service.name,
+              description: [msg(service.page ? "translateSendsBoth" : "translateSendsText"), service.account ? msg("translateAccount") : ""].filter(Boolean).join(" "),
+              class: "nulavio-translate-known",
+              "data-service": service.key,
+            },
+            options: [
+              {
+                key: `add-${service.key}`,
+                control: "moz-button",
+                slot: "actions",
+                disabled: servicesBench.state.busy,
+                controlAttrs: { label: msg("addProviderButton", service.name), "data-action": "add", "data-service": service.key },
+              },
+            ],
+          }));
+        const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("translateKnownNone") } };
+        return { ...config, options: rows.length ? rows : [none] };
+      },
+      onUserClick(event) {
+        const key = event.target.closest?.('[data-action="add"]')?.dataset.service;
+        if ((servicesNow()?.known ?? []).some(service => service.key === key && !service.instance)) {
+          servicesBench.act(() => shell.NulavioServices.addTranslator({ key }), msg("doneAdded"));
+        }
+      },
+    });
+    // A field of the forms below: kept in the bench until its "Adicionar" or "Usar".
+    const servicesField = (id, field, words, visible = () => Boolean(servicesNow())) =>
+      setting({
+        id,
+        setup: servicesSetup,
+        visible,
+        get: () => servicesBench.state.fresh[field],
+        set(value) {
+          servicesBench.state.fresh[field] = value;
+        },
+        getControlConfig: config => ({
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg(words.label), description: words.note ? msg(words.note) : "", placeholder: words.placeholder ?? "" },
+        }),
+      });
+    const servicesButton = (id, label, action, cleared) =>
+      setting({
+        id,
+        setup: servicesSetup,
+        visible: () => Boolean(servicesNow()),
+        disabled: () => servicesBench.state.busy,
+        async onUserClick(event) {
+          event.preventDefault();
+          if (await servicesBench.act(() => action(servicesBench.state.fresh), msg("doneAdded"))) {
+            servicesBench.show({ fresh: { ...servicesBench.state.fresh, ...Object.fromEntries(cleared.map(field => [field, ""])) } });
+          }
+        },
+        getControlConfig: config => ({ ...config, controlAttrs: { ...config.controlAttrs, label: msg(label) } }),
+      });
+    servicesField("nulavio-translate-instance", "instance", { label: "translateInstanceLabel", note: "translateInstanceNote", placeholder: "https://translate.example.org/" });
+    servicesButton("nulavio-translate-instance-add", "translateInstanceAdd", fresh => shell.NulavioServices.addTranslator({ key: "libretranslate", base: fresh.instance }), ["instance"]);
+    servicesField("nulavio-translate-custom-name", "name", { label: "translateCustomName" });
+    servicesField("nulavio-translate-custom-selection", "selection", {
+      label: "translateCustomSelection",
+      note: "translateCustomSelectionNote",
+      placeholder: "https://translate.example.org/?q={text}&to={lang}",
+    });
+    servicesField("nulavio-translate-custom-page", "page", {
+      label: "translateCustomPage",
+      note: "translateCustomPageNote",
+      placeholder: "https://translate.example.org/page?u={url}",
+    });
+    servicesButton(
+      "nulavio-translate-custom-add",
+      "translateCustomAdd",
+      fresh => shell.NulavioServices.addTranslator({ key: "custom", name: fresh.name, selection: fresh.selection, page: fresh.page }),
+      ["name", "selection", "page"]
+    );
+    setting({
+      id: "nulavio-translate-language",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      get: () => servicesNow()?.language ?? "",
+      set(value) {
+        servicesBench.act(() => shell.NulavioServices.setLanguage(String(value)), msg("doneSaved"));
+      },
+      getControlConfig(config) {
+        const now = servicesNow();
+        const named = tag => {
+          try {
+            return new Intl.DisplayNames([now?.browserLanguage ?? "pt-BR"], { type: "language" }).of(tag) ?? tag;
+          } catch {
+            return tag;
+          }
+        };
+        return {
+          ...config,
+          controlAttrs: { ...config.controlAttrs, label: msg("translateLanguage"), description: msg("translateLanguageNote") },
+          options: [
+            { value: "", controlAttrs: { label: msg("translateLanguageBrowser", named(now?.browserLanguage ?? "")) } },
+            ...(now?.languages ?? []).map(tag => ({ value: tag, controlAttrs: { label: named(tag) } })),
+          ],
+        };
+      },
+    });
+    setting({
+      id: "nulavio-services-private",
+      setup: servicesSetup,
+      visible: () => Boolean(servicesNow()),
+      get: () => Boolean(servicesNow()?.privateToo),
+      set(value) {
+        servicesBench.act(() => shell.NulavioServices.setPrivateToo(Boolean(value)), msg("doneSaved"));
+      },
+      getControlConfig: config => ({
+        ...config,
+        controlAttrs: { ...config.controlAttrs, label: msg("servicesPrivateLabel"), description: msg("servicesPrivateNote") },
+      }),
+    });
+    const servicesBars = prefix => [
+      servicesBench.bar(`nulavio-${prefix}-error`, "error", () => servicesBench.state.error, () => Boolean(servicesBench.state.error)),
+      servicesBench.bar(`nulavio-${prefix}-said`, "success", () => servicesBench.state.said, () => Boolean(servicesBench.state.said)),
     ];
 
     // -- what the content filter blocks: uBlock Origin's own lists, on its own page. Nulavio reads whether it
@@ -2181,6 +2558,7 @@
           { id: "nulavio-layout-keep", control: "moz-button" },
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
           { id: "nulavio-hide-page-title", l10nId: "nulavio-hide-page-title", control: "moz-toggle", controlAttrs: { "data-option": "hidePageTitle" } },
+          { id: "nulavio-load-line", l10nId: "nulavio-load-line", control: "moz-toggle", controlAttrs: { "data-option": "loadLine" } },
         ],
       },
       // #221: meeting links in this profile, in the service's app (its page and the engine's prompt) or the browser.
@@ -2313,6 +2691,17 @@
           { id: "nulavio-filter-trusted", control: "moz-box-button" },
         ],
       },
+      nulavioSearchChoose: {
+        l10nId: "nulavio-search-choose-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-search-choose-failed", search),
+          ...chooseBars,
+          { id: "nulavio-search-choose-privateToo", control: "moz-checkbox" },
+          { id: "nulavio-search-choose-suggest", control: "moz-checkbox" },
+          { id: "nulavio-search-choose", control: "moz-box-group" },
+        ],
+      },
       nulavioSearch: {
         l10nId: "nulavio-search-group",
         headingLevel: 2,
@@ -2322,6 +2711,30 @@
         l10nId: "nulavio-search-add-group",
         headingLevel: 2,
         items: [...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
+      },
+      nulavioTranslate: {
+        l10nId: "nulavio-translate-group",
+        headingLevel: 2,
+        items: [
+          failureNote("nulavio-translate-failed", services),
+          ...servicesBars("translate"),
+          { id: "nulavio-translate-added", control: "moz-box-group" },
+          { id: "nulavio-translate-language", control: "moz-select" },
+          { id: "nulavio-services-private", control: "moz-checkbox" },
+        ],
+      },
+      nulavioTranslateAdd: {
+        l10nId: "nulavio-translate-add-group",
+        headingLevel: 2,
+        items: [
+          { id: "nulavio-translate-known", control: "moz-box-group" },
+          { id: "nulavio-translate-instance", control: "moz-input-text" },
+          { id: "nulavio-translate-instance-add", control: "moz-button" },
+          { id: "nulavio-translate-custom-name", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-selection", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-page", control: "moz-input-text" },
+          { id: "nulavio-translate-custom-add", control: "moz-button" },
+        ],
       },
       nulavioAssistantEntry: {
         l10nId: "nulavio-assistant-group",
@@ -2402,6 +2815,8 @@
         return edited;
       },
       privacy: config => ({ ...config, groupIds: after(config.groupIds, "etpStatus", "nulavioProtections", "nulavioExceptions") }),
+      // Web services for translation after the engine's own, which stays the default and on the device.
+      languages: config => ({ ...config, groupIds: after(config.groupIds, "translations", "nulavioTranslate", "nulavioTranslateAdd") }),
       // "Sobre": how many managed policies are in effect and whose they are.
       about: config => ({ ...config, groupIds: [...config.groupIds, "nulavioWhatsNew", "nulavioPolicies"] }),
       passwordsAutofill: config => ({ ...config, groupIds: ["nulavioPasswordManager", ...config.groupIds, "nulavioConfirmedSites"] }),
@@ -2409,7 +2824,10 @@
       // group, and the engines Nulavio adds after its list of engines.
       search: config => ({
         ...config,
-        groupIds: after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
+        groupIds: [
+          "nulavioSearchChoose",
+          ...after(after(config.groupIds, "searchSuggestions", "nulavioSearch"), "searchShortcuts", "nulavioSearchAdd"),
+        ],
       }),
       tabsBrowsing: config => ({
         ...config,

@@ -55,17 +55,25 @@ class SplitViewTest(unittest.TestCase):
     def setUp(self):
         self.m.chrome("window.resizeTo(1400, 900);")
         self.m.navigate(self.a)
-        self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);", [self.b])
-        # Marionette's content scripts stay in the first tab: the second tab's title is read from the window.
-        self.assertTrue(
-            harness.wait_until(lambda: self.m.chrome("return gBrowser.selectedBrowser.contentTitle;") == "Lado-B", 10)
-        )
+        # Cleaned up even when the second tab never loads, so one slow test does not leave its tabs to the next (#436).
         self.addCleanup(self.cleanup)
+        self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);", [self.b])
+        # Marionette's content scripts stay in the first tab: the second tab's title is read from the window. In the
+        # first nightly rehearsal the first test's second tab had no title after 10 s, and the next test's had one: the
+        # first load of the second site (a process of its own) gets more time, and a failure says what the tab was
+        # doing. The cause was not found: alone, and beside 32 busy processes, the module passes (#436).
+        title = "return gBrowser.selectedBrowser.contentTitle;"
+        loading = (
+            "const b = gBrowser.selectedBrowser;"
+            "return { title: b.contentTitle, url: b.currentURI.spec, loading: b.webProgress?.isLoadingDocument ?? null,"
+            " tabs: gBrowser.tabs.length };"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(title) == "Lado-B", 30), self.m.chrome(loading))
 
     def cleanup(self):
         self.m.chrome(
             "Services.prefs.clearUserPref('nulavio.layout.immersive');"
-            "gBrowser.selectedTab.splitview?.unsplitTabs?.('test');"
+            "for (const tab of [...gBrowser.tabs]) tab.splitview?.unsplitTabs?.('test');"
             "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs[gBrowser.tabs.length - 1], { animate: false });"
         )
         self.apply("lateral")

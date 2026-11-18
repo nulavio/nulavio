@@ -81,15 +81,16 @@ scripts/build/build_nulavio.sh 160.0
 
 The script checks Mozilla's signed checksums before it builds anything, applies the [patch stack](browser/patches/series), and writes `nulavio-160.0.en-US.linux-x86_64.tar.xz`. Packaging, signing and the release rehearsal are described in [build](docs/architecture/build.md) and the [update policy](docs/architecture/update-policy.md).
 
-### Try the preview without building
+### If you used the preview
 
-The preview launcher (Track A) runs your distribution's unmodified Firefox with Nulavio's isolated, hardened profile. It needs Python 3.11 or later and a distribution Firefox 140 or later (not the Snap):
+The preview, which ran Nulavio's profile on your distribution's Firefox (`bin/nulavio setup` and `run`), is no longer offered: install the [package](#install) instead. `bin/nulavio setup` and `run` now refuse an engine that is not the Nulavio build. Nothing is deleted: the preview's profiles stay in `~/.local/share/nulavio/profiles/`, and the packaged browser does not open them (its own profiles are in `~/.config/nulavio/nulavio`). To bring a profile's bookmarks and saved passwords along:
 
-```sh
-bin/nulavio setup     # shows the plan and asks before creating anything
-bin/nulavio run       # add a URL, --private, --temporary or --confined
-bin/nulavio doctor    # checks the environment and the profile
-```
+1. Find the profile's folder: `bin/nulavio profile path default` prints it (another profile's name instead of `default`; it differs from the path below if you set `XDG_DATA_HOME` or `NULAVIO_HOME`).
+2. Open the preview profile in the distribution's Firefox, with that Firefox closed: `firefox --new-instance --profile ~/.local/share/nulavio/profiles/default` (another profile's name instead of `default`). An encrypted profile (`nulavio vault`) is unlocked first with `bin/nulavio vault unlock default`, and locked again afterwards with `bin/nulavio vault lock default`.
+3. Bookmarks: Bookmarks → Manage Bookmarks → Import and Backup → Export Bookmarks to HTML. Passwords: Passwords (`about:logins`) → ⋯ → Export Passwords. That file is not encrypted: keep it out of shared folders.
+4. In Nulavio: Bookmarks → Manage Bookmarks → Import and Backup → Import Bookmarks from HTML; Passwords → ⋯ → Import from a File. Then delete the exported password file.
+
+A password manager's extension (Proton Pass, Bitwarden, KeePassXC) keeps its vault in its own account or database: sign in again in Nulavio, nothing to export. If you ran `bin/nulavio desktop install`, its menu entry starts the preview, which now refuses to open, and the command is gone (#465): delete `~/.local/share/applications/nulavio-preview.desktop` and the `nulavio-preview.png` and `nulavio-preview.svg` icons under `~/.local/share/icons/hicolor/` (under `$XDG_DATA_HOME` instead of `~/.local/share` if you had set it). When you no longer need the preview's profiles, delete `~/.local/share/nulavio/profiles/`.
 
 ## Tests
 

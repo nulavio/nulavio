@@ -295,7 +295,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Impact | Every keystroke, including text never searched for (pasted passwords, private URLs), reaches a third party |
 | Preventive | **Now:** suggestions and trending off by default (both tracks); Track B requires per-provider consent at the single fetch point (patch 0004), so consent for one engine does not cover others reached through aliases; the settings page names the host that receives the text |
 | Detective | Nulavio settings show which providers receive typed text |
-| Limitations | Track A has one global switch (R17); DNS is not measured by the test (R20) |
+| Limitations | The preview had one global switch (R17, resolved: removed in #464); DNS is not measured by the test (R20) |
 | Tests | `test_search` 02, 03, 05 |
 | Residual | **Low** (Track B) / **Medium** (Track A with suggestions turned on) |
 
@@ -311,7 +311,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preventive | **Now:** each profile is a separate engine instance and directory; switching passes only an activation command, never cookies or storage; the engine's lock refuses deleting a running profile; switching reuses a running instance. Links from other apps are routed by the user's rules before any request; if the target cannot take a link, nothing is loaded and opening it elsewhere is an explicit choice |
 | Detective | Toolbar shows the active profile's colour, icon and name |
 | Limitations | Same-UID processes can read every profile (TB6, S11); routing moves only an address, never a session; with in-page routing on, a page chooses that address ([R45](residual-risks.md), [review](routing-m5-review.md)) |
-| Tests | `test_profiles` 05, 06, 08; `test_routing` |
+| Tests | `test_profiles` 05, 06, 08; `test_routing`; for a new profile's search choice (#151): `test_search` 16 and `test_settings_search` 04 (the file is a provider key only, 0600; read at the first start only, removed unread later; a link never followed) |
 | Residual | **Low** |
 
 ### S19 — Malicious or mistaken change reaching `main`
@@ -358,6 +358,38 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Limitations | A same-user program can already do much more (S11); this adds no way in, only one more thing it can watch |
 | Tests | `test_keep_above` (elsewhere: refused and said; the script refuses an injected id; on Plasma by hand: KWin's own state read back) |
 | Residual | Low; listed as R77 |
+
+### S22 — A record that says the Rust code was checked when it was not (#430)
+
+| Field | |
+|---|---|
+| Assets | The release's guard against Rust code that talks to the network around the engine's own stack, and so around a proxy the person set |
+| Adversary | Whoever can get a change to `browser/build/networking-check.json` merged: a mistaken or misled author of a pull request, an agent on the shared account (S19, R62), or a compromised build laptop that writes a false record |
+| Preconditions | A pull request that writes the record: one that moves the engine pin, changes a patch or the mozconfig, or only the record. The record says "passed" without a reading, or with a reading of another build; or it says "accepted" with an issue number, which nothing checks beyond its spelling |
+| Boundary | TB22 |
+| Impact | The engine pin, a patch or the configuration lands on `main` without the Rust code having been read for networking imports. Since #455 that does not reach a release by itself: the signing job requires the `networking-check.yml` workflow's attestation of the reading for the release's source and inputs (a new gate, not yet exercised by a release when this was written). Nothing is exposed by the record itself: the harm needs Rust code that does import such a function, which Mozilla's own builds would also carry. Since #364 the release build is cross-language and runs no engine check of its own: Nulavio's reading (the record in a pull request, the workflow's attestation for a release) is the only guard on what the shipped Rust code imports |
+| Preventive | The record is on a CODEOWNERS path: by the project's rule a second, independent review reads it before it is merged; that rule is a convention the agents keep, which GitHub does not enforce (R62). It must name the pinned release and source digest, and carry the digests of the mozconfig, the variant and the patch stack of the tree it sits in (`test_track_b`, and `release_manifest.py verify` at the manifest's base commit). The script that writes it refuses a tree that is not the pinned release, a build made from another mozconfig, a build whose library says nothing, and a reading that looks empty. A unit test keeps Rust code and its build files out of Nulavio's patches |
+| Detective | The record carries the SHA-256 of the library that was read: anyone with a build of the same inputs can compare. `networking-check.yml` makes the reading itself whenever the configuration, the pin or the patch stack changes on `main`: a false record is contradicted by a failed run there, and by a release that cannot be signed |
+| Limitations | CI cannot tell that the build and the reading happened: the record is a statement. "Accepted" is the maintainer's word only because a reviewer checks that the issue it names says so; it is bound to the mozconfig, variant and patch stack it was accepted for, like a reading. Nothing but the review rule stops the shared account from merging a false record (S19); what stops a release built on one is the attestation, which the shared account can obtain by making the workflow pass, or by changing what the workflow runs: the workflow itself (`.github/`), the reading, the claim and the patch applier (`scripts/build/networking_check.py`, `apply_patches.py`), the build script (`scripts/build/build_nulavio.sh`) or the build container's file (`ci/containers/fedora-build.Containerfile`). All of them are CODEOWNERS paths, so such a change is one the project's rule sends to a second review, which is a convention and not enforced (S19, R62). The shipped binary itself is not read. The reading build and the release build may get two versions of the Rust compiler from the container's package manager: the claim names the compiler, so that is a release the signing job refuses until a reading is made with the same one (#472), and what names it is each build's own configuration, on the build machine. No engine check stands behind the reading: it ran in every release build up to 160.0-0.6 and runs in none since #364 |
+| Tests | `test_networking_check`, `test_track_b` (`NetworkingCheckRecordTest`), `test_release_manifest` |
+| Residual | Low; listed as R79. It takes Rust code of Mozilla's that imports one of those functions and, for a release, a run of the workflow that says it does not (the Limitations say who could make it say so). The engine's build checks for that in any release-mode build that is not cross-language; whether Mozilla's own automation makes such a build of each release was not verified, so nothing here leans on it. The attestation gate is new (#455): until a release has been signed through it, read this as Low to Medium |
+
+---
+
+### S23 — What a click sends to a translation service (#156)
+
+| Field | |
+|---|---|
+| Assets | The text the person selects; the address of the page they act on, and what it carries (a token in a query) |
+| Adversary | T-WEB: a page that steers what is selected; a service the person added (it keeps what it receives); a service address the person was told to type |
+| Preconditions | The person added a web service in Settings (none is added by default) and clicks a menu item that names it |
+| Boundary | TB23 |
+| Impact | The service receives the selected text (at most 5,000 characters) or the page's address with its query, on that click. A page can arrange what is selected, but not make the click |
+| Preventive | Nothing before the click; items only for services the person added, each naming its service; the address's fragment is removed; literal addresses of this computer and of private, shared, link-local and reserved ranges (IPv4, and IPv6 including the forms that carry an IPv4 address) and names without a dot or with a listed local suffix are refused; private windows show the items only when allowed; a typed service must be https with a host not built from the page |
+| Detective | The item says the service and, when refused, why; Settings says what each service receives |
+| Limitations | A local name not on the suffix list (a LAN host named like a public one) is not recognised: names are not resolved to decide. A token a site put in its own query goes with the address |
+| Tests | `test_web_services` (addresses, refusals, the request recorded and cancelled, private windows) |
+| Residual | Medium for the token in a query; listed as R80 |
 
 ---
 

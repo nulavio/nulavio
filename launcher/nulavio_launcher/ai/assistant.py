@@ -333,8 +333,7 @@ def _post(url: str, body: dict, headers: dict) -> dict:
     return reply
 
 
-# The assistant works through the bridge's own tools; it has no use for handing the raw endpoint over.
-ASSISTANT_TOOLS = tuple(t for t in TOOLS if t.name != "raw_automation")
+ASSISTANT_TOOLS = TOOLS
 
 
 def _tool_specs(kind: str) -> list[dict]:

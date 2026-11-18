@@ -16,9 +16,14 @@
    shows it.
 
    Colour: a neutral token (window-band.css), never a status colour or the band's, so it cannot read as a
-   security state. Under reduced motion it is a static line: no sliding, no growing. */
+   security state. Under reduced motion it is a static line: no sliding, no growing.
+
+   Off unless the person turns it on (#458, decided in the feature review of #453): Settings, Aparência, "Mostrar uma
+   linha de carregamento", pref PREF (shared/options.json "loadLine"). Off, nothing is attached to any window: no
+   progress listener, no element. The switch takes effect at once, in every window, also while a page loads. */
 
 const LINE = "nulavio-load-line";
+const PREF = "nulavio.window.loadLine";
 const HTML = "http://www.w3.org/1999/xhtml";
 const { STATE_START, STATE_STOP, STATE_IS_NETWORK } = Ci.nsIWebProgressListener;
 
@@ -99,20 +104,49 @@ function detach(win) {
   state.line.remove();
 }
 
+function enabled() {
+  return Services.prefs.getBoolPref(PREF, false);
+}
+
+function attachAll() {
+  for (const win of Services.wm.getEnumerator("navigator:browser")) {
+    if (win.gBrowserInit?.delayedStartupFinished) {
+      attach(win);
+    }
+  }
+}
+
+function detachAll() {
+  for (const win of [...windows.keys()]) {
+    detach(win);
+  }
+}
+
 let watching = null;
 
 export const NulavioLoadLine = {
-  /** From the Shell's start: the line in every browser window. */
+  /** From the Shell's start: the line in every browser window while the person has it on. */
   watch() {
     if (watching) {
       return;
     }
-    watching = { observe: win => attach(win) };
+    watching = {
+      observe: (subject, topic) => {
+        if (topic === "browser-delayed-startup-finished") {
+          if (enabled()) {
+            attach(subject);
+          }
+        } else if (enabled()) {
+          attachAll(); // follow() shows the selected tab's state at once, a load already under way included
+        } else {
+          detachAll();
+        }
+      },
+    };
     Services.obs.addObserver(watching, "browser-delayed-startup-finished");
-    for (const win of Services.wm.getEnumerator("navigator:browser")) {
-      if (win.gBrowserInit?.delayedStartupFinished) {
-        attach(win);
-      }
+    Services.prefs.addObserver(PREF, watching);
+    if (enabled()) {
+      attachAll();
     }
   },
 
@@ -121,9 +155,13 @@ export const NulavioLoadLine = {
       return;
     }
     Services.obs.removeObserver(watching, "browser-delayed-startup-finished");
-    for (const win of [...windows.keys()]) {
-      detach(win);
-    }
+    Services.prefs.removeObserver(PREF, watching);
+    detachAll();
     watching = null;
+  },
+
+  /** For tests: how many windows carry the line and its listener. */
+  attachedCount() {
+    return windows.size;
   },
 };

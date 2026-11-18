@@ -236,7 +236,7 @@ class WindowUI {
         const warning = lazy.NulavioAI.windowWarning();
         if (warning) {
           this.#agent = this.#agent?.id === warning.id
-            ? { ...this.#agent, ...warning, raw: this.#agent.raw || warning.raw }
+            ? { ...this.#agent, ...warning }
             : { ...warning, name: warning.id, autonomy: null };
           for (const window of this.#windows.keys()) {
             this.#paint(window);
@@ -327,7 +327,7 @@ class WindowUI {
     origin.hidden = true;
     row.append(identity, protection, route, header, origin);
     const seals = element(doc, "div", "nv-band-seals");
-    for (const kind of ["temporary", "private", "agent", "raw", "status", "activity"]) {
+    for (const kind of ["temporary", "private", "agent", "status", "activity"]) {
       const seal = element(doc, "span", `nv-band-seal nv-band-${kind}`);
       seal.hidden = true;
       seals.append(seal);
@@ -519,7 +519,7 @@ class WindowUI {
     fullscreen.setAttribute("aria-label", t("bandLabel"));
     const line = element(doc, "div", "nv-fullscreen-line");
     line.setAttribute("aria-hidden", "true");
-    for (const kind of ["normal", "temporary", "private", "agent", "raw", "guard", "activity"]) {
+    for (const kind of ["normal", "temporary", "private", "agent", "guard", "activity"]) {
       const segment = element(doc, "span", `nv-fullscreen-${kind}`);
       segment.hidden = kind !== "normal";
       line.append(segment);
@@ -850,7 +850,7 @@ class WindowUI {
    */
   #immersiveBlock(win) {
     if (this.#agent) {
-      return "agent"; // an AI Workspace, raw automation included
+      return "agent"; // an AI Workspace
     }
     if (!win.toolbar.visible) {
       return "popup"; // a pop-up or any window without the full toolbar
@@ -1287,12 +1287,11 @@ class WindowUI {
     const privateWindow = lazy.PrivateBrowsingUtils.isWindowPrivate(win);
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
-    root.toggleAttribute("nulavio-window-raw", Boolean(agent?.raw));
     this.#applyImmersive(win);
     const state = this.#windows.get(win);
     const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
-      agent: Boolean(agent), raw: Boolean(agent?.raw), guard: this.#guardCount > 0, activity: Boolean(activity) };
+      agent: Boolean(agent), guard: this.#guardCount > 0, activity: Boolean(activity) };
     for (const [kind, visible] of Object.entries(kinds)) {
       state.line.querySelector(`.nv-fullscreen-${kind}`).hidden = !visible;
     }
@@ -1310,7 +1309,6 @@ class WindowUI {
       row.dataset.private = String(privateWindow);
       row.dataset.agent = String(Boolean(agent));
       row.dataset.workspace = String(Boolean(workspace));
-      row.dataset.raw = String(Boolean(agent?.raw));
       // Which outline glyph the protection and the agent status draw (window-band.css); words stay the cue.
       row.dataset.protection = this.#protection === "unlocked" ? "unlocked" : this.#protection === "plain" ? "plain" : "unknown";
       row.dataset.agentStatus = this.#actionError ? "failed" : this.#agentUnavailable ? "unknown"
@@ -1363,7 +1361,6 @@ class WindowUI {
         ? t("bandAgentProfile", [agentName, agent.target.profile || name, level])
         : t("bandAgentWorkspace", [agentName, level]);
       seal("agent", Boolean(agent), agentText);
-      seal("raw", Boolean(agent?.raw), t("bandRaw"));
       seal("status", Boolean(agent && (agent.paused || agent.stopped || agent.revoked || this.#agentUnavailable || this.#actionError)),
         t(this.#actionError ? "bandStopFailed" : this.#agentUnavailable ? "bandAgentUnknown" : agent?.stopped ? "aiStoppedNow" : agent?.revoked ? "aiRevoked" : "aiPaused"));
       seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
@@ -1412,19 +1409,15 @@ class WindowUI {
       }
       this.#protection = protection.status === "fulfilled" ? protection.value : "unknown";
       this.#protectionUnavailable = protection.status === "rejected";
-      // An idle snapshot taken before markWorkspace/raw cannot erase its newer warning.
+      // An idle snapshot taken before markWorkspace cannot erase its newer warning.
       if (agentRevision === this.#agentRevision) {
         this.#agentUnavailable = agent.status === "rejected" || Boolean(agent.value?.unavailable);
       }
       if (agentRevision === this.#agentRevision && agent.status === "fulfilled") {
         const next = agent.value;
-        const raw = this.#agent?.id === next?.id && this.#agent?.raw;
         this.#agent = next?.unavailable && this.#agent?.id === next.id
-          ? { ...this.#agent, ...next, name: this.#agent.name, autonomy: this.#agent.autonomy, raw: next.raw || this.#agent.raw }
+          ? { ...this.#agent, ...next, name: this.#agent.name, autonomy: this.#agent.autonomy }
           : next;
-        if (this.#agent && next) {
-          this.#agent.raw ||= raw;
-        }
       }
       this.#guardCount = lazy.NulavioGuard.findings().length;
       this.#connected = connected;
@@ -1506,7 +1499,6 @@ class WindowUI {
     }
     this.#sheets.delete(win); // a restarted Shell loads it again
     win.document.documentElement.removeAttribute("nulavio-window-agent");
-    win.document.documentElement.removeAttribute("nulavio-window-raw");
   }
 
   /** "Perguntar ao assistente sobre esta página" in the address bar (UX5-H, Q6): typing one of its words, or

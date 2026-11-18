@@ -14,8 +14,7 @@ WebSocket upgrades that carry an Origin header (web pages) or a foreign Host.
 What the Shell in these windows reads (NulavioAI.sys.mjs): the prefs
 `nulavio.ai.workspace` (which agent drives the window) and `nulavio.ai.target`
 ("workspace", or "profile" with `nulavio.ai.target.label` for one of the user's
-own profiles), and the file RAW_MARKER in the profile while the BiDi endpoint is
-handed over (raw automation), so the window can say so.
+own profiles).
 """
 
 from __future__ import annotations
@@ -37,12 +36,10 @@ from .bidi import Bidi
 APP_ID = "nulavio-ai-workspace"
 # The same value as the nulavio.ai.workspace pref, in the engine's environment: nothing in the
 # browser (about:config included) can change it, so the window's lock does not rest on a pref
-# an agent with raw automation could reset (audit A6). browser/shell/modules/NulavioAI.sys.mjs.
+# something in the engine could reset (audit A6). browser/shell/modules/NulavioAI.sys.mjs.
 WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"
-# Written into the AI Workspace's profile when raw_automation hands the endpoint over, removed when
-# the workspace starts or stops: {"agent", "pid" (the bridge), "since"}. A cue for the window only;
-# the bridge's own state (Bridge.raw) and its watcher are what end the workspace.
-RAW_MARKER = "nulavio-raw.json"
+# Left in a workspace's profile by a version that had raw automation (removed in #463); deleted when it starts.
+OLD_RAW_MARKER = "nulavio-raw.json"
 WORKSPACE_PREFS: dict[str, object] = {
     # Keep Safe Browsing, updates, the pop-up blocker and the rest of the
     # baseline: never apply the remote agent's test-automation preferences.
@@ -125,13 +122,7 @@ class Workspace:
         paths.write_private_file(
             self.profile_dir / "user.js", prefs.render(list(merged.items()), "Nulavio AI Workspace (generated)")
         )
-        (self.profile_dir / RAW_MARKER).unlink(missing_ok=True)  # left by a bridge that did not end cleanly
-
-    def mark_raw(self) -> None:
-        """The endpoint was handed over: the window shows the raw-automation state from now until it closes."""
-        since = time.strftime("%Y-%m-%dT%H:%M:%S%z")
-        paths.write_private_file(self.profile_dir / RAW_MARKER,
-                                 json.dumps({"agent": self.agent_id, "pid": os.getpid(), "since": since}))  # fmt: skip
+        (self.profile_dir / OLD_RAW_MARKER).unlink(missing_ok=True)
 
     def command(self) -> list[str]:
         command = [
@@ -191,8 +182,6 @@ class Workspace:
                     os.killpg(self.process.pid, signal.SIGKILL)
                     self.process.wait()
             self.process = None
-        with contextlib.suppress(OSError):
-            (self.profile_dir / RAW_MARKER).unlink(missing_ok=True)
         if self.disposable:
             shutil.rmtree(self.dir, ignore_errors=True)
 

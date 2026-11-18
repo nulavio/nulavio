@@ -4,7 +4,7 @@ Nulavio does **not** implement a password manager. It makes the user's chosen ma
 
 ## Model
 
-- A profile has exactly one **credential provider**: `builtin` (engine), `proton-pass`, `keepassxc` or `bitwarden`. Source: [`browser/config/providers.json`](../../browser/config/providers.json).
+- A profile has exactly one **credential provider**: `builtin` (engine), `proton-pass`, `keepassxc`, `bitwarden` or `1password`. Source: [`browser/config/providers.json`](../../browser/config/providers.json).
 - Choosing an external provider turns **off** the engine's save prompts, autofill and generator (`signon.rememberSignons`, `signon.autofillForms`, `signon.generation.enabled`) for that profile. **Saved engine logins are not deleted.** The CLI says this before applying, and `nulavio provider set builtin` reverts it.
 - Provider prefs are applied only while the profile is closed, so the choice is never half-applied.
 - The provider's **official** extension is installed only on explicit request (`--install-extension`), from the pinned, hash-verified AMO file.
@@ -17,9 +17,21 @@ Nulavio does **not** implement a password manager. It makes the user's chosen ma
 | P0 | **Proton Pass** | Official AMO extension (MV3 on Firefox), unmodified | Installs as a normal extension, Mozilla-signed, background running, popup renders the sign-in screen ([evidence](../research/evidence/gecko-158-password-extensions.json)). **On the maintainer's desktop** (Fedora 44 KDE Wayland, Track A, 2026-10-25): profile created by `nulavio setup --provider proton-pass --install-provider-extension`, extension active, **signed in to a real account** and **autofilled username and password on a real site** (confirmed by the maintainer); the engine's own manager stays off (`signon.*` false, no `logins.json`) | Unlock after restart, autosave, aliases, passkeys |
 | P0 | **KeePassXC** | Official KeePassXC-Browser + native messaging host `org.keepassxc.keepassxc_browser` | **End to end in a Fedora 44 container** (KeePassXC 2.8.0 package, Xvfb): association accepted, popup "connected", **username and password autofilled** on a fixture page from a throwaway database ([evidence](../research/evidence/keepassxc-2.8.0-native-messaging.json), [spike](../../scripts/research/keepassxc_native_messaging_spike.py)) | Manual desktop certification: **not planned by the maintainer** (does not use KeePassXC); the container end-to-end test runs in CI on every push. Community testers welcome: Ubuntu KDE, Flatpak KeePassXC with a host browser |
 | P1 | **Bitwarden** | Official AMO extension. Optional desktop-app native messaging for biometric unlock | Installs, signed, background running, popup renders. Its onboarding offers to disable the browser's own manager through the `privacy` permission, consistent with our single-provider rule | Manual certification **not planned by the maintainer** (does not use Bitwarden); community testers welcome. Desktop-app host `com.8bit.bitwarden` and allowed extension ID **verified** in Bitwarden's source (`apps/desktop/src/main/native-messaging.main.ts`) |
+| P1 | **1Password** | Official AMO extension (proprietary). Optional desktop-app native messaging (`com.1password.1password`); the Nulavio build needs its name in `/etc/1password/custom_allowed_browsers`, which `nulavio doctor` explains and Nulavio never writes | Installs, signed, background running, popup renders (`test_password_extensions`, with the network). Provider choice, engine prompts off, CLI (#81, 2026-11-16) | Manual certification **deferred** (the maintainer does not use 1Password). Desktop integration not measured on any package. [Specifics](#1password-specifics) |
 | P1 | Secret Service / GNOME Keyring | `org.freedesktop.secrets` | `doctor` detects the provider (on the reference machine: `ksecretd`, KDE) | Not used to store web logins (see below) |
 | P1 | KDE Wallet | `kwalletd6` | `doctor` detects it | Same as above |
 | P2 | Other WebExtension / native-messaging managers | Same contract as above | — | Case by case |
+
+## 1Password specifics
+
+Added 2026-11-16 (#81), at the level of Bitwarden: **P1**, and manual certification deferred (the maintainer's decision of 2026-11-16: he does not use 1Password; community testers welcome).
+
+- **The extension** is 1Password's own from addons.mozilla.org (`{d634138d-c276-4fc8-924b-40a0ea21d284}`), pinned with its SHA-256 in `browser/distribution/extensions.lock.json` and installed only when the person chooses 1Password. It is proprietary (AMO: "All Rights Reserved"); Nulavio does not redistribute it. It works on its own with a sign-in in the browser.
+- **The desktop app** (unlock with the app, system authentication) talks to the extension through native messaging, host `com.1password.1password`, whose manifest the app writes when its browser integration is on. The app also accepts only browsers it knows. Distribution Firefox (Track A) is one of them. The Nulavio build (Track B) is not, so its binary name, `nulavio`, has to be in `/etc/1password/custom_allowed_browsers`, written by root, one name per line, then 1Password quit and opened again ([1Password](https://support.1password.com/additional-browsers/), read 2026-11-16).
+- **Nulavio never writes that file** (the maintainer's decision of 2026-11-16, option a): `nulavio-doctor` (a package install; `nulavio doctor` in a source checkout, #470) says when the app is installed and the name is missing, with the exact command (`echo nulavio | sudo tee -a /etc/1password/custom_allowed_browsers`), and the person runs it. No package of Nulavio changes another vendor's configuration. The line trusts any executable named `nulavio`, not only Nulavio's; so `doctor` gives it only when the engine and the folders above it are root's alone (the RPM and DEB packages, or the archive unpacked as root), and for an engine the person's account can change (such as the archive unpacked in the home folder) says why it gives none, or warns if the name is already listed; what that leaves open is [R82](../security/residual-risks.md).
+- **Permissions it asks for, accepted as the official extension's own** (the lock's `reviewed_permissions`, read from 8.12.44.33): `<all_urls>`, `scripting` and `webRequest`/`webRequestBlocking` to fill forms on any site; `nativeMessaging` for the desktop app; `privacy`, which lets it turn the engine's own password manager off (as Bitwarden does), consistent with the one-manager rule; it is a required permission here (optional for Bitwarden), so the extension may also change other privacy settings while the browser runs, which the Guard follows as changes made in the browser and does not report (R81); `management`, which lets it list other extensions: in Firefox 160 it cannot turn one off (`management.setEnabled` works only for themes and for extensions installed by policy, `ext-management.js`), so it cannot turn uBlock Origin off; why it needs the list was not checked; `http://localhost/*` (what it reaches there was not checked); `downloads` and `clipboardWrite` for exports and copying a field; `declarativeNetRequestWithHostAccess` for its own sign-in pages. A version that asks for more is a diff in the lock that `refresh_extensions_lock.py` flags for review; no test yet compares the installed extension's permissions with the lock.
+- **Shortcuts:** the extension asks for Ctrl+Period (open) and Ctrl+Shift+L (lock). Nulavio's own keys stay off both (#469, [below](#extension-shortcuts-and-nulavios-keys)).
+- **Not measured** (needs the app and an account): that the desktop integration works on the RPM, the tarball and the Flatpak bundle; which binary name 1Password checks (the engine's executable, `nulavio`, is what doctor uses: community reports say links are not followed); whether 1Password refuses a browser binary that root does not own, as it does on macOS and Windows. Community reports say the integration fails when the browser or 1Password is a Flatpak or a Snap.
 
 ## KeePassXC specifics
 
@@ -37,6 +49,24 @@ Nulavio does **not** implement a password manager. It makes the user's chosen ma
 - Gecko on Linux does not use them for `logins.json`. Engine passwords are protected only by the optional Primary Password (`key4.db`).
 - Nulavio's use (planned, P1): show the backend status, and possibly hold Nulavio's own non-credential secrets in the future. **No autofill from Secret Service in the MVP**, and no copying of vault data into it.
 - Absence or failure of the service is handled by flow I in [ux-flows](../brand/ux-flows.md): nothing breaks, because Nulavio does not depend on it.
+
+## Extension shortcuts and Nulavio's keys
+
+Read on 2026-11-17 from the `commands` of the pinned XPIs in `browser/distribution/extensions.lock.json` (SHA-256 checked), for #469. A key with no default is left out.
+
+| Extension (pinned version) | Default keys on Linux |
+|---|---|
+| Proton Pass 1.41.1 | Ctrl+Shift+Y (open), Ctrl+Shift+L (open in a larger window) |
+| Bitwarden 2026.10.2 | Ctrl+Shift+U (open, Linux), Alt+Shift+U (sidebar, Linux), Ctrl+Shift+L (fill a login), Ctrl+Shift+9 (generate a password) |
+| KeePassXC-Browser 1.10.4.1 | Alt+Shift+U (fill username and password), Alt+Shift+I (fill password), Alt+Shift+O (fill TOTP), Alt+Shift+G (password generator) |
+| 1Password 8.12.44.33 | Ctrl+Period (open), Ctrl+Shift+L (lock) |
+
+Nulavio's keys are Ctrl+Alt+B, Ctrl+Alt+C, Ctrl+Alt+E, Ctrl+Alt+F, Ctrl+Alt+I and Ctrl+Alt+K, plus Alt+Shift+A and Alt+Shift+P, so none of them is one of the keys above. Ctrl+Alt+E and Ctrl+Alt+K leave with #459 and #460. "Copy Link to Highlight" had Ctrl+Shift+L (#157), the key three of the four use, and moved to Ctrl+Alt+C:
+- `test_shortcuts` 01 checks that it is in no other key of a running window, the engine's included;
+- this desktop's `kglobalshortcutsrc` (Plasma 6) and the GNOME schemas installed here bind no Ctrl+Alt+C;
+- no extension above asks for a Ctrl+Alt key.
+
+A new provider's keys are read the same way before it is added.
 
 ## UX rules (from the product brief)
 

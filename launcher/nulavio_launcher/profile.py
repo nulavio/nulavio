@@ -3,7 +3,6 @@
 Layout of ``$XDG_DATA_HOME/nulavio/profiles/<name>/`` (all 0700/0600):
 
     prefs.js, user.js, extensions/ ...   engine-owned profile files
-    chrome/userChrome.css                preview theme (optional)
     nulavio/settings.json                Nulavio choices for this profile
     nulavio/startpage/                   generated local start page
 
@@ -174,15 +173,11 @@ def baseline_prefs() -> list[prefs.Pref]:
     return prefs.parse_annotated(paths.config_dir() / "prefs" / "baseline.js")
 
 
-def theme_prefs() -> list[prefs.Pref]:
-    return prefs.parse_annotated(paths.config_dir() / "prefs" / "theme.js")
-
-
 def load_providers() -> dict[str, Any]:
     return json.loads((paths.config_dir() / "providers.json").read_text(encoding="utf-8"))
 
 
-def create(name: str, *, provider: str = "builtin", theme: bool = True, inside_container: bool = False) -> Profile:
+def create(name: str, *, provider: str = "builtin", inside_container: bool = False) -> Profile:
     """A new profile. `inside_container`: the directory is an empty, freshly mounted encrypted volume."""
     profile = get(name)
     fresh_volume = inside_container and profile.path.is_dir() and all(p.name == ".nulavio-vault" for p in profile.path.iterdir())
@@ -201,14 +196,13 @@ def create(name: str, *, provider: str = "builtin", theme: bool = True, inside_c
             "created": now,
             "baseline_version": BASELINE_VERSION,
             "provider": provider,
-            "theme": theme,
             "locale": ui_language(),
             "seeded": {},
             "pending_prefs": {},
         }
     )
     set_provider(profile, provider, _creating=True)
-    log.event("profile.create", profile=name, provider=provider, theme=theme)
+    log.event("profile.create", profile=name, provider=provider)
     return profile
 
 
@@ -226,18 +220,6 @@ def set_provider(profile: Profile, provider: str, *, _creating: bool = False) ->
     profile.save_settings(settings)
     log.event("provider.set", profile=profile.name, provider=provider)
     return providers[provider]
-
-
-def set_theme(profile: Profile, enabled: bool) -> None:
-    profile.require_not_running()
-    settings = profile.load_settings()
-    settings["theme"] = enabled
-    profile.save_settings(settings)
-    if not enabled:
-        css = profile.path / "chrome" / "userChrome.css"
-        if css.exists():
-            css.unlink()
-    log.event("theme.set", profile=profile.name, enabled=enabled)
 
 
 def sync_langpack(profile: Profile, source: Path | None) -> bool:
@@ -349,12 +331,11 @@ def default_moved(settings: dict[str, Any], name: str, want: prefs.PrefValue) ->
     return recorded.removeprefix(KEPT) != _digest(want)
 
 
-def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme: bool = False) -> list[str]:
-    """Apply pending seed prefs, render user.js, theme and start page.
+def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
+    """Apply pending seed prefs, render user.js and the start page.
 
-    ``builtin_theme``: the engine (the Nulavio build) ships its own window
-    theme, so the preview userChrome.css is not installed and any copy the
-    launcher wrote earlier is removed (it would override the built-in theme).
+    The preview's userChrome.css, which an earlier launcher wrote into the profile, is removed: the Nulavio build
+    ships its window theme, and the preview is no longer offered (#464).
 
     Must run while the profile is not in use. Returns the names of prefs that
     were newly written into prefs.js.
@@ -395,11 +376,7 @@ def prepare_for_launch(profile: Profile, context: dict[str, str], builtin_theme:
     settings["pending_prefs"] = {}
 
     enforced = [(p.name, prefs.substitute(p.value, variables)) for p in baseline_prefs() if p.mode == "enforce"]
-    if builtin_theme:
-        _remove_preview_theme(profile)
-    elif settings.get("theme", True):
-        enforced += [(p.name, p.value) for p in theme_prefs()]
-        _install_theme(profile)
+    _remove_preview_theme(profile)
     paths.write_private_file(profile.path / "user.js", prefs.render(enforced, USER_JS_HEADER))
     render_startpage(profile, settings, context)
     profile.save_settings(settings)
@@ -418,12 +395,6 @@ def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]])
 
 
 PREVIEW_THEME_MARKER = "Nulavio Preview chrome theme (Track A, userChrome.css)"
-
-
-def _install_theme(profile: Profile) -> None:
-    source = paths.repo_root() / "browser" / "theme" / "userChrome.css"
-    chrome_dir = paths.ensure_private_dir(profile.path / "chrome")
-    paths.write_private_file(chrome_dir / "userChrome.css", source.read_text(encoding="utf-8"))
 
 
 def _remove_preview_theme(profile: Profile) -> None:

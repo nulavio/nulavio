@@ -140,7 +140,7 @@
               "autonomy",
               "grant",
               "clear-grant",
-              "raw-automation",
+              "forget-raw-automation",
               "domains",
               "profiles",
               "routes",
@@ -246,10 +246,6 @@
             "type": "object",
             "properties": {
               "text": {
-                "type": "string",
-                "maxLength": 400
-              },
-              "rawText": {
                 "type": "string",
                 "maxLength": 400
               },

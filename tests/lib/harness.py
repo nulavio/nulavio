@@ -38,6 +38,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
+# Since the preview was removed (#464), the launcher's `setup` and `run` refuse an engine that is not the Nulavio
+# build. Pull-request CI still runs the suites on the distribution's Firefox, and says so with this variable; every
+# tool and engine the harness starts inherits it. It is not a way to use Nulavio.
+os.environ.setdefault("NULAVIO_TEST_DISTRIBUTION_FIREFOX", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from marionette import Marionette  # noqa: E402
@@ -191,6 +195,7 @@ class FixtureServer:
     def __init__(self):
         self.hits: list[str] = []
         self.agents: dict[str, str] = {}  # path (without the query) -> the User-Agent header it was last asked with
+        self.cookies: dict[str, str | None] = {}  # path (without the query) -> the Cookie header it was last asked with
         self._lock = threading.Lock()
         outer = self
 
@@ -199,6 +204,7 @@ class FixtureServer:
                 with outer._lock:
                     outer.hits.append(self.path)
                     outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
+                    outer.cookies[self.path.partition("?")[0]] = self.headers.get("Cookie")
                 if self.path.startswith("/slow-page"):
                     # Load-line fixture (tests/integration/test_load_line.py): a page whose body comes in ten pieces
                     # over `ms` milliseconds, with its length announced, so the engine reports real progress.
@@ -265,6 +271,22 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+        if path == "/opensearch.xml":
+            # OpenSearch fixture (test_search 19): a description whose search, suggestion or search-form address adds
+            # the parameter named in `search`, `suggest` or `form` (with a stand-in value) to its own.
+            base = f"http://127.0.0.1:{self.port}"
+            extra = {k: f"&amp;{query[k]}=stand-in" if query.get(k) else "" for k in ("search", "suggest", "form")}
+            xml = (
+                '<?xml version="1.0" encoding="UTF-8"?>'
+                '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">'
+                f"<ShortName>{urllib.parse.unquote_plus(query.get('name', 'Fixture+OpenSearch'))}</ShortName>"
+                f'<Url type="text/html" method="get" template="{base}/search-os?q={{searchTerms}}{extra["search"]}"/>'
+                '<Url type="application/x-suggestions+json" method="get"'
+                f' template="{base}/suggest-os?q={{searchTerms}}{extra["suggest"]}"/>'
+                f'<Url type="text/html" rel="searchform" template="{base}/form-os?from=nulavio{extra["form"]}"/>'
+                "</OpenSearchDescription>"
+            )
+            return xml.encode(), "application/opensearchdescription+xml", {}
         if path == "/edit-page":
             # Page-editing fixture (tests/integration/test_page_edit.py): a paragraph and a frame from another site
             # (localhost is not 127.0.0.1's site), which editing the page must leave as it is.
@@ -296,6 +318,27 @@ class FixtureServer:
                 "  e.target.textContent = 'editor:' + e.clipboardData.getData('text/plain'); });</script>"
             )
             return page.encode(), html, {}
+        if path == "/english-page":
+            # Translation fixture (tests/integration/test_web_services.py): English text, said to be English.
+            return (
+                (
+                    b'<!doctype html><html lang="en"><title>english-page</title>'
+                    b"<p id=text>The weather is nice today, and the library opens at nine in the morning.</p>"
+                ),
+                html,
+                {},
+            )
+        if path == "/service-links":
+            # Web services fixture (tests/integration/test_web_services.py): text to select, and a link to a
+            # public address (never fetched: the test cancels every request that is not to this server).
+            return (
+                (
+                    "<!doctype html><title>service-links</title><p id=text>Olá & mundo/?#</p>"
+                    '<p><a id=out href="https://example.org/artigo?x=1">artigo</a></p>'
+                ).encode(),
+                html,
+                {},
+            )
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.

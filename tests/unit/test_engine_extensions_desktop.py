@@ -1,4 +1,4 @@
-"""Engine command construction, extension integrity, desktop integration."""
+"""Engine command construction and extension integrity."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import desktop, doctor, engine, extensions  # noqa: E402
+from nulavio_launcher import doctor, engine, extensions  # noqa: E402
 
 FAKE_ENGINE = engine.Engine(path=Path("/usr/lib64/firefox/firefox"), version="158.0.1", vendor="Mozilla Firefox")
 
@@ -123,6 +123,71 @@ class EngineCommandTest(unittest.TestCase):
         nulavio = engine.Engine(path=Path("/opt/nulavio/nulavio"), version="158.0.1", vendor="Nulavio")
         self.assertTrue(nulavio.builtin_theme)
 
+    def test_setup_and_run_refuse_the_distribution_firefox(self):
+        # The preview is no longer offered (#464): only the test harness, which says so, runs Firefox.
+        nulavio = replace(FAKE_ENGINE, vendor="Nulavio")
+        engine.require_nulavio(nulavio, {})
+        engine.require_nulavio(FAKE_ENGINE, {engine.HARNESS_FIREFOX_ENV: "1"})
+        for environ in ({}, {engine.HARNESS_FIREFOX_ENV: "0"}, {engine.HARNESS_FIREFOX_ENV: ""}):
+            with self.subTest(environ=environ), self.assertRaisesRegex(engine.EngineError, "no longer offered"):
+                engine.require_nulavio(FAKE_ENGINE, environ)
+        from nulavio_launcher import cli
+
+        clean = {k: v for k, v in os.environ.items() if k != engine.HARNESS_FIREFOX_ENV}
+        for command in (["setup", "--yes"], ["run", "--dry-run"]):
+            with (
+                self.subTest(command=command),
+                tempfile.TemporaryDirectory() as home,
+                mock.patch.dict(os.environ, {**clean, "NULAVIO_HOME": home}, clear=True),
+                mock.patch.object(engine, "find_engine", return_value=FAKE_ENGINE),
+                mock.patch("sys.stderr") as stderr,
+            ):
+                self.assertEqual(cli.main(command), 1)
+                said = "".join(call.args[0] for call in stderr.write.call_args_list)
+                self.assertIn("install the Nulavio package", said)
+                self.assertEqual(list(Path(home).rglob("*")), [], "nothing is written before the refusal")
+
+    def test_package_of_asks_rpm_then_dpkg_by_exit_status(self):
+        # #470: the .deb's engine has no rpm database to ask, so the doctor's "updates" check asks dpkg too. An answer
+        # counts only with exit status 0: rpm says "not owned" in the person's language, on stdout (review of #507).
+        def which(name, rpm=True, dpkg=True):
+            return f"/usr/bin/{name}" if (name == "rpm" and rpm) or (name == "dpkg-query" and dpkg) else None
+
+        path = Path("/usr/lib/nulavio/nulavio")
+        rpm_q = ("rpm", "-qf", "--queryformat", "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\\n", str(path))
+        rpm_owned = {rpm_q: (0, "nulavio-160.0-0.7.fc44.x86_64")}
+        rpm_none = {rpm_q: (1, "o arquivo /usr/lib/nulavio/nulavio não pertence a nenhum pacote")}
+        version = {("dpkg-query", "-W", "-f=${Version}", "nulavio"): (0, "160.0-0.7")}
+        dpkg = {("dpkg-query", "-S", str(path)): (0, "nulavio: /usr/lib/nulavio/nulavio"), **version}
+        dpkg_arch = {("dpkg-query", "-S", str(path)): (0, "nulavio:amd64: /usr/lib/nulavio/nulavio"), **version}
+        diverted = {("dpkg-query", "-S", str(path)): (0, "diversion by other from: /usr/lib/nulavio/nulavio\n"
+                                                         "diversion by other to: /usr/lib/nulavio/nulavio.real")}  # fmt: skip
+        dpkg_none = {("dpkg-query", "-S", str(path)): (1, "")}
+        cases = (
+            (rpm_owned, {}, "nulavio-160.0-0.7.fc44.x86_64"),
+            (rpm_none, {"dpkg": False}, ""),
+            ({**rpm_none, **dpkg}, {}, "nulavio 160.0-0.7"),
+            (dpkg, {"rpm": False}, "nulavio 160.0-0.7"),
+            (dpkg_arch, {"rpm": False}, "nulavio 160.0-0.7"),
+            (diverted, {"rpm": False}, ""),
+            (dpkg_none, {"rpm": False}, ""),
+            ({}, {"rpm": False, "dpkg": False}, ""),
+        )
+
+        def answer(cmd, answers, **_kwargs):
+            code, out = answers.get(tuple(cmd), (1, ""))
+            return mock.Mock(returncode=code, stdout=out)
+
+        for answers, tools, owner in cases:
+            with (
+                self.subTest(answers=answers, tools=tools),
+                mock.patch.object(doctor.shutil, "which", side_effect=lambda n, t=tools: which(n, **t)),
+                mock.patch.object(doctor.subprocess, "run", side_effect=lambda cmd, a=answers, **k: answer(cmd, a, **k)) as run,
+            ):
+                self.assertEqual(doctor.package_of(path), owner)
+                for call in run.call_args_list:
+                    self.assertEqual(call.kwargs["env"]["LC_ALL"], "C")
+
     def test_version_output_parsing(self):
         self.assertEqual(engine.parse_version_output("Mozilla Firefox 158.0.1\n"), ("Mozilla Firefox", "158.0.1"))
         self.assertEqual(engine.parse_version_output("Nulavio Nulavio 158.0.1\n"), ("Nulavio", "158.0.1"))
@@ -208,30 +273,14 @@ class ExtensionLockTest(unittest.TestCase):
 
 
 class DesktopTest(unittest.TestCase):
-    def test_entry_never_registers_as_handler(self):
-        text = desktop.render_entry(Path("/opt/nulavio/bin/nulavio"))
-        self.assertNotIn("MimeType", text)
-        self.assertIn("Exec=/opt/nulavio/bin/nulavio run %u", text)
-        self.assertIn("StartupWMClass=nulavio-preview", text)
-        self.assertIn("Icon=nulavio-preview", text)
+    def test_the_preview_desktop_command_is_gone(self):
+        # #465: the packages install the menu entry; the preview's own `nulavio desktop` left with the preview.
+        from nulavio_launcher import cli
 
-    def test_exec_path_is_quoted(self):
-        text = desktop.render_entry(Path("/home/a b/$x/bin/nulavio"))
-        self.assertIn('Exec="/home/a b/\\$x/bin/nulavio" run %u', text)
-
-    def test_install_and_uninstall_touch_only_own_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            data_home = Path(tmp) / "share"
-            neighbour = data_home / "applications" / "other.desktop"
-            neighbour.parent.mkdir(parents=True)
-            neighbour.write_text("[Desktop Entry]\n")
-            with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(data_home), "NULAVIO_HOME": str(Path(tmp) / "n")}):
-                written = desktop.install(Path("/x/bin/nulavio"))
-                self.assertTrue(any(p.name == "nulavio-preview.desktop" for p in written))
-                self.assertTrue((data_home / "icons/hicolor/48x48/apps/nulavio-preview.png").exists())
-                removed = desktop.uninstall()
-            self.assertEqual(sorted(map(str, removed)), sorted(map(str, written)))
-            self.assertTrue(neighbour.exists())
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            cli.build_parser().parse_args(["desktop", "install"])
+        self.assertFalse((ROOT / "launcher" / "nulavio_launcher" / "desktop.py").exists())
+        self.assertFalse((ROOT / "packaging" / "linux" / "nulavio-preview.desktop.in").exists())
 
 
 if __name__ == "__main__":

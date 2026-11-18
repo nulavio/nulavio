@@ -139,6 +139,7 @@ def module_text(name: str) -> str:
 API_NAMES = ("nulavioSearch", "nulavioProfiles", "nulavioRouting", "nulavioConnect", "nulavioVault", "nulavioAI")
 API_NAMES += ("nulavioGuard", "nulavioPrivacy", "nulavioPasswords")
 API_NAMES += ("nulavioLayout", "nulavioPersonalise", "nulavioWhatsNew")
+API_NAMES += ("nulavioServices",)  # web services on a click, for translation (#156)
 
 
 class PrivilegedApiTest(unittest.TestCase):
@@ -175,6 +176,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
         self.assertEqual(apis["nulavioWhatsNew"]["parent"]["events"], ["startup"])  # the Help entry and the bar (#198)
+        self.assertNotIn("events", apis["nulavioServices"]["parent"])  # only the menus' calls
 
     def test_an_engine_module_is_imported_from_one_address(self):
         # 160.0-0.5 shipped NulavioWhatsNew importing SessionStore from an address the engine no longer has
@@ -235,7 +237,7 @@ class PrivilegedApiTest(unittest.TestCase):
         for name in ("toggleFocus", "copyLinkToHighlight", "setKeepAbove"):  # the tab the key was pressed in, nothing else (#157)
             fn = next(f for f in schema["functions"] if f["name"] == name)
             self.assertEqual(fn["parameters"], [{"name": "tabId", "type": "integer", "minimum": 0}])
-        self.assertEqual(self.manifest["commands"]["copy-link-to-highlight"]["suggested_key"]["default"], "Ctrl+Shift+L")
+        self.assertEqual(self.manifest["commands"]["copy-link-to-highlight"]["suggested_key"]["default"], "Ctrl+Alt+C")
         for name in ("state", "dismissChoice"):
             fn = next(f for f in schema["functions"] if f["name"] == name)
             self.assertEqual(fn["parameters"], [])
@@ -280,14 +282,17 @@ class SearchProvidersTest(unittest.TestCase):
 
     def setUp(self):
         self.text = module_text("NulavioSearch.sys.mjs")
-        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export class SearchSettingsError")]
+        block = self.text[self.text.index("export const PROVIDERS") : self.text.index("export const ACCOUNTS")]
         self.providers = {
             key: dict(re.findall(r'(\w+): ("[^"]*"|null|true|false)', body))
             for key, body in re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S)
         }
 
     def test_curated_providers(self):
-        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi"})
+        # The first-run three, then the ones offered on request (#151 added Ecosia, Qwant and Startpage, checked
+        # 2026-11-16 in docs/research/search-providers.md).
+        self.assertEqual(set(self.providers), {"duckduckgo", "brave", "mojeek", "kagi", "ecosia", "qwant", "startpage"})
+        self.assertEqual({key for key, p in self.providers.items() if p["firstRun"] == "true"}, {"duckduckgo", "brave", "mojeek"})
         for key, p in self.providers.items():
             with self.subTest(provider=key):
                 self.assertRegex(p["search"], r'^"https://[a-z0-9.-]+/[^"]*\{searchTerms\}')
@@ -304,6 +309,29 @@ class SearchProvidersTest(unittest.TestCase):
 
     def test_no_nulavio_endpoint(self):
         self.assertIsNone(re.search(r"nulavio\.net|nulavio\.(com|org|io)", self.text), "a Nulavio endpoint")
+
+    def test_a_new_profiles_search_choice_is_applied_at_its_first_start_only(self):
+        """#151 (and #453's decision): the choice file is read only at a profile's first start; later it is removed
+        unread, so a file left in a profile that has run cannot change its search."""
+        start = self.text[self.text.index("  startup() {") : self.text.index("  /** A choice file in a profile")]
+        self.assertIn("const firstStart = Services.prefs.getIntPref(PREF_MIGRATION, 0) < MIGRATION_VERSION;", start)
+        self.assertLess(start.index("const firstStart"), start.index("await this.migrate()"), "read before the migration")
+        self.assertRegex(
+            start, r"if \(firstStart\) \{\s*await this\.applyPending\(\);\s*\} else \{\s*await this\.#dropPending\(\);"
+        )
+        for name in ("carryable", "carrySearch", "nulavio-search-carry"):
+            self.assertNotIn(name, self.text, "taking a search to other profiles was left out (#453)")
+
+    def test_a_sign_in_is_read_from_a_cookies_name_never_its_value(self):
+        """#151: providers with accounts name their session cookie; the module reads only whether it is there."""
+        block = self.text[self.text.index("export const ACCOUNTS") : self.text.index("export class SearchSettingsError")]
+        accounts = dict(re.findall(r"(\w+): Object\.freeze\(\{(.*?)\}\)", block, re.S))
+        self.assertEqual(set(accounts), {"kagi"})
+        self.assertIn('cookie: "kagi_session"', accounts["kagi"])
+        self.assertIn('signIn: "https://kagi.com/signin"', accounts["kagi"])
+        body = self.text[self.text.index("  accounts() {") : self.text.index("  async choose(")]
+        self.assertIn("cookie.name === account.cookie", body)
+        self.assertNotIn(".value", body, "a cookie's value is read")
 
     def test_baseline_turns_remote_suggestions_and_trending_off(self):
         baseline = (ROOT / "browser" / "config" / "prefs" / "baseline.js").read_text(encoding="utf-8")
@@ -584,6 +612,18 @@ class GuardModuleTest(unittest.TestCase):
         self.assertEqual(review.count("guard.resolve("), 1)
 
 
+class LocaleKeysTest(unittest.TestCase):
+    def test_no_message_is_defined_twice(self):
+        """A key given twice keeps only the last one, so one feature shows another's words (#486: two features'
+        `err_invalid_choice`)."""
+        for name in ("pt_BR", "en"):
+            with self.subTest(locale=name):
+                text = (SHELL / "_locales" / name / "messages.json").read_text(encoding="utf-8")
+                # The engine keeps message names in lower case, so two that differ only in case are one.
+                keys = [key.lower() for key, _ in json.loads(text, object_pairs_hook=lambda pairs: pairs)]
+                self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
+
+
 class PasswordsTest(unittest.TestCase):
     """Flows B and D: pinned providers, and a content script that never reads what is typed."""
 
@@ -605,6 +645,18 @@ class PasswordsTest(unittest.TestCase):
                 self.assertEqual(provider["extension"]["version"], lock[ext_key]["version"])
                 self.assertTrue(provider["extension"]["url"].startswith("https://addons.mozilla.org/"))
                 self.assertEqual(provider["prefs"]["signon.rememberSignons"], False)
+
+    def test_new_tab_knows_every_provider(self):
+        """The new tab's password status names each external provider (review of #478: it had no 1Password)."""
+        config = json.loads((ROOT / "browser" / "config" / "providers.json").read_text())["providers"]
+        lock = {
+            e["key"]: e["id"]
+            for e in json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())["extensions"]
+        }
+        expected = {lock[p["extension"]] for p in config.values() if p["extension"]}
+        newtab = (SHELL / "newtab" / "newtab.js").read_text(encoding="utf-8")
+        block = newtab[newtab.index("const PROVIDERS = [") : newtab.index("];", newtab.index("const PROVIDERS = ["))]
+        self.assertEqual(set(re.findall(r'\["([^"]+)", "', block)), expected)
 
     def test_lookalike_check_reads_nothing_from_pages(self):
         child = module_text("NulavioLookalikeChild.sys.mjs")

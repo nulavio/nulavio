@@ -27,6 +27,9 @@ cp -a "$install_dir" "$pkg/usr/lib/nulavio"
 find "$pkg" -name __pycache__ -prune -exec rm -rf {} +
 printf '#!/bin/sh\nexec /usr/lib/nulavio/nulavio "$@"\n' > "$pkg/usr/bin/nulavio"
 chmod 0755 "$pkg/usr/bin/nulavio"
+# The diagnostics (#470): `nulavio` alone stays the browser.
+printf '#!/bin/sh\nNULAVIO_ENGINE=/usr/lib/nulavio/nulavio\nexport NULAVIO_ENGINE\nexec /usr/lib/nulavio/nulavio-tools/bin/nulavio doctor "$@"\n' > "$pkg/usr/bin/nulavio-doctor"
+chmod 0755 "$pkg/usr/bin/nulavio-doctor"
 cp "$repo/packaging/linux/nulavio.desktop" "$pkg/usr/share/applications/"
 for size in 16 32 48 64 128; do
     install -Dm0644 "$install_dir/browser/chrome/icons/default/default$size.png" \
