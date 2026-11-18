@@ -1,9 +1,10 @@
 name: perf
 
 # #80: Nulavio's own performance measures (scripts/perf/run.py) on a published release, against the published
-# release before it and stock Firefox, each time a release is published (and by hand). Report only: the table goes
-# into the job summary and the JSON into a 90-day artifact named after the release; thresholds are written once
-# there is history enough to tell a change from noise. It holds no secret and cannot sign, publish or attest:
+# release before it and stock Firefox, each time a release is published (and by hand). The table goes
+# into the job summary and the JSON into a 90-day artifact named after the release. Since #367 a measure that got worse
+# past its threshold (scripts/perf/gate.py) fails the run, with the reason in the summary; the release is already out.
+# It holds no secret and cannot sign, publish or attest:
 # both releases' archives are checked against their SHA256SUMS signed with the release key before they run.
 on:
   release:
@@ -23,7 +24,7 @@ concurrency:
 
 jobs:
   measure:
-    name: a release against the one before it and Firefox (report only)
+    name: a release against the one before it and Firefox
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     permissions:
@@ -44,6 +45,7 @@ jobs:
       - name: Build the measuring image (Mozilla's Firefox and its libraries, as the integration job's)
         run: docker build -t nulavio-perf -f ci/containers/ubuntu-itest.Containerfile ci/containers
       - name: Measure startup, memory and Speedometer (5 runs; the release, the one before it, Firefox)
+        id: measure
         # Docker's default seccomp profile blocks the user namespaces the engine's content sandbox needs (ci.yml). As in the
         # integration job (test_04), the run checks the sandbox is fully on in every run and fails otherwise.
         run: |
@@ -61,11 +63,17 @@ jobs:
           PREVIOUS: ${{ steps.releases.outputs.previous }}
         run: |
           {
-            printf '## Performance: %s against %s and Firefox (report only)\n\n' "$NEW" "$PREVIOUS"
+            printf '## Performance: %s against %s and Firefox\n\n' "$NEW" "$PREVIOUS"
             printf 'GitHub-hosted runner, headless, 5 runs a side; a change whose interval holds 0 is noise.\n\n```\n'
             cat perf/table.txt 2>/dev/null || echo "no table: see the log"
             printf '```\n'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: The gate (#367), each measure against its threshold; a failure is the maintainer's to read
+        if: ${{ !cancelled() && steps.measure.outcome == 'success' }}
+        shell: bash # -o pipefail: without it the pipe ends with tee's status and a failed gate passes
+        run: |
+          { printf '\n### Gate: each measure against its threshold (docs/architecture/performance.md, Thresholds)\n\n'
+            python3 -I scripts/perf/gate.py --strict perf/perf.json; } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
