@@ -157,7 +157,7 @@ class Vault {
   async lock(profileId) {
     const { path, isCurrent } = await this.#path(profileId);
     if (isCurrent) {
-      fail("is-current"); // a profile cannot lock itself while it is open
+      fail("lock-current"); // a profile cannot lock itself while it is open: "Lock now" closes its windows first
     }
     return helper({ op: "lock", path });
   }
@@ -241,7 +241,7 @@ class Vault {
   async rekey(profileId, { current } = {}) {
     const { path, isCurrent } = await this.#path(profileId);
     if (isCurrent) {
-      fail("unlocked"); // its files are in use by this very browser
+      fail("rekey-current"); // its files are in use by this very browser
     }
     const answer = await helper({ op: "rekey", path, current: checkSecret(current) }, REKEY_TIMEOUT_MS);
     const listed = items =>
