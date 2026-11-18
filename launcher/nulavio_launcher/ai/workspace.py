@@ -56,6 +56,17 @@ WORKSPACE_PREFS: dict[str, object] = {
     # that ended in a crash, which would load before the Bridge is connected.
     "dom.serviceWorkers.enabled": False,
     "browser.sessionstore.resume_from_crash": False,
+    # The engine's own Local Network Access decides on the address it connects to, after its own DNS lookup,
+    # which the Bridge cannot see: a name that answers the Bridge with a public address and the engine with a
+    # local one (rebinding, LESIS 929cb094, #243). A public page's request to this computer or the local network
+    # is refused here with no prompt (nobody should answer one in an agent's window), and a page's own top-level
+    # navigation (a pop-up, a link it follows) is checked too. The agent's own navigation is not: the Bridge
+    # decides that one, with local_resources.
+    "network.lna.enabled": True,
+    "network.lna.blocking": True,
+    "network.lna.allow_top_level_navigation": False,
+    "permissions.default.local-network": 2,
+    "permissions.default.loopback-network": 2,
 }
 
 
