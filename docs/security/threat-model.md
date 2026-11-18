@@ -113,7 +113,7 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Preconditions | Renderer compromise (S4) plus a parent/IPC or kernel bug |
 | Boundary | TB2, kernel |
 | Impact | Equivalent to T-LOCAL (see S13) |
-| Preventive | Upstream sandbox; fast patching; **opt-in outer confinement** `nulavio run --confined` (bubblewrap): the browser sees only its profile and Downloads in the home folder, its writes elsewhere stay in memory, and the engine's sandbox is unchanged on Fedora ([spikes](phase5-spikes.md#bubblewrap)); on Ubuntu the `.deb`'s AppArmor profile keeps user namespaces available to the engine's sandbox, except inside the confined mode, where Ubuntu's bubblewrap policy removes them, so the confined mode refuses to start there (R46, [#282](https://github.com/nulavio/nulavio/issues/282)). Flatpak not now, SELinux module not adopted ([spikes](phase5-spikes.md)) |
+| Preventive | Upstream sandbox; fast patching; **opt-in outer confinement** `nulavio run --confined` (bubblewrap; from a source checkout only, not part of 1.0, #283, #466): the browser sees only its profile and Downloads in the home folder, its writes elsewhere stay in memory, and the engine's sandbox is unchanged on Fedora ([spikes](phase5-spikes.md#bubblewrap)); on Ubuntu the `.deb`'s AppArmor profile keeps user namespaces available to the engine's sandbox, except inside the confined mode, where Ubuntu's bubblewrap policy removes them, so the confined mode refuses to start there (R46, [#282](https://github.com/nulavio/nulavio/issues/282)). Flatpak not now, SELinux module not adopted ([spikes](phase5-spikes.md)) |
 | Detective | None reliable inside the browser |
 | Limitations | Out-of-browser containment is the only further layer |
 | Tests | Sandbox presence only (we cannot test escapes); `test_confine`, `test_confined` (what a confined browser can reach) |
@@ -392,6 +392,22 @@ The item was removed before it shipped (#460, 2026-11-17): Nulavio no longer ask
 | Limitations | A local name not on the suffix list (a LAN host named like a public one) is not recognised: names are not resolved to decide. A token a site put in its own query goes with the address |
 | Tests | `test_web_services` (addresses, refusals, the request recorded and cancelled, private windows) |
 | Residual | Medium for the token in a query; listed as R80 |
+
+
+### S24 — Nulavio's automatic updates run as root (#241)
+
+| Field | |
+|---|---|
+| Assets | The system: what runs as root; the installed browser's version |
+| Adversary | T-LOCAL: a program of the person's account; a repository or mirror answering for Nulavio's |
+| Preconditions | The RPM or .deb package is installed and the person turned automatic updates on (the administrator's password, through polkit) |
+| Boundary | TB24 |
+| Impact | At midnight and noon, as root, the package manager updates the `nulavio` package: with dnf from Nulavio's repository only (`--from-repo=nulavio`), with APT from the highest version among the system's sources |
+| Preventive | Off after the install; nothing runs at install. Turning it on or off is the only privileged step, with the administrator's password every time, and runs one fixed helper that takes only `on` or `off`. The service and the timer require the flag file, update only the `nulavio` package, and use the package manager's own signature checks (`gpgcheck` and `repo_gpgcheck` in Nulavio's RPM repository, `Signed-By` in its APT source) |
+| Detective | `systemctl status nulavio-update.timer`, `journalctl -u nulavio-update`; the package manager's own history |
+| Limitations | With APT the update trusts every source the system has: one the administrator added that also offers a `nulavio` package could provide it (R83). An update may pull in new dependencies from the system's repositories, as a manual update does; it never removes a package (`--no-remove`; dnf refuses without `--allowerasing`). With `-y`, dnf may import a new signing key from the repository's `gpgkey` address at a key change without showing its fingerprint (not verified). The flag file survives the package's removal, so a later install updates again without asking unless it was deleted (the download pages' removal steps delete it). A program of the person's account can start `pkexec` too, but gets nothing without the administrator's password |
+| Tests | `test_track_b`, `check_rpm.sh`, `check_deb.sh` |
+| Residual | Low: the same trust as a manual `dnf upgrade nulavio` or `apt upgrade`, on a schedule; R83 |
 
 ---
 

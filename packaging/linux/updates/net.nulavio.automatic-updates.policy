@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Nulavio's automatic updates (#241): the one privileged step, turning them on or off. The administrator's
+     password every time, also for an active local session. -->
+<policyconfig>
+  <vendor>Nulavio</vendor>
+  <vendor_url>https://nulavio.net</vendor_url>
+  <action id="net.nulavio.automatic-updates">
+    <description>Turn Nulavio's automatic updates on or off</description>
+    <description xml:lang="pt_BR">Ligar ou desligar as atualizações automáticas do Nulavio</description>
+    <message>Authentication is required to change how Nulavio is updated</message>
+    <message xml:lang="pt_BR">É preciso autenticar para mudar como o Nulavio é atualizado</message>
+    <icon_name>nulavio</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/nulavio/automatic-updates</annotate>
+  </action>
+</policyconfig>

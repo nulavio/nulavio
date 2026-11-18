@@ -1,0 +1,18 @@
+{
+  "version": "160.0.1-0.2",
+  "date": "2026-11-18",
+  "channel": "alpha",
+  "firefox": "160.0.1",
+  "pt-BR": {
+    "summary": "Atualizações automáticas do Nulavio, ligadas por você: duas vezes por dia o sistema instala a versão nova do pacote, sem esperar o navegador.",
+    "new": [
+      "Atualizações automáticas, em Configurações e na primeira execução: ligadas, o sistema instala a versão nova do Nulavio à meia-noite e ao meio-dia, só do repositório do Nulavio. Ligar e desligar pedem a senha de administrador; nada roda até você ligar."
+    ]
+  },
+  "en-US": {
+    "summary": "Automatic updates of Nulavio, turned on by you: twice a day the system installs the new version of the package, without waiting for the browser.",
+    "new": [
+      "Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on."
+    ]
+  }
+}

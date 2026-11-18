@@ -11,6 +11,159 @@ Update an installed Nulavio with `sudo dnf upgrade nulavio`. Only the latest rel
 
 <!-- releases -->
 
+<!-- release:v160.0.1-0.1 -->
+## [160.0.1-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.1) — 2026-11-18
+
+Nulavio 160.0.1-0.1, built from Firefox 160.0.1 (commit 419967a45604).
+
+### What's new
+
+A security update of the alpha, with the engine on Firefox 160.0.1 and Mozilla's security fixes. Also, sites get even less to recognise your computer by, a site can be stopped from blocking copy and paste, and the window gains a loading line.
+
+#### Changes that need your attention
+
+- Sites are no longer told that your system asks for less motion or more contrast, because that helps recognise you from one site to the next. Sites then show their animations, and pages scroll smoothly.
+- If you rely on those settings, turn on Let sites see my motion and contrast preferences in Settings, Privacy and security. When your system has one of them on, a bar offers it once.
+- Copying a link to the selected text is now Ctrl+Alt+C instead of Ctrl+Shift+L, which is a key of Bitwarden, 1Password and Proton Pass.
+- Nulavio's KRunner plugin is gone: KDE's KRunner already opens an address or a search in the default browser. If you used Add to KRunner, delete krunner/dbusplugins/net.nulavio.krunner.desktop and dbus-1/services/net.nulavio.krunner.service under ~/.local/share (or XDG\_DATA\_HOME, if set).
+
+#### What to do
+
+- If you used the preview, which ran Nulavio's profile on the distribution's Firefox: it is no longer offered. Install the package. The preview's profiles stay in ~/.local/share/nulavio/profiles, and the project's README says how to bring their bookmarks and passwords along.
+- If you installed the Flatpak bundle of an earlier version: it never updates, and releases no longer carry it. On Fedora or Ubuntu, install the RPM or APT package, export bookmarks and passwords in the Flatpak and import them, then remove it. Elsewhere, remove it and wait for Flathub.
+- If you gave an AI agent raw automation: it was removed from Nulavio. The agent keeps working through Nulavio's tools, with your permissions and the activity log; an automation library of its own needs a Firefox profile outside Nulavio. Reconnect the agent after updating.
+- If you ran nulavio desktop install for the preview: the command is gone. Delete ~/.local/share/applications/nulavio-preview.desktop and the nulavio-preview icons under ~/.local/share/icons/hicolor (or XDG\_DATA\_HOME, if set); the package installs its own menu entry.
+
+#### What is new
+
+- The sound a page renders to recognise your computer is now different on every site, and the 1920 by 1080 screen holds for every part of a page: frames, pop-ups and images too. What you hear does not change.
+- Allow copy and paste on this site, in the shield's panel: for a site that blocks copying, pasting or the page menu. Off by default, kept per site, and listed in Settings with the other site exceptions.
+- Hide the page title in the window title, in Settings, Appearance: the title bar, the taskbar and screen-sharing pickers show Nulavio, not the page's title.
+- Immersive is in the View menu, next to Full Screen, and the first run offers it when the tabs are in the side list.
+- A thin line along the top of the page while it loads, off by default: turn it on in Settings, Appearance, Show a loading line at the top of the page.
+- Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser.
+
+#### Fixes
+
+- The engine moves to Firefox 160.0.1, with the security fixes of Mozilla's advisory mfsa2026-130, of high severity.
+- On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the nulavio-doctor command says when it is missing and what to install.
+- The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line.
+
+In Portuguese and English: https://nulavio.net/novidades/160.0.1-0.1/ and https://nulavio.net/en/whats-new/160.0.1-0.1/
+
+### Features
+
+- privacy: a per-site switch lets a site's pages no longer block copy, paste and the page menu (#386) ([3b2f36a8e271](https://github.com/nulavio/nulavio/commit/3b2f36a8e2712f6ed11f620d35b68ca3a8d5ae20))
+- shell: edit the text of a page in place, from the page menu or Ctrl+Alt+E (#385) ([0355da12b276](https://github.com/nulavio/nulavio/commit/0355da12b276d208d7d93a3e86f6b0a579cf0523))
+- settings: a switch keeps the page's title out of the window's title (D-UX17) (#390) ([fe334c49c81b](https://github.com/nulavio/nulavio/commit/fe334c49c81bed9a01c10969e7e5dc88d0d2ee41))
+- newtab: the first run's layout step offers Imersivo with the side tab list (#391) ([8c13ef83ede4](https://github.com/nulavio/nulavio/commit/8c13ef83ede4e417fda9c56d2f519dc8d628dfcb))
+- layout: Imersivo in the View menu, next to Full Screen (#393) ([f8870a30de70](https://github.com/nulavio/nulavio/commit/f8870a30de70929457f949da523a84d878ffb9ae))
+- window: keep a window above the others on KDE Plasma, from the View menu or Ctrl+Alt+K (#392) ([827413fd02b0](https://github.com/nulavio/nulavio/commit/827413fd02b064147970a6ffb333b3cf43b910b1))
+- window: a calm page-loading line along the top of the page (#394) ([814396269086](https://github.com/nulavio/nulavio/commit/8143962690867baf1a904b1ce2b71d004fdc4b7c))
+- fingerprinting: sites are not told the system's motion and contrast preferences, unless the person says so (#380) ([42750b1647d8](https://github.com/nulavio/nulavio/commit/42750b1647d866bde3536cdb0ccb7b96886a8eb6))
+- fingerprinting: rendered audio differs per site, and the engine gives every document one screen size (#402) ([7f9e6f5210b5](https://github.com/nulavio/nulavio/commit/7f9e6f5210b572b800fb53cbcfeb0298be6931ed))
+- ci: a nightly rehearsal of main runs the tests that pull requests skip, and an issue says when it fails (#431) ([3d399f0a67ca](https://github.com/nulavio/nulavio/commit/3d399f0a67cab7b6ff609b2f0c6a23230d31cb68))
+- release: the engine's Rust networking check is read from a build made for it, and gates the pin and publishing (#438) ([68ec0575faad](https://github.com/nulavio/nulavio/commit/68ec0575faad9116a3aa0ce2f9abef314a3473e1))
+- release: a workflow makes the Rust networking reading and attests it, and signing requires that attestation (#457) ([ddd0c8bae220](https://github.com/nulavio/nulavio/commit/ddd0c8bae220a6a6108b9b82270f4bbe23ead647))
+- build: C++ and Rust link-time optimisation across each other (cross-language ThinLTO) (#371) ([d4d7aef595f8](https://github.com/nulavio/nulavio/commit/d4d7aef595f861f5fd1dd8f3ff80e1ec5be40f84))
+- release: the attested networking reading names the Rust compiler, and a release built with another is refused (#481) ([aaeb03fe63c8](https://github.com/nulavio/nulavio/commit/aaeb03fe63c8dab5b33c86799d65422ac1dcb323))
+- search: choose a profile's search provider in one step, signed in where it has accounts (#442) ([6178b3a86c5d](https://github.com/nulavio/nulavio/commit/6178b3a86c5db0bb191e905e0d1b0f5aa942175c))
+- search: an account-based provider is said before it is chosen, and no search address carries a session (#484) ([114090a8fe12](https://github.com/nulavio/nulavio/commit/114090a8fe12004fd1ea21d7485a17947452276c))
+- passwords: 1Password as a credential provider (#478) ([26a8177dee3f](https://github.com/nulavio/nulavio/commit/26a8177dee3f5f8826c242a685a3587666938a6f))
+- services: translation with a web service the person adds, used only on a click (#443) ([99156580bb08](https://github.com/nulavio/nulavio/commit/99156580bb088977125ec66f90714464e198375b))
+- launcher: the Track A preview is no longer a way to use Nulavio (#500) ([eeb66ce8b353](https://github.com/nulavio/nulavio/commit/eeb66ce8b3535e53c28c2af633998eb021647341))
+- release: releases stop offering the Flatpak bundle, which never updates, until Flathub (#501) ([82bc55dde68c](https://github.com/nulavio/nulavio/commit/82bc55dde68c1d9fa5acff3340e0825c4f5cc3b1))
+- window: the page-loading line is off in a new profile, with a switch in Settings (#505) ([e3f665dd9b74](https://github.com/nulavio/nulavio/commit/e3f665dd9b74c0283b5383cd13779792c23d0e59))
+- shell: Copy Link to Highlight moves to Ctrl+Alt+C, off the password managers' Ctrl+Shift+L (#506) ([dabad4517be6](https://github.com/nulavio/nulavio/commit/dabad4517be6d7698bbfb508e6e296736431361f))
+- ai: raw automation is removed from the AI Bridge: agents act only through the policy (#504) ([e94674979f5a](https://github.com/nulavio/nulavio/commit/e94674979f5a173a14a1431ce9f69009712b8b2f))
+- packaging: nulavio-doctor runs the diagnostics from a package install (#507) ([763cc23329ed](https://github.com/nulavio/nulavio/commit/763cc23329ed5839033333b50609e0cdada427c5))
+- launcher: nulavio desktop install is removed with the preview (#511) ([08f6cee33bc6](https://github.com/nulavio/nulavio/commit/08f6cee33bc690c9d303f2aee461cf42ea83ae9f))
+- shell: editing a page's text leaves the browser for an extension the documentation names (#512) ([0ed225117eb1](https://github.com/nulavio/nulavio/commit/0ed225117eb15d00c8906e68045e8d1ae1901cb4))
+- shell: keeping a window above others is left to KDE's own window menu (#513) ([a4b26522fde0](https://github.com/nulavio/nulavio/commit/a4b26522fde0148b16f8a78c0526c00203418184))
+- connect: the KRunner plugin is removed (#514) ([270b142a43a9](https://github.com/nulavio/nulavio/commit/270b142a43a95e4fb42b0f6ad0706619a79ca835))
+
+### Fixes
+
+- packaging: the packages ask for the system's codec library, and doctor names it when it is missing (#401) ([e6ccc59caf84](https://github.com/nulavio/nulavio/commit/e6ccc59caf84829c42a62d8a8d112fe01682a387))
+- launcher: a seeded preference nobody changed follows the baseline (#400) ([f887797e523c](https://github.com/nulavio/nulavio/commit/f887797e523ccfc89898613be215a51cba670539))
+- newtab: the first run's layout card after Imersivo: its tests, its error state and 150 % on a small screen (#404) ([d1aa8cac84ca](https://github.com/nulavio/nulavio/commit/d1aa8cac84ca47fe4c30f46d451c78c079b804d9))
+- fingerprinting: a site with its own set follows a change of the general set at once (#410) ([aede8f29a37d](https://github.com/nulavio/nulavio/commit/aede8f29a37d4ab30f5fca97dd5263340d1bfc99))
+- release: an older run's publish job cannot roll the repositories back (#418) ([2c1b9b38880e](https://github.com/nulavio/nulavio/commit/2c1b9b38880e33488ff504073ab4d8be2a57486e))
+- vault: a refused unlock writes nothing into the volume (#432) ([55f4c5e84be3](https://github.com/nulavio/nulavio/commit/55f4c5e84be36e1f908ef9a43d984e1afcdcd486))
+- vault: the key file of a profile being protected is saved once a stop can be undone (#433) ([ec3f93cf421f](https://github.com/nulavio/nulavio/commit/ec3f93cf421f833b8fe012f4db2f5d3102713014))
+- vault: the lock between two protections of a profile counts only on the file its name points to (#480) ([8cf180d2d9e8](https://github.com/nulavio/nulavio/commit/8cf180d2d9e8af5f5cc960a0958ec26e2510671b))
+- settings: the add-provider button keeps the provider's name for assistive tech only (#487) ([05ccf5319a8b](https://github.com/nulavio/nulavio/commit/05ccf5319a8ba7b46acb43a994a9e091e909f3dc))
+- filter: pin uBlock Origin 1.76.4, past the element-picker XSS (GHSA-cmqw-9r2w-6wv2) (#416) ([40706ba272f3](https://github.com/nulavio/nulavio/commit/40706ba272f36ccec68621055a83068142efe131))
+- profiles: a refused search choice in a new profile has its own message (#517) ([5b71ab627605](https://github.com/nulavio/nulavio/commit/5b71ab62760546a167cb18df2e870cc8aa00d247))
+- ci: the Companion's Gradle steps run again when Maven Central rate-limits the runner (#518) ([bdf68ec9c313](https://github.com/nulavio/nulavio/commit/bdf68ec9c313b90e28bff94c10f18ea3642fd10e))
+- ai: an address agents never act on is refused before the tool's own question (#520) ([b4885d7b9a45](https://github.com/nulavio/nulavio/commit/b4885d7b9a450ce38d413af271434adf9861aef3))
+- ci: the Gradle retry waits 2 and then 5 minutes (#536) ([425d80cf7dfa](https://github.com/nulavio/nulavio/commit/425d80cf7dfa48af9de0de3f9f0fd758312718e8))
+
+### Documentation
+
+- release: what is new in 160.0-0.7, as main stands (#422) ([a1e534f14a18](https://github.com/nulavio/nulavio/commit/a1e534f14a1819334b88c2b0078c9b68d67a2059))
+- review: every reviewer reads the security invariants from REVIEW.md (#424) ([55c0ccbc7ddd](https://github.com/nulavio/nulavio/commit/55c0ccbc7ddd9252165e23d806970ec0e483d664))
+- security: the changelog entries for 160.0-0.5 and 160.0-0.6 (#426) ([9f471442f25c](https://github.com/nulavio/nulavio/commit/9f471442f25cbd4af463577e89cf45e0c65e06dc))
+- vault: a lost record is restored from a backup, and the page says how to make one (#429) ([52d910b0f1f0](https://github.com/nulavio/nulavio/commit/52d910b0f1f0475b72c14703469fcb79070d0193))
+- release: the independent review's summary is in the release criteria (#441) ([549e30c1fbbb](https://github.com/nulavio/nulavio/commit/549e30c1fbbb54582a87b8e0a78efab52aecd06e))
+- product: review every feature before the 1.0 freeze, with a recommendation each (#456) ([4bbf2133a5b1](https://github.com/nulavio/nulavio/commit/4bbf2133a5b12254d171f34a8f88e2bc2d48dfe1))
+- product: the feature review says its milestones and closures are applied (#471) ([a5b3081206e2](https://github.com/nulavio/nulavio/commit/a5b3081206e21274e9f9e829dcdcac0f00cdddac))
+- research: the first video call record, Jitsi Meet as a guest with no account (#477) ([901a1f39eed0](https://github.com/nulavio/nulavio/commit/901a1f39eed00aa4b656712152bb969c3a6d5625))
+- performance: the first build with cross-language LTO, measured (#479) ([29f2dee61efb](https://github.com/nulavio/nulavio/commit/29f2dee61efbde91846b1656c7df7242f1427ebb))
+- what the LTO build is against Mozilla's, where the reading's compiler comes from, and why Jitsi offered no end-to-end encryption (#485) ([819d5259ff9f](https://github.com/nulavio/nulavio/commit/819d5259ff9f03be42269d4c9f3370f067f6140f))
+- process: the Actions event policy that keeps the AI review running (#499) ([a032ac09fd28](https://github.com/nulavio/nulavio/commit/a032ac09fd28d9273c5462faf2e45e80d678260d))
+- confined mode is out of 1.0's promise until a package can start it (#515) ([1fd3941d150a](https://github.com/nulavio/nulavio/commit/1fd3941d150a9cfd2a47b4d3e2809376820983eb))
+- perf: a new profile's first minute is uBlock Origin compiling its lists (#510) ([a6c1e587a2aa](https://github.com/nulavio/nulavio/commit/a6c1e587a2aac86056742d46dcd9b804bd1271dc))
+
+### Tests
+
+- tabs: the engine's tab groups checked in the Nulavio build, per arrangement (#395) ([59ef65f32890](https://github.com/nulavio/nulavio/commit/59ef65f32890a2e56c70f3ee51eb8f2949a67fb1))
+- split-view: the engine's split view checked with the band, Imersivo and both arrangements (#396) ([e7b7e2388936](https://github.com/nulavio/nulavio/commit/e7b7e2388936e78a289678b8617cfb325e84d52e))
+- fingerprinting: a weekly check that PrivacyTests' probes are the ones copied here (#399) ([b82245423752](https://github.com/nulavio/nulavio/commit/b8224542375202e826829b877fbb4fc03b231b02))
+- Settings' navigation never shows a pane with nothing to use (#407) ([dde32d4a20e6](https://github.com/nulavio/nulavio/commit/dde32d4a20e6fc1b09f6a51837a6d166a0c4b319))
+- routing inside a split view, its menu in both languages, and where to read about it (#408) ([57dabe72090b](https://github.com/nulavio/nulavio/commit/57dabe72090bd8569fffdc845acb5193d8396878))
+- two tests that failed once in a whole-suite run wait or allow for rounding (#409) ([84be37ed63f0](https://github.com/nulavio/nulavio/commit/84be37ed63f034e9986ccbb0b6e7157d18daf199))
+- tab groups come back from the closed groups and after a restart, and keep through Imersivo (#414) ([9f1bd1dc602d](https://github.com/nulavio/nulavio/commit/9f1bd1dc602d94118fcaab7dccd05e625fd07cd9))
+- a wait for a page to be ready survives the moment the document has no root (#435) ([ce649092bac0](https://github.com/nulavio/nulavio/commit/ce649092bac07f7a1c6c2f88dd31fff877058ae4))
+- split view and load line wait for what they read, and one slow test leaves nothing to the next (#439) ([0afb537cece4](https://github.com/nulavio/nulavio/commit/0afb537cece4b5e80a04f18cfe89c2b41ec00bc3))
+- allow-copy: after the switch, wait for the reloaded page and not for the one that is leaving (#445) ([517afb6f88de](https://github.com/nulavio/nulavio/commit/517afb6f88def17fcf7834b8564673145ff66787))
+- content-filter: wait for uBlock Origin to say it loaded its lists again (#474) ([51d5d2ad29be](https://github.com/nulavio/nulavio/commit/51d5d2ad29be242849829fb53083a72138150b0e))
+- drm: the Widevine stream must play past its clear start, and stop there without a licence (#475) ([f5c3ca0f6d0b](https://github.com/nulavio/nulavio/commit/f5c3ca0f6d0b9d797dfef4461fd409f9b96f538d))
+- drm: each step of the ClearKey playback has a name and a limit (#476) ([43a41674cd05](https://github.com/nulavio/nulavio/commit/43a41674cd05e88b34f048fa92f90b2f8d35277d))
+- engine: the sandbox check says why it cannot run in an AddressSanitizer build, and only there (#489) ([db53a39659f2](https://github.com/nulavio/nulavio/commit/db53a39659f2840b587bcf9b9ffe2dd6fdb7ba27))
+- temporary: close the temporary instance once its window is up (#496) ([5cae029ef7d6](https://github.com/nulavio/nulavio/commit/5cae029ef7d6d9ecb58543fd86647cc14bbda3e8))
+
+### Maintenance
+
+- release: record v160.0-0.6 (#425) ([3f63d3440a71](https://github.com/nulavio/nulavio/commit/3f63d3440a71ede7c43a561f3c0ed5bdfae22daa))
+- brand: remove the raw-automation tokens left after #463 (#521) ([419967a45604](https://github.com/nulavio/nulavio/commit/419967a4560488c3cd44c17d2e604cd6d494fcf8))
+
+### Build and CI
+
+- engine: Firefox 160.0.1, urgent security update (mfsa2026-130) (#524) ([c0d31d6447e6](https://github.com/nulavio/nulavio/commit/c0d31d6447e6a161533d27d1f840a745d00ce721))
+
+[Full changelog](https://github.com/nulavio/nulavio/compare/v160.0-0.6...419967a4560488c3cd44c17d2e604cd6d494fcf8)
+
+### Install and verify
+
+Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/
+
+On Ubuntu, `nulavio.sources` from the download page has the SHA-256 `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`.
+
+Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.1.0.apk`. Its signing certificate's SHA-256 is `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (`apksigner verify --print-certs nulavio-companion-0.1.0.apk` prints it).
+
+Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`): check that first, as the download page shows. Each also has a GitHub build-provenance attestation from the release workflow on `main`; check it with both of these options:
+
+```sh
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
+```
+
+[Build and test run](https://github.com/nulavio/nulavio/actions/runs/44252459660).
+
+[Security changelog](https://github.com/nulavio/nulavio/blob/main/docs/security/changelog.md) and [published advisories](https://github.com/nulavio/nulavio/security/advisories). Commit categories are not a vulnerability assessment.
+
+
 <!-- release:v160.0-0.6 -->
 ## [160.0-0.6](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.6) — 2026-11-16
 
