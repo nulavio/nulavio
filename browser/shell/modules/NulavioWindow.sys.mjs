@@ -39,7 +39,10 @@ const WIDGET = "nulavio-band-widget";
 const QUICK_ACTION = "nulavio-assistant"; // the address bar quick action (UX5-H)
 // UX6 (D8): Nulavio's other quick actions after ">". None of them unlocks, resumes, grants or turns
 // anything off (tests/unit/test_personalisation.py); lock and AI actions have their own places.
-const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus"]);
+// #321 adds Immersive, a temporary window, the profile menu and Copy Link to Highlight, each what its key or button
+// already does.
+const QUICK_ACTIONS = Object.freeze([QUICK_ACTION, "nulavio-settings", "nulavio-focus", "nulavio-immersive",
+  "nulavio-temporary", "nulavio-profiles", "nulavio-highlight"]);
 const SHELL = "shell@nulavio.net";
 const HTML = "http://www.w3.org/1999/xhtml";
 // nulavio-ai-agent-files-changed: the driving agent's registry or the emergency stop changed (NulavioAI).
@@ -1553,6 +1556,82 @@ class WindowUI {
             lazy.NulavioLayout.toggleFocus(win, say).catch(() => {}); // announced in the window
           }
           return null;
+        },
+      });
+      // #321: what Ctrl+Alt+I, the profile menu's "Nova janela temporária", the profile button (Alt+Shift+P) and
+      // Ctrl+Alt+C already do, found by their words. Each runs in the window it was picked in.
+      const icon = WebExtensionPolicy.getByID(SHELL)?.getURL("shared/nulavio-symbol-mono.svg") ?? "";
+      const sayIn = win => {
+        const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+        return key => win.A11yUtils?.announce({ raw: extension?.localizeMessage(key) ?? key }).catch(() => {});
+      };
+      lazy.ActionsProviderQuickActions.addAction("nulavio-immersive", {
+        commands: ["imersivo", "modo imersivo", "immersive", "immersive mode"],
+        icon,
+        label: "nulavio-quickaction-immersive",
+        isUnsupported: workspace, // never Immersive where an agent drives the window (ADR 0009)
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            try {
+              lazy.NulavioLayout.setImmersive(!lazy.NulavioLayout.immersive().on, sayIn(win)); // a locked pref says so
+            } catch (e) {
+              // Already announced in the window.
+            }
+          }
+          // The keyboard goes back to the page, as with Ctrl+Alt+I: left in the address bar, it would hold the
+          // toolbar shown over the page in the mode that hides it.
+          return { focusContent: true };
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-temporary", {
+        // Phrases, not single words: the engine also matches an action's words inside what is typed for a search.
+        commands: ["janela temporária", "janela temporaria", "nova janela temporária", "nova janela temporaria",
+          "temporary window", "new temporary window"],
+        icon,
+        label: "nulavio-quickaction-temporary",
+        isUnsupported: workspace,
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          const say = win ? sayIn(win) : () => {};
+          // As the profile menu's item does: said while it opens, and why when it cannot.
+          say("profilesTemporaryOpening");
+          lazy.NulavioProfiles.openTemporary().catch(e => {
+            console.error(e);
+            const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+            const key = `err_${String(e?.code ?? "unexpected").replaceAll("-", "_")}`;
+            say(extension?.localizeMessage(key) ? key : "err_unexpected");
+          });
+          return { focusContent: true };
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-profiles", {
+        commands: ["perfis", "trocar de perfil", "mudar de perfil", "switch profile", "change profile"],
+        icon,
+        label: "nulavio-quickaction-profiles",
+        isUnsupported: workspace,
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            // The profile menu as the band's name opens it: the button's own action (the tab's site for "always
+            // open here"), or the menu in a tab when the person removed the button. It filters profiles by name.
+            this.#profiles(win);
+          }
+          return null;
+        },
+      });
+      lazy.ActionsProviderQuickActions.addAction("nulavio-highlight", {
+        commands: ["link para o destaque", "copiar link para o destaque", "copiar um link", "link para o texto",
+          "copy link to highlight", "copy a link", "link to highlight"],
+        icon,
+        label: "nulavio-quickaction-highlight",
+        isUnsupported: workspace,
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          if (win) {
+            lazy.NulavioLayout.copyLinkToHighlight(win.gBrowser.selectedBrowser, sayIn(win)).catch(() => {});
+          }
+          return { focusContent: true };
         },
       });
     } catch (e) {

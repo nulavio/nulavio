@@ -558,6 +558,18 @@
     #sidebar-container:-moz-locale-dir(rtl) {
       translate: calc(100% + var(--nv-space-5)) 0;
     }
+    /* #346: the tab list on the other side (sidebar.position_start false) leaves by that side and comes back from
+       that edge. As specific as the rules that bring it in below, and before them, so they still win. */
+    &[sidebar-positionend] #nulavio-immersive-edge {
+      inset-inline: auto 0;
+    }
+    &[sidebar-positionend] #sidebar-container {
+      inset-inline: auto 0;
+      translate: calc(100% + var(--nv-space-5)) 0;
+    }
+    &[sidebar-positionend] #sidebar-container:where(:-moz-locale-dir(rtl)) {
+      translate: calc(-100% - var(--nv-space-5)) 0;
+    }
     /* #238: while the toolbar is shown, the tab list starts under it, as it does with the mode off: the toolbar
        never covers the list's top and the list never covers the toolbar. NulavioWindow measures the toolbars. */
     &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #sidebar-container,

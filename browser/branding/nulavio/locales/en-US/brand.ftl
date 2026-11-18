@@ -19,7 +19,12 @@ trademarkInfo = Nulavio is built on the Gecko engine by Mozilla. Nulavio is not 
 
 nulavio-quickaction-assistant = Ask the assistant about this page
 
-## Nulavio's other quick actions after ">" (UX6): open its settings, and turn the Focus layout on or off.
+## Nulavio's other quick actions after ">" (UX6, #321): its settings, the Focus layout, Immersive, a temporary window,
+## the profile menu and a link to the selected text.
 
 nulavio-quickaction-settings = Open Nulavio settings
 nulavio-quickaction-focus = Turn the Focus layout on or off
+nulavio-quickaction-immersive = Turn Immersive on or off
+nulavio-quickaction-temporary = New temporary window
+nulavio-quickaction-profiles = Switch profile
+nulavio-quickaction-highlight = Copy a link to the selected text

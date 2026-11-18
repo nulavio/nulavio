@@ -19,7 +19,12 @@ trademarkInfo = O Nulavio é construído sobre o motor Gecko da Mozilla. O Nulav
 
 nulavio-quickaction-assistant = Perguntar ao assistente sobre esta página
 
-## As outras ações rápidas do Nulavio depois de ">" (UX6): abrir as configurações e ligar ou desligar o layout Foco.
+## As outras ações rápidas do Nulavio depois de ">" (UX6, #321): as configurações, o layout Foco, o Imersivo, uma janela
+## temporária, o menu de perfis e um link para o texto selecionado.
 
 nulavio-quickaction-settings = Abrir as configurações do Nulavio
 nulavio-quickaction-focus = Ligar ou desligar o layout Foco
+nulavio-quickaction-immersive = Ligar ou desligar o modo Imersivo
+nulavio-quickaction-temporary = Nova janela temporária
+nulavio-quickaction-profiles = Trocar de perfil
+nulavio-quickaction-highlight = Copiar um link para o texto selecionado

@@ -62,6 +62,8 @@ this.nulavioLayout = class extends ExtensionAPI {
           const say = key => tab.window?.A11yUtils?.announce({ raw: context.extension.localizeMessage(key) }).catch(() => {});
           return layout.copyLinkToHighlight(tab.nativeTab?.linkedBrowser ?? null, say);
         }),
+        // #321: Ctrl+Alt+P, the address bar of the window the key was pressed in, in the engine's actions mode.
+        openActions: call(tabId => layout.openActions(context.extension.tabManager.get(tabId)?.window ?? null)),
         // From Settings (a page) or from the key (the background page, with the tab it was pressed in).
         setImmersive: call((on, tabId) => {
           const win = tabId === null || tabId === undefined ? null : context.extension.tabManager.get(tabId).window;
