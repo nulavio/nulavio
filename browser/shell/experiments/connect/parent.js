@@ -35,7 +35,6 @@ this.nulavioConnect = class extends ExtensionAPI {
         restoreDefaultBrowser: call(() => connect.restoreDefaultBrowser()),
         kdeDevices: call(() => connect.kdeDevices()),
         sendLink: call((url, device) => connect.sendLink(url, device)),
-        setKrunner: call(enabled => connect.setKrunner(enabled)),
       },
     };
   }

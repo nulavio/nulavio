@@ -895,7 +895,18 @@ class ProtectedWindowBandTest(unittest.TestCase):
             """,
                 [profile_id],
             )
-            self.assertEqual(lock, {"error": "is-current"})
+            self.assertEqual(lock, {"error": "lock-current"})
+            # #495: a new key for the profile in use is refused with its own code, before the tools are asked.
+            rekey = chrome_async(
+                child,
+                """
+              return ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs')
+                .NulavioVault.rekey(args[0], {current: 'synthetic farol vault password'});
+            """,
+                [profile_id],
+            )
+            self.assertEqual(rekey, {"error": "rekey-current"})
+            self.assertTrue(storage.Container(path).mounted(), "the profile in use was touched")
         finally:
             child.quit()
         self.assertTrue(harness.wait_until(lambda: not storage.Container(path).mounted(), 30))
