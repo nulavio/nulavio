@@ -102,21 +102,6 @@ function integrationActions(item) {
     });
     actions.push(make);
   }
-  if (item.id === "krunner" && (item.state === "available" || item.state === "enabled")) {
-    const enable = item.state === "available";
-    const button = h("button", {
-      class: `button ${enable ? "button--secondary" : "button--quiet"}`,
-      type: "button",
-      text: t(enable ? "connectKrunnerEnable" : "connectKrunnerDisable"),
-      "data-focus-key": "krunner",
-    });
-    button.addEventListener("click", async () => {
-      if ((await run(() => connect.setKrunner(enable), { done: t(enable ? "connectKrunnerEnabled" : "connectKrunnerDisabled") })) !== undefined) {
-        renderIntegrations();
-      }
-    });
-    actions.push(button);
-  }
   if (item.id === "default-browser" && item.state === "enabled" && item.params.previous) {
     const restore = h("button", {
       class: "button button--quiet",
