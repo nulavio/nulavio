@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "perf"))
 
 import gate  # noqa: E402
 
+SPEEDOMETER = "speedometer3_score"  # what main() calls it: the next test looks for the name in run.py's source
 RUN_SPEC = importlib.util.spec_from_file_location("perf_run_for_gate", ROOT / "scripts" / "perf" / "run.py")
 perf_run = importlib.util.module_from_spec(RUN_SPEC)
 RUN_SPEC.loader.exec_module(perf_run)
@@ -79,7 +80,16 @@ class PerfGateTest(unittest.TestCase):
         # +10.002 %: the line is not "+10.0 % ... fails past +10 %"
         self.assertIn("+10.002%", words)
         self.assertEqual(pss(550.0 * (1 + 1e-12))[0], "fail")
-        self.assertEqual(self.verdict(results(speedometer3_score=(-0.1, (-0.2, -0.05))))["speedometer3_score"], "pass")
+
+        def score(build: float):
+            data = results(speedometer3_score=(0.0, (-0.2, -0.05)))
+            data["metrics"]["speedometer3_score"] = {"build": [build] * 5, "baseline": [100.0] * 5}
+            return {n: (v, w) for n, v, w in gate.verdicts(data)}["speedometer3_score"]
+
+        self.assertEqual(score(90.0)[0], "pass")  # exactly -10 %
+        verdict, words = score(89.99)  # just past it, in the "down" direction
+        self.assertEqual(verdict, "fail")
+        self.assertIn("-10.01%", words)
 
     def test_memory_with_unreadable_processes_is_not_judged_whatever_it_reads(self):
         for side in ("build", "baseline"):
@@ -135,10 +145,14 @@ class PerfGateTest(unittest.TestCase):
             mock.patch.object(perf_run, "sandbox", return_value="on"),
             mock.patch.object(perf_run.time, "sleep"),
         ):
-            out = perf_run.one_run("engine", [1, 10], server, (("speedometer3_score", lambda m: 12.0),))
+            out = perf_run.one_run("engine", [1, 10], server, ((SPEEDOMETER, lambda m: 12.0),))
+        source = (ROOT / "scripts" / "perf" / "run.py").read_text(encoding="utf-8")
         for name in gate.THRESHOLDS:
             with self.subTest(name=name):
                 self.assertIn(name, out)
+        # The benchmark's name is main()'s, not one_run's: the test hands it in, so it is looked up in run.py as well.
+        self.assertIn(f'benchmarks.append(("{SPEEDOMETER}", ', source)
+        self.assertIn(SPEEDOMETER, gate.THRESHOLDS)
         self.assertEqual((out["unreadable_1_tabs"], out["unreadable_10_tabs"]), (0, 0))
 
     def test_the_command_exits_1_on_a_failure_and_names_it(self):
