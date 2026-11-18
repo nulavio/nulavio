@@ -16,7 +16,8 @@ SHEETS = [
     ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "horizon.css",
     ROOT / "browser" / "startpage" / "startpage.css",
 ]
-MOTION = ("animation", "transition", "animation-duration", "transition-duration", "animation-name")
+# The last one is a transition of the engine's own, kept in a variable that Horizon gives a new value (the motion map, #319).
+MOTION = ("animation", "transition", "animation-duration", "transition-duration", "animation-name", "--tab-dragover-transition")
 NO_PREFERENCE = "prefers-reduced-motion: no-preference"
 # Animations of 0 s that reveal something after a delay: they show, they do not move.
 REVEALS = ("nv-reveal-fallback", "nv-skeleton-in")
@@ -67,6 +68,8 @@ class MotionSheetTest(unittest.TestCase):
         found = {(sheet, prop) for sheet, _, prop, _ in motion()}
         for expected in (("components.css", "transition"), ("pages.css", "animation"), ("horizon.css", "animation")):
             self.assertIn(expected, found)
+        # The motion map (#319): the engine's tab transition that Horizon puts on the tokens is scanned as well.
+        self.assertIn(("horizon.css", "--tab-dragover-transition"), found)
 
     def test_every_movement_waits_for_no_preference(self):
         for sheet, stack, prop, value in motion():
@@ -142,6 +145,11 @@ class SidebarMotionTest(unittest.TestCase):
                 "--motion-dur-sidebar-enter": "var(--nv-motion-duration-expand)",
                 "--motion-dur-sidebar-exit": "var(--nv-motion-duration-collapse)",
                 "--motion-ease-emphasized": "var(--nv-motion-easing-standard)",
+                # The motion map (#319): a sidebar panel opening, closing and giving way to another.
+                "--motion-dur-sidebar-panel-enter": "var(--nv-motion-duration-expand)",
+                "--motion-dur-sidebar-panel-exit": "var(--nv-motion-duration-collapse)",
+                "--motion-dur-sidebar-panel-content-fade": "var(--nv-motion-duration-fast)",
+                "--motion-ease-standard": "var(--nv-motion-easing-standard)",
             },
         )
         for prop, (preludes, _) in found.items():
