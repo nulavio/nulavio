@@ -635,6 +635,20 @@ export const NulavioLayout = {
     return { on: Services.prefs.getBoolPref(PREF_IMMERSIVE, false), locked: Services.prefs.prefIsLocked(PREF_IMMERSIVE) };
   },
 
+  /**
+   * #321: the address bar of `win` in the engine's own actions mode, as typing ">" there does: the engine's actions
+   * and Nulavio's (NulavioWindow's quick actions), filtered as the person types. Nothing runs until one is picked.
+   */
+  openActions(win) {
+    // A pop-up window's address bar cannot be typed into: nothing to open there.
+    if (!win?.gURLBar || win.closed || win.gURLBar.readOnly) {
+      fail("no-window");
+    }
+    win.focus();
+    win.gURLBar.search(">", { searchModeEntry: "shortcut" });
+    return true;
+  },
+
   /** Turn Immersive on or off for this profile. `say(key)` announces the outcome in the window. */
   setImmersive(on, say = () => {}) {
     if (Services.prefs.prefIsLocked(PREF_IMMERSIVE)) {

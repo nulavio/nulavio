@@ -38,29 +38,6 @@
         "type": "function",
         "async": true,
         "parameters": []
-      },
-      {
-        "name": "kdeDevices",
-        "type": "function",
-        "async": true,
-        "parameters": []
-      },
-      {
-        "name": "sendLink",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "url",
-            "type": "string",
-            "maxLength": 8192
-          },
-          {
-            "name": "device",
-            "type": "string",
-            "maxLength": 64
-          }
-        ]
       }
     ]
   }

@@ -73,25 +73,16 @@ class KdeConnectTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def test_devices_and_one_link_to_one_device(self):
+    def test_devices_for_the_status_row_and_no_link_is_sent(self):
+        # The KDE Connect status row still lists the reachable devices; sending a link to one was removed (#462).
         self.assertEqual(
             connect_p1.devices(), [{"id": "abc123_def", "name": "Pixel do Caio"}, {"id": "zzz999", "name": "Tablet"}]
         )
-        self.assertEqual(connect_p1.send_link("https://example.org/a?b=1", "abc123_def"), {"sent": True, "device": "abc123_def"})
-        calls = self.log.read_text().splitlines()
-        self.assertEqual(calls[-1], "--device abc123_def --share https://example.org/a?b=1")
-
-    def test_refusals(self):
-        for url, device, code in (
-            ("file:///etc/passwd", "abc123_def", "bad-url"),
-            ("javascript:alert(1)", "abc123_def", "bad-url"),
-            ("https://example.org", "../x", "bad-device"),
-            ("https://example.org", "not_paired", "device-unreachable"),
-        ):
-            with self.subTest(url=url, device=device), self.assertRaises(connect_p1.ConnectP1Error) as caught:
-                connect_p1.send_link(url, device)
-            self.assertEqual(caught.exception.code, code)
-        self.assertNotIn("--share", self.log.read_text())  # nothing was sent
+        self.assertFalse(hasattr(connect_p1, "send_link"))
+        for op in ("send-link", "devices"):
+            with self.subTest(op=op), self.assertRaises(connect_p1.ConnectP1Error):
+                connect_p1.api_request({"op": op, "url": "https://example.org/a", "device": "abc123_def"})
+        self.assertNotIn("--share", self.log.read_text())
 
 
 class KrunnerRemovedTest(unittest.TestCase):

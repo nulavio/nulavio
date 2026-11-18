@@ -222,12 +222,15 @@ class PrivilegedApiTest(unittest.TestCase):
                 "toggleFocus",
                 "setImmersive",
                 "copyLinkToHighlight",
+                "openActions",  # #321: one tab's window, the address bar in its actions mode; nothing runs
             },
         )
         # #459: editing the page's text left the browser for an extension the documentation names.
         self.assertNotIn("toggle-page-editing", self.manifest["commands"])
         self.assertFalse((ROOT / "browser" / "shell" / "modules" / "NulavioPageEdit.sys.mjs").exists())
         self.assertNotIn("toggle-keep-above", self.manifest["commands"])  # #460: left to KWin's own window menu
+        actions = next(f for f in schema["functions"] if f["name"] == "openActions")
+        self.assertEqual([(a["name"], a["type"]) for a in actions["parameters"]], [("tabId", "integer")])
         # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
         switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
         self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])

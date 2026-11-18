@@ -183,74 +183,6 @@ if (browser.nulavioAI) {
   setUpAI().catch(console.error);
 }
 
-// -- Nulavio Connect: send one link to a KDE Connect device, on the user's click --
-// The menu lists the devices reachable when it opens; never offered in private windows.
-// The item is hidden until then, and the engine leaves hidden items out of onShown's
-// menuIds, so a link menu is recognised by its context (the item's URL patterns still
-// keep it off non-web links).
-
-const SEND_MENU = "nulavio-send-link";
-
-if (browser.nulavioConnect && browser.menus) {
-  const scope = { contexts: ["link"], targetUrlPatterns: ["http://*/*", "https://*/*"] };
-  browser.menus.create({ id: SEND_MENU, title: t("menuSendLink"), visible: false, ...scope });
-  let shown = [];
-  let visible = false;
-  let opened = 0; // the menu that is open now: answers for one already closed are dropped
-  // The device list comes from KDE Connect's own tool (a helper process, ~1-2 s): a recent answer
-  // is used at once, so only the first link menu in a while waits for it. A phone that left in the
-  // last 30 s can still be listed; sending to it fails as for any unreachable device.
-  const FRESH_MS = 30000;
-  let known = null;
-  let knownAt = 0;
-  const devices = async () => {
-    if (known && Date.now() - knownAt < FRESH_MS) {
-      return known;
-    }
-    const found = await browser.nulavioConnect.kdeDevices().catch(() => null);
-    // Only a list with devices is kept: a failure or an empty answer (KDE Connect still starting,
-    // a phone not connected yet) is asked again at the next menu (review F14).
-    known = found?.length ? found : null;
-    knownAt = Date.now();
-    return found ?? [];
-  };
-  browser.menus.onHidden.addListener(() => {
-    opened++;
-    if (visible) {
-      visible = false; // each menu starts without it: no stale devices, nothing in private windows
-      browser.menus.update(SEND_MENU, { visible: false }).catch(() => {});
-    }
-  });
-  browser.menus.onShown.addListener(async (info, tab) => {
-    const menu = ++opened;
-    if (!info.contexts.includes("link") || tab?.incognito) {
-      return;
-    }
-    const reachable = await devices();
-    if (menu !== opened) {
-      return;
-    }
-    await Promise.all(shown.map(id => browser.menus.remove(id).catch(() => {})));
-    shown = reachable.map(device => {
-      const id = `${SEND_MENU}:${device.id}`;
-      browser.menus.create({ id, parentId: SEND_MENU, title: device.name, ...scope });
-      return id;
-    });
-    if (menu !== opened) {
-      return;
-    }
-    visible = reachable.length > 0;
-    await browser.menus.update(SEND_MENU, { visible });
-    browser.menus.refresh();
-  });
-  browser.menus.onClicked.addListener((info, tab) => {
-    const id = String(info.menuItemId);
-    if (id.startsWith(`${SEND_MENU}:`) && !tab?.incognito) {
-      browser.nulavioConnect.sendLink(info.linkUrl, id.slice(SEND_MENU.length + 1)).catch(console.error);
-    }
-  });
-}
-
 // -- Nulavio Assistant: "Perguntar ao assistente" on a selection, and its shortcut (UX5-G) --
 // Both only put something in the panel of that window (the selection as an item, or the focus on
 // the question) and open it; nothing is sent until Send. Never in private windows: there the item
@@ -316,6 +248,12 @@ if (browser.commands) {
       const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
       if (target) {
         browser.nulavioLayout.copyLinkToHighlight(target.id).catch(() => {}); // announced in the window
+      }
+    } else if (command === "open-actions" && browser.nulavioLayout?.openActions) {
+      // #321: Ctrl+Alt+P opens the address bar in its actions mode (">"), where Nulavio's actions are listed.
+      const target = tab ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0];
+      if (target) {
+        browser.nulavioLayout.openActions(target.id).catch(console.error);
       }
     } else if (command === "lock-profile") {
       lockAsked = Date.now();
