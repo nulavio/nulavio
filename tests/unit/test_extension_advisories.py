@@ -5,11 +5,13 @@ that covers the pinned version (#415). No network: GitHub's replies are recorded
 from __future__ import annotations
 
 import copy
+import datetime
 import io
 import json
 import sys
 import unittest
 import urllib.error
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -22,7 +24,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "advisories"
 UBO = json.loads((FIXTURES / "gorhill-uBlock.json").read_text())
 KEEPASSXC = json.loads((FIXTURES / "keepassxreboot-keepassxc-browser.json").read_text())
 LOCK = json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())
-UBO_SOURCE = {"key": "ublock-origin", "repo": "gorhill/uBlock", "packages": ["uBlock Origin"]}
+UBO_SOURCE = {"key": "ublock-origin", "repo": "gorhill/uBlock", "monorepo": False}
 
 
 def entry(key: str, version: str) -> dict:
@@ -118,18 +120,70 @@ class AdvisoryRowsTest(unittest.TestCase):
             other[0].update(change)
             self.assertEqual(self.rows("1.75.0", other), [])
 
-    def test_another_package_of_the_repository_is_reported_not_matched(self):
-        other = copy.deepcopy(UBO)
-        other[0]["vulnerabilities"][0]["package"]["name"] = "uBO Scope"
-        rows = self.rows("1.75.0", other)
-        self.assertEqual([r.state for r in rows], ["warn"])
-        self.assertIn("uBO Scope", rows[0].text)
+    def test_a_one_product_repository_matches_whatever_the_package_is_called(self):
+        for name in ("uBlock Origin (Firefox)", "ublock-origin", "gorhill/uBlock", "uBO", ""):
+            other = copy.deepcopy(UBO)
+            other[0]["vulnerabilities"][0]["package"]["name"] = name
+            other[0]["vulnerabilities"][0]["package"]["ecosystem"] = ""
+            with self.subTest(name=name):
+                self.assertEqual([r.state for r in self.rows("1.75.0", other)], ["fail"])
+
+    def test_a_monorepo_is_filtered_by_name_and_an_unknown_name_fails(self):
+        mono = {"key": "bitwarden", "repo": "bitwarden/clients", "monorepo": True, "packages": ["@bitwarden/browser"]}
+        advisory = copy.deepcopy(UBO)
+        advisory[0]["vulnerabilities"][0]["vulnerable_version_range"] = "< 2027.1.0"
+        advisory[0]["vulnerabilities"][0]["package"]["name"] = "@Bitwarden/Browser"
+        self.assertEqual([r.state for r in watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)], ["fail"])
+        self.assertEqual(watch.advisory_row(entry("bitwarden", "2027.1.0"), mono, advisory), [])  # not covered
+        advisory[0]["vulnerabilities"][0]["package"]["name"] = "@bitwarden/cli"
+        rows = watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)
+        self.assertEqual([r.state for r in rows], ["fail"])
+        self.assertIn("@bitwarden/cli", rows[0].text)
+
+    def test_an_advisory_without_vulnerabilities_cannot_be_matched(self):
+        for empty in (None, [], "x"):
+            other = copy.deepcopy(UBO)
+            other[0]["vulnerabilities"] = empty
+            with self.subTest(empty=empty):
+                rows = self.rows("1.76.4", other)
+                self.assertEqual([r.state for r in rows], ["fail"])
+                self.assertIn("GHSA-cmqw-9r2w-6wv2", rows[0].text)
+
+    def exception(self, **change):
+        item = {
+            "id": "GHSA-cmqw-9r2w-6wv2",
+            "ecosystem": watch.EXTENSION_ECOSYSTEM,
+            "package": "ublock-origin",
+            "version": "1.75.0",
+            "reason": "test",
+            "until": "2026-12-31",
+        }
+        return {**item, **change}
+
+    def test_an_exception_covers_one_advisory_one_extension_one_version_until_its_date(self):
+        today = datetime.date(2026, 11, 18)
+
+        def states(version, item, now=today):
+            used = set()
+            rows = watch.advisory_row(entry("ublock-origin", version), UBO_SOURCE, UBO, [item], now, used)
+            return [r.state for r in rows], used
+
+        self.assertEqual(states("1.75.0", self.exception())[0], ["accepted"])
+        self.assertEqual(states("1.75.0", self.exception(until="2026-11-18"))[0], ["accepted"])  # the last day
+        expired = watch.advisory_row(
+            entry("ublock-origin", "1.75.0"), UBO_SOURCE, UBO, [self.exception(until="2026-11-17")], today
+        )
+        self.assertEqual([r.state for r in expired], ["fail"])
+        self.assertIn("expired", expired[0].text)
+        self.assertEqual(states("1.75.2", self.exception())[0], ["fail"])  # another version
+        self.assertEqual(states("1.75.0", self.exception(package="bitwarden"))[0], ["fail"])  # another extension
+        self.assertEqual(states("1.75.0", self.exception(id="GHSA-xxxx-xxxx-xxxx"))[0], ["fail"])  # another advisory
 
     def test_keepassxc_ranges_use_four_part_versions(self):
         source = {
             "key": "keepassxc-browser",
             "repo": "keepassxreboot/keepassxc-browser",
-            "packages": ["KeePassXC-Browser", "keepassxreboot/keepassxc-browser"],
+            "monorepo": False,
         }
         self.assertEqual(watch.advisory_row(entry("keepassxc-browser", "1.10.4.1"), source, KEEPASSXC), [])
         states = [r.state for r in watch.advisory_row(entry("keepassxc-browser", "1.10.3"), source, KEEPASSXC)]
@@ -137,11 +191,11 @@ class AdvisoryRowsTest(unittest.TestCase):
 
 
 class WatchTest(unittest.TestCase):
-    def run_rows(self, net, versions=None):
+    def run_rows(self, net, versions=None, exceptions=()):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            return watch.advisory_rows(net, tree(versions or {}, Path(tmp)))
+            return watch.advisory_rows(net, tree(versions or {}, Path(tmp)), list(exceptions), datetime.date(2026, 11, 18))
 
     def test_the_pinned_lock_has_no_finding_and_names_what_has_no_source(self):
         net = AdvisoryNet()
@@ -167,6 +221,15 @@ class WatchTest(unittest.TestCase):
         rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": {"message": "rate limited"}}))
         self.assertIn("error", {r.state for r in rows})  # not a list
 
+    def test_an_unused_extension_exception_is_reported_and_the_osv_check_leaves_it_alone(self):
+        item = AdvisoryRowsTest.exception(self, version="1.76.4")
+        rows = self.run_rows(AdvisoryNet(), exceptions=[item])
+        self.assertEqual(
+            [r.text for r in rows if r.check == "exception"],
+            ["exception GHSA-cmqw-9r2w-6wv2 for ublock-origin 1.76.4 matches nothing now: remove it"],
+        )
+        self.assertEqual(watch.vulnerability_rows([], {}, [item], datetime.date(2026, 11, 18)), [])
+
     def test_a_full_page_is_not_assumed_to_be_everything(self):
         rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": [UBO[0]] * 100}))
         self.assertIn("error", {r.state for r in rows})
@@ -189,9 +252,11 @@ class WatchTest(unittest.TestCase):
         import tempfile
 
         bad = [
-            {"key": "a", "repo": "o/r"},  # no packages
+            {"key": "a", "repo": "o/r"},  # no monorepo flag
+            {"key": "a", "repo": "o/r", "monorepo": True},  # a monorepo with no packages
+            {"key": "a", "repo": "o/r", "monorepo": False, "packages": ["x"]},  # packages without a monorepo
             {"key": "a", "repo": None},  # no reason
-            {"key": "a", "repo": "not a repo", "packages": ["x"]},
+            {"key": "a", "repo": "not a repo", "monorepo": False},
         ]
         for item in bad:
             with tempfile.TemporaryDirectory() as tmp, self.subTest(item=item):
@@ -231,11 +296,35 @@ class FetchTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             net.github_json("https://example.org/repos/o/r/security-advisories")
 
-    def test_the_workflow_token_is_not_sent_elsewhere(self):
+    def test_the_token_is_sent_to_github_unredirected_and_never_by_json(self):
         net = watch.Net(token="t")
+        with mock.patch("urllib.request.urlopen", return_value=self.reply([])) as opened:
+            net.github_json(watch.GITHUB + "repos/o/r/security-advisories")
+        request = opened.call_args.args[0]
+        self.assertEqual(request.get_header("Authorization"), "Bearer t")  # in the unredirected headers
+        self.assertNotIn("Authorization", request.headers)
+        # a redirect to another host builds a request that does not carry it
+        redirected = urllib.request.HTTPRedirectHandler().redirect_request(
+            request, None, 302, "Found", request.headers, "https://elsewhere.example/x"
+        )
+        self.assertIsNone(redirected.get_header("Authorization"))
         with mock.patch("urllib.request.urlopen", return_value=self.reply({})) as opened:
             net.json("https://addons.mozilla.org/api/v5/x/")
         self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
+
+    def test_retrying_stops_when_the_budget_is_spent(self):
+        now = [0.0]
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append, clock=lambda: now[0])
+        url = watch.GITHUB + "repos/o/r/security-advisories"
+        with mock.patch.object(net, "_open", side_effect=self.http(503)), self.assertRaises(urllib.error.HTTPError):
+            net.github_json(url)  # the first repository uses 2 + 8 + 30 seconds of the budget
+        self.assertEqual(sleeps, [2, 8, 30])
+        now[0] = watch.GITHUB_BUDGET - 1  # almost nothing left: the next repository gets no retry
+        sleeps.clear()
+        with mock.patch.object(net, "_open", side_effect=self.http(503)) as opened, self.assertRaises(urllib.error.HTTPError):
+            net.github_json(url)
+        self.assertEqual((sleeps, opened.call_count), ([], 1))
 
 
 if __name__ == "__main__":

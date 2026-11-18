@@ -22,7 +22,8 @@ a blocked or replaced extension, a published advisory that covers a pinned exten
 than 30 days behind AMO), 2 some data was unavailable and
 nothing else needs action. The four checks run independently: one source being down does not hide
 what the others found.
-Sends only public package names and versions to api.osv.dev, addons.mozilla.org and the registries.
+Sends only public package names and versions to api.osv.dev, addons.mozilla.org, api.github.com (a GET of a
+repository's advisories, with the workflow's read-only token) and the registries.
 """
 
 from __future__ import annotations
@@ -47,9 +48,11 @@ AMO = "https://addons.mozilla.org/api/v5/"
 GITHUB = "https://api.github.com/"
 ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json"
 RETRY_DELAYS = (2, 8, 30)  # a transient GitHub failure is retried before it is reported (as watch_upstream.py does)
+GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step ends and writes its summary in time
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
 EXTENSION_LAG_DAYS = 30
+EXTENSION_ECOSYSTEM = "Browser extension"  # in vulnerability-exceptions.json: package = the lock's key, version = the pin
 UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
 INDEX_TYPES = ", ".join([
@@ -82,10 +85,12 @@ class Row:
 class Net:
     """The only code here that touches the network (the unit tests replace it)."""
 
-    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep):
+    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep, clock=time.monotonic):
         self.timeout = timeout
         self.token = token  # the workflow's read-only GITHUB_TOKEN: only for api.github.com, it raises the rate limit
         self.sleep = sleep
+        self.clock = clock
+        self.github_started: float | None = None
 
     def _open(self, url: str, data: dict | None = None, headers: dict | None = None, method: str | None = None):
         if not url.startswith("https://"):
@@ -94,7 +99,10 @@ class Net:
         request = urllib.request.Request(url, data=body, method=method)  # noqa: S310 - https only, checked above
         request.add_header("User-Agent", "nulavio-dependency-watch")
         for key, value in (headers or {}).items():
-            request.add_header(key, value)
+            if key.lower() == "authorization":
+                request.add_unredirected_header(key, value)  # never follows a redirect to another host
+            else:
+                request.add_header(key, value)
         if body is not None:
             request.add_header("Content-Type", "application/json")
         return urllib.request.urlopen(request, timeout=self.timeout)  # noqa: S310 - https only, checked above
@@ -115,15 +123,18 @@ class Net:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+        if self.github_started is None:
+            self.github_started = self.clock()
         for attempt in range(len(RETRY_DELAYS) + 1):
+            late = attempt == len(RETRY_DELAYS) or self.clock() - self.github_started + RETRY_DELAYS[attempt] > GITHUB_BUDGET
             try:
                 with self._open(url, headers=headers) as response:
                     return json.load(response)
             except urllib.error.HTTPError as exc:
-                if exc.code not in (429, 500, 502, 503, 504) or attempt == len(RETRY_DELAYS):
+                if exc.code not in (429, 500, 502, 503, 504) or late:
                     raise
             except OSError:  # a reset, a timeout, DNS (HTTPError is handled above)
-                if attempt == len(RETRY_DELAYS):
+                if late:
                     raise
             self.sleep(RETRY_DELAYS[attempt])
 
@@ -303,7 +314,7 @@ def vulnerability_rows(findings: list[tuple[Dep, str]], details: dict[str, dict]
             detail["exception"] = item
             rows.append(Row("osv", "accepted", f"{text} (accepted until {until})", detail))
     for item in exceptions:
-        if id(item) not in used:
+        if id(item) not in used and item["ecosystem"] != EXTENSION_ECOSYSTEM:  # advisory_rows reports those
             what = f"{item['id']} for {item['ecosystem']} {item['package']} {item['version']}"
             rows.append(Row("exception", "warn", f"exception {what} matches nothing now: remove it"))
     return rows
@@ -409,73 +420,92 @@ def load_advisory_sources(path: Path = ADVISORY_SOURCES) -> dict[str, dict]:
         if item.get("key") in table or not item.get("key"):
             raise ValueError(f"{path.name}: duplicate or missing key: {item}")
         if item.get("repo"):
-            if (
-                set(item) != {"key", "repo", "packages"}
-                or not re.fullmatch(r"[\w.-]+/[\w.-]+", item["repo"])
-                or not item["packages"]
-            ):
-                raise ValueError(f"{path.name}: a source needs exactly key, repo and a list of packages: {item}")
+            ok = re.fullmatch(r"[\w.-]+/[\w.-]+", item["repo"]) and isinstance(item.get("monorepo"), bool)
+            if not ok or set(item) != {"key", "repo", "monorepo", *(["packages"] if item.get("monorepo") else [])}:
+                raise ValueError(
+                    f"{path.name}: a source needs key, repo, monorepo (true or false) and, for a monorepo, packages: {item}"
+                )
+            if item["monorepo"] and not item["packages"]:
+                raise ValueError(f"{path.name}: a monorepo needs the package names of its extension: {item}")
         elif set(item) != {"key", "repo", "reason"} or item["repo"] is not None or not str(item["reason"]).strip():
             raise ValueError(f"{path.name}: an extension without a source needs repo null and a reason: {item}")
         table[item["key"]] = item
     return table
 
 
-def advisory_row(entry: dict, source: dict, advisories: list) -> list[Row]:
-    """Rows for one extension from its repository's advisories: fail when one covers the pinned version."""
+def advisory_row(
+    entry: dict,
+    source: dict,
+    advisories: list,
+    exceptions: list[dict] = (),
+    today: _dt.date | None = None,
+    used: set | None = None,
+) -> list[Row]:
+    """Rows for one extension from its repository's advisories: fail when one covers the pinned version.
+
+    A repository of one product accepts any package name (the names are free text); a monorepo is filtered by the
+    names in the table, and a name not in it fails like a range that cannot be read. An exception for the advisory,
+    this extension and this pinned version turns a failure into "accepted" until its date.
+    """
     key, version = entry["key"], entry["version"]
-    packages = {p.lower() for p in source["packages"]}
+    today = today or _dt.datetime.now(_dt.UTC).date()
+    used = used if used is not None else set()
+    packages = {p.lower() for p in source.get("packages", [])}
+    dep = Dep(EXTENSION_ECOSYSTEM, key, version, ())
     rows = []
+
+    def finding(advisory: dict, text: str) -> None:
+        ident, link = advisory["ghsa_id"], advisory["html_url"]
+        detail = {"key": key, "pinned": version, "id": ident, "url": link}
+        item = matching_exception({ident, *filter(None, [advisory.get("cve_id")])}, dep, exceptions)
+        if item is None:
+            rows.append(Row("advisory", "fail", text, detail))
+            return
+        used.add(id(item))
+        until = _dt.date.fromisoformat(item["until"])
+        if until < today:
+            rows.append(Row("advisory", "fail", f"{text} (exception expired {until}: look at it again)", detail))
+        else:
+            rows.append(Row("advisory", "accepted", f"{text} (accepted until {until})", {**detail, "exception": item}))
+
     for advisory in advisories:
         if advisory.get("state") != "published" or advisory.get("withdrawn_at"):
             continue
         ident, link = advisory["ghsa_id"], advisory["html_url"]
-        covered = unreadable = None
-        for vuln in advisory.get("vulnerabilities") or []:
+        covered, problems = None, []
+        vulns = advisory.get("vulnerabilities")
+        if not isinstance(vulns, list) or not vulns:
+            problems.append("it lists no affected package or range")
+        for vuln in vulns if isinstance(vulns, list) else []:
             name = str((vuln.get("package") or {}).get("name", ""))
-            if name.lower() not in packages:
-                rows.append(
-                    Row(
-                        "advisory",
-                        "warn",
-                        f"{key}: {ident} names package {name!r}, which is not in the table: is it this extension? {link}",
-                        {"key": key, "id": ident},
-                    )
-                )
+            if source["monorepo"] and name.lower() not in packages:
+                problems.append(f"it names package {name!r}, which is not this extension's in the table")
                 continue
             try:
                 if range_covers(vuln.get("vulnerable_version_range"), version):
-                    covered = vuln
+                    covered = covered or vuln
             except ValueError as exc:
-                unreadable = exc
-        detail = {"key": key, "pinned": version, "id": ident, "url": link}
+                problems.append(f"a range cannot be read ({exc})")
         if covered:
             fixed = covered.get("patched_versions") or "no fixed version listed"
-            rows.append(
-                Row(
-                    "advisory",
-                    "fail",
-                    f"{key} {version} is covered by {ident} [{advisory.get('severity') or 'unrated'}] "
-                    f"{str(advisory.get('summary', '')).strip()} (range {covered['vulnerable_version_range']!r}, "
-                    f"fixed in {fixed}): {link}",
-                    detail,
-                )
+            finding(
+                advisory,
+                f"{key} {version} is covered by {ident} [{advisory.get('severity') or 'unrated'}] "
+                f"{str(advisory.get('summary', '')).strip()} (range {covered['vulnerable_version_range']!r}, "
+                f"fixed in {fixed}): {link}",
             )
-        elif unreadable:
-            rows.append(
-                Row(
-                    "advisory",
-                    "fail",
-                    f"{key} {version}: {ident} has a range that cannot be read ({unreadable}); look at it by hand: {link}",
-                    detail,
-                )
-            )
+        elif problems:
+            finding(advisory, f"{key} {version}: {ident} cannot be matched, {'; '.join(problems)}; look at it by hand: {link}")
     return rows
 
 
-def advisory_rows(net: Net, root: Path = ROOT) -> list[Row]:
+def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = None, today: _dt.date | None = None) -> list[Row]:
     lock = json.loads((root / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
     table = load_advisory_sources(root / "docs" / "security" / "extension-advisory-sources.json")
+    today = today or _dt.datetime.now(_dt.UTC).date()
+    if exceptions is None:
+        exceptions = load_exceptions(root / "docs" / "security" / "vulnerability-exceptions.json")
+    used: set = set()
     keys = [e["key"] for e in lock["extensions"]]
     rows = [
         Row(
@@ -509,7 +539,7 @@ def advisory_rows(net: Net, root: Path = ROOT) -> list[Row]:
             advisories = net.github_json(f"{GITHUB}repos/{source['repo']}/security-advisories?per_page=100")
             if not isinstance(advisories, list) or len(advisories) >= 100:
                 raise ValueError("expected a list of fewer than 100 advisories")
-            found = advisory_row(entry, source, advisories)
+            found = advisory_row(entry, source, advisories, exceptions, today, used)
         except UNAVAILABLE as exc:  # the other extensions are still checked
             rows.append(
                 Row(
@@ -528,6 +558,10 @@ def advisory_rows(net: Net, root: Path = ROOT) -> list[Row]:
                 {"key": entry["key"]},
             )
         ]
+    for item in exceptions:
+        if item["ecosystem"] == EXTENSION_ECOSYSTEM and id(item) not in used:
+            what = f"{item['id']} for {item['package']} {item['version']}"
+            rows.append(Row("exception", "warn", f"exception {what} matches nothing now: remove it"))
     return rows
 
 
@@ -607,7 +641,7 @@ def run(net: Net, now: _dt.datetime, root: Path = ROOT, exceptions: list[dict] |
     sections = (
         ("osv", "OSV.dev", lambda: osv_rows(deps, net, exceptions, now.date())),
         ("extension", "addons.mozilla.org", lambda: extension_rows(net, now, root)),
-        ("advisory", "api.github.com", lambda: advisory_rows(net, root)),
+        ("advisory", "api.github.com", lambda: advisory_rows(net, root, exceptions, now.date())),
         ("image", "the registries", lambda: image_rows(net, root)),
     )
     rows: list[Row] = []

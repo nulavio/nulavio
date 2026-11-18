@@ -215,7 +215,7 @@ class OtherPinsTest(unittest.TestCase):
         for item in data["exceptions"]:
             self.assertEqual(set(item), {"id", "ecosystem", "package", "version", "reason", "until"}, item)
             self.assertRegex(item["id"], r"^(GHSA|CVE|PYSEC|OSV|BIT)-[\w-]+$", item)
-            self.assertIn(item["ecosystem"], ("Maven", "PyPI", "GitHub Actions", "Bitnami", "npm"), item)
+            self.assertIn(item["ecosystem"], ("Browser extension", "Maven", "PyPI", "GitHub Actions", "Bitnami", "npm"), item)
             self.assertGreater(len(item["reason"]), 40, item)
             until = datetime.date.fromisoformat(item["until"])
             self.assertLessEqual((until - datetime.date.today()).days, 366, f"{item['id']}: at most a year ahead")
