@@ -20,6 +20,9 @@ intervals come from the compositor's frame-time recording; when it records nothi
 source of each scene (the dialog is always timed by requestAnimationFrame in the page) and keeps a
 failed sample's error; a transition scene with no samples fails its budget line.
 Xvfb timings are a regression gate, not a measure of real hardware.
+The motion map's scenes (#319, docs/design/motion-map.md) run after the tab switch: a tab opening in
+the strip, a tab closing, the main menu opening, and a sidebar panel (history) opening and closing.
+A new profile starts in Lateral, the vertical strip; --layout top measures them with the tabs on top.
 """
 
 from __future__ import annotations
@@ -153,6 +156,54 @@ ACTIONS = {
     ),
 }
 
+# The motion map's scenes (#319, docs/design/motion-map.md), in the strip the profile's layout shows.
+# A tab opens in the background, so the scene holds the strip's movement and not a page being drawn.
+SYSTEM = "{triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()"
+MAP_ACTIONS = {
+    "tab_open": (
+        "if (window.nvSceneTab?.isConnected) { gBrowser.removeTab(window.nvSceneTab); }"
+        "await new Promise(r => setTimeout(r, 150));",
+        f"window.nvSceneTab = gBrowser.addTab('about:blank', {SYSTEM}, animate: true}});",
+        320,
+    ),
+    "tab_close": (
+        "if (!window.nvSceneTab?.isConnected) {"
+        f" window.nvSceneTab = gBrowser.addTab('about:blank', {SYSTEM}}}); }}"
+        "await new Promise(r => setTimeout(r, 300));",
+        "gBrowser.removeTab(window.nvSceneTab, {animate: true});",
+        320,
+    ),
+    "menu_open": (
+        "if (PanelUI.panel.state !== 'closed') {"
+        " const hidden = new Promise(r => PanelUI.panel.addEventListener('popuphidden', r, {once: true}));"
+        " PanelUI.hide(); await hidden; }"
+        "await new Promise(r => setTimeout(r, 150));",
+        "PanelUI.show();",
+        420,
+    ),
+    # A sidebar panel, through toggle(), which the sidebar's buttons call (show() and hide() start no transition).
+    "sidebar_panel_open": (
+        "if (PanelUI.panel.state !== 'closed') { PanelUI.hide(); }"
+        "await SidebarController.waitUntilStable();"
+        "if (SidebarController.isOpen) { SidebarController.hide(); await SidebarController.waitUntilStable(); }"
+        "await new Promise(r => setTimeout(r, 150));",
+        "SidebarController.toggle('viewHistorySidebar');",
+        480,
+    ),
+    "sidebar_panel_close": (
+        "await SidebarController.waitUntilStable();"
+        "if (!SidebarController.isOpen) { await SidebarController.show('viewHistorySidebar');"
+        " await SidebarController.waitUntilStable(); }"
+        "await new Promise(r => setTimeout(r, 300));",
+        "SidebarController.toggle('viewHistorySidebar');",
+        420,
+    ),
+}
+ACTIONS.update(MAP_ACTIONS)
+TRANSITIONS = (*TRANSITIONS, *MAP_ACTIONS)
+LAYOUTS = ("lateral", "top")
+LAYOUT_MODULE = "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs"
+
 
 def provenance(engine: Path) -> dict:
     """What the build says about itself (its application.ini), and the extensions its distribution
@@ -183,7 +234,7 @@ def checkout() -> dict:
     return {"git": head.stdout.strip(), "gitDirty": bool(dirty.stdout.strip())}
 
 
-def one_run(engine: Path, samples: int, prefs: dict | None = None) -> dict:
+def one_run(engine: Path, samples: int, prefs: dict | None = None, layout: str | None = None) -> dict:
     os.environ["NULAVIO_ENGINE"] = str(engine)
     import harness  # reads NULAVIO_ENGINE at session start
 
@@ -197,6 +248,18 @@ def one_run(engine: Path, samples: int, prefs: dict | None = None) -> dict:
         out["prefs"] = prefs or {}
         m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
         out["layerManager"] = m.chrome("return window.windowUtils.layerManagerType;")
+        if layout:
+            m.set_context("chrome")
+            try:
+                m.execute_async(
+                    "const done = arguments[arguments.length - 1];"
+                    f"ChromeUtils.importESModule('{LAYOUT_MODULE}').NulavioLayout"
+                    ".apply(window, arguments[0]).then(() => done(true), e => done(String(e)));",
+                    [layout],
+                )
+            finally:
+                m.set_context("content")
+        out["verticalTabs"] = m.chrome("return gBrowser.tabContainer.verticalMode;")
         base = m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
         with harness.FixtureServer() as server:
             m.navigate(server.url("/page/Scene"))
@@ -329,6 +392,7 @@ def main() -> int:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--samples", type=int, default=10)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--layout", choices=LAYOUTS, help="apply this layout preset in every run (default: the profile's own)")
     args = parser.parse_args()
     engine = Path(os.environ["NULAVIO_ENGINE"])
     if args.load_line and args.baseline_engine:
@@ -348,11 +412,12 @@ def main() -> int:
     found = {label: build["distributionExtensions"] for label, build in results["builds"].items()}
     if len({json.dumps(v) for v in found.values()}) > 1:
         parser.error(f"the builds install different extensions, so they cannot be compared: {found}")
+    results["layout"] = args.layout
     args.out.mkdir(parents=True, exist_ok=True)
     for i in range(args.runs):
         order = list(builds.items()) if i % 2 == 0 else list(reversed(builds.items()))
         for label, path in order:
-            results["runs"][label].append(one_run(path, args.samples, prefs[label]))
+            results["runs"][label].append(one_run(path, args.samples, prefs[label], args.layout))
             (args.out / "perf.json").write_text(json.dumps(results, indent=1))
     results["scenes"] = {label: pooled(runs) for label, runs in results["runs"].items()}
     results["verdict"] = {label: verdict(scenes) for label, scenes in results["scenes"].items()}
