@@ -104,7 +104,7 @@ async function attempt(method, secret = null) {
       byId("recovery").setAttribute("aria-invalid", "true");
       byId("recovery").focus();
     } else {
-      setState("error", errorText(e), "error");
+      setState("error", await failureText(e), "error");
     }
   }
 }
@@ -147,10 +147,10 @@ async function phonePoll() {
     await unlocked(status.settled, status.warning);
   } else if (PHONE_ENDINGS[status.state] || status.state === "failed") {
     showPhone(false);
-    const message = status.state === "failed" ? errorText(new Error(status.error)) : t(PHONE_ENDINGS[status.state]);
+    const message = status.state === "failed" ? await failureText(new Error(status.error)) : t(PHONE_ENDINGS[status.state]);
     // Declined or expired on the phone is not a failure of this page; cancelled is just information.
     const level = PHONE_LEVELS[status.state] ?? "error";
-    setState("device-unavailable", message, level);
+    setState(status.error === "not-found" ? "error" : "device-unavailable", message, level);
   }
 }
 
@@ -164,9 +164,9 @@ async function startPhone() {
     byId("phone-hint").textContent = t("vaultPhoneScan");
     showPhone(true);
     setState("waiting", t("phoneScanStatus"), "progress"); // the hint above already says what to do
-    phoneTimer = setInterval(() => phonePoll().catch(e => setState("error", errorText(e), "error")), 1000);
+    phoneTimer = setInterval(() => phonePoll().catch(async e => setState("error", await failureText(e), "error")), 1000);
   } catch (e) {
-    setState("error", errorText(e), "error");
+    setState("error", await failureText(e), "error");
   }
 }
 
@@ -242,10 +242,34 @@ byId("phone-cancel").addEventListener("click", () => {
 
 const UNAVAILABLE = new Set(["tools-missing", "storage-unavailable", "helper-failed"]);
 
+const isGone = e => String(e?.message ?? e) === "not-found";
+
+/** The words for a failure after the page loaded. `not-found` is the profile or one of its ways to unlock, and the
+    code does not say which: the page is read again, and what it finds says. The profile is gone: the page says what
+    it says on load and leaves nothing to type into. A way is gone: the page now shows what is left (#547). */
+async function failureText(e) {
+  if (!isGone(e)) {
+    return errorText(e);
+  }
+  try {
+    await render();
+  } catch (again) {
+    if (isGone(again)) {
+      unreadable(again);
+      return t("vaultGone");
+    }
+    return errorText(again);
+  }
+  return t("vaultMethodGone");
+}
+
 /* The profile could not be read (it was deleted, or the read failed): the page says that, not
    "locked", and leaves no field to type a secret into (audit 2026-11 S-01). */
 function unreadable(e) {
-  const gone = String(e?.message) === "not-found";
+  const gone = isGone(e);
+  clearInterval(phoneTimer); // nothing to poll for any more
+  phoneTimer = null;
+  phoneSession = null;
   byId("headline").textContent = t(gone ? "vaultGoneHeadline" : "vaultUnreadHeadline");
   for (const id of ["explain", "url", "password-form", "recovery-form", "phone-panel", "alternatives"]) {
     byId(id).hidden = true;
