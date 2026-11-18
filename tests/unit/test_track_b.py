@@ -804,10 +804,21 @@ class PackagingTest(unittest.TestCase):
                 self.assertIn("usage: automatic-updates on|off", done.stderr)
         # What runs as root updates the nulavio package and nothing else.
         update = (updates / "update-nulavio").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r"(?m)^\s*exec (.*)$", update),
-                         ["dnf -y --refresh upgrade nulavio",
-                          "apt-get -q -y -o Dpkg::Options::=--force-confold install --only-upgrade nulavio"])  # fmt: skip
-        self.assertNotRegex(update, r"\b(curl|wget|--nogpgcheck|AllowUnauthenticated|allow-unauthenticated)\b")
+        commands = [line.strip() for line in update.splitlines() if re.match(r"\s*(exec )?(dnf|apt-get) ", line)]
+        self.assertEqual(
+            commands,
+            [
+                "exec dnf -y --refresh upgrade --from-repo=nulavio nulavio",
+                'apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0',
+                "exec apt-get -q -y --no-remove -o Dpkg::Options::=--force-confold install --only-upgrade nulavio",
+            ],
+        )
+        self.assertNotRegex(update, r"(?m)^[^#]*\b(curl|wget)\b")
+        for weaker in ("gpgcheck", "allowerasing", "AllowUnauthenticated", "allow-unauthenticated",
+                       "allow-downgrades", "force-yes", "trusted=yes"):  # fmt: skip
+            self.assertNotIn(weaker, " ".join(commands))
+        timer_fields = dict(line.split("=", 1) for line in timer.splitlines() if "=" in line and not line.startswith("#"))
+        self.assertEqual((timer_fields["OnCalendar"], timer_fields["Persistent"]), ("*-*-* 00,12:00:00", "true"))
 
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")

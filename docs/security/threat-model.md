@@ -400,12 +400,12 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Adversary | T-LOCAL: a program of the person's account; a repository or mirror answering for Nulavio's |
 | Preconditions | The RPM or .deb package is installed and the person turned automatic updates on (the administrator's password, through polkit) |
 | Boundary | TB24 |
-| Impact | Twice a day, as root, the package manager updates `nulavio` from the repositories configured on the system |
+| Impact | At midnight and noon, as root, the package manager updates the `nulavio` package: with dnf from Nulavio's repository only (`--from-repo=nulavio`), with APT from the highest version among the system's sources |
 | Preventive | Off after the install; nothing runs at install. Turning it on or off is the only privileged step, with the administrator's password every time, and runs one fixed helper that takes only `on` or `off`. The service and the timer require the flag file, update only the `nulavio` package, and use the package manager's own signature checks (`gpgcheck` and `repo_gpgcheck` in Nulavio's RPM repository, `Signed-By` in its APT source) |
 | Detective | `systemctl status nulavio-update.timer`, `journalctl -u nulavio-update`; the package manager's own history |
-| Limitations | The update trusts what the system's package manager trusts: a repository the administrator added that also offers a `nulavio` package could provide it. An update of `nulavio` may pull in new dependencies from the system's repositories, as a manual update does. A program of the person's account can start `pkexec` too, but gets nothing without the administrator's password |
+| Limitations | With APT the update trusts every source the system has: one the administrator added that also offers a `nulavio` package could provide it (R83). An update may pull in new dependencies from the system's repositories, as a manual update does; it never removes a package (`--no-remove`; dnf refuses without `--allowerasing`). With `-y`, dnf may import a new signing key from the repository's `gpgkey` address at a key change without showing its fingerprint (not verified). The flag file survives the package's removal, so a later install updates again without asking unless it was deleted (the download pages' removal steps delete it). A program of the person's account can start `pkexec` too, but gets nothing without the administrator's password |
 | Tests | `test_track_b`, `check_rpm.sh`, `check_deb.sh` |
-| Residual | Low: the same trust as a manual `dnf upgrade nulavio` or `apt upgrade`, on a schedule |
+| Residual | Low: the same trust as a manual `dnf upgrade nulavio` or `apt upgrade`, on a schedule; R83 |
 
 ---
 

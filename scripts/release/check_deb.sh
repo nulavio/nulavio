@@ -41,5 +41,5 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     su tester -c "nulavio-doctor --json" > /tmp/doctor.json || true
     python3 -I /checks/doctor_probe.py /usr/lib/nulavio < /tmp/doctor.json
     # Automatic updates (#241), last: it removes the package.
-    sh /checks/updates_probe.sh "apt-get -qq remove -y nulavio"
+    sh /checks/updates_probe.sh apt-get -qq remove -y nulavio
 '
