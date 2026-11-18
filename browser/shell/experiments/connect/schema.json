@@ -16,6 +16,18 @@
         "parameters": []
       },
       {
+        "name": "updatesState",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "setAutomaticUpdates",
+        "type": "function",
+        "async": true,
+        "parameters": [{ "name": "on", "type": "boolean" }]
+      },
+      {
         "name": "setDefaultBrowser",
         "type": "function",
         "async": true,
@@ -47,17 +59,6 @@
             "name": "device",
             "type": "string",
             "maxLength": 64
-          }
-        ]
-      },
-      {
-        "name": "setKrunner",
-        "type": "function",
-        "async": true,
-        "parameters": [
-          {
-            "name": "enabled",
-            "type": "boolean"
           }
         ]
       }

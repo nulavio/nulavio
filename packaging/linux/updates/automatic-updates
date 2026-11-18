@@ -1,0 +1,31 @@
+#!/bin/sh
+# Turn Nulavio's automatic updates on or off (#241). Run as root by pkexec under the polkit action
+# net.nulavio.automatic-updates, which asks for the administrator's password each time. It takes "on" or "off" and
+# nothing else; the state is one empty file that nulavio-update.timer and nulavio-update.service require.
+set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+flag=/etc/nulavio/automatic-updates
+[ "$#" -eq 1 ] || { echo "usage: automatic-updates on|off" >&2; exit 2; }
+case "$1" in
+on)
+    mkdir -p /etc/nulavio
+    chmod 0755 /etc/nulavio
+    rm -f "$flag"
+    : > "$flag"
+    chmod 0644 "$flag"
+    # The timer reads the file when it starts; started now, or at the next boot if systemd cannot be asked.
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl restart nulavio-update.timer >/dev/null 2>&1 || echo "the timer starts at the next boot" >&2
+    echo on
+    ;;
+off)
+    rm -f "$flag"
+    systemctl stop nulavio-update.timer >/dev/null 2>&1 || true # without the file it would not run anyway
+    echo off
+    ;;
+*)
+    echo "usage: automatic-updates on|off" >&2
+    exit 2
+    ;;
+esac

@@ -50,6 +50,12 @@ only what the measure needs: Marionette, no default-browser question and no firs
 page would load into the first tab). Everything else is Firefox's own default. It runs the same startup, memory
 and benchmark measures; the frame-time scenes are Nulavio's own and run on the two Nulavio builds only.
 
+With --first-minute, also a new profile's first minutes (#362): the highest PSS of the whole instance, read every 2 s
+for 60 s after the profile's first start (first_minute_peak_mib, one more minute a run) and during the 60 s its second
+start already runs (second_minute_peak_mib), with *_unreadable: the most running processes one reading could not
+read (counted, as for memory, never silently a lower peak). The content filter's first compile of its lists showed
+up there; a change to the lists shows up as this number.
+
 With --cli, the tools the browser runs for its pages (nulavio-tools/bin/nulavio next to each Nulavio engine, started
 by the Shell for the Vault, the AI Bridge, temporary profiles and the KDE integrations): the median wall time of 20
 calls each of `nulavio --version` and `nulavio vault api` asking for its capabilities, from a throwaway HOME
@@ -113,6 +119,7 @@ SETTLE_S = 5.0  # memory is read after the tabs have settled, not while they loa
 # Memory is read until two readings in a row agree: work the engine still does after its start (the content
 # filter's lists, the Shell's first tasks) made one reading of 1 tab swing by tens of percent between runs.
 FIRST_RUN_S = 60.0  # the second start runs this long before memory is read in a third
+FIRST_MINUTE_EVERY_S = 2.0  # --first-minute: how often the instance's PSS is read in a new profile's first minutes
 SETTLED_WITHIN = 0.03
 SETTLE_READINGS = 8
 # The engine's own "Minimize memory usage" (about:memory), in every process: garbage and caches the engine would
@@ -666,6 +673,20 @@ class FirefoxSession:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
 
+def peak_pss_mib(root: int, seconds: float, every: float = FIRST_MINUTE_EVERY_S) -> tuple[float, int, int]:
+    """(the highest PSS of the instance's process tree in MiB, how many readings, the most processes one reading could
+    not read) over `seconds`, read every `every` seconds (#362: a new profile's first work held the extension process at
+    up to 1.3 GiB for about 40 s). A reading that missed a running process is counted, never silently a lower peak."""
+    peak, readings, unreadable = 0, 0, 0
+    deadline = time.monotonic() + seconds
+    while True:
+        total, missed = pss_kib(instance_pids(root))
+        peak, readings, unreadable = max(peak, total), readings + 1, max(unreadable, missed)
+        if time.monotonic() >= deadline:
+            return peak / 1024, readings, unreadable
+        time.sleep(min(every, max(0.0, deadline - time.monotonic())))
+
+
 def one_run(
     engine: str,
     tabs: list[int],
@@ -674,6 +695,7 @@ def one_run(
     firefox: bool = False,
     require_sandbox: bool = False,
     cli: bool = False,
+    first_minute: bool = False,
 ) -> dict:
     """One fresh profile: its two starts, the tabs' memory, then each of `benchmarks` ((name, score of a Marionette
     session)) in a start of its own. `engine` is a Nulavio build, or with `firefox` the Firefox binary."""
@@ -685,13 +707,20 @@ def one_run(
     try:
         m = session.start()
         out = {"engine": str(session.engine.path), "version": session.engine.version, "startup_first_ms": startup_ms(m)}
+        if first_minute:  # the new profile's first minute, as a person's first minute in Nulavio (#362)
+            peak = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            out["first_minute_peak_mib"], out["first_minute_readings"], out["first_minute_unreadable"] = peak
         session.stop()
         m = session.restart()
         out["startup_second_ms"] = startup_ms(m)
         # A new profile's first work (the content filter compiles its lists until it has a copy to load): the
         # extension process held up to 1.2 GiB for about 30 s after the first two starts, 130 to 330 MiB after
         # later ones. Memory is a later start's, as a person's profile is every day.
-        time.sleep(FIRST_RUN_S)
+        if first_minute:  # read during the minute the second start runs anyway
+            peak = peak_pss_mib(session.process.pid, FIRST_RUN_S)
+            out["second_minute_peak_mib"], out["second_minute_readings"], out["second_minute_unreadable"] = peak
+        else:
+            time.sleep(FIRST_RUN_S)
         session.stop()
         m = session.restart()
         local = server.url("/page/perf-")
@@ -751,6 +780,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--firefox", action="store_true", help="also stock Firefox 160.0 as a third side, pinned")
     parser.add_argument("--cli", action="store_true", help="also the tools the browser runs (nulavio-tools), wall time")
     parser.add_argument(
+        "--first-minute", action="store_true",
+        help="also the peak PSS of a new profile's first minute after its first and second starts (one more minute a run)",
+    )  # fmt: skip
+    parser.add_argument(
         "--fingerprinting-cost", action="store_true", help="also each benchmark with the fingerprinting protections off"
     )
     parser.add_argument(
@@ -806,6 +839,7 @@ def main(argv: list[str] | None = None) -> int:
                         firefox=side == "firefox",
                         require_sandbox=args.require_sandbox,
                         cli=args.cli,
+                        first_minute=args.first_minute,
                     )
                     results["runs"].append({"run": run, "side": side, **measured})
                     print(f"run {run} {side}: {measured}", file=sys.stderr)

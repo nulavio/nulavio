@@ -5,9 +5,11 @@ the DNS options, the password managers, a protected profile."""
 
 from __future__ import annotations
 
+import time
 import unittest
 
 import harness
+import settings_page
 
 SHELL_ID = "shell@nulavio.net"
 # The window around the page: staged or not, what the band calls the page, and whether the toolbar is in view.
@@ -47,13 +49,34 @@ return {
 """
 PRIVACY = "resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs"
 DNS = f"return ChromeUtils.importESModule('{PRIVACY}').NulavioPrivacy.dns();"
+# #241: an install from the packages, played in chrome: NulavioUpdates' reads and its pkexec call are replaced (the
+# test engine is not in /usr/lib64/nulavio, and nothing here may ask for an administrator password). The pref
+# nulavio.test.updates set to "cancel" makes the next switch fail as a dismissed polkit prompt does.
+UPDATES = "resource://builtin-addons/nulavio-shell/modules/NulavioUpdates.sys.mjs"
+FAKE_UPDATES = f"""
+const U = ChromeUtils.importESModule('{UPDATES}');
+const now = {{available: true, on: false, canAsk: arguments[0], command: 'sudo /usr/libexec/nulavio/automatic-updates on'}};
+U.NulavioUpdates.real ??= {{state: U.NulavioUpdates.state, set: U.NulavioUpdates.set}};
+U.NulavioUpdates.state = async () => ({{...now}});
+U.NulavioUpdates.set = async on => {{
+  if (Services.prefs.getStringPref('nulavio.test.updates', '') === 'cancel') throw new U.UpdatesError('cancelled');
+  now.on = on;
+  return {{...now}};
+}};
+"""
+REAL_UPDATES = f"""
+const U = ChromeUtils.importESModule('{UPDATES}');
+if (U.NulavioUpdates.real) {{ Object.assign(U.NulavioUpdates, U.NulavioUpdates.real); delete U.NulavioUpdates.real; }}
+Services.prefs.clearUserPref('nulavio.test.updates');
+"""
 # The control that answers each step, and the card it leads to.
 STEPS = [
     ("firstrun-start", "layout-choice"),
     ("layout-choice-done", "dns-choice"),
     ("dns-apply", "firstrun-passwords"),
     ("firstrun-passwords-next", "firstrun-default"),
-    ("firstrun-default-later", "firstrun-profile"),
+    ("firstrun-default-later", "firstrun-updates"),
+    ("firstrun-updates-later", "firstrun-profile"),
     ("firstrun-profile-later", "firstrun-done"),
 ]
 
@@ -390,6 +413,94 @@ class FirstRunStageTest(unittest.TestCase):
             "return ['layout-choice', 'dns-choice', 'firstrun-back'].map(id => document.getElementById(id).checkVisibility());"
         )
         self.assertEqual(after, [False, False, False], "a card shown again was left on the new tab")
+
+    def updates_install(self, can_ask: bool = True):
+        self.m.chrome(FAKE_UPDATES, [can_ask])
+        self.addCleanup(self.m.chrome, REAL_UPDATES)
+        self.m.navigate(self.newtab)  # the steps that apply are read when the page loads
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-welcome", 15), self.page())
+
+    def test_10_automatic_updates_are_offered_on_a_package_install_and_turned_on_with_the_password(self):
+        """#241: after the default browser, on an install from the packages; a dismissed password prompt changes
+        nothing and keeps the card; given, the step is answered and "Tudo pronto" says they are on."""
+        self.updates_install()
+        self.go_to("firstrun-updates")
+        texts = self.m.execute(
+            "const c = document.getElementById('firstrun-updates');"
+            "return {title: c.querySelector('h2').textContent, terms: [...c.querySelectorAll('dt')].map(e => e.textContent),"
+            " on: document.getElementById('firstrun-updates-on').textContent,"
+            " command: document.getElementById('firstrun-updates-command').hidden};"
+        )
+        self.assertEqual(texts["title"], "Atualizações automáticas")
+        self.assertEqual(texts["terms"], ["O que é atualizado", "Quando", "Para ligar"])
+        self.assertEqual(texts["on"], "Ligar as atualizações automáticas")
+        self.assertTrue(texts["command"], "the command is for an install where nothing can ask for the password")
+        page = self.page()
+        self.assertEqual([page["panes"][name]["cut"] for name in ("say", "show", "do")], [0, 0, 0], page)
+        folder = harness.artifacts_dir() / "firstrun-stage"
+        folder.mkdir(parents=True, exist_ok=True)
+        for scheme, dark in (("light", 0), ("dark", 1)):
+            self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+            time.sleep(0.4)
+            (folder / f"updates-{scheme}.png").write_bytes(self.m.screenshot_png())
+        self.m.chrome("Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        self.m.chrome("Services.prefs.setStringPref('nulavio.test.updates', 'cancel');")
+        self.click("firstrun-updates-on")
+        error = "return document.getElementById('firstrun-updates-error').textContent;"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(error), 10))
+        self.assertEqual(self.m.execute(error), "Nada mudou: a senha não foi informada.")
+        self.assertEqual(self.page()["card"], "firstrun-updates")
+        self.m.chrome("Services.prefs.clearUserPref('nulavio.test.updates');")
+        self.click("firstrun-updates-on")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-profile", 10), self.page())
+        self.click("firstrun-profile-later")
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-done", 10), self.page())
+        summary = "return [...document.querySelectorAll('#firstrun-summary div')].map(d => d.textContent);"
+        self.assertTrue(harness.wait_until(lambda: "Atualizações automáticasLigadas" in self.m.execute(summary), 10))
+
+    def test_10b_where_nothing_can_ask_for_the_password_the_command_is_shown(self):
+        self.updates_install(can_ask=False)
+        self.go_to("firstrun-updates")
+        shown = self.m.execute(
+            "return {button: document.getElementById('firstrun-updates-on').checkVisibility(),"
+            " command: document.getElementById('firstrun-updates-code').textContent,"
+            " line: document.getElementById('firstrun-updates-command').checkVisibility()};"
+        )
+        self.assertEqual(shown, {"button": False, "command": "sudo /usr/libexec/nulavio/automatic-updates on", "line": True})
+        self.click("firstrun-updates-later")  # "Agora não" still goes on
+        self.assertTrue(harness.wait_until(lambda: self.page()["card"] == "firstrun-profile", 10), self.page())
+
+    def test_10c_not_offered_on_an_install_without_the_packages(self):
+        """The test engine itself is not in /usr/lib64/nulavio or /usr/lib/nulavio: the real module says so, no step."""
+        self.m.set_context("chrome")
+        try:
+            state = self.m.execute_async(
+                f"ChromeUtils.importESModule('{UPDATES}').NulavioUpdates.state().then(arguments[arguments.length - 1]);"
+            )
+        finally:
+            self.m.set_context("content")
+        self.assertFalse(state["available"], state)
+        self.go_to("firstrun-profile")
+        self.assertNotIn("firstrun-updates", self.page()["shown"])
+
+    def test_11_settings_about_has_the_switch_and_says_what_it_did(self):
+        self.updates_install()
+        self.m.chrome("Services.prefs.setStringPref('nulavio.firstrun.done', 'finished');")
+        settings_page.open_pane(self.m, "about")
+        switch = settings_page.wait_control(self.m, "nulavio-updates-auto")
+        self.assertEqual(switch["label"], "Atualizar o Nulavio automaticamente")
+        self.assertFalse(settings_page.control(self.m, "nulavio-updates-other")["shown"])
+        settings_page.click(self.m, "#nulavio-updates-auto")
+        said = settings_page.wait_control(self.m, "nulavio-updates-said")
+        self.assertEqual(said["message"], "As atualizações automáticas estão ligadas.")
+        self.m.chrome("Services.prefs.setStringPref('nulavio.test.updates', 'cancel');")
+        settings_page.click(self.m, "#nulavio-updates-auto")
+        error = settings_page.wait_control(self.m, "nulavio-updates-error")
+        self.assertEqual(error["message"], "Nada mudou: a senha não foi informada.")
+        self.assertFalse(settings_page.control(self.m, "nulavio-updates-said")["shown"], "a line left next to the error")
+        self.assertTrue(settings_page.control(self.m, "nulavio-updates-auto")["pressed"], "a dismissed prompt changed it")
+        folder = harness.artifacts_dir() / "firstrun-stage"
+        settings_page.shoot(self.m, folder, "updates-settings")
 
     def test_09_in_a_short_window_the_panes_stack_and_the_actions_stay_on_screen(self):
         size = self.m.chrome("return [window.outerWidth, window.outerHeight];")
