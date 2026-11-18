@@ -53,8 +53,8 @@ and benchmark measures; the frame-time scenes are Nulavio's own and run on the t
 With --first-minute, also a new profile's first minutes (#362): the highest PSS of the whole instance, read every 2 s
 for 60 s after the profile's first start (first_minute_peak_mib, one more minute a run) and during the 60 s its second
 start already runs (second_minute_peak_mib), with *_unreadable: the most running processes one reading could not
-read (counted, as for memory, never silently a lower peak). The content filter's first compile of its lists showed up there; a change
-to the lists shows up as this number.
+read (counted, as for memory, never silently a lower peak). The content filter's first compile of its lists showed
+up there; a change to the lists shows up as this number.
 
 With --cli, the tools the browser runs for its pages (nulavio-tools/bin/nulavio next to each Nulavio engine, started
 by the Shell for the Vault, the AI Bridge, temporary profiles and the KDE integrations): the median wall time of 20
