@@ -31,7 +31,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **New protections and their limits**:
 
-- Automatic updates (#241), packaging part: the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The browser's switch follows in the next change.
+- Automatic updates (#241): the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The switch is in Settings and on the first run, which offers it once; the browser runs the helper through `pkexec`, and a person without a polkit agent gets the command to type instead.
 
 **Nulavio fixes**:
 
