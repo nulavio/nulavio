@@ -1,4 +1,4 @@
-"""Nulavio Connect P1/P2 (docs/adr/0004-nulavio-connect.md): more desktop facts, and two explicit actions.
+"""Nulavio Connect P1/P2 (docs/adr/0004-nulavio-connect.md): more desktop facts, read only.
 
 Discovery stays read-only and evidence-based, as in P0:
 
@@ -9,12 +9,8 @@ Discovery stays read-only and evidence-based, as in P0:
 * notifications: the desktop's notification service and portal;
 * activities: Plasma activities (P2; Nulavio does not use them yet).
 
-Actions, each only on the user's request:
-
-* send a link to a KDE Connect device (`kdeconnect-cli --share`), one link at a time.
-
-The KRunner plugin was removed (#461): KDE's own runners open a typed address or a web-search keyword in the
-default browser.
+No actions: sending a link to a KDE Connect device was removed (#462; Plasma Browser Integration has its own), and the
+KRunner plugin too (#461: KDE's own runners open a typed address or a web-search keyword in the default browser).
 """
 
 from __future__ import annotations
@@ -144,24 +140,6 @@ def activities(spec: dict) -> connect.Status:
     return _status(spec, "available", "not-used", detail, [_owner_line(spec, owner)])
 
 
-# -- KDE Connect: one link, on request ----------------------------------------------------------
-
-
-def send_link(url: str, device: str) -> dict:
-    """Share one web address with one reachable device (KDE Connect opens it there)."""
-    if not isinstance(url, str) or not re.match(r"^https?://[^\s]{1,8000}$", url):
-        raise ConnectP1Error("bad-url")
-    if not isinstance(device, str) or not DEVICE_RE.match(device):
-        raise ConnectP1Error("bad-device")
-    if device not in {d["id"] for d in devices()}:
-        raise ConnectP1Error("device-unreachable")
-    tool = shutil.which("kdeconnect-cli")
-    result = _run([tool, "--device", device, "--share", url])
-    if result.returncode != 0:
-        raise ConnectP1Error("send-failed")
-    return {"sent": True, "device": device}
-
-
 PROBES = {
     "kde-connect": kde_connect,
     "screen-cast": screen_cast,
@@ -172,7 +150,7 @@ PROBES = {
 
 
 def api_request(request: dict) -> dict:
-    """The browser's requests (Settings -> Integrations, the link menu), one per call."""
+    """The browser's requests (Settings -> Integrations), one per call."""
     op = request.get("op")
     if op == "discover":
         later = [d for d in connect.definitions() if d["priority"] != "P0"]
@@ -183,8 +161,4 @@ def api_request(request: dict) -> dict:
             except Exception as exc:  # a broken probe reports itself
                 items.append(_status(spec, "error", "check-failed", "This check failed.", [repr(exc)]))
         return {"items": [asdict(i) for i in items]}
-    if op == "devices":
-        return {"devices": devices()}
-    if op == "send-link":
-        return send_link(request.get("url"), request.get("device"))
     raise ConnectP1Error("bad-request")
