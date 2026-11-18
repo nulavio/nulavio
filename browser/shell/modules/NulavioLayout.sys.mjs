@@ -640,7 +640,8 @@ export const NulavioLayout = {
    * and Nulavio's (NulavioWindow's quick actions), filtered as the person types. Nothing runs until one is picked.
    */
   openActions(win) {
-    if (!win?.gURLBar || win.closed) {
+    // A pop-up window's address bar cannot be typed into: nothing to open there.
+    if (!win?.gURLBar || win.closed || win.gURLBar.readOnly) {
       fail("no-window");
     }
     win.focus();

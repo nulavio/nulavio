@@ -354,9 +354,9 @@ class ShortcutsTest(unittest.TestCase):
         )["ok"]
         for words, name in (
             (("imers", "imersivo", "immersive"), "nulavio-immersive"),
-            (("tempor", "temporaria", "temporary window"), "nulavio-temporary"),
-            (("perf", "perfis", "switch profile"), "nulavio-profiles"),
-            (("destaq", "destaque", "highlight"), "nulavio-highlight"),
+            (("janela temp", "janela temporaria", "temporary window"), "nulavio-temporary"),
+            (("troc", "perfis", "switch profile"), "nulavio-profiles"),
+            (("copiar um", "link para o destaque", "copy link to highlight"), "nulavio-highlight"),
         ):
             for word in words:
                 self.assertIn(name, found(word, True), word)  # the exact path also gives the prefixes

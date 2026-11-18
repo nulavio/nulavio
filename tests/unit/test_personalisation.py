@@ -426,6 +426,10 @@ class QuickActionsTest(unittest.TestCase):
         names = [json.loads(a) if a.startswith('"') else "nulavio-assistant" for a in added]
         declared = next(o for o in options() if o["id"] == "quickActions")
         self.assertEqual(sorted(names), sorted(declared["values"]))
+        # The list stop() removes is the list start() added (#321): none is left in the engine after the Shell stops.
+        listed = re.search(r"const QUICK_ACTIONS = Object\.freeze\(\[(.*?)\]\)", source, re.S).group(1)
+        removed = ["nulavio-assistant" if n.strip() == "QUICK_ACTION" else json.loads(n) for n in listed.split(",") if n.strip()]
+        self.assertEqual(sorted(removed), sorted(names))
         block = source[source.index('addAction("nulavio-settings"') : source.index("  stop() {")]
         for forbidden in ("NulavioVault", "unlock", "setStopped", "grant", "autonomy", "NulavioGuard", "Services.prefs.set"):
             self.assertNotIn(forbidden, block)

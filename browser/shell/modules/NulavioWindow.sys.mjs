@@ -1579,37 +1579,50 @@ class WindowUI {
               // Already announced in the window.
             }
           }
-          return null;
+          // The keyboard goes back to the page, as with Ctrl+Alt+I: left in the address bar, it would hold the
+          // toolbar shown over the page in the mode that hides it.
+          return { focusContent: true };
         },
       });
       lazy.ActionsProviderQuickActions.addAction("nulavio-temporary", {
-        commands: ["temporária", "temporaria", "janela temporária", "janela temporaria", "temporary", "temporary window"],
+        // Phrases, not single words: the engine also matches an action's words inside what is typed for a search.
+        commands: ["janela temporária", "janela temporaria", "nova janela temporária", "nova janela temporaria",
+          "temporary window", "new temporary window"],
         icon,
         label: "nulavio-quickaction-temporary",
         isUnsupported: workspace,
-        onPick: () => {
-          lazy.NulavioProfiles.openTemporary().catch(console.error); // a profile of its own, deleted when it closes
-          return null;
+        onPick: (_queryContext, controller) => {
+          const win = controller?.browserWindow ?? top();
+          const say = win ? sayIn(win) : () => {};
+          // As the profile menu's item does: said while it opens, and why when it cannot.
+          say("profilesTemporaryOpening");
+          lazy.NulavioProfiles.openTemporary().catch(e => {
+            console.error(e);
+            const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
+            const key = `err_${String(e?.code ?? "unexpected").replaceAll("-", "_")}`;
+            say(extension?.localizeMessage(key) ? key : "err_unexpected");
+          });
+          return { focusContent: true };
         },
       });
       lazy.ActionsProviderQuickActions.addAction("nulavio-profiles", {
-        commands: ["perfil", "perfis", "trocar de perfil", "profile", "profiles", "switch profile"],
+        commands: ["perfis", "trocar de perfil", "mudar de perfil", "switch profile", "change profile"],
         icon,
         label: "nulavio-quickaction-profiles",
         isUnsupported: workspace,
         onPick: (_queryContext, controller) => {
           const win = controller?.browserWindow ?? top();
-          const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
-          // The profile menu, as its button opens it: it lists the profiles and filters them as the person types.
-          const action = extension && lazy.ExtensionParent.apiManager.global.browserActionFor?.(extension);
-          if (win && action) {
-            action.openPopup(win, true).catch(console.error);
+          if (win) {
+            // The profile menu as the band's name opens it: the button's own action (the tab's site for "always
+            // open here"), or the menu in a tab when the person removed the button. It filters profiles by name.
+            this.#profiles(win);
           }
           return null;
         },
       });
       lazy.ActionsProviderQuickActions.addAction("nulavio-highlight", {
-        commands: ["destaque", "link para o destaque", "copiar link para o destaque", "highlight", "copy link to highlight"],
+        commands: ["link para o destaque", "copiar link para o destaque", "copiar um link", "link para o texto",
+          "copy link to highlight", "copy a link", "link to highlight"],
         icon,
         label: "nulavio-quickaction-highlight",
         isUnsupported: workspace,
