@@ -1001,6 +1001,18 @@ change no measured scene):
   against an extracted package that had no `distribution/` read this as a Nulavio regression;
   `frame_scene.py` now records each build's extensions and refuses to compare builds that differ.
 
+**The page-loading line (#397, 2026-11-18).** `frame_scene.py --load-line` measured one engine, the Nulavio 160.0 build (BuildID 20261116132313) with the Shell at `a64888d3`, as shipped (uBlock Origin installed). It ran with the line on (`nulavio.window.loadLine`) against the same engine with it off, 5 runs × 10 samples a side. The new `page_load` scene loads a local page whose body arrives over 1.2 s in the selected tab, and records the chrome's frames while it loads ([perf.json](../research/evidence/load-line-frames-2026-11-18/perf.json)).
+
+| Gate | Budget | Line on | Line off | Result |
+|---|---|---|---|---|
+| A page loading, frame interval | p95 ≤ 20 ms, max ≤ 50 ms | p95 18.2, max 35.3 (4361 intervals) | p95 34.9, max 53.1 (3508) | Pass |
+| Against the line off | flag a median > 10 % worse when the runs do not overlap | none flagged in any scene | — | Pass |
+| 60 s idle | 0 chrome reflows, 0 frames constructed | 0 and 0 | 0 and 0 | Pass |
+
+With the line off, nothing in the chrome animates while the page loads. The compositor then composites only when the page changes, and its intervals are longer: 33 ms at p95. That is not jank. With the line on, it composites every frame, and the intervals stay at the display's 17 ms.
+
+The other scenes of this run read as shipped, with uBlock Origin's first-run work, on both sides alike: sidebar collapse p95 34 ms, the tab switch max 120–135 ms. They are covered by the exceptions above, and the line changes none of them.
+
 The sidebar scenes measure the curve and durations of patch 0008 (Horizon since Firefox 160) on both builds, so they compare like
 with like. Re-run with:
 
