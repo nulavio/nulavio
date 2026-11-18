@@ -970,8 +970,9 @@ class ImmersiveTest(unittest.TestCase):
         toolbar, across the page, and out and back in during the hold and during a transition: the toolbar never
         covers the tab list or the assistant's panel, the page and the panel never move sideways, the band never
         moves, and once the pointer rests on the page nothing stays shown. With no panel, Nulavio's assistant and a
-        site's; in Lateral, Foco and Abas no topo (where the side column is the launcher's, as with the mode off);
-        light at 1440 x 900 and dark at the narrowest window.
+        site's; in Lateral, Foco and Abas no topo (where the side column is the launcher's, as with the mode off), and in
+        Lateral with the tab list on the right (#346: every journey mirrored, by the right edge); light at 1440 x 900
+        and dark at the narrowest window.
         The tab list is drawn over the panel as it is over the page: it comes and goes without moving either."""
         self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
         self.addCleanup(
@@ -987,9 +988,10 @@ class ImmersiveTest(unittest.TestCase):
         self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
         before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
         self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
         chatbot = self.server.url("/page/chatbot")
 
-        def journey(name: str, points: list[tuple[int, int]], pause_ms: int = 0) -> list[dict]:
+        def walk(name: str, points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]:
             self.m.chrome(TRACE)
             self.m.set_context("chrome")
             try:
@@ -1038,8 +1040,9 @@ class ImmersiveTest(unittest.TestCase):
         for size, dark in (((1440, 900), 0), ((320, 480), 1)):
             self.m.chrome("window.resizeTo(arguments[0], arguments[1]);", list(size))
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
-            for preset in ("lateral", "focus", "top"):
+            for preset, start in (("lateral", True), ("focus", True), ("top", True), ("lateral", False)):
                 self.apply_preset(preset)
+                self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
                 for panel, show in PANELS.items():
                     self.m.chrome(show, [chatbot])
                     if panel != "none":
@@ -1051,7 +1054,14 @@ class ImmersiveTest(unittest.TestCase):
                     self.m.chrome(AWAY + "gBrowser.selectedBrowser.focus();")
                     self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
                     w, h = self.m.chrome("return [innerWidth, innerHeight];")
-                    where = f"{preset}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
+                    side = "" if start else " on the right"
+                    where = f"{preset}{side}, panel {panel}, {w}x{h}, {'dark' if dark else 'light'}"
+
+                    def journey(name, points, pause_ms=0, w=w, start=start):
+                        # With the tab list on the right, the same path seen in a mirror: by the right edge.
+                        mirrored = [p if start else (w - 1 - p[0], *p[1:]) for p in points]
+                        return walk(name, mirrored, pause_ms)
+
                     page = (w * 3 // 4, h // 2)
                     with self.subTest(where=where):
                         # Band -> toolbar -> tab list and back up, then out over the page.
