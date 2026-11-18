@@ -47,8 +47,8 @@ jobs:
         run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Companion protocol library (Java; Gradle and dependencies checksum-verified)
-        run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :nv1:test
+      - name: Companion protocol library (Java; Gradle and dependencies checksum-verified; run again if Maven refuses, #516)
+        run: JAVA_HOME="$JAVA_HOME_21_X64" scripts/ci/gradle.sh -q :nv1:test
       - name: uBlock Origin's list registry is the pinned package's (fetched from AMO, checked against the lock)
         run: python3 -I scripts/upstream/refresh_extensions_lock.py --check-registry
       - name: Unit tests
@@ -135,8 +135,8 @@ jobs:
           persist-credentials: false
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
-      - name: Lint and release build (Gradle and dependencies checksum-verified; no signing key in CI)
-        run: JAVA_HOME="$JAVA_HOME_21_X64" android/gradlew -p android --no-daemon -q :app:lintDebug :app:assembleRelease
+      - name: Lint and release build (Gradle and dependencies checksum-verified, run again if Maven refuses; no signing key in CI)
+        run: JAVA_HOME="$JAVA_HOME_21_X64" scripts/ci/gradle.sh -q :app:lintDebug :app:assembleRelease
 
   changes:
     name: does this change need the engine integration run
