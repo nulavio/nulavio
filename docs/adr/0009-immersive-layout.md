@@ -124,3 +124,15 @@ Not verified: a real camera, microphone or screen capture. The engine's test mod
 ## Amendment 2026-11-18: raw automation is gone (#463, #509)
 
 Raw automation was removed from the AI Bridge ([ADR 0007](0007-ai-bridge.md), amendment of 2026-11-17). Decisions 2 and 6 still name it: the band has no raw seal any more, and "a window under raw automation" no longer exists. Its design tokens (the red fill, the diagonal-stripes pattern, the fullscreen colour) were removed in #509. An AI Workspace is still never Immersive.
+
+## Amendment 2026-11-18: the tab list on either side, and tabs on top (#346)
+
+The maintainer left tabs on top and a tab list on the right for after 1.0 (2026-11-14); #346 brings them into "Barras". Each part leaves entirely and comes back from its own edge:
+
+- **The tab list on the left** (the default) leaves by the left edge and comes back from it, as before.
+- **The tab list on the right** (`sidebar.position_start` false, the engine's own setting) leaves by the right edge and only the right edge brings it back; the left edge brings nothing. It is drawn over the page, which does not move. `test_immersive` 23, and every pointer journey of 20 mirrored by the right edge.
+- **Tabs on top** (Abas no topo) leave and come back with the toolbar, as one block under the band. The side column there is the launcher's, from the left edge, as with the mode off. `test_immersive` 20.
+
+Measured at 1440×900 on a 160.0.1 build of this branch, in all three positions, with every part away: the page gets **1424×868 (95.4 %)**, between the frame margins and under the band; nothing else of the window is in view at either edge. The tab list at rest is entirely past its edge (x −240 on the left, x 1456 on the right). Captures and geometry from the probe that measured it are in the pull request.
+
+Not in this amendment: the assistant's panel on the side opposite the tabs, with an edge of its own. It depends on the panel being able to sit there at all, which is [#527](https://github.com/nulavio/nulavio/issues/527) (the spike in [#249](https://github.com/nulavio/nulavio/issues/249)).
