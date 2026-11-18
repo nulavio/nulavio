@@ -7,13 +7,14 @@ Discovery stays read-only and evidence-based, as in P0:
 * security-keys: FIDO2/U2F keys plugged in (HID usage page 0xF1D0) and whether
   this user may open them (passkeys and Nulavio's planned security-key unlock);
 * notifications: the desktop's notification service and portal;
-* krunner: whether Nulavio's KRunner plugin is installed (P1);
 * activities: Plasma activities (P2; Nulavio does not use them yet).
 
 Actions, each only on the user's request:
 
-* send a link to a KDE Connect device (`kdeconnect-cli --share`), one link at a time;
-* install or remove the KRunner plugin (user-level files, nothing else).
+* send a link to a KDE Connect device (`kdeconnect-cli --share`), one link at a time.
+
+The KRunner plugin was removed (#461): KDE's own runners open a typed address or a web-search keyword in the
+default browser.
 """
 
 from __future__ import annotations
@@ -22,13 +23,11 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from . import connect, paths
+from . import connect
 
-KRUNNER_SERVICE = "net.nulavio.krunner"
 DEVICE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 TIMEOUT = 10
 
@@ -145,76 +144,6 @@ def activities(spec: dict) -> connect.Status:
     return _status(spec, "available", "not-used", detail, [_owner_line(spec, owner)])
 
 
-# -- KRunner plugin (user-level files) -------------------------------------------------------
-
-
-def _data_home() -> Path:
-    value = os.environ.get("XDG_DATA_HOME", "")
-    return Path(value) if value.startswith("/") else Path.home() / ".local" / "share"
-
-
-def krunner_files() -> tuple[Path, Path]:
-    base = _data_home()
-    return (
-        base / "krunner" / "dbusplugins" / f"{KRUNNER_SERVICE}.desktop",
-        base / "dbus-1" / "services" / f"{KRUNNER_SERVICE}.service",
-    )
-
-
-def krunner(spec: dict) -> connect.Status:
-    plugin, service = krunner_files()
-    evidence = [
-        f"{plugin}: {'present' if plugin.exists() else 'absent'}",
-        f"{service}: {'present' if service.exists() else 'absent'}",
-    ]
-    if plugin.exists() and service.exists():
-        detail = 'Type an address or "nulavio <words>" in KRunner (Alt+Space) to open it in Nulavio.'
-        return _status(spec, "enabled", "enabled", detail, evidence)
-    if not shutil.which("krunner"):
-        return _status(spec, "unavailable", "no-krunner", "KRunner is not installed.", evidence)
-    if not _gi_available():
-        detail = "The plugin needs Python's GLib bindings (python3-gobject), which are not installed."
-        return _status(spec, "unavailable", "no-gi", detail, evidence)
-    return _status(spec, "available", "available", "Open addresses and searches in Nulavio from KRunner.", evidence)
-
-
-def _gi_available() -> bool:
-    return (
-        _run(
-            [sys.executable, "-I", "-c", "import gi; gi.require_version('Gio', '2.0'); from gi.repository import Gio"]
-        ).returncode
-        == 0
-    )
-
-
-def krunner_enable() -> list[str]:
-    """Write the plugin's two user-level files; returns what was written (reversible with krunner_disable)."""
-    if not _gi_available():
-        raise ConnectP1Error("gi-missing")
-    plugin, service = krunner_files()
-    launcher = paths.repo_root() / "bin" / "nulavio"
-    paths.ensure_private_dir(plugin.parent)
-    paths.ensure_private_dir(service.parent)
-    plugin.write_text(
-        "[Desktop Entry]\nName=Nulavio\nComment=Open addresses and searches in Nulavio\nType=Service\nIcon=nulavio\n"
-        "X-KDE-ServiceTypes=Plasma/Runner\nX-KDE-PluginInfo-Name=net.nulavio.krunner\nX-KDE-PluginInfo-Version=1.0\n"
-        "X-KDE-PluginInfo-License=MPL-2.0\nX-KDE-PluginInfo-EnabledByDefault=true\nX-Plasma-API=DBus\n"
-        f"X-Plasma-DBusRunner-Service={KRUNNER_SERVICE}\nX-Plasma-DBusRunner-Path=/runner\n",
-        encoding="utf-8",
-    )
-    service.write_text(f"[D-BUS Service]\nName={KRUNNER_SERVICE}\nExec={launcher} integrations krunner-serve\n", encoding="utf-8")
-    return [str(plugin), str(service)]
-
-
-def krunner_disable() -> list[str]:
-    removed = []
-    for path in krunner_files():
-        if path.exists():
-            path.unlink()
-            removed.append(str(path))
-    return removed
-
-
 # -- KDE Connect: one link, on request ----------------------------------------------------------
 
 
@@ -238,7 +167,6 @@ PROBES = {
     "screen-cast": screen_cast,
     "security-keys": security_keys,
     "notifications": notifications,
-    "krunner": krunner,
     "activities": activities,
 }
 
@@ -259,8 +187,4 @@ def api_request(request: dict) -> dict:
         return {"devices": devices()}
     if op == "send-link":
         return send_link(request.get("url"), request.get("device"))
-    if op == "krunner-enable":
-        return {"written": krunner_enable()}
-    if op == "krunner-disable":
-        return {"removed": krunner_disable()}
     raise ConnectP1Error("bad-request")

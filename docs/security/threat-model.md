@@ -344,7 +344,9 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Tests | `test_release_metadata`, `test_release_metadata_workflow`, `test_release_notes` |
 | Residual | Existing supply-chain and shared-account limits (S13, S19); this automation does not accept or reduce those risks by itself |
 
-### S21 — A program on the session bus posing as KWin (keep above, #170)
+### S21 — A program on the session bus posing as KWin (keep above, #170) — removed
+
+The item was removed before it shipped (#460, 2026-11-17): Nulavio no longer asks KWin for anything, so this scenario has no surface left. The table below is the record of what it was.
 
 | Field | |
 |---|---|

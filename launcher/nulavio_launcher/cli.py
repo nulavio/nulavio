@@ -362,10 +362,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_integrations(args: argparse.Namespace) -> int:
-    if args.integrations_cmd == "krunner-serve":
-        from . import krunner
-
-        return krunner.serve()
     if args.integrations_cmd == "api":
         from . import connect_p1
 
@@ -496,7 +492,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("integrations", help="what the desktop offers (KDE, portals, secret storage, default browser); read-only")
     p.add_argument("--json", action="store_true")
-    p.add_argument("integrations_cmd", nargs="?", choices=["api", "krunner-serve"], help=argparse.SUPPRESS)
+    p.add_argument("integrations_cmd", nargs="?", choices=["api"], help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_integrations)
 
     p = sub.add_parser("temporary", help="temporary profiles (deleted on close); `nulavio run --temporary` opens one")

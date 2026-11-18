@@ -66,10 +66,6 @@
       "busName": "org.freedesktop.Notifications"
     },
     {
-      "id": "krunner",
-      "priority": "P1"
-    },
-    {
       "id": "activities",
       "priority": "P2",
       "busName": "org.kde.ActivityManager"
