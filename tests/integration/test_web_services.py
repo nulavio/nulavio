@@ -51,6 +51,20 @@ return [...open.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulav
   label: item.getAttribute('label'), disabled: item.disabled,
   shown: !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' }));
 """
+# Where the Shell's items on a selection are (#483): the assistant's item, and whether it sits in the menu itself or in
+# the submenu the engine makes, named after the add-on, once the Shell has more than one item there.
+ARRANGEMENT = """
+const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
+  .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+if (!d) return null;
+const drawn = i => !i.hidden && i.ownerDocument.defaultView.getComputedStyle(i).display !== 'none';
+const shell = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-']")].filter(drawn);
+const ask = shell.find(i => i.id.endsWith('-menuitem-_nulavio-ask-selection'));
+if (!ask) return null;
+const popup = ask.parentNode;
+return { submenu: popup.id === 'contentAreaContextMenu' ? null : popup.parentNode.getAttribute('label'),
+         items: shell.filter(i => i.parentNode === popup).map(i => i.getAttribute('label')) };
+"""
 ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
   .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
@@ -400,6 +414,33 @@ class WebServicesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
         self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
         return handles
+
+    def test_04c_the_menus_arrangement_with_zero_one_and_two_services(self):
+        """#483: with no service the assistant's item is in the page's menu itself. With one or more services the
+        engine groups the Shell's items in a submenu named after the add-on: that name is "Nulavio", the product's, not
+        "Nulavio Shell". The add-on itself is hidden from the add-ons manager, so the name shows nowhere else."""
+        ask = "Perguntar ao assistente sobre a seleção"
+        cases = ((None, None, [ask]), ("deepl", "Nulavio", None), ("google", "Nulavio", None))
+        for key, submenu, items in cases:
+            with self.subTest(service=key):
+                expect = None
+                if key:
+                    self.ok("return SV.NulavioServices.addTranslator({key: args[0]});", key)
+                    expect = {"deepl": "Traduzir seleção com DeepL", "google": "Traduzir seleção com Google Translate"}[key]
+                self.open_menu_on_text(expect=expect)
+                seen = harness.wait_until(lambda: self.m.chrome(ARRANGEMENT), 5)
+                self.assertTrue(seen, "the assistant's item is not in the menu")
+                self.assertEqual(seen["submenu"], submenu, seen)
+                if items is not None:
+                    self.assertEqual(seen["items"], items)
+                else:
+                    self.assertIn(ask, seen["items"])
+                    self.assertIn(expect, seen["items"])
+                self.m.chrome(CLOSE_MENU)
+        shell = "const {AddonManager} = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');"
+        shell += " const a = await AddonManager.getAddonByID('shell@nulavio.net');"
+        addon = self.sv(shell + " return {name: a.name, hidden: a.hidden};")
+        self.assertEqual(addon, {"ok": {"name": "Nulavio", "hidden": True}})
 
     def test_06_private_windows_offer_them_only_when_allowed(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")

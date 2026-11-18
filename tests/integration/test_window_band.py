@@ -347,7 +347,8 @@ class WindowBandTest(unittest.TestCase):
         try:
             stopped = seen("extensionPage")
             self.assertEqual((stopped["kind"], stopped["says"]), ("extensionPage", "extension"))
-            self.assertIn("Nulavio Shell", stopped["label"])
+            self.assertIn("Nulavio", stopped["label"])  # the add-on's name (#483), in the engine's extension label
+            self.assertNotEqual(stopped["label"], brand)
         finally:
             self.assertNotIn("error", chrome_async(self.m, f"const ui = {WINDOW}; ui.start(); await ui.refresh();"))
         self.assertEqual(seen("chromeUI"), own)

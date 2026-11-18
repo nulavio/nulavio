@@ -1,5 +1,5 @@
 {
-  "extName": { "message": "Nulavio Shell" },
+  "extName": { "message": "Nulavio" },
   "extDescription": { "message": "Nulavio built-in components: new tab, search and profile settings, and the dangerous-download warning." },
 
   "newtabTitle": { "message": "New Tab" },
