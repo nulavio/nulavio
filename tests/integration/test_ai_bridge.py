@@ -990,7 +990,7 @@ class AiBridgeTest(unittest.TestCase):
         opened = bridge.call("tab_new", {"url": url})
         self.assertFalse(opened["isError"], opened)
         self.assertEqual(opened["structuredContent"]["title"], "Asked")
-        self.assertEqual(hits, ["/asked"])
+        self.assertEqual([hit for hit in hits if hit != "/favicon.ico"], ["/asked"])  # the engine may ask for its icon
 
     @unittest.skipUnless(harness.nulavio_engine(), "the profile's Local Network Access is set by the Nulavio Shell")
     def test_29_a_users_profile_opened_for_an_agent_refuses_a_public_pages_local_requests_and_keeps_nothing(self):
