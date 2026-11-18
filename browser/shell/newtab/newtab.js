@@ -869,6 +869,7 @@ async function firstRun() {
       await connect.setAutomaticUpdates(true);
       updatesOn.hidden = true; // asked and done: shown again ("Voltar"), the card says so instead of asking again
       document.getElementById("firstrun-updates-said").hidden = false;
+      document.getElementById("firstrun-updates-later").textContent = t("firstrunContinue"); // "Agora não" no longer fits
       if (current === "updates") {
         await advance("updates"); // a prompt answered late, after the person went on, moves nothing
       }
