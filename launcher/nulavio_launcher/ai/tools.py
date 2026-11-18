@@ -202,11 +202,8 @@ FORMS_SEND_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.send()
 FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open() : 0)"
 DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
-# Seconds a name that resolved to a local address is still taken as local. An answer that it is not local is never
-# kept: the engine looks the name up again on its own, and a name can answer "public" to the Bridge and then a local
-# address to the engine (DNS rebinding, LESIS 929cb094), so each held request waits for a lookup of its own.
-LOCAL_HOST_TTL = 60.0
-LOCAL_HOSTS_KEPT = 2048  # local names kept; the older half goes when it is full
+LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the requests that follow
+LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
 LOCAL_LOOKUP_TIMEOUT = 3.0  # seconds a name may take to resolve before its request fails
 LOCAL_REFUSED_NOTED = 20  # places a session's refused requests are listed for in the activity
 # Schemes whose requests reach no host: a page's own data, and the engine's own pages and icons.
@@ -371,7 +368,7 @@ class Bridge:
         self._net_handled: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections whose handler is set
         self._net_engines: weakref.WeakSet[Bidi] = weakref.WeakSet()  # connections synced at least once
         self._local_ok: set[tuple[str, int]] = set()  # (host, port) local_resources was allowed for in this call
-        self._local_hosts: dict[str, float] = {}  # name that resolved to a local address -> when
+        self._local_hosts: dict[str, tuple[float, bool]] = {}  # resolved name -> (when, local)
         self._local_refused: set[str | None] = set()  # origins whose refused request is in the activity already
         self._local_refused_more = False  # more places were refused than the activity lists
         self._local_busy_noted = False  # requests were failed because too many names were out
@@ -867,18 +864,17 @@ class Bridge:
         return not local or self._local_all or place in self._local_ok or (port == 443 and (host, 80) in self._local_ok)
 
     def _is_local(self, host: str, wait: bool = True) -> bool | None:
-        """An address is read at once, and so is a name that resolved to a local address in the last
-        LOCAL_HOST_TTL seconds. Any other name is looked up for this request (once for the requests that need
-        it at the same time), with a deadline: one that does not answer in time counts as local, and so does
-        every new name while LOOKUPS_AT_ONCE of them are still out. A "not local" answer is never reused."""
+        """An address is read at once, and a name already looked up. Otherwise the name is looked up, once
+        however many requests need it, with a deadline: one that does not answer in time counts as local,
+        and so does every new name while LOOKUPS_AT_ONCE of them are still out."""
         if policy.local_host(host, resolve=False):
             return True
         if policy.is_address(host):
             return False
         with self._net_state:
             known = self._local_hosts.get(host)
-            if known is not None and time.monotonic() - known <= LOCAL_HOST_TTL:
-                return True
+            if known is not None and time.monotonic() - known[0] <= LOCAL_HOST_TTL:
+                return known[1]
             if not wait:
                 return None
             lookup = self._lookups.get(host)
@@ -900,11 +896,10 @@ class Bridge:
         with contextlib.suppress(Exception):
             local = policy.local_host(host)
         with self._net_state:
-            if local:  # kept even when its requests stopped waiting; "not local" is not kept at all
-                if len(self._local_hosts) >= LOCAL_HOSTS_KEPT:
-                    for old in list(self._local_hosts)[: LOCAL_HOSTS_KEPT // 2]:
-                        del self._local_hosts[old]
-                self._local_hosts[host] = time.monotonic()
+            if len(self._local_hosts) >= LOCAL_HOSTS_KEPT:
+                for old in list(self._local_hosts)[: LOCAL_HOSTS_KEPT // 2]:
+                    del self._local_hosts[old]
+            self._local_hosts[host] = (time.monotonic(), local)  # kept even when its requests stopped waiting
             self._lookups.pop(host, None)
         lookup.local = local
         lookup.done.set()
