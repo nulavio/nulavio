@@ -30,7 +30,9 @@ class ScreenTest(unittest.TestCase):
 
     def test_the_engine_has_the_target_and_the_default_set_of_both_tracks_turns_it_on(self):
         self.assertIn("+ITEM_VALUE(ScreenSizeConstant,", PATCH)
-        series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8").split()
+        # Read as the build reads it (scripts/build/apply_patches.py): a commented line is not applied.
+        lines = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8").splitlines()
+        series = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
         self.assertIn("0012-rfp-per-site-audio-noise-and-one-screen-size.patch", series)
         # The entry as the engine reads the list (nsRFPService::CreateOverridesFromText): between commas, a sign
         # first, no space skipped. Nothing else gives pages the constant, so a set that lost it loses the screen.

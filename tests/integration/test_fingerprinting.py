@@ -894,8 +894,9 @@ class FingerprintingTest(unittest.TestCase):
         self.assertEqual(self.measure("localhost")["screen"]["size"], constant)
         # The engine's set is the one thing that decides (#468): with a set written without the target, pages read
         # the display's size, as they lose any other protection a set leaves out: the open page at once, and the
-        # next one from its first script. Nothing in the Shell puts the constant back. With the build's set again,
-        # so is the constant, for the page that stayed open too.
+        # next one from its first script. (This set has no ScreenRect, which the engine would ask first.) Nothing
+        # in the Shell puts the constant back. With the build's set again, so is the constant, for the page that
+        # stayed open too.
         own = ",".join(i for i in self.m.chrome(TARGETS)["overrides"].split(",") if i.strip() != "+ScreenSizeConstant")
         self.m.chrome(f"Services.prefs.setStringPref('{OVERRIDES_PREF}', arguments[0]);", [own])
         self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{OVERRIDES_PREF}');")
