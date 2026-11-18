@@ -611,7 +611,7 @@
     }
     /* #346: the side panel on the other side of the page (#527) has an edge of its own. It leaves the flow by that edge,
        as the tab list does by its, and comes back over the page when the pointer reaches the edge, while the pointer or
-       the keyboard is in it, while a menu or a panel anchored in it is open, while the band's pin is pressed, and while
+       the keyboard is in it (in its page: NulavioWindow), while a menu or a panel anchored in it is open, while the band's pin is pressed, and while
        the window holds it (NulavioWindow: just opened, a permission request waiting in it). The page keeps the frame margin on
        both sides and does not move. Under the tab list, never over it; the toolbar never covers its top (above). Its
        splitter goes with it: the panel is resized with the mode off. */

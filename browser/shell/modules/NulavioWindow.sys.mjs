@@ -590,6 +590,12 @@ class WindowUI {
     // the background is (#346).
     const panelShown = () => this.#panelShown(win);
     win.addEventListener("SidebarShown", panelShown);
+    // ...and the keyboard in that panel. The panel's page is a document of its own, so the chrome's :focus-within does
+    // not see the keyboard there (window-band.css); the window root sees focus move in every document of the window.
+    const panelFocus = () => win.setTimeout(() => this.#panelFocusHold(win), 0);
+    for (const type of ["focus", "blur"]) {
+      win.windowRoot.addEventListener(type, panelFocus, true);
+    }
     // ...and the tab list's side or the panel's changing at once, not sliding across the window (#346).
     const sides = new win.MutationObserver(() => this.#sideChanged(win));
     sides.observe(doc.documentElement, { attributes: true, attributeFilter: ["sidebar-positionend", "nulavio-panel-opposite"] });
@@ -690,7 +696,7 @@ class WindowUI {
     }
     const menuItem = this.#addViewMenuItem(win);
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, panelEdge, panelShown, sides, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, panelEdge, panelShown, panelFocus, sides, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -1090,6 +1096,29 @@ class WindowUI {
         this.#applyImmersive(win);
       }
     }, BACKGROUND_TAB_MS);
+  }
+
+  /** #346: the keyboard in the side panel (its page, or the panel's own header) holds the panel on its own edge in view,
+      as the keyboard in the toolbar holds the toolbar. Read from the window's focused element: with the keyboard in the
+      panel's page, that is the panel's browser. */
+  #panelFocusHold(win) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    const doc = win.document;
+    const box = doc.getElementById("sidebar-box");
+    const key = doc.getElementById("sidebar"); // the panel's browser: one key for this hold, apart from the others
+    const inside = Boolean(box && key && !box.hidden && box.contains(doc.activeElement));
+    if (!key || inside === state.holds.has(key)) {
+      return;
+    }
+    if (inside) {
+      state.holds.set(key, "panel");
+    } else {
+      state.holds.delete(key);
+    }
+    this.#applyImmersive(win);
   }
 
   /** #346: a permission request of the assistant's task waits as a card in this window's panel (NulavioAI places it
@@ -1588,6 +1617,9 @@ class WindowUI {
     state.edge.remove();
     state.panelEdge.remove();
     win.removeEventListener("SidebarShown", state.panelShown);
+    for (const type of ["focus", "blur"]) {
+      win.windowRoot?.removeEventListener(type, state.panelFocus, true);
+    }
     state.sides.disconnect();
     for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-immersive-two-lines",
       "nulavio-immersive-entering", "nulavio-stage"]) {
