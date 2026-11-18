@@ -22,6 +22,7 @@ from urllib.parse import urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import settings_page
+from nulavio_launcher.vault import sodium, storage
 
 
 MODULE = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch'
@@ -758,6 +759,81 @@ class SearchPrivacyTest(unittest.TestCase):
         engine = self.search("return S.addOpenSearch({url: args[0]});", url)
         self.addCleanup(self.search, "await S.remove(args[0]);", engine)
         self.assertIn("Fixture OS limpo", self.search(names))
+
+
+VAULT = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs')"
+PROFILES = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs').NulavioProfiles"
+STAND_IN_SESSION = (
+    "Services.cookies.add('kagi.com', '/', 'kagi_session', 'stand-in', true, true, false, Date.now() + 86400000, {},"
+    " Ci.nsICookie.SAMESITE_LAX, Ci.nsICookie.SCHEME_HTTPS); return true;"
+)
+
+
+@unittest.skipUnless(harness.nulavio_engine() and sodium.available() and storage.tools_available(), "needs Vault and Track B")
+class ProtectedProfileSignInTest(unittest.TestCase):
+    def test_a_sign_in_survives_the_lock_and_unlock_of_a_protected_profile(self):
+        """#440 (#151's encrypted case): a protected profile keeps its cookie store inside its volume, so a provider's
+        sign-in is still there after the profile is locked and unlocked; while it is locked, another profile's
+        Settings say nothing about it. A stand-in session cookie: the test never signs in anywhere."""
+        owner = harness.GeckoProfileSession(name="Owner")
+        self.addCleanup(owner.cleanup)
+        m = owner.start()
+        password = "synthetic sign-in vault password"
+
+        def ok(client, body: str, *args):
+            result = chrome_async(client, body, args)
+            self.assertNotIn("error", result, result)
+            return result["ok"]
+
+        made = ok(
+            m,
+            f"const {{id}} = await {VAULT}.NulavioVault.createProtected({{name: 'Conta protegida', avatar: 'diamond',"
+            " color: 'sand', password: args[0]});"
+            "const SPS = ChromeUtils.importESModule('resource:///modules/profiles/SelectableProfileService.sys.mjs')"
+            ".SelectableProfileService; return {id, path: (await SPS.getProfile(id)).path};",
+            password,
+        )
+        profile_id, path = made["id"], Path(made["path"])
+        # A volume left mounted by a failure is unmounted (lazily, as test_vault_profiles does) before the home goes.
+        self.addCleanup(lambda: storage.Container(path).mounted() and storage.Container(path).unmount(wait=30, lazy_after=True))
+        signed = f"return {MODULE}.accounts().kagi.signedIn;"
+        # #151: false when the profile is not signed in; null when its cookies could not be read, which is not "not".
+        signed_out = {"signedIn": False, "signIn": "https://kagi.com/signin", "host": "kagi.com"}
+
+        def open_protected():
+            ok(m, f"await {VAULT}.vaultHelper({{op: 'unlock', path: args[0], method: 'password', secret: args[1]}});"
+               " return true;", str(path), password)  # fmt: skip
+            self.assertTrue(storage.Container(path).mounted())
+            (path / "MarionetteActivePort").unlink(missing_ok=True)
+            harness.GeckoProfileSession.enable_marionette(path)
+            self.assertEqual(ok(m, f"return {PROFILES}.switchTo(args[0]);", profile_id), {"action": "launched"})
+            child = harness.GeckoProfileSession.connect(path)
+            # The instance Marionette reached is the protected profile's own (its port file is in the volume).
+            self.assertEqual(Path(child.chrome("return Services.dirsvc.get('ProfD', Ci.nsIFile).path;")), path)
+            return child
+
+        def close(client):
+            client.quit()
+            return harness.wait_until(lambda: not storage.Container(path).mounted(), 30)
+
+        child = open_protected()
+        try:
+            self.assertEqual(ok(child, f"return {MODULE}.accounts().kagi;"), signed_out)
+            ok(child, STAND_IN_SESSION)
+            self.assertIs(ok(child, signed), True)
+        finally:
+            locked = close(child)  # asserted after, so a failure above is the one reported
+        self.assertTrue(locked, "it did not lock")
+        self.assertEqual(list(path.iterdir()), [], "a locked profile's folder shows none of its files")
+        # Locked: the owner's Settings read the owner's own accounts, signed out, and only the providers it knows.
+        # By construction each profile has its own cookie store; this checks that nothing else is said.
+        self.assertEqual(ok(m, f"return {MODULE}.accounts();"), {"kagi": signed_out})
+        child = open_protected()
+        try:
+            self.assertTrue(harness.wait_until(lambda: ok(child, signed) is True, 15), "the sign-in was lost")
+        finally:
+            locked = close(child)
+        self.assertTrue(locked, "it did not lock")
 
 
 if __name__ == "__main__":

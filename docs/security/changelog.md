@@ -27,7 +27,23 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
-## Unreleased (on `main`, after 160.0-0.6)
+## Unreleased (on `main`, after 160.0.1-0.1)
+
+**New protections and their limits**:
+
+- Automatic updates (#241): the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The switch is in Settings and on the first run, which offers it once; the browser runs the helper through `pkexec`, and a person without a polkit agent gets the command to type instead.
+
+## Nulavio 160.0.1-0.1 (Firefox 160.0.1), published 2026-11-18
+
+The urgent engine update ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.1), [run 44252459660](https://github.com/nulavio/nulavio/actions/runs/44252459660)), built from `main` at `419967a4`, which also carries what landed after 160.0-0.6 (below). The engine pin landed in #524 after the laptop pre-check of 160.0.1 (networking check passed; integration 641 of 643, the two failures timing races in the tests that passed alone, #526). The first attempt of the release run stopped on two integration tests whose navigation timed out (`test_layout_presets`, `test_window_frame`; `main`'s CI skips both, which need the built-in Shell, and both passed in `main`'s scheduled rehearsal of the same commit, run 44283732010, which stopped on three `test_web_services` tests that passed here); the second was cancelled while it was only slow (its build took 83 minutes instead of 15); the third passed every step. At the maintainer's request in chat, the agent dispatched the run, gave the `release` environment's approval and published the draft (after checking `SHA256SUMS.asc` against the published key): `scripts/release/AGENTS.md` leaves those steps to the maintainer, who asked for this exception. Signing through KMS ended at 11:05 UTC, the packages were uploaded and installed from the site's repository files in clean containers by 11:11 UTC, and the GitHub release was published at 11:51 UTC.
+
+**Upstream**: Firefox 160.0.1, released by Mozilla 2026-11-17 14:06:53 UTC ([mfsa2026-130](https://www.mozilla.org/security/advisories/mfsa2026-130/), high). Urgency: urgent (an advisory of high impact; not exploited in the wild, no public exploit code). Source SHA-256 `7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d` (Mozilla's signed SHA256SUMS, subkey `827E658608679618CD349F93678E455D76767AA3`). 160.0.1-0.1 carries it (#444, #524).
+
+**Timing**
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| 2026-11-17 14:06:53 UTC | staged, by the `upstream` workflow, −14.6 h (#444 opened 2026-11-16 23:31 UTC); published seen +8.6 h | 2026-11-18 10:58 UTC, +20.9 h (rehearsal of the third attempt: build, unit, 633 integration tests with 30 skipped, RPM, .deb, signed-repository and KMS checks, 71 min) | 2026-11-18 11:51 UTC, +21.7 h (packages in the repositories at 11:11 UTC) | 24 h (2026-11-18 14:06 UTC): met | 72 h (2026-11-20 14:06 UTC): met |
 
 **New protections and their limits**:
 
@@ -46,7 +62,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 - A site with "Usar meu fuso horário neste site" on kept the earlier set of fingerprinting protections until the browser restarted, when the set changed while it was open: turning "Deixar os sites verem minhas preferências de movimento e contraste" on or off did not reach that site (#405). The engine works out each site's own set when the per-site list is set, and not again; the Shell now hands it the list again after the general set changes.
 
-- Release chain: the engine pin may only name, and a release may only be published from, a Firefox release whose Rust code passed the engine's networking check (no `recv`, `send` or resolver function imported, the engine's guard against Rust code going around a proxy). The check is read from a build made for it, by a script, and its record is in the repository; CI refuses a pin without it and signing refuses a manifest without it (#430, [build](../architecture/build.md#the-networking-check-on-rust-code)). The record is a statement by whoever ran the reading, and the maintainer may record a release as accepted without one, naming the issue where he said so; nothing checks that but the review of the pull request ([R79](residual-risks.md)). The build laptop's automatic pre-build of a new engine release is now this pre-check, and makes nothing that can be signed. A release does not rest on the record: a workflow makes the same reading on the build machine and attests it, and the signing job refuses a release without that attestation for its exact source, configuration and patch stack (#455; not yet exercised by a release when this was written). The attestation also names the Rust compiler its build used, and the release's manifest the one the release was built with: built with two compilers, the reading does not count for the release (#472).
+- Release chain: the engine pin may only name, and a release may only be published from, a Firefox release whose Rust code passed the engine's networking check (no `recv`, `send` or resolver function imported, the engine's guard against Rust code going around a proxy). The check is read from a build made for it, by a script, and its record is in the repository; CI refuses a pin without it and signing refuses a manifest without it (#430, [build](../architecture/build.md#the-networking-check-on-rust-code)). The record is a statement by whoever ran the reading, and the maintainer may record a release as accepted without one, naming the issue where he said so; nothing checks that but the review of the pull request ([R79](residual-risks.md)). The build laptop's automatic pre-build of a new engine release is now this pre-check, and makes nothing that can be signed. A release does not rest on the record: a workflow makes the same reading on the build machine and attests it, and the signing job refuses a release without that attestation for its exact source, configuration and patch stack (#455; first exercised by 160.0.1-0.1). The attestation also names the Rust compiler its build used, and the release's manifest the one the release was built with: built with two compilers, the reading does not count for the release (#472).
 
 - Build: the release build is linked with link-time optimisation across C++ and Rust, as Mozilla's own Linux builds are (#364). In such a build the engine skips its own check that Rust code imports no networking function, which ran in every release build up to 160.0-0.6. The reading above, made on another build of the same source, is what stands in its place; it does not read the binary that ships ([R79](residual-risks.md)).
 
@@ -57,15 +73,12 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Removed**:
 
 - The Track A preview, Nulavio's profile on the distribution's Firefox (#464, ADR 0001 amendment of 2026-11-17): `nulavio setup` and `run` refuse an engine that is not the Nulavio build, and its chrome theme is gone. People who used it move to the RPM or APT package; their profiles stay where they were, and the README gives the steps to bring bookmarks and passwords. R1, R4, R5, R12, R13 and R17 closed with it.
+- The KRunner plugin (#461, ADR 0004 amendment of 2026-11-17): Nulavio no longer runs a session-bus service that any program of the user could call to open an address or a search in it, and R44 closes with it. The two files "Add to KRunner" wrote under the data folder (`krunner/dbusplugins/net.nulavio.krunner.desktop`, `dbus-1/services/net.nulavio.krunner.service`) stay until the person deletes them; the release notes give them.
 - Raw automation (#463, ADR 0007 amendment of 2026-11-17): no tool hands an agent the AI Workspace's WebDriver BiDi endpoint any more, so nothing an agent does through the bridge escapes the per-call policy and the activity record (a program running as the user can still reach the workspace's automation port, AI-T17 and AI-T18). The browser's internal pages, which only its opt-in opened, are offered to no agent; an opt-in recorded by an earlier version grants nothing, and the agents' page says once that it was removed. R42 closed.
 
 **Per-site choices that loosen a site's own rules (not a protection)**:
 
 - "Permitir copiar e colar neste site" in the shield's panel (#160): off by default, kept per origin in the profile and listed in Settings' site exceptions. On, that origin's pages cannot cancel copy, cut, paste, the page menu or selection, so their own handlers for those events no longer run there (R76).
-
-**New ways the browser talks to the desktop**:
-
-- "Manter acima das outras janelas" on KDE Plasma (#170): on the person's action, Nulavio asks KWin over the session bus to run a one-line script that keeps that one window above the others. Whatever answers as KWin learns the profile's path and the window's id (R77).
 
 ## Nulavio 160.0-0.6 (Firefox 160.0), published 2026-11-16
 

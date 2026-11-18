@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 from pathlib import Path
 from urllib.parse import quote, urlsplit
@@ -50,6 +51,20 @@ if (!open) return null;
 return [...open.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-svc-']")].map(item => ({
   label: item.getAttribute('label'), disabled: item.disabled,
   shown: !item.hidden && item.ownerDocument.defaultView.getComputedStyle(item).display !== 'none' }));
+"""
+# Where the Shell's items on a selection are (#483): the assistant's item, and whether it sits in the menu itself or in
+# the submenu the engine makes, named after the add-on, once the Shell has more than one item there.
+ARRANGEMENT = """
+const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
+  .find(d => d.getElementById('contentAreaContextMenu').state === 'open');
+if (!d) return null;
+const drawn = i => !i.hidden && i.ownerDocument.defaultView.getComputedStyle(i).display !== 'none';
+const shell = [...d.querySelectorAll("#contentAreaContextMenu [id*='-menuitem-_nulavio-']")].filter(drawn);
+const ask = shell.find(i => i.id.endsWith('-menuitem-_nulavio-ask-selection'));
+if (!ask) return null;
+const popup = ask.parentNode;
+return { submenu: popup.id === 'contentAreaContextMenu' ? null : popup.parentNode.getAttribute('label'),
+         items: shell.filter(i => i.parentNode === popup).map(i => i.getAttribute('label')) };
 """
 ACTIVATE = """
 const d = [...Services.wm.getEnumerator('navigator:browser')].map(w => w.document)
@@ -400,6 +415,39 @@ class WebServicesTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
         self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
         return handles
+
+    def test_04c_the_menus_arrangement_with_zero_one_and_two_services(self):
+        """#483: with no service the assistant's item is in the page's menu itself. With one or more services the
+        engine groups the Shell's items in a submenu named after the add-on: that name is "Nulavio", the product's, not
+        "Nulavio Shell". The add-on is hidden from the add-ons manager; the name also shows in the engine's extension
+        shortcuts view (test_shortcuts 07), where "Nulavio" reads right too."""
+        ask = "Perguntar ao assistente sobre a seleção"
+        deepl, google = "Traduzir seleção com DeepL", "Traduzir seleção com Google Translate"
+        cases = ((None, None, [ask]), ("deepl", "Nulavio", [ask, deepl]), ("google", "Nulavio", [ask, deepl, google]))
+        for key, submenu, items in cases:
+            with self.subTest(service=key):
+                expect = None
+                if key:
+                    self.ok("return SV.NulavioServices.addTranslator({key: args[0]});", key)
+                    expect = {"deepl": "Traduzir seleção com DeepL", "google": "Traduzir seleção com Google Translate"}[key]
+                # The background page draws its items a moment after the services change (open_menu_on_text): the
+                # menu is opened again until it shows what is expected, the services' items included or gone.
+                seen = None
+                for _ in range(6):
+                    self.open_menu_on_text(expect=expect)
+                    seen = harness.wait_until(lambda: self.m.chrome(ARRANGEMENT), 5)
+                    if seen and (seen["submenu"] is None) == (submenu is None):
+                        break
+                    self.m.chrome(CLOSE_MENU)
+                    time.sleep(0.5)
+                self.assertTrue(seen, "the assistant's item is not in the menu")
+                self.assertEqual(seen["submenu"], submenu, seen)
+                self.assertEqual(sorted(seen["items"]), sorted(items), seen)
+                self.m.chrome(CLOSE_MENU)
+        shell = "const {AddonManager} = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');"
+        shell += " const a = await AddonManager.getAddonByID('shell@nulavio.net');"
+        addon = self.sv(shell + " return {name: a.name, hidden: a.hidden};")
+        self.assertEqual(addon, {"ok": {"name": "Nulavio", "hidden": True}})
 
     def test_06_private_windows_offer_them_only_when_allowed(self):
         self.ok("return SV.NulavioServices.addTranslator({key: 'deepl'});")

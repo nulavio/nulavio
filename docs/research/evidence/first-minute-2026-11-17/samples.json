@@ -1,0 +1,456 @@
+{
+ "what": "#362: a new profile's first three starts on Nulavio 160.0 (main's Shell at the time, headless), PSS in MiB every ~6 s: the whole instance and the extension process (requestProcInfo type 'extension').",
+ "starts": {
+  "first": [
+   {
+    "t": 0.0,
+    "instance": 789,
+    "extension": 173
+   },
+   {
+    "t": 2.2,
+    "instance": 1088,
+    "extension": 435
+   },
+   {
+    "t": 4.2,
+    "instance": 1196,
+    "extension": 693
+   },
+   {
+    "t": 7.8,
+    "instance": 1941,
+    "extension": 1318
+   },
+   {
+    "t": 9.9,
+    "instance": 1711,
+    "extension": 1057
+   },
+   {
+    "t": 12.0,
+    "instance": 1351,
+    "extension": 845
+   },
+   {
+    "t": 14.0,
+    "instance": 1105,
+    "extension": 553
+   },
+   {
+    "t": 16.1,
+    "instance": 1104,
+    "extension": 566
+   },
+   {
+    "t": 18.2,
+    "instance": 1107,
+    "extension": 601
+   },
+   {
+    "t": 20.3,
+    "instance": 1345,
+    "extension": 566
+   },
+   {
+    "t": 22.4,
+    "instance": 1436,
+    "extension": 681
+   },
+   {
+    "t": 24.5,
+    "instance": 1259,
+    "extension": 665
+   },
+   {
+    "t": 26.5,
+    "instance": 1302,
+    "extension": 715
+   },
+   {
+    "t": 28.6,
+    "instance": 1383,
+    "extension": 736
+   },
+   {
+    "t": 30.7,
+    "instance": 1295,
+    "extension": 706
+   },
+   {
+    "t": 32.8,
+    "instance": 1251,
+    "extension": 706
+   },
+   {
+    "t": 34.9,
+    "instance": 1224,
+    "extension": 706
+   },
+   {
+    "t": 37.0,
+    "instance": 1222,
+    "extension": 706
+   },
+   {
+    "t": 39.0,
+    "instance": 854,
+    "extension": 351
+   },
+   {
+    "t": 41.1,
+    "instance": 835,
+    "extension": 341
+   },
+   {
+    "t": 43.2,
+    "instance": 662,
+    "extension": 173
+   },
+   {
+    "t": 45.2,
+    "instance": 661,
+    "extension": 172
+   },
+   {
+    "t": 47.3,
+    "instance": 661,
+    "extension": 172
+   },
+   {
+    "t": 49.4,
+    "instance": 663,
+    "extension": 173
+   },
+   {
+    "t": 51.4,
+    "instance": 658,
+    "extension": 173
+   },
+   {
+    "t": 53.5,
+    "instance": 657,
+    "extension": 173
+   },
+   {
+    "t": 55.6,
+    "instance": 658,
+    "extension": 173
+   },
+   {
+    "t": 57.6,
+    "instance": 657,
+    "extension": 173
+   },
+   {
+    "t": 59.7,
+    "instance": 653,
+    "extension": 173
+   }
+  ],
+  "second": [
+   {
+    "t": 0.0,
+    "instance": 589,
+    "extension": 150
+   },
+   {
+    "t": 2.1,
+    "instance": 936,
+    "extension": 457
+   },
+   {
+    "t": 4.1,
+    "instance": 904,
+    "extension": 423
+   },
+   {
+    "t": 6.2,
+    "instance": 724,
+    "extension": 244
+   },
+   {
+    "t": 8.3,
+    "instance": 713,
+    "extension": 237
+   },
+   {
+    "t": 10.3,
+    "instance": 629,
+    "extension": 156
+   },
+   {
+    "t": 12.4,
+    "instance": 619,
+    "extension": 155
+   },
+   {
+    "t": 14.5,
+    "instance": 616,
+    "extension": 155
+   },
+   {
+    "t": 16.5,
+    "instance": 624,
+    "extension": 155
+   },
+   {
+    "t": 18.6,
+    "instance": 623,
+    "extension": 155
+   },
+   {
+    "t": 20.6,
+    "instance": 626,
+    "extension": 155
+   },
+   {
+    "t": 22.7,
+    "instance": 626,
+    "extension": 155
+   },
+   {
+    "t": 24.8,
+    "instance": 628,
+    "extension": 156
+   },
+   {
+    "t": 26.8,
+    "instance": 628,
+    "extension": 156
+   },
+   {
+    "t": 28.9,
+    "instance": 628,
+    "extension": 156
+   },
+   {
+    "t": 30.9,
+    "instance": 627,
+    "extension": 156
+   },
+   {
+    "t": 33.0,
+    "instance": 625,
+    "extension": 156
+   },
+   {
+    "t": 35.1,
+    "instance": 626,
+    "extension": 156
+   },
+   {
+    "t": 37.1,
+    "instance": 625,
+    "extension": 156
+   },
+   {
+    "t": 39.2,
+    "instance": 896,
+    "extension": 370
+   },
+   {
+    "t": 41.3,
+    "instance": 897,
+    "extension": 372
+   },
+   {
+    "t": 43.3,
+    "instance": 817,
+    "extension": 339
+   },
+   {
+    "t": 45.4,
+    "instance": 817,
+    "extension": 339
+   },
+   {
+    "t": 47.5,
+    "instance": 817,
+    "extension": 339
+   },
+   {
+    "t": 49.5,
+    "instance": 819,
+    "extension": 339
+   },
+   {
+    "t": 51.6,
+    "instance": 816,
+    "extension": 339
+   },
+   {
+    "t": 53.7,
+    "instance": 813,
+    "extension": 339
+   },
+   {
+    "t": 55.7,
+    "instance": 808,
+    "extension": 339
+   },
+   {
+    "t": 57.8,
+    "instance": 808,
+    "extension": 339
+   },
+   {
+    "t": 59.9,
+    "instance": 809,
+    "extension": 339
+   }
+  ],
+  "third": [
+   {
+    "t": 0.0,
+    "instance": 542,
+    "extension": 107
+   },
+   {
+    "t": 2.1,
+    "instance": 951,
+    "extension": 471
+   },
+   {
+    "t": 4.1,
+    "instance": 917,
+    "extension": 436
+   },
+   {
+    "t": 6.2,
+    "instance": 727,
+    "extension": 244
+   },
+   {
+    "t": 8.3,
+    "instance": 711,
+    "extension": 237
+   },
+   {
+    "t": 10.4,
+    "instance": 630,
+    "extension": 157
+   },
+   {
+    "t": 12.4,
+    "instance": 620,
+    "extension": 155
+   },
+   {
+    "t": 14.5,
+    "instance": 618,
+    "extension": 155
+   },
+   {
+    "t": 16.5,
+    "instance": 618,
+    "extension": 155
+   },
+   {
+    "t": 18.6,
+    "instance": 618,
+    "extension": 155
+   },
+   {
+    "t": 20.7,
+    "instance": 620,
+    "extension": 155
+   },
+   {
+    "t": 22.7,
+    "instance": 621,
+    "extension": 155
+   },
+   {
+    "t": 24.8,
+    "instance": 622,
+    "extension": 156
+   },
+   {
+    "t": 26.9,
+    "instance": 622,
+    "extension": 156
+   },
+   {
+    "t": 28.9,
+    "instance": 622,
+    "extension": 156
+   },
+   {
+    "t": 31.0,
+    "instance": 622,
+    "extension": 156
+   },
+   {
+    "t": 33.1,
+    "instance": 619,
+    "extension": 157
+   },
+   {
+    "t": 35.1,
+    "instance": 618,
+    "extension": 157
+   },
+   {
+    "t": 37.2,
+    "instance": 617,
+    "extension": 157
+   },
+   {
+    "t": 39.2,
+    "instance": 618,
+    "extension": 158
+   },
+   {
+    "t": 41.3,
+    "instance": 616,
+    "extension": 156
+   },
+   {
+    "t": 43.4,
+    "instance": 616,
+    "extension": 156
+   },
+   {
+    "t": 45.4,
+    "instance": 613,
+    "extension": 153
+   },
+   {
+    "t": 47.5,
+    "instance": 614,
+    "extension": 153
+   },
+   {
+    "t": 49.5,
+    "instance": 614,
+    "extension": 153
+   },
+   {
+    "t": 51.6,
+    "instance": 615,
+    "extension": 153
+   },
+   {
+    "t": 53.7,
+    "instance": 616,
+    "extension": 153
+   },
+   {
+    "t": 55.7,
+    "instance": 1179,
+    "extension": 644
+   },
+   {
+    "t": 57.8,
+    "instance": 1117,
+    "extension": 613
+   },
+   {
+    "t": 59.9,
+    "instance": 1044,
+    "extension": 613
+   }
+  ]
+ }
+}
