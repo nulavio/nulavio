@@ -84,6 +84,9 @@ class RangeTest(unittest.TestCase):
             "before 1.4",
             "~> 1.2",
             "< 1.2,",
+            "< 1.0, before the summer",
+            "< 1.0, <= 2.x",
+            "< 1.0, garbage",
         ):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 watch.range_covers(text, "1.0.0")
@@ -239,6 +242,16 @@ class WatchTest(unittest.TestCase):
         draft = [{**UBO[0], "state": "draft"}]
         rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": draft}), {"ublock-origin": "1.75.0"})
         self.assertEqual(watch.exit_status(rows), 0)  # a valid draft stays excluded
+
+    def test_a_malformed_vulnerability_is_an_error_row_and_the_other_checks_go_on(self):
+        for bad in (["x"], [1], [{"package": "uBO", "vulnerable_version_range": "<= 2"}], [None]):
+            other = copy.deepcopy(UBO)
+            other[0]["vulnerabilities"] = bad
+            with self.subTest(bad=bad):
+                rows = self.run_rows(AdvisoryNet(replies={"gorhill/uBlock": other}))
+                self.assertIn("error", {r.state for r in rows if r.check == "advisory"})
+                self.assertIn("ok", {r.state for r in rows if r.check == "advisory"})  # the other extensions
+                self.assertEqual(watch.exit_status(rows), 2)
 
     def test_the_token_is_read_from_the_first_line_of_stdin(self):
         self.assertEqual(watch.read_token(io.StringIO("ghs_abc\nmore")), "ghs_abc")

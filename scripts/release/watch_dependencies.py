@@ -520,6 +520,8 @@ def advisory_row(
         if not isinstance(vulns, list) or not vulns:
             problems.append("it lists no affected package or range")
         for vuln in vulns if isinstance(vulns, list) else []:
+            if not isinstance(vuln, dict) or not isinstance(vuln.get("package") or {}, dict):
+                raise ValueError(f"{ident}: a vulnerability or its package is not an object")
             name = str((vuln.get("package") or {}).get("name", ""))
             if source["monorepo"] and name.lower() not in packages:
                 problems.append(f"it names package {name!r}, which is not this extension's in the table")
