@@ -955,6 +955,9 @@ motion. Security cues, warnings and critical consent never move.
 |---|---|---|---|---|
 | Sidebar launcher | width | expand 220 / collapse 160 ms, standard curve (Horizon on the engine's view transition; patch 0008 until Firefox 159); Foco's expand-on-hover 220 ms after the engine's 200 ms intent delay | — | The engine skips it |
 | Tab labels, route mark, hover | opacity, scale, colour | fade, base, fast | — | Off |
+| The engine's security panels (#319): the site's trust panel, its permissions, a permission prompt | nothing: they open at once. The engine fades its arrow panels in over 180 ms; the Shell sets the engine's own per-panel switch (`animate="false"`) on these as they start to show, and on no other panel | — | — | — |
+| The room tabs make for a dragged one (#319) | the engine's `transform` on the other tabs, in both strips | base, standard (Horizon re-values the engine's variable). The engine's width movement of a tab with the tabs on top keeps its own 100 ms ease-out: on the tokens it measured worse | — | The engine skips it |
+| Sidebar panels: history, bookmarks, the assistant (#319) | the engine's view transition as a panel opens, closes or gives way to another | expand 220 / collapse 160 / fast 120 ms, standard curve | — | The engine skips it |
 | Plain dialogs and the profile create sheet | opening only: opacity and `translate: 0 8px → 0`; the backdrop's opacity | base, enter | `.dialog--critical`, `.dialog--danger` ("Bloquear agora", deletions) | Instant |
 | Toasts | appearing only: opacity and `translate: 0 4px → 0` | fast, enter | warn and error levels, inline results | Instant |
 | The profile's arrival | the identity chip in the new tab's "Você está em" line, once the page paints | base, enter | the band, state badges, the temporary chip | Off |
@@ -964,7 +967,11 @@ motion. Security cues, warnings and critical consent never move.
 Closing a sheet, removing a chip and hiding a toast are instant, so focus never waits on an
 animation. Under reduced motion the guard in `shared/accessibility.css` sets every duration to 0 but
 keeps delays, so what appears after a delay (the new tab's fallback, list placeholders, "still
-loading") still appears. `test_motion` 01–05 and `tests/unit/test_motion_sheet.py` check both.
+loading") still appears. `test_motion` 01–09 and `tests/unit/test_motion_sheet.py` check both.
+
+The [motion map](motion-map.md) (#319) goes through the whole window moment by moment: what moves, what
+does not and why, the patterns it does not use, how it was measured, and how the engine's security panels
+were made to open with no animation.
 
 ### Budget
 
@@ -1018,6 +1025,12 @@ change no measured scene):
 With the line off, nothing in the chrome animates while the page loads. The compositor then composites only when the page changes, and its intervals are longer: 33 ms at p95. That is not jank. With the line on, it composites every frame, and the intervals stay at the display's 17 ms.
 
 The other scenes of this run read as shipped, with uBlock Origin's first-run work, on both sides alike: sidebar collapse p95 34 ms, the tab switch max 120–135 ms. They are covered by the exceptions above, and the line changes none of them.
+
+The motion map's movements (#319) were measured the same way on 2026-11-18, with five new scenes (a tab
+opening and closing, the main menu, a sidebar panel opening and closing) and with the tabs on top: nothing
+that existed got slower. A tab's arrival in the vertical list was built and measured with them, read p95 34.2
+against 20 (one doubled frame at its start; max 35.4, inside 50), and was taken out: it waits for a
+real-desktop measurement in #555. [Motion map, "Measured"](motion-map.md#measured).
 
 The sidebar scenes measure the curve and durations of patch 0008 (Horizon since Firefox 160) on both builds, so they compare like
 with like. Re-run with:
