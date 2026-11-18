@@ -1,10 +1,10 @@
 {
-  "version": "160.0-0.7",
-  "date": "2026-11-17",
+  "version": "160.0.1-0.1",
+  "date": "2026-11-18",
   "channel": "alpha",
-  "firefox": "160.0",
+  "firefox": "160.0.1",
   "pt-BR": {
-    "summary": "Uma atualização da alpha com o mesmo motor (Firefox 160.0): os sites recebem ainda menos dados para reconhecer o seu computador, um site pode ser impedido de bloquear copiar e colar, e a janela ganha ferramentas: editar o texto de uma página, manter a janela acima das outras e uma linha de carregamento.",
+    "summary": "Uma atualização de segurança da alpha, com o motor no Firefox 160.0.1 e as correções de segurança da Mozilla. Além disso, os sites recebem ainda menos dados para reconhecer o seu computador, um site pode ser impedido de bloquear copiar e colar, e a janela ganha ferramentas: editar o texto de uma página, manter a janela acima das outras e uma linha de carregamento.",
     "breaking": [
       "Os sites não ficam mais sabendo que o seu sistema pede menos movimento ou mais contraste, porque isso ajuda a reconhecer você de um site para outro. Os sites então mostram as animações deles, e as páginas rolam suavemente.",
       "Se você depende dessas configurações, ligue Deixar os sites verem minhas preferências de movimento e contraste em Configurações, Privacidade e Segurança. Quando o sistema tem uma delas ligada, uma barra oferece isso uma vez.",
@@ -21,6 +21,7 @@
       "Diagnóstico pelo terminal numa instalação por pacote: nulavio-doctor confere o motor do pacote, os codecs, o chaveiro do sistema e a ligação com os gerenciadores de senha. O comando nulavio continua abrindo o navegador."
     ],
     "fixed": [
+      "O motor passa ao Firefox 160.0.1, que corrige falhas de segurança de gravidade alta (aviso da Mozilla mfsa2026-130).",
       "Num sistema sem a biblioteca de codecs, o som em MP4, como a maioria dos sites de vídeo envia, não tocava. Os pacotes agora recomendam a biblioteca, e o comando nulavio-doctor avisa quando ela falta e o que instalar.",
       "A escolha da organização das abas na primeira execução cabe na tela em 150 % num monitor pequeno, onde os nomes das opções apareciam uma letra por linha."
     ],
@@ -32,7 +33,7 @@
     ]
   },
   "en-US": {
-    "summary": "An update of the alpha with the same engine (Firefox 160.0): sites get even less to recognise your computer by, a site can be stopped from blocking copy and paste, and the window gains tools: editing a page's text, keeping the window above the others and a loading line.",
+    "summary": "A security update of the alpha, with the engine on Firefox 160.0.1 and Mozilla's security fixes. Also, sites get even less to recognise your computer by, a site can be stopped from blocking copy and paste, and the window gains tools: editing a page's text, keeping the window above the others and a loading line.",
     "breaking": [
       "Sites are no longer told that your system asks for less motion or more contrast, because that helps recognise you from one site to the next. Sites then show their animations, and pages scroll smoothly.",
       "If you rely on those settings, turn on Let sites see my motion and contrast preferences in Settings, Privacy and security. When your system has one of them on, a bar offers it once.",
@@ -49,6 +50,7 @@
       "Diagnostics from a terminal on a package install: nulavio-doctor checks the package's engine, the codecs, the system keyring and the password managers' connection. The nulavio command still opens the browser."
     ],
     "fixed": [
+      "The engine moves to Firefox 160.0.1, which fixes security flaws of high severity (Mozilla's advisory mfsa2026-130).",
       "On a system without the codec library, sound in MP4, as most video sites send it, did not play. The packages now recommend the library, and the nulavio-doctor command says when it is missing and what to install.",
       "The first run's choice of tab arrangement fits the screen at 150 % on a small display, where the options' names were set one letter per line."
     ],

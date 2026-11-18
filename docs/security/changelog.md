@@ -29,6 +29,14 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0-0.6)
 
+**Upstream**: Firefox 160.0.1, released by Mozilla 2026-11-17 14:06:53 UTC ([mfsa2026-130](https://www.mozilla.org/security/advisories/mfsa2026-130/), high). Urgency: urgent (an advisory of high impact; not exploited in the wild, no public exploit code). Source SHA-256 `7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d` (Mozilla's signed SHA256SUMS, subkey `827E658608679618CD349F93678E455D76767AA3`). The next package carries it as 160.0.1-0.1 (#444).
+
+**Timing** (to complete when it is published)
+
+| Mozilla's release | Detected | Ready to sign | Published | Target | Deadline |
+|---|---|---|---|---|---|
+| 2026-11-17 14:06:53 UTC | staged, by the `upstream` workflow, −14.6 h (#444 opened 2026-11-16 23:31 UTC); published seen +8.6 h | | | 24 h (2026-11-18 14:06 UTC): | 72 h (2026-11-20 14:06 UTC): |
+
 **New protections and their limits**:
 
 - Fingerprinting: what a page renders as audio offline differs per site (engine patch 0012, [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md), #79). The usual audio probe then reads a different value on every site and the same value again on one site. It covers the buffer an offline rendering returns: a probe that reads through a node inside the rendering (an analyser, a script processor, a worklet) or from sound that plays is not changed, and a script written against the noise can average it out (R56). Distribution Firefox (Track A) does not have the patch.
