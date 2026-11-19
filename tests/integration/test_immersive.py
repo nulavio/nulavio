@@ -1337,8 +1337,13 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(f"SidebarController.show('{ASSISTANT}');")
         self.assertTrue(harness.wait_until(lambda: self.m.chrome("return SidebarController.currentID;") == ASSISTANT, 10))
         self.rest_pointer_at(start)
+        # The assistant's page may take the keyboard once it has loaded (its question field), which holds the panel, as
+        # it should: give it that moment, then put the keyboard back in the page.
+        inside = "return document.getElementById('sidebar-box').contains(document.activeElement);"
+        harness.wait_until(lambda: self.m.chrome(inside), 3)
         self.m.chrome("gBrowser.selectedBrowser.focus();")
-        self.assertTrue(harness.wait_until(lambda: self.panel_away() and self.m.chrome(STILL), 10), self.m.chrome(PANEL))
+        away = harness.wait_until(lambda: self.panel_away() and self.m.chrome(STILL), 10)
+        self.assertTrue(away, f"{self.m.chrome(PANEL)}, {self.window()}, keyboard in the panel: {self.m.chrome(inside)}")
         return tuple(self.m.chrome("return [innerWidth, innerHeight];"))
 
     def panel_away(self) -> bool:
