@@ -1,0 +1,139 @@
+[
+ {
+  "ghsa_id": "GHSA-p2p4-33gh-c6w3",
+  "cve_id": null,
+  "url": "https://api.github.com/repos/keepassxreboot/keepassxc-browser/security-advisories/GHSA-p2p4-33gh-c6w3",
+  "html_url": "https://github.com/keepassxreboot/keepassxc-browser/security/advisories/GHSA-p2p4-33gh-c6w3",
+  "summary": "KeePassXC-Browser: cross-origin iframe base-domain check uses unbounded endsWith, allowing attacker-domain suffix spoof to defeat iframe autofill protection",
+  "description": "(trimmed in the fixture)",
+  "severity": "medium",
+  "identifiers": [
+   {
+    "value": "GHSA-p2p4-33gh-c6w3",
+    "type": "GHSA"
+   }
+  ],
+  "state": "published",
+  "created_at": null,
+  "updated_at": "2026-10-14T07:23:16Z",
+  "published_at": "2026-10-14T07:21:19Z",
+  "closed_at": null,
+  "withdrawn_at": null,
+  "submission": null,
+  "vulnerabilities": [
+   {
+    "package": {
+     "ecosystem": "other",
+     "name": "keepassxreboot/keepassxc-browser"
+    },
+    "vulnerable_version_range": "<= 1.9.6",
+    "patched_versions": "1.10.4.1",
+    "vulnerable_functions": []
+   }
+  ],
+  "cvss_severities": {
+   "cvss_v3": {
+    "vector_string": null,
+    "score": null
+   },
+   "cvss_v4": {
+    "vector_string": null,
+    "score": null
+   }
+  },
+  "cwes": [
+   {
+    "cwe_id": "CWE-20",
+    "name": "Improper Input Validation"
+   },
+   {
+    "cwe_id": "CWE-923",
+    "name": "Improper Restriction of Communication Channel to Intended Endpoints"
+   }
+  ],
+  "cwe_ids": [
+   "CWE-20",
+   "CWE-923"
+  ],
+  "credits": [
+   {
+    "login": "router0mail",
+    "type": "reporter"
+   }
+  ],
+  "collaborating_users": null,
+  "collaborating_teams": null,
+  "private_fork": null,
+  "comments": 2,
+  "cvss": {
+   "vector_string": null,
+   "score": null
+  }
+ },
+ {
+  "ghsa_id": "GHSA-9jhp-23xw-qp8m",
+  "cve_id": null,
+  "url": "https://api.github.com/repos/keepassxreboot/keepassxc-browser/security-advisories/GHSA-9jhp-23xw-qp8m",
+  "html_url": "https://github.com/keepassxreboot/keepassxc-browser/security/advisories/GHSA-9jhp-23xw-qp8m",
+  "summary": "Cross-Origin Credential Disclosure",
+  "description": "(trimmed in the fixture)",
+  "severity": "medium",
+  "identifiers": [
+   {
+    "value": "GHSA-9jhp-23xw-qp8m",
+    "type": "GHSA"
+   }
+  ],
+  "state": "published",
+  "created_at": null,
+  "updated_at": "2026-10-14T07:21:39Z",
+  "published_at": "2026-10-14T07:11:19Z",
+  "closed_at": null,
+  "withdrawn_at": null,
+  "submission": null,
+  "vulnerabilities": [
+   {
+    "package": {
+     "ecosystem": "browser extension",
+     "name": "KeePassXC-Browser"
+    },
+    "vulnerable_version_range": "<=1.10.3",
+    "patched_versions": "1.10.4.1",
+    "vulnerable_functions": []
+   }
+  ],
+  "cvss_severities": {
+   "cvss_v3": {
+    "vector_string": "CVSS:3.1/AV:A/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+    "score": 5.7
+   },
+   "cvss_v4": {
+    "vector_string": null,
+    "score": null
+   }
+  },
+  "cwes": [
+   {
+    "cwe_id": "CWE-346",
+    "name": "Origin Validation Error"
+   },
+   {
+    "cwe_id": "CWE-522",
+    "name": "Insufficiently Protected Credentials"
+   }
+  ],
+  "cwe_ids": [
+   "CWE-346",
+   "CWE-522"
+  ],
+  "credits": [],
+  "collaborating_users": null,
+  "collaborating_teams": null,
+  "private_fork": null,
+  "comments": 2,
+  "cvss": {
+   "vector_string": "CVSS:3.1/AV:A/AC:L/PR:N/UI:R/S:U/C:H/I:N/A:N",
+   "score": 5.7
+  }
+ }
+]

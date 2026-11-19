@@ -222,12 +222,15 @@ class PrivilegedApiTest(unittest.TestCase):
                 "toggleFocus",
                 "setImmersive",
                 "copyLinkToHighlight",
+                "openActions",  # #321: one tab's window, the address bar in its actions mode; nothing runs
             },
         )
         # #459: editing the page's text left the browser for an extension the documentation names.
         self.assertNotIn("toggle-page-editing", self.manifest["commands"])
         self.assertFalse((ROOT / "browser" / "shell" / "modules" / "NulavioPageEdit.sys.mjs").exists())
         self.assertNotIn("toggle-keep-above", self.manifest["commands"])  # #460: left to KWin's own window menu
+        actions = next(f for f in schema["functions"] if f["name"] == "openActions")
+        self.assertEqual([(a["name"], a["type"]) for a in actions["parameters"]], [("tabId", "integer")])
         # ADR 0009: Immersive is one boolean; the tab only says in which window the outcome is announced.
         switch = next(f for f in schema["functions"] if f["name"] == "setImmersive")
         self.assertEqual([(a["name"], a["type"]) for a in switch["parameters"]], [("on", "boolean"), ("tabId", "integer")])
@@ -296,7 +299,7 @@ class PrivilegedApiTest(unittest.TestCase):
             "locked",
             "name-taken",
             "no-window",
-            "not-found",  # not on the Vault's methods page: "the list was refreshed" (#519)
+            "not-found",
             "unknown-provider",
         }
     )
@@ -312,6 +315,96 @@ class PrivilegedApiTest(unittest.TestCase):
         shared = {code: sorted(names) for code, names in modules.items() if len(names) > 1}
         self.assertEqual({code: names for code, names in shared.items() if code not in self.SHARED_ERROR_CODES}, {})
         self.assertEqual(self.SHARED_ERROR_CODES - set(shared), set(), "an allowed code is no longer shared")
+
+
+class VaultMethodsPageErrorsTest(unittest.TestCase):
+    """#519: `not-found` is the Vault's code for a profile that is gone and for a method that is gone, and the shared
+    message ("the list was refreshed") is true of neither on the methods page, which refreshes nothing."""
+
+    def test_the_methods_page_never_shows_the_shared_words_for_a_change_that_failed(self):
+        text = (SHELL / "vault" / "methods.js").read_text(encoding="utf-8")
+        uses = [m.start() for m in re.finditer(r"errorText\(", text)]
+        helpers = [text.index(f"function {name}(") for name in ("readText", "failureText")]
+        helpers = [(start, text.index("\n}\n", start)) for start in helpers]
+        outside = [i for i in uses if not any(start < i < end for start, end in helpers)]
+        self.assertEqual(outside, [], "errorText is called through readText (a read) or failureText (a change)")
+        self.assertIn('isGone(e) ? t("vaultGone") : errorText(e)', text)
+        self.assertIn('t("methodsMethodGone")', text)
+
+    def test_the_words_exist_in_both_languages_and_say_nothing_about_a_refreshed_list(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                self.assertIn("methodsMethodGone", messages)
+                self.assertIn("vaultGone", messages)
+        self.assertNotIn("refresh", locale("en")["methodsMethodGone"]["message"].lower())
+
+
+class FailureAnnouncementsTest(unittest.TestCase):
+    """#546: a temporary window that cannot be launched after its profile was made, and a link that cannot be written to
+    the clipboard, are announced as what they are, by the module itself so every entry point says the same."""
+
+    def test_a_launch_that_fails_after_the_profile_was_made_says_so_without_nothing_was_changed(self):
+        body = module_text("NulavioProfiles.sys.mjs")
+        body = body[body.index("async openTemporary()") :]
+        body = body[: body.index("\n  }\n")]
+        self.assertLess(body.index('{ op: "create" }'), body.index("runw("))
+        launch = body[body.index("try {") : body.index("return {")]
+        self.assertIn("runw(", launch)
+        self.assertIn('fail("temporary-not-opened")', launch.split("catch", 1)[1])
+        for name in ("en", "pt_BR"):
+            self.assertIn("err_temporary_not_opened", locale(name))
+        self.assertNotIn("nothing was changed", locale("en")["err_temporary_not_opened"]["message"].lower())
+        self.assertNotIn("nada foi alterado", locale("pt_BR")["err_temporary_not_opened"]["message"].lower())
+
+    def test_a_link_that_cannot_be_copied_is_announced_by_the_function_every_caller_uses(self):
+        body = module_text("NulavioLayout.sys.mjs")
+        body = body[body.index("async copyLinkToHighlight(") :]
+        body = body[: body.index("\n  },\n")]
+        copy = body[body.index("try {\n      lazy.ClipboardHelper.copyString") :]
+        self.assertLess(copy.index('announce("linkHighlightNotCopied")'), copy.index('announce("linkHighlightCopied")'))
+        self.assertIn("return false;", copy.split("catch", 1)[1].split('announce("linkHighlightCopied")')[0])
+        for name in ("en", "pt_BR"):
+            self.assertIn("linkHighlightNotCopied", locale(name))
+        self.assertEqual(locale("pt_BR")["linkHighlightNotCopied"]["message"], "O link não pôde ser copiado.")
+
+
+class VaultOtherPagesErrorsTest(unittest.TestCase):
+    """#547: the same as #519 for the phone, unlock and create pages. `not-found` is a profile that is gone or one of
+    its ways to unlock that is gone, and "the list was refreshed" is true of neither on a page that lists nothing."""
+
+    def helpers_of(self, text, names):
+        spans = []
+        for name in names:
+            start = re.search(rf"(?:async )?function {name}\(", text).start()
+            spans.append((start, text.index("\n}\n", start)))
+        return spans
+
+    def assert_errortext_only_in(self, page, names):
+        text = (SHELL / "vault" / page).read_text(encoding="utf-8")
+        spans = self.helpers_of(text, names)
+        outside = [m.start() for m in re.finditer(r"errorText\(", text) if not any(a < m.start() < b for a, b in spans)]
+        self.assertEqual(outside, [], f"{page}: errorText is reached only through {names}")
+        return text
+
+    def test_no_page_shows_the_shared_words_for_a_failure_after_it_loaded(self):
+        phone = self.assert_errortext_only_in("phone.js", ["readText", "failure"])
+        self.assertIn('t("phoneMethodGone")', phone)
+        self.assertIn('t("vaultGone")', phone)
+        unlock = self.assert_errortext_only_in("unlock.js", ["failureText", "unreadable"])
+        self.assertIn('t("vaultMethodGone")', unlock)
+        create = self.assert_errortext_only_in("create.js", ["failureText"])
+        self.assertIn('t("vaultCreateGone")', create)
+
+    def test_the_words_exist_in_both_languages_and_say_nothing_about_a_refreshed_list(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                for key in ("phoneMethodGone", "vaultMethodGone", "vaultCreateGone", "vaultGone"):
+                    self.assertIn(key, messages)
+        for key in ("phoneMethodGone", "vaultMethodGone", "vaultCreateGone"):
+            self.assertNotIn("refresh", locale("en")[key]["message"].lower())
+            self.assertNotIn("atualizada", locale("pt_BR")[key]["message"].lower())
 
 
 class SearchProvidersTest(unittest.TestCase):

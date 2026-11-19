@@ -4,18 +4,11 @@
 
 /* What Nulavio adds to the engine's fingerprinting protection from the Shell (#79; ADR 0016, ADR 0017, ADR 0018).
 
-   The screen: pages read one size, the same on every computer, instead of the display's. The engine has a
-   per-tab screen size for automation (browsingContext.setScreenAreaOverride); with it set, screen.width and
-   height, the available area (at 0,0) and the device-width and device-height media queries all say that size.
-   The window is left alone: its own size is still what the page lays out in.
-
-   It follows the engine's protection: on while fingerprinting protection is on (the Strict category), and off
-   for a site the person exempts with the shield in the address bar, which gets the display's size like the
-   other plain values.
-
-   An engine with Nulavio's patch 0012 gives each document that size itself (the ScreenSizeConstant target, in
-   the default set), a frame and a pop-up too. This module then leaves the per-tab size unset. The per-tab
-   path stays for an engine from before the patch, and for a set a person wrote without the target.
+   The screen is not here: pages read one size, 1920 by 1080, from the engine itself, which answers each
+   document (Nulavio's patch 0012, the ScreenSizeConstant target in the build's default set). Until 160.0.1-0.1
+   this module also set a per-tab size, for an engine without the target or a set without it; that went with
+   #468, so the engine's set is the one thing that decides. The tab's own screen size
+   (browsingContext.setScreenAreaOverride) is automation's, and nothing here sets or clears it.
 
    The time zone: pages read UTC (the engine's JSDateTimeUTC, in the default set). A site that needs the real
    one, a calendar or a bank, gets it from a switch in the engine's trust panel, "use my time zone on this
@@ -29,37 +22,14 @@
    else: a set the person wrote themselves keeps its other entries). It rewrites the set itself, not the
    per-site list: with the motion one in the set the engine also scrolls smoothly whatever
    the system asks, so that pages cannot tell, and only the set itself undoes that. When the system has either
-   preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way.
-
-   The screen is decided by each page as its window is created, in the page's own process
-   (NulavioFingerprintingChild): the one moment that is after the page before it and before the new page's
-   first script. This module only starts that, and decides again for the pages already open when the Shell
-   starts or when the engine's protection is switched on or off. */
-
-import {
-  SCREEN,
-  engineDecides,
-  protectionOn,
-  setScreen,
-  wantsConstant,
-} from "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs";
-
-export { SCREEN };
+   preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way. */
 
 /** The permission of a site whose pages read the system's time zone. Kept for the site's registrable domain. */
 export const TIME_ZONE = "nulavio-timezone";
 
 const SHELL = "shell@nulavio.net";
-const ACTOR = "NulavioFingerprinting";
 const TOPICS = ["browser-delayed-startup-finished", "perm-changed"];
-// What decides a tab's screen size: the engine's protection on or off, and its set, which says whether the
-// engine gives documents the constant itself (NulavioFingerprintingChild.engineDecides).
-const SWITCHES = [
-  "privacy.fingerprintingProtection",
-  "privacy.fingerprintingProtection.pbmode",
-  "privacy.fingerprintingProtection.overrides",
-];
-const FALLBACK_TOPIC = "browsing-context-attached"; // only if the actor cannot be registered
+const FPP = "privacy.fingerprintingProtection"; // the engine's protection, in ordinary windows
 const GRANULAR = "privacy.fingerprintingProtection.granularOverrides"; // the engine's per-site list (JSON)
 const SHOW_TIME_ZONE = "-JSDateTimeUTC";
 const ROW = "nulavio-trustpanel-timezone";
@@ -75,6 +45,11 @@ const OVERRIDES = "privacy.fingerprintingProtection.overrides"; // the engine's 
 const WRITTEN = "nulavio.fingerprinting.overridesWritten";
 const ACCESSIBILITY = Object.freeze(["CSSPrefersReducedMotion", "CSSPrefersContrast", "CSSPrefersReducedTransparency"]);
 const BAR = "nulavio-accessibility-offer";
+
+/** Whether the engine's fingerprinting protection is on in ordinary windows (nsRFPService::IsFPPEnabled). */
+function protectionOn() {
+  return Services.prefs.getBoolPref(FPP, false);
+}
 
 function t(key) {
   return WebExtensionPolicy.getByID(SHELL)?.extension?.localizeMessage(key) || key;
@@ -163,7 +138,7 @@ function timeZoneState(browser) {
   const on = Boolean(site) && Services.perms.testExactPermissionFromPrincipal(sitePrincipal(site), TIME_ZONE) === Services.perms.ALLOW_ACTION;
   const context = browser.browsingContext;
   const exempted = Boolean(context?.currentWindowGlobal?.cookieJarSettings?.isOnContentBlockingAllowList);
-  return { site, on, offered: Boolean(site) && !context?.usePrivateBrowsing && protectionOn(false) && !exempted };
+  return { site, on, offered: Boolean(site) && !context?.usePrivateBrowsing && protectionOn() && !exempted };
 }
 
 function setTimeZone(uri, on) {
@@ -223,20 +198,6 @@ function showTimeZoneRow(panel) {
   row.dataset.site = state.offered ? state.site : "";
   row.querySelector("moz-toggle").pressed = state.on;
   row.querySelector(`#${ROW}-description`).textContent = t(state.on ? "timeZoneSwitchOn" : "timeZoneSwitchOff");
-}
-
-/** Decide again for every page open in a tab: at the Shell's start, and when the engine's protection is
-    switched on or off (the category changed in Settings), so an open page does not keep what it had. */
-function decideOpenPages() {
-  for (const win of Services.wm.getEnumerator("navigator:browser")) {
-    for (const browser of win.gBrowser?.browsers ?? []) {
-      const context = browser.browsingContext;
-      const page = context?.currentWindowGlobal;
-      if (context && !context.isDiscarded && page) {
-        setScreen(context, wantsConstant(page.documentPrincipal, page.cookieJarSettings, context.usePrivateBrowsing));
-      }
-    }
-  }
 }
 
 /** A set without the three accessibility entries. Pure. */
@@ -301,7 +262,7 @@ async function offerAccessibility(win) {
   if (Services.prefs.getBoolPref(OFFERED, false) || Services.prefs.getBoolPref(SHARE, false)) {
     return false;
   }
-  if (Services.prefs.prefIsLocked(SHARE) || Services.prefs.prefIsLocked(OVERRIDES) || !protectionOn(false)) {
+  if (Services.prefs.prefIsLocked(SHARE) || Services.prefs.prefIsLocked(OVERRIDES) || !protectionOn()) {
     return false;
   }
   const asks = systemAsks(win);
@@ -334,7 +295,8 @@ async function offerAccessibility(win) {
 let watching = null;
 
 export const NulavioFingerprinting = {
-  /** From the Shell's start: every tab has the constant before its first page, and each page gets what it is due. */
+  /** From the Shell's start: the engine's set and per-site list follow the person's settings, and each window
+      gets the time zone's row and, once, the bar. */
   watch() {
     if (watching) {
       return;
@@ -366,27 +328,16 @@ export const NulavioFingerprinting = {
         if (topic === "nsPref:changed") {
           if (data === SHARE) {
             applyAccessibility(true); // the person's setting, turned on or off
-          } else {
-            // The engine's protection switched on or off, or its set changed. On the engine's way the tab's
-            // size is not this module's: it is left as it is (it may be automation's, WebDriver BiDi's screen
-            // emulation), except once, on the change from the per-tab way, to clear what this module had set.
-            const engine = engineDecides();
-            if (!(engine && watching.engine)) {
-              decideOpenPages();
-            }
-            watching.engine = engine;
-            if (data === OVERRIDES && !watching.handing) {
-              // After the engine's own observer of the same preference has the new general set. Once per
-              // change: a preference observer is told of everything under its name, so this one hears the
-              // set twice (as itself, and under "privacy.fingerprintingProtection").
-              watching.handing = true;
-              Services.tm.dispatchToMainThread(() => {
-                if (watching) {
-                  watching.handing = false;
-                  handListAgain();
-                }
-              });
-            }
+          } else if (data === OVERRIDES && !watching.handing) {
+            // The engine's set changed. After the engine's own observer of the same preference has the new
+            // general set, and once however many changes come before that.
+            watching.handing = true;
+            Services.tm.dispatchToMainThread(() => {
+              if (watching) {
+                watching.handing = false;
+                handListAgain();
+              }
+            });
           }
         } else if (topic === "perm-changed") {
           // A site's choice added or removed, here or in Settings' list, or every permission cleared.
@@ -401,44 +352,12 @@ export const NulavioFingerprinting = {
     for (const topic of TOPICS) {
       Services.obs.addObserver(watching, topic);
     }
-    for (const pref of SWITCHES) {
-      Services.prefs.addObserver(pref, watching);
-    }
+    Services.prefs.addObserver(OVERRIDES, watching);
     Services.prefs.addObserver(SHARE, watching);
     applyAccessibility(false);
-    try {
-      ChromeUtils.registerWindowActor(ACTOR, {
-        child: {
-          esModuleURI: "resource://builtin-addons/nulavio-shell/modules/NulavioFingerprintingChild.sys.mjs",
-          // Capturing: before the page's own pageshow listeners, for a page taken back from the engine's cache.
-          events: { DOMWindowCreated: {}, pageshow: { capture: true } },
-        },
-        allFrames: false,
-        messageManagerGroups: ["browsers"],
-        // Runs in web content processes, with nothing to trust: it sends no message and takes none.
-        safeForUntrustedWebProcess: true,
-      });
-    } catch (e) {
-      // Without the actor no page would decide for itself, and new tabs would read the display's size. So every
-      // new top-level content context gets the constant when it is made, as the first version of this did: an
-      // exempted site and an extension's pages then read it too, which is the lesser failure.
-      console.error("Nulavio fingerprinting: pages cannot decide their screen size, every new context gets the constant", e);
-      watching.fallback = {
-        observe(subject) {
-          if (subject.top === subject && subject.isContent && !subject.isDiscarded && !engineDecides()) {
-            setScreen(subject, protectionOn(subject.usePrivateBrowsing));
-          }
-        },
-      };
-      Services.obs.addObserver(watching.fallback, FALLBACK_TOPIC);
-    }
     sync();
     for (const win of Services.wm.getEnumerator("navigator:browser")) {
       attach(win);
-    }
-    watching.engine = engineDecides();
-    if (!watching.engine) {
-      decideOpenPages();
     }
   },
 
@@ -480,22 +399,12 @@ export const NulavioFingerprinting = {
     for (const topic of TOPICS) {
       Services.obs.removeObserver(watching, topic);
     }
-    for (const pref of SWITCHES) {
-      Services.prefs.removeObserver(pref, watching);
-    }
-    if (watching.fallback) {
-      Services.obs.removeObserver(watching.fallback, FALLBACK_TOPIC);
-    }
+    Services.prefs.removeObserver(OVERRIDES, watching);
     Services.prefs.removeObserver(SHARE, watching);
     for (const win of watching.windows) {
       win.removeEventListener("popupshowing", watching.panelShowing, true);
       win.document.getElementById(ROW)?.remove();
       win.gNotificationBox?.getNotificationWithValue(BAR)?.close();
-    }
-    try {
-      ChromeUtils.unregisterWindowActor(ACTOR);
-    } catch {
-      // It was never registered.
     }
     watching = null;
   },

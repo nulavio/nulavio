@@ -206,7 +206,8 @@
         "toggle-focus",
         "toggle-immersive",
         "lock-profile",
-        "copy-link-to-highlight"
+        "copy-link-to-highlight",
+        "open-actions"
       ],
       "default": "_execute_action",
       "writer": "engine",
@@ -222,7 +223,11 @@
       "values": [
         "nulavio-assistant",
         "nulavio-settings",
-        "nulavio-focus"
+        "nulavio-focus",
+        "nulavio-immersive",
+        "nulavio-temporary",
+        "nulavio-profiles",
+        "nulavio-highlight"
       ],
       "default": "nulavio-assistant",
       "writer": "engine",

@@ -635,6 +635,20 @@ export const NulavioLayout = {
     return { on: Services.prefs.getBoolPref(PREF_IMMERSIVE, false), locked: Services.prefs.prefIsLocked(PREF_IMMERSIVE) };
   },
 
+  /**
+   * #321: the address bar of `win` in the engine's own actions mode, as typing ">" there does: the engine's actions
+   * and Nulavio's (NulavioWindow's quick actions), filtered as the person types. Nothing runs until one is picked.
+   */
+  openActions(win) {
+    // A pop-up window's address bar cannot be typed into: nothing to open there.
+    if (!win?.gURLBar || win.closed || win.gURLBar.readOnly) {
+      fail("no-window");
+    }
+    win.focus();
+    win.gURLBar.search(">", { searchModeEntry: "shortcut" });
+    return true;
+  },
+
   /** Turn Immersive on or off for this profile. `say(key)` announces the outcome in the window. */
   setImmersive(on, say = () => {}) {
     if (Services.prefs.prefIsLocked(PREF_IMMERSIVE)) {
@@ -670,7 +684,14 @@ export const NulavioLayout = {
       announce("linkHighlightNothing");
       return false;
     }
-    lazy.ClipboardHelper.copyString(url, global);
+    try {
+      lazy.ClipboardHelper.copyString(url, global);
+    } catch (e) {
+      // Announced here, not by the callers: the key and the address-bar action both drop what this rejects with (#546).
+      console.error(e);
+      announce("linkHighlightNotCopied");
+      return false;
+    }
     announce("linkHighlightCopied");
     return true;
   },

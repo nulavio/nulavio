@@ -1,0 +1,1244 @@
+{
+ "lookAndFeel": {
+  "reduce": false,
+  "mq": false,
+  "panelAnimations": false,
+  "layers": "WebRender (Software)",
+  "animEasing": "cubic-bezier(0.07, 0.95, 0, 1)"
+ },
+ "layout-lateral": {
+  "ok": {
+   "preset": "lateral",
+   "available": true,
+   "locked": false,
+   "choicePending": false,
+   "immersive": {
+    "on": false,
+    "locked": false
+   }
+  }
+ },
+ "tab-lateral-animate": {
+  "ok": {
+   "first": {
+    "fadein": true,
+    "h": 40,
+    "w": 224
+   },
+   "seen": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 40,
+    "w": 224,
+    "transition": "all",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": false,
+    "anims": []
+   },
+   "after": {
+    "connected": false,
+    "anims": null
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": true
+  }
+ },
+ "tab-lateral-plain": {
+  "ok": {
+   "first": {
+    "fadein": true,
+    "h": 40,
+    "w": 224
+   },
+   "seen": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 40,
+    "w": 224,
+    "transition": "all",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": false,
+    "anims": []
+   },
+   "after": {
+    "connected": false,
+    "anims": null
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": true
+  }
+ },
+ "tab-lateral-background": {
+  "ok": {
+   "first": {
+    "fadein": true,
+    "h": 40,
+    "w": 224
+   },
+   "seen": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 40,
+    "w": 224,
+    "transition": "all",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": false,
+    "anims": []
+   },
+   "after": {
+    "connected": false,
+    "anims": null
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": true
+  }
+ },
+ "layout-top": {
+  "ok": {
+   "preset": "top",
+   "available": true,
+   "locked": false,
+   "choicePending": false,
+   "immersive": {
+    "on": false,
+    "locked": false
+   }
+  }
+ },
+ "tab-top-animate": {
+  "ok": {
+   "first": {
+    "fadein": false,
+    "h": 46,
+    "w": 4
+   },
+   "seen": [
+    [],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 46,
+    "w": 225,
+    "transition": "min-width 0.1s ease-out, max-width 0.1s ease-out",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "min-width 100ms ease-out, max-width 100ms ease-out",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "after": {
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": false
+  }
+ },
+ "tab-top-plain": {
+  "ok": {
+   "first": {
+    "fadein": false,
+    "h": 46,
+    "w": 4
+   },
+   "seen": [
+    [],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 46,
+    "w": 225,
+    "transition": "min-width 0.1s ease-out, max-width 0.1s ease-out",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "min-width 100ms ease-out, max-width 100ms ease-out",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "after": {
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": false
+  }
+ },
+ "tab-top-background": {
+  "ok": {
+   "first": {
+    "fadein": false,
+    "h": 46,
+    "w": 4
+   },
+   "seen": [
+    [],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ],
+    [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   ],
+   "settled": {
+    "fadein": true,
+    "h": 46,
+    "w": 225,
+    "transition": "min-width 0.1s ease-out, max-width 0.1s ease-out",
+    "minH": "auto",
+    "maxH": "none",
+    "overflow": "clip",
+    "display": "flex",
+    "widthVar": "min-width 100ms ease-out, max-width 100ms ease-out",
+    "dragVar": "transform 200ms cubic-bezier(0.07, 0.95, 0, 1)"
+   },
+   "moved": {
+    "records": [
+     [
+      0,
+      1,
+      false,
+      true
+     ],
+     [
+      1,
+      0,
+      true,
+      false
+     ]
+    ],
+    "anims": []
+   },
+   "closing": {
+    "closing": true,
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "after": {
+    "connected": true,
+    "anims": [
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "max-width",
+      100,
+      0,
+      "ease-out"
+     ],
+     [
+      "CSSTransition",
+      "tab#.tabbrowser-tab",
+      "min-width",
+      100,
+      0,
+      "ease-out"
+     ]
+    ]
+   },
+   "stillConnected": false,
+   "reduce": false,
+   "vertical": false
+  }
+ },
+ "panel-appMenu-popup": {
+  "ok": {
+   "id": "appMenu-popup",
+   "existedBefore": true,
+   "state": "open",
+   "type": "arrow",
+   "animate": "open",
+   "side": "top",
+   "cls": "cui-widget-panel panel-no-padding",
+   "duration": "0.18s",
+   "props": "transform, opacity",
+   "easing": "cubic-bezier(0.07, 0.95, 0, 1), ease-in-out",
+   "panelAnimations": false,
+   "seen": [
+    [
+     "closed",
+     null,
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "showing",
+     "open",
+     true,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "showing",
+     "open",
+     true,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "showing",
+     "open",
+     true,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ]
+   ]
+  }
+ },
+ "panel-protections-popup": {
+  "ok": {
+   "id": "protections-popup",
+   "existedBefore": false,
+   "state": null,
+   "type": null,
+   "animate": null,
+   "side": null,
+   "cls": null,
+   "duration": null,
+   "props": null,
+   "easing": null,
+   "panelAnimations": false,
+   "seen": []
+  }
+ },
+ "panel-identity-popup": {
+  "ok": {
+   "id": "identity-popup",
+   "existedBefore": false,
+   "state": null,
+   "type": null,
+   "animate": null,
+   "side": null,
+   "cls": null,
+   "duration": null,
+   "props": null,
+   "easing": null,
+   "panelAnimations": false,
+   "seen": []
+  }
+ },
+ "panel-unified-extensions-panel": {
+  "ok": {
+   "id": "unified-extensions-panel",
+   "existedBefore": true,
+   "state": "open",
+   "type": "arrow",
+   "animate": "open",
+   "side": "top",
+   "cls": "panel-no-padding",
+   "duration": "0.18s",
+   "props": "transform, opacity",
+   "easing": "cubic-bezier(0.07, 0.95, 0, 1), ease-in-out",
+   "panelAnimations": false,
+   "seen": [
+    [
+     "closed",
+     null,
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "showing",
+     "open",
+     true,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "showing",
+     "open",
+     true,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ],
+    [
+     "open",
+     "open",
+     false,
+     "1",
+     "none",
+     "0.18s",
+     "transform, opacity",
+     0
+    ]
+   ]
+  }
+ }
+}

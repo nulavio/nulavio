@@ -10,13 +10,19 @@ Runs on a real Track B build in a throwaway profile, headful on a private Xvfb (
 Each run uses a fresh profile with reduced motion off, and alternates the build and the baseline.
 Both must install the same extensions (a package's distribution/; the script refuses otherwise):
 an extracted package without one is compared after copying the build's distribution/ next to it.
-Scenes: the sidebar launcher collapsing and expanding, switching tabs, Ctrl+T to the new tab's
-`nv-painted` mark, a Settings dialog opening, and 60 s idle on a page (chrome reflows, frames
-constructed, paints). Frame intervals come from the compositor's frame-time recording; when it
-records nothing (some Xvfb set-ups), from requestAnimationFrame in the window. The JSON names the
+Scenes: the sidebar launcher collapsing and expanding, switching tabs, a slow local page loading (the
+page-loading line's moment, #397), Ctrl+T to the new tab's `nv-painted` mark, a Settings dialog
+opening, and 60 s idle on a page (chrome reflows, frames constructed, paints).
+--load-line compares one engine with the page-loading line on (the build) and off (the baseline),
+instead of two engines (#397: since #458 the line is an option, off in a new profile). Frame
+intervals come from the compositor's frame-time recording; when it records nothing
+(some Xvfb set-ups), from requestAnimationFrame in the window. The JSON names the
 source of each scene (the dialog is always timed by requestAnimationFrame in the page) and keeps a
 failed sample's error; a transition scene with no samples fails its budget line.
 Xvfb timings are a regression gate, not a measure of real hardware.
+The motion map's scenes (#319, docs/design/motion-map.md) run after the tab switch: a tab opening in
+the strip, a tab closing, the main menu opening, and a sidebar panel (history) opening and closing.
+A new profile starts in Lateral, the vertical strip; --layout top measures them with the tabs on top.
 """
 
 from __future__ import annotations
@@ -44,7 +50,8 @@ BUDGET = {
     "idle_frames_constructed": 0,
     "regression_ratio": 1.10,
 }
-TRANSITIONS = ("sidebar_collapse", "sidebar_expand", "tab_switch", "dialog_open")
+TRANSITIONS = ("sidebar_collapse", "sidebar_expand", "tab_switch", "page_load", "dialog_open")
+LOAD_LINE_PREF = "nulavio.window.loadLine"
 
 
 # -- statistics (pure; tests/unit/test_frame_scene.py) ---------------------------------------------
@@ -139,7 +146,63 @@ ACTIONS = {
         480,
     ),
     "tab_switch": ("", "gBrowser.tabContainer.advanceSelectedTab(1, true);", 300),
+    # #397: a page whose body arrives over 1.2 s, in the selected tab: the frames of the chrome while it loads
+    # (the page-loading line runs then, when it is on). SLOW_URL is the fixture server's address.
+    "page_load": (
+        "gBrowser.selectedTab = gBrowser.tabs[0];",
+        "gBrowser.selectedBrowser.fixupAndLoadURIString('SLOW_URL', "
+        "{triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});",
+        1500,
+    ),
 }
+
+# The motion map's scenes (#319, docs/design/motion-map.md), in the strip the profile's layout shows.
+# A tab opens in the background, so the scene holds the strip's movement and not a page being drawn.
+SYSTEM = "{triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()"
+MAP_ACTIONS = {
+    "tab_open": (
+        "if (window.nvSceneTab?.isConnected) { gBrowser.removeTab(window.nvSceneTab); }"
+        "await new Promise(r => setTimeout(r, 150));",
+        f"window.nvSceneTab = gBrowser.addTab('about:blank', {SYSTEM}, animate: true}});",
+        320,
+    ),
+    "tab_close": (
+        "if (!window.nvSceneTab?.isConnected) {"
+        f" window.nvSceneTab = gBrowser.addTab('about:blank', {SYSTEM}}}); }}"
+        "await new Promise(r => setTimeout(r, 300));",
+        "gBrowser.removeTab(window.nvSceneTab, {animate: true});",
+        320,
+    ),
+    "menu_open": (
+        "if (PanelUI.panel.state !== 'closed') {"
+        " const hidden = new Promise(r => PanelUI.panel.addEventListener('popuphidden', r, {once: true}));"
+        " PanelUI.hide(); await hidden; }"
+        "await new Promise(r => setTimeout(r, 150));",
+        "PanelUI.show();",
+        420,
+    ),
+    # A sidebar panel, through toggle(), which the sidebar's buttons call (show() and hide() start no transition).
+    "sidebar_panel_open": (
+        "if (PanelUI.panel.state !== 'closed') { PanelUI.hide(); }"
+        "await SidebarController.waitUntilStable();"
+        "if (SidebarController.isOpen) { SidebarController.hide(); await SidebarController.waitUntilStable(); }"
+        "await new Promise(r => setTimeout(r, 150));",
+        "SidebarController.toggle('viewHistorySidebar');",
+        480,
+    ),
+    "sidebar_panel_close": (
+        "await SidebarController.waitUntilStable();"
+        "if (!SidebarController.isOpen) { await SidebarController.show('viewHistorySidebar');"
+        " await SidebarController.waitUntilStable(); }"
+        "await new Promise(r => setTimeout(r, 300));",
+        "SidebarController.toggle('viewHistorySidebar');",
+        420,
+    ),
+}
+ACTIONS.update(MAP_ACTIONS)
+TRANSITIONS = (*TRANSITIONS, *MAP_ACTIONS)
+LAYOUTS = ("lateral", "top")
+LAYOUT_MODULE = "resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs"
 
 
 def provenance(engine: Path) -> dict:
@@ -171,7 +234,7 @@ def checkout() -> dict:
     return {"git": head.stdout.strip(), "gitDirty": bool(dirty.stdout.strip())}
 
 
-def one_run(engine: Path, samples: int) -> dict:
+def one_run(engine: Path, samples: int, prefs: dict | None = None, layout: str | None = None) -> dict:
     os.environ["NULAVIO_ENGINE"] = str(engine)
     import harness  # reads NULAVIO_ENGINE at session start
 
@@ -180,8 +243,27 @@ def one_run(engine: Path, samples: int) -> dict:
     out: dict = {"sources": {}, "errors": {}}
     try:
         m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 0);")
+        for name, value in (prefs or {}).items():
+            m.chrome("Services.prefs.setBoolPref(arguments[0], arguments[1]);", [name, value])
+        out["prefs"] = prefs or {}
         m.send("WebDriver:SetWindowRect", {"width": 1366, "height": 768})
         out["layerManager"] = m.chrome("return window.windowUtils.layerManagerType;")
+        if layout:
+            m.set_context("chrome")
+            try:
+                applied = m.execute_async(
+                    "const done = arguments[arguments.length - 1];"
+                    f"ChromeUtils.importESModule('{LAYOUT_MODULE}').NulavioLayout"
+                    ".apply(window, arguments[0]).then(() => done(true), e => done(String(e)));",
+                    [layout],
+                )
+            finally:
+                m.set_context("content")
+            if applied is not True:  # a locked layout, for one: the scenes would be measured in another strip
+                raise RuntimeError(f"the layout {layout} was not applied: {applied}")
+        out["verticalTabs"] = m.chrome("return gBrowser.tabContainer.verticalMode;")
+        if layout and out["verticalTabs"] != (layout != "top"):
+            raise RuntimeError(f"the layout {layout} was asked for, and the tab strip is not in it")
         base = m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
         with harness.FixtureServer() as server:
             m.navigate(server.url("/page/Scene"))
@@ -195,6 +277,7 @@ def one_run(engine: Path, samples: int) -> dict:
             m.set_context("chrome")
             try:
                 for name, (prepare, action, settle) in ACTIONS.items():
+                    action = action.replace("SLOW_URL", server.url("/slow-page?ms=1200"))
                     script = RECORD.replace("PREPARE", prepare).replace("ACTION", action)
                     m.execute_async(script, [settle])  # warm-up
                     raw[name] = []
@@ -309,26 +392,36 @@ def run_medians(runs: list[dict], name: str) -> list[float]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--baseline-engine", type=Path)
+    parser.add_argument("--load-line", action="store_true", help="this engine with the page-loading line on, then off")
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--samples", type=int, default=10)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--layout", choices=LAYOUTS, help="apply this layout preset in every run (default: the profile's own)")
     args = parser.parse_args()
     engine = Path(os.environ["NULAVIO_ENGINE"])
+    if args.load_line and args.baseline_engine:
+        parser.error("--load-line compares one engine with itself; drop --baseline-engine")
     builds = {"build": engine, **({"baseline": args.baseline_engine} if args.baseline_engine else {})}
+    prefs = {"build": {}, "baseline": {}}
+    if args.load_line:
+        builds["baseline"] = engine
+        prefs = {"build": {LOAD_LINE_PREF: True}, "baseline": {LOAD_LINE_PREF: False}}
     results = {
         "budget": BUDGET,
         "checkout": checkout(),
         "builds": {k: provenance(v) for k, v in builds.items()},
         "runs": {k: [] for k in builds},
+        "prefs": prefs if args.load_line else None,
     }
     found = {label: build["distributionExtensions"] for label, build in results["builds"].items()}
     if len({json.dumps(v) for v in found.values()}) > 1:
         parser.error(f"the builds install different extensions, so they cannot be compared: {found}")
+    results["layout"] = args.layout
     args.out.mkdir(parents=True, exist_ok=True)
     for i in range(args.runs):
         order = list(builds.items()) if i % 2 == 0 else list(reversed(builds.items()))
         for label, path in order:
-            results["runs"][label].append(one_run(path, args.samples))
+            results["runs"][label].append(one_run(path, args.samples, prefs[label], args.layout))
             (args.out / "perf.json").write_text(json.dumps(results, indent=1))
     results["scenes"] = {label: pooled(runs) for label, runs in results["runs"].items()}
     results["verdict"] = {label: verdict(scenes) for label, scenes in results["scenes"].items()}

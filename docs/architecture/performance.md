@@ -29,14 +29,34 @@ All of it runs headless with software rendering. It is a regression signal for t
 - **On every published release**, by [`perf.yml`](../../.github/workflows/perf.yml):
   - It compares the release with the published release before it and with Firefox, both checked against their `SHA256SUMS` signed with the release key ([`fetch_releases.py`](../../scripts/perf/fetch_releases.py)).
   - It runs 5 runs with Speedometer, on a GitHub-hosted runner, in the integration job's container, and fails a run whose web content processes are not in the full content sandbox.
-  - It is report only. The table goes into the job summary and the JSON into a 90-day artifact per release, which is the history.
+  - The table goes into the job summary and the JSON into a 90-day artifact per release, which is the history. Since #367 a measure worse than its threshold (below) fails the run, with the reason in the summary. The release is already published by then: the maintainer reads the result, and a regression is a bug for the next release.
 
 ## Thresholds
 
-Not written yet.
+Decided on 2026-11-18 (#367) from four `perf.yml` runs on GitHub's runner, kept in [the evidence folder](../research/evidence/perf-runner-noise-2026-11-18/) (the artifacts expire after 90 days): 160.0-0.6 against 0.5 twice (run 43908609249 on release, 44220905151 by hand), 0.5 against 0.4, and 0.4 against 0.3.
 
-- For 1.0 the suite gates nothing by itself. The release criterion is that the 1.0 candidate's run against the release before it has no measure that gets worse with an interval that excludes 0, unless the reason is recorded ([release criteria](../product/release-criteria.md#scope-of-10-decided-2026-11-04)).
-- Fixed thresholds come once `perf.yml` has kept enough releases to show the runner's own noise.
+**The runner's noise, as measured:**
+
+| Measure | Spread of 5 runs (coefficient of variation) | The same comparison twice (0.6 against 0.5) | Largest change between releases with no change meant to affect it | Widest 95 % interval |
+|---|---|---|---|---|
+| First start | 1–10 %, one run 23 % (a single slow start) | +1.1 %, +4.1 % | +4.1 % | −7 … +55 % |
+| Second start | 2–9 % | −3.5 %, −1.1 % | −3.5 % | −10.3 … +14.0 % |
+| Memory, 1 and 10 tabs | 0.1–4.7 % | −0.1 %, +0.1 % | −4.7 % | −8.4 … +8.7 % |
+| Speedometer 3 | 1–7 % | −1.3 %, +3.5 % | +3.5 % | −7.6 … +11.5 % |
+
+Between runs on different days the absolute numbers move a lot (the first start of 0.6: 1246 ms, then 906 ms; Speedometer 12.2, then 15.6): the runner's hardware differs from run to run. Only the change against the release before, measured in the same run, is compared.
+
+**The gate** (`scripts/perf/gate.py`, in `perf.yml` since #367): a measure fails when its 95 % interval excludes 0 on the worse side **and** its median change is worse than:
+
+| Measure | Fails past |
+|---|---|
+| First and second start | +15 % |
+| Memory, 1 and 10 tabs | +10 % |
+| Speedometer 3 | −10 % |
+
+That is two to four times the largest change seen with no change meant (memory 2.1×, Speedometer 2.9×, first and second start 3.7× and 4.3×). A measure that was not measured, has no interval, or (memory) had processes whose memory could not be read (`unreadable_*_tabs` in the JSON: their memory is missing from the sum, so the reading is too low on either side) is not judged, and fails in `perf.yml` too (`--strict`): it always measures all five, so a missing one means the measuring broke. Past a threshold is strict: exactly +10 % passes, and a failure prints enough digits to be seen past the limit. The interval alone is not enough: 0.4 against 0.3 shows a first start 2.3 % slower with an interval of +0.5 … +5.0 %: outside noise, but far under the threshold, and a change that small cannot be told apart from the runner's variation between runs, so it does not fail. The four runs above all pass. The thresholds are looked at again when the gate fails on a release with no change that explains it, or when ten releases have run.
+
+For 1.0, the [release criterion](../product/release-criteria.md#scope-of-10-decided-2026-11-04) is this gate: the 1.0 candidate's run against the release before it passes it, or the reason is recorded.
 
 ## Baseline, 2026-11-15
 

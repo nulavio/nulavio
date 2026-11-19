@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "comment": "Where the daily watch (scripts/release/watch_dependencies.py) reads each pinned extension's security advisories: GitHub's published repository advisories, GET /repos/{repo}/security-advisories. Reviewed by hand, never guessed at run time. 'monorepo' says whether the repository holds more than one product. If not, every advisory of the repository concerns the extension, whatever package name it carries (the names are free text). If so, 'packages' lists the names (case-insensitive) that are this extension's, and an advisory with another name fails until the name is added here or the advisory is accepted in vulnerability-exceptions.json. An extension with no public advisory source says why. Every extension in browser/distribution/extensions.lock.json must be here (a unit test).",
+  "sources": [
+    {"key": "ublock-origin", "repo": "gorhill/uBlock", "monorepo": false},
+    {"key": "keepassxc-browser", "repo": "keepassxreboot/keepassxc-browser", "monorepo": false},
+    {"key": "bitwarden", "repo": "bitwarden/clients", "monorepo": true, "packages": ["Bitwarden browser extension", "@bitwarden/browser", "bitwarden/clients"]},
+    {"key": "proton-pass", "repo": null, "reason": "the source is in the ProtonMail/WebClients monorepo, which publishes no repository advisories; Proton has no machine-readable feed. Only the AMO blocklist check covers it"},
+    {"key": "1password", "repo": null, "reason": "closed source with no public advisory repository or feed. Only the AMO blocklist check covers it"}
+  ]
+}

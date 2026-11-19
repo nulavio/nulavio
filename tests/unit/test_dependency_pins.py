@@ -215,7 +215,7 @@ class OtherPinsTest(unittest.TestCase):
         for item in data["exceptions"]:
             self.assertEqual(set(item), {"id", "ecosystem", "package", "version", "reason", "until"}, item)
             self.assertRegex(item["id"], r"^(GHSA|CVE|PYSEC|OSV|BIT)-[\w-]+$", item)
-            self.assertIn(item["ecosystem"], ("Maven", "PyPI", "GitHub Actions", "Bitnami", "npm"), item)
+            self.assertIn(item["ecosystem"], ("Browser extension", "Maven", "PyPI", "GitHub Actions", "Bitnami", "npm"), item)
             self.assertGreater(len(item["reason"]), 40, item)
             until = datetime.date.fromisoformat(item["until"])
             self.assertLessEqual((until - datetime.date.today()).days, 366, f"{item['id']}: at most a year ahead")
@@ -272,6 +272,10 @@ class FakeNet:
             }
             return {"current_version": self.amo.get(guid, current)}
         raise AssertionError(f"unexpected URL {url}")
+
+    def github_json(self, url):
+        self.unreachable(url)
+        return []  # no published advisory (test_extension_advisories.py has the recorded ones)
 
     def head(self, url, headers):
         self.unreachable(url)
@@ -337,7 +341,7 @@ class WatcherTest(unittest.TestCase):
         self.assertGreater(len(deps), 200)
         self.assertEqual([r.text for r in rows if r.state != "ok"], [])
         self.assertEqual(watch.exit_status(rows), 0)
-        self.assertEqual({r.check for r in rows}, {"extension", "image"})
+        self.assertEqual({r.check for r in rows}, {"advisory", "extension", "image"})
 
     def test_a_vulnerability_without_a_valid_exception_fails(self):
         net = FakeNet(

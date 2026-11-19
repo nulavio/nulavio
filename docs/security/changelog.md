@@ -31,11 +31,16 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **New protections and their limits**:
 
+- Extension advisories (#415): the daily watch reads the security advisories that uBlock Origin's, KeePassXC-Browser's and Bitwarden's repositories publish on GitHub, and fails at once when one covers the version Nulavio pins (uBlock Origin's GHSA-cmqw-9r2w-6wv2 was the case that was missed: the pin moved in #416). It does not cover Proton Pass or 1Password, which publish no machine-readable advisories (R84), and a vendor's unpublished fix is not seen. It is a maintainer-side alert: users get a pinned extension's fix as a new Nulavio build, and, as the extension updates itself from AMO, usually sooner.
 - Automatic updates (#241): the RPM and .deb packages carry a timer and a service that update only the `nulavio` package, at midnight and noon, as root: with dnf from Nulavio's repository only, with APT from the highest version among the system's sources (R83). They do nothing until the person turns them on, which asks for the administrator's password through polkit; nothing runs at install ([TB24](../architecture/trust-boundaries.md), S24). The switch is in Settings and on the first run, which offers it once; the browser runs the helper through `pkexec`, and a person without a polkit agent gets the command to type instead.
 
 **Nulavio fixes**:
 
 - AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. In the AI Workspace the engine's own Local Network Access, which decides on the address it connects to, now refuses a public page's requests to local addresses with no prompt, a pop-up's included. Not covered yet (R29): a rebinding name the agent itself opens, or a redirect on its way, and your own profiles opened for an agent. Nothing to do: it comes with the update.
+
+**Removed**:
+
+- Fingerprinting: the 1920×1080 screen comes from the engine alone (patch 0012's `ScreenSizeConstant`, in the build's set of protections); the Shell no longer sets a screen size per tab (#468, [ADR 0016](../adr/0016-one-screen-size-and-processor-count-for-pages.md#one-mechanism-since-468)). Nothing changes with the build's set, also while "Deixar os sites verem minhas preferências de movimento e contraste" is on. A profile whose set the person wrote themselves in `about:config` without `+ScreenSizeConstant` read the constant through the Shell until 160.0.1-0.1 and reads the display's size from this version on (where the set has the engine's own `+ScreenRect`, `+ScreenAvailRect` or `+CSSDeviceSize`, the value that entry covers is the window's inner size, as before; the values it does not cover read 1920×1080 before and read the display's now): add the entry to `privacy.fingerprintingProtection.overrides`, or reset the preference ([R56, R78](residual-risks.md)). Such a set can now also turn the screen's protection off, which it could not before.
 
 ## Nulavio 160.0.1-0.1 (Firefox 160.0.1), published 2026-11-18
 

@@ -19,6 +19,12 @@ const state = { templateId: "banking", name: "", id: null, code: "", groups: [] 
 let capabilities = { keyring: false };
 let templates = [];
 
+/** The words for a failure. `not-found` here is the profile being made: it was created and is gone before it was
+    protected (the shared words, "the list was refreshed", are true of nothing on this page) (#547). */
+function failureText(e) {
+  return String(e?.message) === "not-found" ? t("vaultCreateGone") : errorText(e);
+}
+
 function step(name) {
   document.body.dataset.step = name;
   for (const id of ["step-profile", "step-protection", "step-recovery", "step-done"]) {
@@ -166,7 +172,7 @@ async function create(event) {
     showRecovery();
   } catch (e) {
     announce("");
-    error.textContent = errorText(e);
+    error.textContent = failureText(e);
   } finally {
     for (const control of document.querySelectorAll("#step-protection input, #step-protection button")) {
       control.disabled = false;
@@ -201,7 +207,7 @@ function finish(event) {
   byId("done-actions").replaceChildren(
     h("button", { class: "button button--primary", type: "button", text: t("vaultOpenProfile", [state.name]),
       // It was created locked: opening it goes through its unlock page, as in the profile menu and in Settings.
-      onclick: () => vault.openUnlockPage(state.id).catch(e => announce(errorText(e), "error")) }),
+      onclick: () => vault.openUnlockPage(state.id).catch(e => announce(failureText(e), "error")) }),
     h("a", { class: "button button--secondary", href: "../settings/settings.html#profiles", dataset: { settings: "profiles" }, text: t("vaultToSettings") })
   );
   wireSettingsLinks(byId("done-actions"));
@@ -246,7 +252,7 @@ Promise.all([renderTemplates(), vault.capabilities().then(c => (capabilities = c
     syncProtection();
     step(state.fromMenu ? "protection" : "profile");
   })
-  .catch(e => announce(errorText(e), "error"))
+  .catch(e => announce(failureText(e), "error"))
   .finally(() => {
     document.documentElement.dataset.ready = "true";
   });

@@ -48,6 +48,8 @@ jobs:
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Companion protocol library (Java; Gradle and dependencies checksum-verified; run again if Maven refuses, #516)
+        env:
+          NULAVIO_MAVEN_MIRROR: https://maven-central.storage-download.googleapis.com/maven2/ # Google's mirror of Maven Central, asked first; each artifact still checked against the verification metadata (#535)
         run: JAVA_HOME="$JAVA_HOME_21_X64" scripts/ci/gradle.sh -q :nv1:test
       - name: uBlock Origin's list registry is the pinned package's (fetched from AMO, checked against the lock)
         run: python3 -I scripts/upstream/refresh_extensions_lock.py --check-registry
@@ -56,6 +58,7 @@ jobs:
           NULAVIO_REQUIRE_SODIUM: "1"
           NULAVIO_REQUIRE_GOCRYPTFS: "1"
           NULAVIO_REQUIRE_APKSIGNER: "1" # test_apk_sign checks the Companion's signer with the runner's Android build-tools
+          NULAVIO_REQUIRE_GRADLE: "1" # test_ci_gradle runs the Maven mirror's init script in the Gradle the protocol library step unpacked
         run: python3 -I tests/run.py unit
       - name: Pinned Firefox source digest is the one Mozilla signed (engine.json)
         if: ${{ !cancelled() }} # reported even when an earlier step failed
@@ -73,11 +76,13 @@ jobs:
             sbom.cdx.json
             companion.cdx.json
           retention-days: 14 # artifacts count against the plan's storage; releases keep their own SBOM
-      - name: Pinned dependencies against OSV.dev, the AMO blocklist and the registries (daily in upstream.yml too)
+      - name: Pinned dependencies against OSV.dev, the AMO blocklist, extension advisories and the registries (daily in upstream.yml too)
         if: ${{ !cancelled() }} # reported even when an earlier step failed
+        env:
+          NV_GITHUB_TOKEN: ${{ github.token }} # read-only here; only raises api.github.com's rate limit; the script reads it on stdin (I3)
         run: |
           status=0
-          python3 -I scripts/release/watch_dependencies.py --summary "$GITHUB_STEP_SUMMARY" || status=$?
+          printf '%s\n' "$NV_GITHUB_TOKEN" | env -u NV_GITHUB_TOKEN python3 -I scripts/release/watch_dependencies.py --token-stdin --summary "$GITHUB_STEP_SUMMARY" || status=$?
           if [ "$status" -eq 2 ]; then
             echo "::warning title=Dependency watch::some data could not be fetched; the daily upstream run fails on this"
             exit 0
@@ -136,6 +141,8 @@ jobs:
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Lint and release build (Gradle and dependencies checksum-verified, run again if Maven refuses; no signing key in CI)
+        env:
+          NULAVIO_MAVEN_MIRROR: https://maven-central.storage-download.googleapis.com/maven2/ # Google's mirror of Maven Central, asked first; each artifact still checked against the verification metadata (#535)
         run: JAVA_HOME="$JAVA_HOME_21_X64" scripts/ci/gradle.sh -q :app:lintDebug :app:assembleRelease
 
   changes:

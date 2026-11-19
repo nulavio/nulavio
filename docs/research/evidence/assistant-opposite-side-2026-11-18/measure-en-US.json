@@ -1,0 +1,437 @@
+[
+ {
+  "name": "en-US-lateral-1366x768-light-today",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   224,
+   340
+  ],
+  "splitter": [
+   564,
+   8
+  ],
+  "tabbox": [
+   572,
+   786
+  ],
+  "page": [
+   572,
+   786
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-lateral-1366x768-light-opposite",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1018,
+   8
+  ],
+  "tabbox": [
+   224,
+   786
+  ],
+  "page": [
+   224,
+   786
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-lateral-1366x768-dark-today",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   224,
+   340
+  ],
+  "splitter": [
+   564,
+   8
+  ],
+  "tabbox": [
+   572,
+   786
+  ],
+  "page": [
+   572,
+   786
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-lateral-1366x768-dark-opposite",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1018,
+   8
+  ],
+  "tabbox": [
+   224,
+   786
+  ],
+  "page": [
+   224,
+   786
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-lateral-1440x900-light-today",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   224,
+   340
+  ],
+  "splitter": [
+   564,
+   8
+  ],
+  "tabbox": [
+   572,
+   860
+  ],
+  "page": [
+   572,
+   860
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1440,
+   900
+  ]
+ },
+ {
+  "name": "en-US-lateral-1440x900-light-opposite",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   1100,
+   340
+  ],
+  "splitter": [
+   1092,
+   8
+  ],
+  "tabbox": [
+   224,
+   860
+  ],
+  "page": [
+   224,
+   860
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1440,
+   900
+  ]
+ },
+ {
+  "name": "en-US-lateral-1440x900-dark-today",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   224,
+   340
+  ],
+  "splitter": [
+   564,
+   8
+  ],
+  "tabbox": [
+   572,
+   860
+  ],
+  "page": [
+   572,
+   860
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1440,
+   900
+  ]
+ },
+ {
+  "name": "en-US-lateral-1440x900-dark-opposite",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   1100,
+   340
+  ],
+  "splitter": [
+   1092,
+   8
+  ],
+  "tabbox": [
+   224,
+   860
+  ],
+  "page": [
+   224,
+   860
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1440,
+   900
+  ]
+ },
+ {
+  "name": "en-US-focus-1366x768-light-today",
+  "launcher": [
+   0,
+   50
+  ],
+  "box": [
+   50,
+   340
+  ],
+  "splitter": [
+   390,
+   8
+  ],
+  "tabbox": [
+   398,
+   960
+  ],
+  "page": [
+   398,
+   960
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-focus-1366x768-light-opposite",
+  "launcher": [
+   0,
+   50
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1018,
+   8
+  ],
+  "tabbox": [
+   50,
+   960
+  ],
+  "page": [
+   50,
+   960
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-top-1366x768-light-today",
+  "launcher": [
+   0,
+   40
+  ],
+  "box": [
+   40,
+   340
+  ],
+  "splitter": [
+   380,
+   8
+  ],
+  "tabbox": [
+   388,
+   970
+  ],
+  "page": [
+   388,
+   970
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "en-US-top-1366x768-light-opposite",
+  "launcher": [
+   0,
+   40
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1018,
+   8
+  ],
+  "tabbox": [
+   40,
+   970
+  ],
+  "page": [
+   40,
+   970
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "bookmarks-opposite",
+  "launcher": [
+   0,
+   224
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1018,
+   8
+  ],
+  "tabbox": [
+   224,
+   786
+  ],
+  "page": [
+   224,
+   786
+  ],
+  "current": "viewBookmarksSidebar",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "positionend-opposite",
+  "launcher": [
+   1142,
+   224
+  ],
+  "box": [
+   0,
+   340
+  ],
+  "splitter": [
+   340,
+   8
+  ],
+  "tabbox": [
+   356,
+   786
+  ],
+  "page": [
+   356,
+   786
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": true,
+  "window": [
+   1366,
+   768
+  ]
+ },
+ {
+  "name": "immersive-opposite",
+  "launcher": [
+   -240,
+   224
+  ],
+  "box": [
+   1026,
+   340
+  ],
+  "splitter": [
+   1010,
+   8
+  ],
+  "tabbox": [
+   0,
+   1002
+  ],
+  "page": [
+   0,
+   1002
+  ],
+  "current": "shell_nulavio_net-sidebar-action",
+  "positionend": false,
+  "window": [
+   1366,
+   768
+  ]
+ }
+]

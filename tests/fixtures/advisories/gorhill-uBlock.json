@@ -1,0 +1,61 @@
+[
+ {
+  "ghsa_id": "GHSA-cmqw-9r2w-6wv2",
+  "cve_id": null,
+  "url": "https://api.github.com/repos/gorhill/uBlock/security-advisories/GHSA-cmqw-9r2w-6wv2",
+  "html_url": "https://github.com/gorhill/uBlock/security/advisories/GHSA-cmqw-9r2w-6wv2",
+  "summary": "Universal XSS from website-driven element picker",
+  "description": "(trimmed in the fixture)",
+  "severity": "high",
+  "identifiers": [
+   {
+    "value": "GHSA-cmqw-9r2w-6wv2",
+    "type": "GHSA"
+   }
+  ],
+  "state": "published",
+  "created_at": null,
+  "updated_at": "2026-11-16T13:25:44Z",
+  "published_at": "2026-11-15T16:27:56Z",
+  "closed_at": null,
+  "withdrawn_at": null,
+  "submission": null,
+  "vulnerabilities": [
+   {
+    "package": {
+     "ecosystem": "",
+     "name": "uBlock Origin"
+    },
+    "vulnerable_version_range": "1.75.2 and lower",
+    "patched_versions": "1.75.4",
+    "vulnerable_functions": []
+   }
+  ],
+  "cvss_severities": {
+   "cvss_v3": {
+    "vector_string": null,
+    "score": null
+   },
+   "cvss_v4": {
+    "vector_string": null,
+    "score": null
+   }
+  },
+  "cwes": [],
+  "cwe_ids": [],
+  "credits": [
+   {
+    "login": "syvb",
+    "type": "reporter"
+   }
+  ],
+  "collaborating_users": null,
+  "collaborating_teams": null,
+  "private_fork": null,
+  "comments": 0,
+  "cvss": {
+   "vector_string": null,
+   "score": null
+  }
+ }
+]
