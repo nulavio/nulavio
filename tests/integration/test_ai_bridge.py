@@ -1174,9 +1174,11 @@ class AiBridgeTest(unittest.TestCase):
         agent, _ = self.agent("autonomous", local=False)
         bridge = tools.Bridge(agent["id"], "s-pac", approver=registry.Approver(), headless=True)
         self.addCleanup(bridge.close)
-        opened = bridge.call("tab_new", {"url": f"{local}-direct"})
-        self.assertNotIn("only on this computer", json.dumps(opened))
-        tab = next(t["tab"] for t in bridge.call("tabs_list", {})["structuredContent"]["tabs"] if "/x-direct" in t["url"])
+        opened = bridge.call("tab_new", {})
+        self.assertFalse(opened["isError"], opened)
+        tab = opened["structuredContent"]["tab"]
+        went = bridge.call("navigate", {"tab": tab, "url": f"{local}-direct"})
+        self.assertNotIn("only on this computer", json.dumps(went))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
         self.assertEqual(hits, ["/x-direct"])  # the engine connected directly, and the page was not shown
         # The same direct connection opens the page once the agent may reach local resources: nothing else stops it.
