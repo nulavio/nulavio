@@ -27,7 +27,22 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
-## Unreleased (on `main`, after 160.0.1-0.1)
+## Unreleased (on `main`, after 160.0.1-0.2)
+
+**Nulavio fixes**:
+
+- AI Bridge, local network, continued (#243, #560):
+  - In your own profiles opened for an agent, the engine's Local Network Access now refuses a public page's requests to local addresses with no prompt, a pop-up's included. This holds for the agent's run only, and none of these settings stays in the profile.
+  - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
+  - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
+  - With a proxy, no page is checked this way; R29 lists what else is not.
+  - Nothing to do: it comes with the update.
+
+## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19
+
+A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.2), [run 44442004774](https://github.com/nulavio/nulavio/actions/runs/44442004774)), built from `main` at `be6d3ea3`. The first run, from `8d265dc8` (run 44418820464), stopped twice on `test_downloads_indicator` 01: a second read after its wait, which #567 fixed. The run from `be6d3ea3` stopped once on `test_tab_groups` 05, the order of a restored group's tabs, which passed on the rerun. In the same attempt the Companion's Gradle steps could not resolve dependencies from Maven Central, and that job also passed on the rerun. At the maintainer's request in chat, the agent dispatched the run, gave the `release` environment's approval and published the draft. It published only after checking `SHA256SUMS.asc` against the published key (`298A 9093 … 8DB1`) and every asset against `SHA256SUMS`. `scripts/release/AGENTS.md` leaves those steps to the maintainer, who asked for this exception, as for 160.0.1-0.1.
+
+**Upstream**: unchanged, Firefox 160.0.1.
 
 **New protections and their limits**:
 
@@ -36,7 +51,8 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Nulavio fixes**:
 
-- AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. In the engines an agent drives (the AI Workspace, and your own profiles opened for an agent) the engine's own Local Network Access, which decides on the address it connects to, now refuses a public page's requests to local addresses with no prompt, a pop-up's included; in your profiles it holds for the agent's run only, and none of these settings stays in the profile. A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place: the engine knows the address only once it has connected, so that request has been sent, and the local service still receives it (R29). For that check the agent's engines never take a top-level page from the cache: it is fetched, or not shown. With a proxy, no page is checked this way; R29 lists what else is not. Nothing to do: it comes with the update.
+- AI Bridge, engine lookup (#563): the tools installed with Nulavio now use the engine of their own install, and the Bridge drives only the Nulavio build. Nothing to do: it comes with the update. Its advisory is linked here once published.
+- AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. In the AI Workspace the engine's own Local Network Access, which decides on the address it connects to, now refuses a public page's requests to local addresses with no prompt, a pop-up's included. Not covered yet (R29): a rebinding name the agent itself opens, or a redirect on its way, and your own profiles opened for an agent. Nothing to do: it comes with the update.
 
 **Removed**:
 
