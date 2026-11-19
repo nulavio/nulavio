@@ -11,6 +11,8 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+# engine.HARNESS_FIREFOX_ENV, which tests/lib/harness.py sets: passed on so the bridge may drive that Firefox.
+HARNESS_FIREFOX_ENV = "NULAVIO_TEST_DISTRIBUTION_FIREFOX"
 MODERN_META = {
     "io.modelcontextprotocol/protocolVersion": "2026-07-28",
     "io.modelcontextprotocol/clientCapabilities": {},
@@ -25,7 +27,8 @@ class McpClient:
             [str(ROOT / "bin" / "nulavio"), "ai", "serve", *args],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             # TMPDIR too: the bridge makes its disposable workspaces there, and the tests look for them in their own.
-            env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), "TMPDIR": tempfile.gettempdir(), **env},
+            env={"PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""), "TMPDIR": tempfile.gettempdir(),
+                 **{k: os.environ[k] for k in (HARNESS_FIREFOX_ENV,) if k in os.environ}, **env},
         )  # fmt: skip
         self._ids = itertools.count(1)
         self.stderr: list[str] = []
