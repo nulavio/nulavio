@@ -458,6 +458,41 @@
   }
 }
 
+/* #527: the side panel on the other side of the page (nulavio.sidebar.panelOpposite; the engine orders it, patch 0013).
+   What the engine's own sheets decide from the panel being beside the launcher, put right for the panel on the other
+   side, whatever the window's theme and height (Horizon's frame, horizon.css, adds its margins on top of this). */
+@-moz-document url("chrome://browser/content/browser.xhtml") {
+  :root[nulavio-panel-opposite] {
+    /* Foco: while the launcher is expanded over the page, the engine keeps the collapsed launcher's width as a margin of
+       what sits beside it, which it takes to be the panel (sidebar.css). The page sits beside it here, and the panel
+       needs none. */
+    @media -moz-pref("sidebar.visibility", "expand-on-hover") {
+      #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded]:not([sidebar-positionend]) {
+        margin-inline-start: var(--sidebar-launcher-collapsed-width);
+      }
+      #tabbrowser-tabbox[sidebar-panel-open][sidebar-launcher-expanded][sidebar-positionend] {
+        margin-inline-end: var(--sidebar-launcher-collapsed-width);
+      }
+      #sidebar-box[sidebar-panel-open][sidebar-launcher-expanded]:not([sidebar-positionend]) {
+        margin-inline-start: 0;
+      }
+      #sidebar-box[sidebar-panel-open][sidebar-launcher-expanded][sidebar-positionend] {
+        margin-inline-end: 0;
+      }
+    }
+    /* The page's edge that faces the panel is drawn as one facing chrome (content-area.css draws only the launcher's
+       side). Horizon's card replaces both where it applies. */
+    &:not([inDOMFullscreen]) #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
+      border-inline-end: var(--border-width) solid var(--chrome-content-separator-color);
+      border-start-end-radius: var(--content-area-start-radius);
+    }
+    &:not([inDOMFullscreen]) #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] #tabbrowser-tabpanels > :not(.split-view-panel) .browserContainer {
+      border-inline-start: var(--border-width) solid var(--chrome-content-separator-color);
+      border-start-start-radius: var(--content-area-start-radius);
+    }
+  }
+}
+
 /* ADR 0009, Immersive: the toolbar and the tab list leave the layout and come back over the page;
    the band's row stays, with the site of the tab in its middle. Nothing here removes or restyles an
    engine indicator: the toolbar is the engine's own, out of view until the pointer, the keyboard or
