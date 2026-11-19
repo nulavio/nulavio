@@ -161,6 +161,44 @@ PANELS = {
 }
 
 
+# #346: the engine's own view transition of the sidebar (setPosition() runs in one): the animations of the snapshots of
+# the tab list and of the panel, every frame, so a part that is away is never seen crossing in its snapshot either.
+VIEW_TRANSITIONS = """
+const vt = (window.nvVT = { seen: [], on: true, active: false });
+const tick = () => {
+  if (!vt.on) return;
+  for (const a of document.getAnimations()) {
+    const p = a.effect?.pseudoElement ?? "";
+    vt.active ||= p.startsWith("::view-transition");
+    if (/\\((sidebar-launcher|sidebar-box)\\)/.test(p) && !vt.seen.includes(p)) vt.seen.push(p);
+  }
+  requestAnimationFrame(tick);
+};
+requestAnimationFrame(tick);
+"""
+VIEW_TRANSITIONS_END = "window.nvVT.on = false; return { seen: window.nvVT.seen, active: window.nvVT.active };"
+# The change of side over: a view transition ran (VIEW_TRANSITIONS saw it), none of its pseudo-elements is left, and
+# nothing else in the window moves.
+VIEW_TRANSITIONS_DONE = """
+return Boolean(window.nvVT?.active) && !document.getAnimations().some(
+  a => a.playState === "running" || (a.effect?.pseudoElement ?? "").startsWith("::view-transition"));
+"""
+
+# #346: the side panel on the other side of the page (#527): the setting, the assistant's panel, and the panel as drawn
+# ([left, right] of the box, whether it is in view), with the page's box and the frame margin.
+OPPOSITE = "nulavio.sidebar.panelOpposite"
+ASSISTANT = "shell_nulavio_net-sidebar-action"
+PANEL = """
+const e = document.getElementById("sidebar-box"), b = e.getBoundingClientRect(), s = getComputedStyle(e);
+const page = gBrowser.selectedBrowser.closest(".browserContainer").getBoundingClientRect();
+const frame = getComputedStyle(document.documentElement).getPropertyValue("--nulavio-frame-margin").trim();
+return { box: [Math.round(b.left), Math.round(b.right)], page: [Math.round(page.left), Math.round(page.right)],
+         shown: e.checkVisibility() && b.width > 0 && b.right > 2 && b.left < innerWidth - 2 && s.opacity !== "0",
+         frame: frame ? Math.round(parseFloat(frame)) : 0,
+         opposite: document.documentElement.hasAttribute("nulavio-panel-opposite") };
+"""
+
+
 def pointer_path(points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]:
     """A pointer moving through `points` in 8 px steps at 60 Hz, as a hand moves it, resting `pause_ms` at each
     point, or as long as the point's third number says."""
@@ -1297,6 +1335,323 @@ class ImmersiveTest(unittest.TestCase):
                     self.assertEqual(sized(back), sized(reference))
                     self.m.chrome("gBrowser.selectedBrowser.focus();")
                     self.assertFalse(self.settled(False)["toolbar"])
+
+    # -- #346: the side panel on the other side of the page (#527) has an edge of its own ----------------------------
+
+    def panel_opposite(self, start: bool = True) -> tuple[int, int]:
+        """Lateral, the tab list on the left (start) or the right, the side panel opposite it (patch 0013, #527) with the
+        assistant open, and everything away: the pointer on the page, the keyboard in the page, the opening's moment
+        over. Returns the window's inner size. A build of this tree must have the patch."""
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref('{OPPOSITE}');")
+        self.addCleanup(self.m.chrome, "SidebarController.hide();")
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.apply_preset("lateral")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+        self.m.chrome(f"Services.prefs.setBoolPref('{OPPOSITE}', true);")
+        marked = "return document.documentElement.hasAttribute('nulavio-panel-opposite');"
+        if not harness.wait_until(lambda: self.m.chrome(marked), 5):
+            if harness.built_from_this_tree():
+                self.fail("this engine is a build of this tree and does not place the panel opposite: patch 0013 is missing")
+            self.skipTest("an engine without patch 0013 (a development package with this tree's Shell)")
+        side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(side) is not start, 10))
+        self.m.chrome(f"SidebarController.show('{ASSISTANT}');")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return SidebarController.currentID;") == ASSISTANT, 10))
+        self.rest_pointer_at(start)
+        # The assistant's page may take the keyboard once it has loaded (its question field), which holds the panel, as
+        # it should: give it that moment, then put the keyboard back in the page.
+        inside = "return document.getElementById('sidebar-box').contains(document.activeElement);"
+        harness.wait_until(lambda: self.m.chrome(inside), 3)
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        away = harness.wait_until(lambda: self.panel_away() and self.m.chrome(STILL), 10)
+        self.assertTrue(away, f"{self.m.chrome(PANEL)}, {self.window()}, keyboard in the panel: {self.m.chrome(inside)}")
+        return tuple(self.m.chrome("return [innerWidth, innerHeight];"))
+
+    def held_through(self, why: str) -> None:
+        """The pointer away, then every frame for 2 s (past the 0.6 s hold and the exit a pointer gets): the panel is in
+        view in each of them, not only at the end."""
+        # In view first, past its slide in (the hold has just begun), then the window traced from there.
+        shown = harness.wait_until(lambda: self.m.chrome(PANEL)["shown"] and self.m.chrome(STILL), 5)
+        self.assertTrue(shown, f"{why}: the panel did not come: {self.m.chrome(PANEL)}, {self.window()}")
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.m.chrome(TRACE)
+        self.m.chrome(AWAY)
+        time.sleep(2)  # the window traced throughout, every frame checked below
+        frames = self.trace_end()
+        self.assertGreater(len(frames), 30, why)
+        gone = [n for n, f in enumerate(frames) if not visible(f["panel"])]
+        self.assertEqual(
+            gone, [], f"{why}: the panel left in frames {gone[:5]} of {len(frames)}: {frames[gone[0]] if gone else ''}"
+        )
+
+    def panel_away(self) -> bool:
+        return not self.m.chrome(PANEL)["shown"] and "panel" not in (self.window()["hold"] or "")
+
+    def rest_pointer_at(self, start: bool) -> None:
+        """The pointer on the page, a quarter in from the tab list's side: away from both edges."""
+        w, h = self.m.chrome("return [innerWidth, innerHeight];")
+        x = w // 3 if start else w * 2 // 3
+        self.m.set_context("chrome")
+        try:
+            move = {"type": "pointerMove", "duration": 0, "origin": "viewport", "x": x, "y": h // 2}
+            pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": [move]}
+            self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
+        finally:
+            self.m.set_context("content")
+
+    def walk(self, points: list[tuple[int, ...]], pause_ms: int = 0) -> list[dict]:
+        """A pointer journey through the engine's own event path, every frame traced (TRACE), and the rest after it."""
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.m.chrome(TRACE)
+        self.m.set_context("chrome")
+        try:
+            actions = [*pointer_path(points, pause_ms), {"type": "pause", "duration": 1600}]
+            pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": actions}
+            self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
+        finally:
+            self.m.set_context("content")
+        frames = self.trace_end()
+        self.assertGreater(len(frames), 30)
+        return frames
+
+    def test_25_the_panel_opposite_leaves_and_comes_back_by_its_own_edge(self):
+        """#346: with the side panel on the other side of the page (#527), the panel leaves entirely by its own edge and
+        only that edge brings it back, over the page, which does not move. Journeys with the pointer, every frame: the
+        panel's edge, into the panel and back onto the page; the tab list's edge; the toolbar; across the page. The
+        toolbar never covers the panel, the panel never covers the tab list, the band and the page never move, the tab
+        list's edge never brings the panel and the panel's edge never brings the tab list, and once the pointer rests
+        on the page nothing is in view. Tabs on the left and on the right; light at 1440 x 900, dark at 1366 x 768."""
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.systemUsesDarkTheme');")
+        self.addCleanup(
+            self.m.chrome,
+            "window.resizeTo(arguments[0], arguments[1]);",
+            self.m.chrome("return [window.outerWidth, window.outerHeight];"),
+        )
+        for size, dark in (((1440, 900), 0), ((1366, 768), 1)):
+            self.m.chrome("window.resizeTo(arguments[0], arguments[1]);", list(size))
+            self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme', arguments[0]);", [dark])
+            for start in (True, False):
+                w, h = self.panel_opposite(start)
+                where = f"tabs {'left' if start else 'right'}, {w}x{h}, {'dark' if dark else 'light'}"
+                frame = self.m.chrome(PANEL)["frame"]
+
+                def mirror(points, w=w, start=start):
+                    # Drawn for the tab list on the left; with it on the right, the same path in a mirror.
+                    return [p if start else (w - 1 - p[0], *p[1:]) for p in points]
+
+                def check(name, frames, want_panel, want_tabs, want_toolbar, where=where):
+                    first = frames[0]
+                    for n, f in enumerate(frames):
+                        at = f"{where}, {name}, frame {n} of {len(frames)}: {f}"
+                        self.assertFalse(covers(f["toolbar"], f["panel"]), "the toolbar over the panel: " + at)
+                        self.assertFalse(covers(f["toolbar"], f["tabs"]), "the toolbar over the tab list: " + at)
+                        self.assertFalse(covers(f["panel"], f["tabs"]), "the panel and the tab list together: " + at)
+                        self.assertEqual(f["band"][:4], first["band"][:4], "the band moved: " + at)
+                        self.assertEqual(f["page"][:4], first["page"][:4], "the page moved: " + at)
+                        if visible(f["panel"]):
+                            self.assertGreaterEqual(f["panel"][1] + 1, f["band"][3], "the panel over the band: " + at)
+                    self.assertEqual(any(visible(f["panel"]) for f in frames), want_panel, f"{where}, {name}: the panel")
+                    self.assertEqual(any(visible(f["tabs"]) for f in frames), want_tabs, f"{where}, {name}: the tab list")
+                    self.assertEqual(any(visible(f["toolbar"]) for f in frames), want_toolbar, f"{where}, {name}: the toolbar")
+                    last = frames[-1]
+                    self.assertFalse(
+                        visible(last["panel"]) or visible(last["tabs"]) or visible(last["toolbar"]),
+                        f"{where}, {name}: still shown at rest: {last}",
+                    )
+
+                page = (w // 3, h // 2)
+                with self.subTest(where=where):
+                    # At rest: the page between the frame margins, the panel entirely past its edge.
+                    rest = self.m.chrome(PANEL)
+                    self.assertEqual(rest["page"], [frame, w - frame], rest)
+                    self.assertTrue(rest["box"][0] >= w if start else rest["box"][1] <= 0, rest)
+                    # The panel's edge, into the panel, a moment there, and back onto the page.
+                    frames = self.walk(mirror([page, (w - 1, h // 2, 300), (w - 120, h // 2, 400), page]))
+                    check("the panel's edge", frames, True, False, False)
+                    # In view, it rests at the frame margin of its side and never comes further in; the other frames in
+                    # view are its slide's.
+                    gaps = [(w - f["panel"][2]) if start else f["panel"][0] for f in frames if visible(f["panel"])]
+                    self.assertEqual(max(set(gaps), key=gaps.count), frame, f"the panel at rest in view: {gaps}")
+                    self.assertEqual(max(gaps), frame, f"the panel came further in than the frame margin: {gaps}")
+                    # The tab list's edge brings the tab list, never the panel.
+                    frames = self.walk(mirror([page, (1, h // 2, 300), (100, h // 2, 300), page]))
+                    check("the tab list's edge", frames, False, True, False)
+                    # The toolbar, from the top, and down onto the page.
+                    frames = self.walk(mirror([page, (w // 2, 10, 400), page]))
+                    check("the toolbar", frames, False, False, True)
+                    # Across the page, away from every edge.
+                    frames = self.walk(mirror([page, (w // 4, h - 40), (w * 3 // 4, 80), page]))
+                    check("across the page", frames, False, False, False)
+
+    def test_26_the_panel_stays_while_it_has_the_focus_a_menu_or_the_pin(self):
+        """#346, the toolbar's holds for the panel on its own edge: the keyboard in it, a menu anchored in it and the
+        band's pin keep it in view with the pointer away; when they end, it leaves."""
+        self.panel_opposite(True)
+
+        def stays(why: str) -> None:
+            self.held_through(why)
+
+        def leaves(why: str) -> None:
+            self.m.chrome(AWAY)
+            self.assertTrue(harness.wait_until(self.panel_away, 6), f"{why}: the panel stayed: {self.m.chrome(PANEL)}")
+
+        # The keyboard in the panel (the page in it), then back in the page.
+        self.m.chrome(
+            "const outer = SidebarController.browser; outer.contentWindow.focus();"
+            "(outer.contentDocument?.querySelector('browser') ?? outer).focus();"
+        )
+        inside = "return document.getElementById('sidebar-box').contains(document.activeElement);"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(inside), 5), "the keyboard did not go into the panel")
+        self.assertTrue(harness.wait_until(lambda: "panel" in (self.window()["hold"] or ""), 5), self.window())
+        stays("the keyboard in it")
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        leaves("the keyboard back in the page")
+        # A menu anchored in it.
+        self.addCleanup(self.m.chrome, "document.getElementById('nv-test-panel-menu')?.remove();")
+        self.m.chrome(
+            "const menu = document.createXULElement('menupopup'); menu.id = 'nv-test-panel-menu';"
+            "const item = document.createXULElement('menuitem'); item.setAttribute('label', 'Item'); menu.append(item);"
+            "document.getElementById('mainPopupSet').append(menu);"
+            "menu.openPopup(document.getElementById('sidebar-box'), 'overlap', 20, 20);"
+        )
+        menu = "return document.getElementById('nv-test-panel-menu').state;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(menu) == "open", 5))
+        self.assertIn("panel", self.window()["hold"] or "")
+        stays("a menu open in it")
+        self.m.chrome("document.getElementById('nv-test-panel-menu').hidePopup();")
+        leaves("the menu closed")
+        # The pin, for touch: pressed, it holds the panel too; pressed again, it lets it go.
+        self.m.chrome(PRESS_PIN)
+        self.addCleanup(lambda: self.m.chrome(PIN)["pressed"] == "true" and self.m.chrome(PRESS_PIN))
+        stays("the pin pressed")
+        self.m.chrome(PRESS_PIN + "gBrowser.selectedBrowser.focus();")
+        leaves("the pin let go")
+
+    def test_27_a_panel_just_opened_or_with_a_request_waiting_is_in_view(self):
+        """#346: a panel opened while it is away (the key, the launcher) comes into view for a moment, as a tab opened in
+        the background does; and while the assistant's permission request waits as a card in it, it stays in view, so
+        the request is never left unseen in a panel that is out of view (NulavioAI places the card there while the
+        panel is open)."""
+        self.panel_opposite(True)
+        self.m.chrome("SidebarController.hide();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome("return !SidebarController.isOpen;"), 5))
+        self.m.chrome(f"SidebarController.show('{ASSISTANT}');")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(PANEL)["shown"], 3), self.m.chrome(PANEL))
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        self.assertTrue(harness.wait_until(self.panel_away, 6), self.m.chrome(PANEL))
+        # A request waiting in the panel: what NulavioAI says of this window's runs, then its notice of the change.
+        ai = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
+        # Back to NulavioAI's own answer, and the window told so, as the end of a request tells it (else the window keeps
+        # the hold of a request that no longer waits, for whatever runs next).
+        self.addCleanup(
+            self.m.chrome, f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.m.chrome(
+            f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
+            "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.assertTrue(harness.wait_until(lambda: "panel" in (self.window()["hold"] or ""), 5), self.window())
+        self.held_through("a request waiting in it")
+        self.m.chrome(f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');")
+        self.assertTrue(harness.wait_until(self.panel_away, 6), self.m.chrome(PANEL))
+        # With the panel beside the tabs (the setting off) it stays in the flow (#344): a waiting request holds nothing,
+        # so the window's other rules that look at the holds (#239: a click on the page takes the keyboard) are as before.
+        self.m.chrome(f"Services.prefs.clearUserPref('{OPPOSITE}');")
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(PANEL)["opposite"], 5))
+        self.m.chrome(
+            f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
+            "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.assertFalse(harness.wait_until(lambda: self.window()["hold"] is not None, 2), self.window())
+
+    def test_28_a_side_that_changes_moves_the_part_that_is_away_at_once(self):
+        """#346 (from #539's review): with the mode on and the tab list away, changing its side (sidebar.position_start)
+        moved its edge at once while its slide ran, so the list was seen crossing the window. The part that is away
+        goes to its new edge without a slide: the tab list alone, and the tab list with the panel opposite it."""
+        before = self.m.chrome(f"return {LAYOUT}.state(window).then(state => state.preset);")
+        self.addCleanup(self.apply_preset, before)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.apply_preset("lateral")
+        side = "return document.documentElement.hasAttribute('sidebar-positionend');"
+
+        def flip(where: str) -> None:
+            for start in (False, True):
+                self.m.chrome(TRACE)
+                self.m.chrome(VIEW_TRANSITIONS)
+                self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
+                self.assertTrue(harness.wait_until(lambda start=start: self.m.chrome(side) is not start, 10))
+                # Traced until the engine's view transition and every slide are over, not for a fixed time.
+                done = harness.wait_until(lambda: self.m.chrome(VIEW_TRANSITIONS_DONE), 10)
+                frames = self.trace_end()
+                snapshots = self.m.chrome(VIEW_TRANSITIONS_END)
+                self.assertGreater(len(frames), 10)
+                to = f"{where}, to the {'left' if start else 'right'}"
+                seen = [f for f in frames if visible(f["tabs"]) or visible(f["panel"])]
+                self.assertEqual(seen, [], f"{to}: seen crossing")
+                # The engine's view transition draws snapshots of the parts that have a view-transition name, moved
+                # from their old place to their new one: a part that is away has none, so nothing of it crosses there.
+                self.assertTrue(snapshots["active"], f"{to}: the engine ran no view transition, so this saw nothing")
+                self.assertTrue(done, f"{to}: the view transition or a slide did not end ({snapshots})")
+                self.assertEqual(snapshots["seen"], [], f"{to}: a snapshot crossing ({snapshots})")
+
+        self.rest_pointer()
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        self.assertTrue(harness.wait_until(lambda: not self.window()["toolbar"] and self.m.chrome(STILL), 10))
+        flip("the tab list")
+        self.panel_opposite(True)
+        flip("the tab list and the panel opposite it")
+
+    def test_30_from_the_edge_to_the_panel_it_stays_with_reduced_motion(self):
+        """#346 (CodeRabbit on #564): the panel shown sits at the frame margin, so the strip that brings it covers that
+        margin, all of it: the pointer going from the window's edge into the panel never crosses a gap where neither
+        holds it. With reduced motion nothing waits, so such a gap would take the panel away at once."""
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return matchMedia('(prefers-reduced-motion: reduce)').matches;"), 5)
+        )
+        w, h = self.panel_opposite(True)
+        frame = self.m.chrome(PANEL)["frame"]
+        strip = self.m.chrome(
+            "const b = document.getElementById('nulavio-immersive-panel-edge').getBoundingClientRect();"
+            "return [Math.round(b.left), Math.round(b.right)];"
+        )
+        self.assertEqual(strip, [w - max(frame, 4), w], "the strip does not cover the frame margin")
+        # From the page to the very edge, then in one pixel at a time across the margin and into the panel.
+        inward = [(x, h // 2) for x in range(w - 2, w - frame - 31, -1)]
+        frames = self.walk([(w // 3, h // 2), (w - 1, h // 2, 300), *inward, (w - frame - 30, h // 2, 600)], 0)
+        first = next((n for n, f in enumerate(frames) if visible(f["panel"])), None)
+        self.assertIsNotNone(first, "the edge did not bring the panel")
+        gone = [n for n, f in enumerate(frames[first:], first) if not visible(f["panel"])]
+        self.assertEqual(gone, [], f"the panel left on the way in, frames {gone[:5]}: {frames[gone[0]] if gone else ''}")
+
+    def test_29_a_panel_held_in_view_does_not_keep_the_keyboard_in_the_address_bar(self):
+        """#346 with #239: the side panel's own holds are about the panel. With a request waiting in the panel opposite
+        (it is held in view), a click on the band after the keyboard was in the address bar still gives the page the
+        keyboard, and the toolbar goes; the panel stays."""
+        self.panel_opposite(True)
+        ai = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
+        self.addCleanup(
+            self.m.chrome, f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.m.chrome(
+            f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
+            "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "panel", 5), self.window())
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.assertTrue(self.m.chrome(FOCUS)["urlbar"])
+        # On the band: a web page takes the keyboard by itself, the band does not, so the window's own rule is what acts.
+        at = self.m.chrome(SPOTS)["band"]
+        self.assertIsNotNone(at, "no free point on the band")
+        self.m.chrome(CLICK_AT, [at])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(FOCUS)["urlbar"], 5), self.m.chrome(FOCUS))
+        self.m.chrome(AWAY)
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertTrue(self.m.chrome(PANEL)["shown"], "the panel left with a request waiting in it")
 
     def rest_pointer(self):
         """The pointer on the page, three quarters across and halfway down, through the engine's own event path."""

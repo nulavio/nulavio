@@ -5,7 +5,9 @@ Nulavio's sheets give it the window's margin on its outer side (horizon.css, and
 geometry is read for every layout, both sides of the tabs (`sidebar.position_start`), with Imersivo off and on, in
 both themes at 1440 x 900 and 1366 x 768, and compared with the same window with the setting off: the panel is
 after the page with the tabs on the left and before it with the tabs on the right, the margin at the window's edge
-and the gap between the page and the panel are the ones the page had, and the page and the panel are as wide.
+and the gap between the page and the panel are the ones the page had, and the page and the panel are as wide. In
+Imersivo the panel has an edge of its own (#346): away, the page has the frame margin on both sides, and that edge
+brings the panel over the page (the journeys are test_immersive 25 to 28).
 That comparison is what notices when Mozilla's sidebar styles change under Nulavio's rules (#249).
 
 A test of what the patch adds fails on a build of this tree that lacks it (NULAVIO_BUILT_FROM_TREE=1, as the
@@ -179,6 +181,21 @@ class PanelOppositeTest(unittest.TestCase):
         else:
             self.assertEqual(page[1], off["panel"][1], at)
 
+    def assert_own_edge(self, on: dict, where: str) -> None:
+        """#346, Imersivo: the panel is away past its own edge, the page has the frame margin on both sides; the pointer
+        at that edge brings the panel over the page, at the frame margin, and the page does not move."""
+        start, frame, w = not on["end"], on["frame"], on["width"]
+        self.assertEqual(on["page"], [frame, w - frame], f"{where}: the page between the frame margins: {on}")
+        self.assertTrue(on["panel"][0] >= w if start else on["panel"][1] <= 0, f"{where}: the panel is in view: {on}")
+        x = w - 2 if start else 1
+        self.m.chrome("window.synthesizeMouseEvent('mousemove', arguments[0], Math.round(innerHeight / 2), {}, {});", [x])
+        shown = self.settle(lambda g: g["panel"][1] == w - frame if start else g["panel"][0] == frame, where + ", by its edge")
+        self.assertEqual(shown["page"], on["page"], f"{where}: the page moved when the panel came")
+        self.assertEqual(width(shown["panel"]), width(on["panel"]), where)
+        self.capture(where.replace(" ", "-") + "-shown")
+        self.m.chrome(AWAY)
+        self.settle(lambda g: g["panel"][0] >= w if start else g["panel"][1] <= 0, where + ", away again")
+
     def restore(self) -> None:
         for pref in ("sidebar.position_start", "nulavio.layout.immersive", "ui.systemUsesDarkTheme"):
             self.m.chrome(f"Services.prefs.clearUserPref('{pref}');")
@@ -251,7 +268,10 @@ class PanelOppositeTest(unittest.TestCase):
                             off = self.settle(lambda g: g["panel"] is not None and not g["opposite"], name + ", off")
                             on = self.opposite(True)
                             self.assertEqual(on["current"], ASSISTANT, on)
-                            self.assert_opposite(off, on, name)
+                            if immersive:
+                                self.assert_own_edge(on, name)  # #346: Imersivo gives the panel an edge of its own
+                            else:
+                                self.assert_opposite(off, on, name)
                             self.capture(name)
                             back = self.opposite(False)
                             self.assertEqual((back["page"], back["panel"]), (off["page"], off["panel"]), name + ", off again")
