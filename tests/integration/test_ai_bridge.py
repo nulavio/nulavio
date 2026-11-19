@@ -1183,6 +1183,9 @@ class AiBridgeTest(unittest.TestCase):
             # 127.0.0.2's port is public to the engine (its address-space override, as in test_26)
             "network.lna.address_space.public.override": f"127.0.0.2:{port}",
             "network.proxy.type": 2,
+            # The engine sends loopback addresses past any proxy setting unless told otherwise; these fixtures are on
+            # loopback, so the PAC answer has to apply to them (checked: without it the channel has no proxy info).
+            "network.proxy.allow_hijacking_localhost": True,
             "network.proxy.autoconfig_url": f"http://127.0.0.2:{port}/proxy.pac",
         }
         patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
