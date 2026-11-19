@@ -662,15 +662,17 @@
       #sidebar-splitter {
         display: none;
       }
-      /* In a window too short for the frame margin (horizon.css) the edge lies over the page's last 4 px on that side,
-         where a page draws its scroll bar on the right: reaching for it brings the panel there, as reaching for it brings
-         the tab list on the right (#539). With the margin, the edge is in the margin. */
+      /* The strip that brings the panel covers the frame margin, all of it, so the pointer goes from it straight onto the
+         panel shown at that margin, with no gap where neither holds it (with reduced motion nothing waits: CodeRabbit on
+         #564). In a window too short for the frame margin (horizon.css) it is 4 px over the page's edge on that side,
+         where a page draws its scroll bar on the right: reaching for it brings the panel there, as reaching for it
+         brings the tab list on the right (#539). */
       #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
         display: block;
         position: fixed;
         inset-block: var(--nulavio-band-size) 0;
         inset-inline: auto 0;
-        inline-size: var(--nv-space-2);
+        inline-size: max(var(--nv-space-2), var(--nulavio-frame-margin, 0px));
         z-index: calc(var(--nv-zIndex-band) - 3);
       }
       &[sidebar-positionend] #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
