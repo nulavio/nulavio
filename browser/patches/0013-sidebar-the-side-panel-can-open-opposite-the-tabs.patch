@@ -1,0 +1,75 @@
+Subject: [PATCH] sidebar: the side panel can open on the other side of the page
+
+The engine places the sidebar panel (#sidebar-box: the assistant, the
+bookmarks, the history, any extension's sidebar) on the same side as the
+launcher and the vertical tabs. SidebarController.setPosition() gives each
+child of #browser a flex order: the DOM order, or its reverse when
+sidebar.position_start is false, so the launcher, the tabs and the panel
+always move together.
+
+With nulavio.sidebar.panelOpposite true (a setting in Aparência, off by
+default), setPosition() then gives the panel and its splitter the orders
+past the page on the other side: after it when the tabs are on the left,
+before it when they are on the right. The launcher and the tabs stay where
+they are. The panel's splitter resolves its sibling in DOM order and its
+side in order order (nsSplitterFrame), as with position_start false, so it
+still resizes the panel. The root gets nulavio-panel-opposite, which
+Nulavio's own sheets read for the margins (horizon.css, window-band.css).
+A lazy preference getter calls setPosition() again when the setting
+changes, as the engine's own getter does for sidebar.position_start.
+
+Why a patch: the same two orders set from outside (a MutationObserver
+in a Shell module) would be undone on each setPosition() and redone a frame
+later, and would stop silently if a release orders #browser another way;
+the patch stops the build instead (#249, #242,
+docs/research/assistant-opposite-side.md). Off, nothing changes.
+
+Owner: Nulavio maintainers
+Upstream: not proposed (a Nulavio layout option; #527).
+---
+--- a/browser/components/sidebar/browser-sidebar.js
++++ b/browser/components/sidebar/browser-sidebar.js
+@@ -1021,6 +1021,18 @@
+     [...browser.children].forEach((node, i, children) => {
+       node.style.order = this._positionStart ? i + 1 : children.length - i;
+     });
++    // Nulavio (#249, #527): the panel and its splitter on the other side of
++    // the page, while the launcher and the vertical tabs stay where they are.
++    const panelOpposite = this._nulavioPanelOpposite;
++    if (panelOpposite) {
++      const last = browser.children.length + 1;
++      this._splitter.style.order = this._positionStart ? last - 1 : 1;
++      this._box.style.order = this._positionStart ? last : 0;
++    }
++    document.documentElement.toggleAttribute(
++      "nulavio-panel-opposite",
++      panelOpposite
++    );
+     let sidebarContainer = document.getElementById("sidebar-container");
+     let sidebarMain = document.querySelector("sidebar-main");
+ 
+@@ -2808,6 +2820,24 @@
+       SidebarController._maybeAnimate(() => {
+         SidebarController.setPosition();
+       });
++    }
++  }
++);
++// Nulavio (#527): the panel's side, read by setPosition() and applied again
++// when the setting changes.
++XPCOMUtils.defineLazyPreferenceGetter(
++  SidebarController,
++  "_nulavioPanelOpposite",
++  "nulavio.sidebar.panelOpposite",
++  false,
++  () => {
++    if (
++      !SidebarController.uninitializing &&
++      !SidebarController.inSingleTabWindow
++    ) {
++      SidebarController._maybeAnimate(() => {
++        SidebarController.setPosition();
++      });
+     }
+   }
+ );

@@ -26,6 +26,10 @@ nulavio-immersive =
     .label = Immersive
     .description = Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. They come back with the pointer at the edge of the window, with the keyboard, and by themselves whenever the browser has something to show.
 
+nulavio-panel-opposite =
+    .label = Side panel opposite the tabs
+    .description = The assistant opens on the side of the page opposite the sidebar: on the right when the sidebar is on the left, on the left when it is on the right. The bookmarks and history panels open on that side too.
+
 nulavio-hide-page-title =
     .label = Hide the page title in the window title
     .description = The window's title bar, the taskbar, Alt+Tab and screen-sharing pickers see only "Nulavio" and the profile's name, never the page. It does not hide the titles on the tabs, inside the window, or the page itself.
