@@ -1011,10 +1011,10 @@ class AiBridgeTest(unittest.TestCase):
                 pass
 
         secret = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/secret"
-        # The page reports back to its own (public) server: the frame's load ended, the fetch was refused at once (not
-        # left waiting on a prompt), and the pop-up the agent's click opens was opened (the pop-up blocker stays on).
+        # The page reports back to its own (public) server: the fetch was refused at once (not left waiting on a
+        # prompt), and the pop-up the agent's click opens was opened (the pop-up blocker stays on).
         page = (
-            f'<!doctype html><title>Public</title><iframe src="{secret}-frame" onload="fetch(\'/ran?frame=ended\')"></iframe>'
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
             f"<button onclick=\"fetch('/ran?popup=' + (window.open('{secret}-popup') ? 'opened' : 'blocked'))\">Open</button>"
             f'<script>fetch("{secret}-fetch").then(() => "sent", () => "refused")'
             '.then(how => fetch("/ran?fetch=" + how));</script>'
@@ -1049,23 +1049,25 @@ class AiBridgeTest(unittest.TestCase):
         registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
         bridge = tools.Bridge(agent["id"], "s-profile-local", approver=registry.Approver(), headless=True)
         self.addCleanup(bridge.close)
-        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page", "profile": "Trabalho"})
+        opened = bridge.call("tab_new", {"profile": "Trabalho"})
         self.assertFalse(opened["isError"], opened)
         tab = opened["structuredContent"]["tab"]
         engine = bridge.profiles["Trabalho"].bidi
-        engine.command("session.subscribe", {"events": ["browsingContext.navigationFailed"]})
+        engine.command("session.subscribe", {"events": ["browsingContext.navigationFailed"]})  # before the page loads
+        self.assertFalse(bridge.call("navigate", {"tab": tab, "url": f"http://127.0.0.2:{port}/page"})["isError"])
         clicked = bridge.call(
             "click", {"tab": tab, "element": self.element(bridge.call("page_snapshot", {"tab": tab}), name="Open")}
         )
         self.assertFalse(clicked["isError"], clicked)
-        self.assertTrue(harness.wait_until(lambda: len(ran) == 3, timeout=10), ran)
-        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?frame=ended", "/ran?popup=opened"])
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?popup=opened"])
 
-        def popup_failed() -> bool:
-            return any(e.get("method") == "browsingContext.navigationFailed"
-                       and str(e["params"].get("url", "")).endswith("/secret-popup") for _, e in list(engine.events))  # fmt: skip
+        def failed() -> set[str]:
+            return {str(e["params"].get("url", "")).rpartition("/")[2] for _, e in list(engine.events)
+                    if e.get("method") == "browsingContext.navigationFailed"}  # fmt: skip
 
-        self.assertTrue(harness.wait_until(popup_failed, timeout=15))  # the pop-up's navigation ended, refused
+        # The frame's and the pop-up's navigations ended, refused: only then does "nothing arrived" mean anything.
+        self.assertTrue(harness.wait_until(lambda: {"secret-frame", "secret-popup"} <= failed(), timeout=15), failed())
         self.assertEqual(hits, [])
         bridge.close()
         kept = (work / "prefs.js").read_text()
