@@ -1505,7 +1505,11 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.panel_away, 6), self.m.chrome(PANEL))
         # A request waiting in the panel: what NulavioAI says of this window's runs, then its notice of the change.
         ai = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
-        self.addCleanup(self.m.chrome, f"delete {ai}.assistantRuns;")
+        # Back to NulavioAI's own answer, and the window told so, as the end of a request tells it (else the window keeps
+        # the hold of a request that no longer waits, for whatever runs next).
+        self.addCleanup(
+            self.m.chrome, f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
         self.m.chrome(
             f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
             "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
