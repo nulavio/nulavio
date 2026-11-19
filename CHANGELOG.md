@@ -27,7 +27,7 @@ Automatic updates of Nulavio, turned on by you: twice a day the system installs 
 
 #### What is new
 
-- Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon: on Fedora only from Nulavio's repository, on Ubuntu the highest version among the system's sources. Turning them on or off asks for the administrator's password; nothing runs until you turn them on.
+- Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon (on Fedora only from Nulavio's repository; on Ubuntu the highest among the system's sources). Turning them on or off asks for the administrator's password.
 - More Nulavio actions in the address bar: Ctrl+Alt+P lists them, and they now include Immersive, a temporary window, switching profile and copying a link to the selected text.
 - The security panels open at once, with no animation: the site's panel (identity and protections), the site's permissions and permission prompts. The sidebar's panels move at the same pace as the sidebar.
 
