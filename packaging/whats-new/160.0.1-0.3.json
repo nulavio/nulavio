@@ -6,13 +6,13 @@
   "pt-BR": {
     "summary": "O painel lateral pode abrir do outro lado das abas, em Aparência.",
     "new": [
-      "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição e no Imersivo. Vem desligado."
+      "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição. No Imersivo ele sai pela própria borda e volta por ela, como a lista de abas. Vem desligado."
     ]
   },
   "en-US": {
     "summary": "The side panel can open on the other side of the tabs, in Appearance.",
     "new": [
-      "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout and in Immersive. It starts off."
+      "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout. In Immersive it leaves by its own edge and comes back from it, as the tab list does. It starts off."
     ]
   }
 }

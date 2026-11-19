@@ -768,6 +768,7 @@ class AI {
           if (run.pendingApproval && run.pendingPlace === "panel" && !this.#panelOpen(run.win)) {
             run.pendingPlace = "tab";
             this.#open(`ai/request.html?id=${run.pendingApproval}`, run.win);
+            this.#activity(run); // no card waits in the panel any more (NulavioWindow holds a panel with one, #346)
           }
         }
       }, PANEL_GONE_MS);
@@ -967,7 +968,11 @@ class AI {
     }
     this.#claim(id).then(claimed => {
       if (!claimed) {
+        if (run.pendingApproval === id) {
+          run.pendingPlace = "elsewhere"; // no card of it here, in the panel or after the panel reloads
+        }
         this.#emit(run, { type: "approval", runId, id, place: "elsewhere" }); // another Nulavio took it
+        this.#activity(run);
       } else if (!inPanel) {
         this.#open(`ai/request.html?id=${id}`, run.win);
       }

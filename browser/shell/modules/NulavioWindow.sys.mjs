@@ -239,6 +239,7 @@ class WindowUI {
       // The assistant's task shows in every normal window (Q10); memory only: nothing is read or started.
       for (const window of this.#windows.keys()) {
         this.#paint(window);
+        this.#panelCardHold(window);
       }
     } else {
       if (topic === "nulavio-ai-window-changed") {
@@ -563,6 +564,12 @@ class WindowUI {
     edge.id = "nulavio-immersive-edge";
     edge.setAttribute("aria-hidden", "true");
     doc.getElementById("browser").prepend(edge);
+    // #346: where the pointer brings back the side panel when it sits on the other side of the page (#527), which
+    // in Immersive leaves by its own edge as the tab list does by its.
+    const panelEdge = element(doc, "div");
+    panelEdge.id = "nulavio-immersive-panel-edge";
+    panelEdge.setAttribute("aria-hidden", "true");
+    edge.after(panelEdge);
     win.gBrowser.addProgressListener(progress);
     win.gBrowser.tabContainer.addEventListener("TabSelect", header);
     // ADR 0009: a panel or a menu anchored on the toolbar or on the tab list keeps it shown for its whole life.
@@ -579,6 +586,19 @@ class WindowUI {
     // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
     const opened = event => this.#backgroundTab(win, event.target);
     win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
+    // ...and a side panel just opened on the other side of the page is shown for a moment there, as a tab opened in
+    // the background is (#346).
+    const panelShown = () => this.#panelShown(win);
+    win.addEventListener("SidebarShown", panelShown);
+    // ...and the keyboard in that panel. The panel's page is a document of its own, so the chrome's :focus-within does
+    // not see the keyboard there (window-band.css); the window root sees focus move in every document of the window.
+    const panelFocus = () => win.setTimeout(() => this.#panelFocusHold(win), 0);
+    for (const type of ["focus", "blur"]) {
+      win.windowRoot.addEventListener(type, panelFocus, true);
+    }
+    // ...and the tab list's side or the panel's changing at once, not sliding across the window (#346).
+    const sides = new win.MutationObserver(() => this.#sideChanged(win));
+    sides.observe(doc.documentElement, { attributes: true, attributeFilter: ["sidebar-positionend", "nulavio-panel-opposite"] });
     // ...and a tab being dragged in it: the engine's drag session takes the hover away from the list, which left
     // under the pointer before the drop (#344).
     const drag = event => this.#dragHold(win, event);
@@ -632,7 +652,10 @@ class WindowUI {
     // click on a web page does. The window root also sees the clicks inside in-process pages.
     const outside = event => {
       const root = doc.documentElement;
-      if (!event.isTrusted || event.button !== 0 || !root.hasAttribute("nulavio-immersive") || root.hasAttribute("nulavio-immersive-hold")) {
+      // Something anchored on the toolbar or the tab list keeps them, and the keyboard with them; the side panel's own
+      // holds (#346) are about the panel only.
+      const held = (root.getAttribute("nulavio-immersive-hold") ?? "").split(" ").some(part => part && part !== "panel");
+      if (!event.isTrusted || event.button !== 0 || !root.hasAttribute("nulavio-immersive") || held) {
         return;
       }
       const toolbox = doc.getElementById("navigator-toolbox");
@@ -676,7 +699,7 @@ class WindowUI {
     }
     const menuItem = this.#addViewMenuItem(win);
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, panelEdge, panelShown, panelFocus, sides, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -1009,7 +1032,10 @@ class WindowUI {
         state.holds.delete(node); // a popup that never opened, or went away without its event
       }
     }
-    const parts = [...state.holds.values()].flatMap(part => part.split(" "));
+    // #346: the side panel has an edge of its own only on the other side of the page (#527); beside the tabs it stays in
+    // the flow (#344), and a hold on it means nothing there.
+    const opposite = root.hasAttribute("nulavio-panel-opposite");
+    const parts = [...state.holds.values()].flatMap(part => part.split(" ")).filter(part => part !== "panel" || opposite);
     mark("nulavio-immersive-hold", [...new Set(parts)].sort().join(" "));
     const neutral = this.#neutral(win);
     if (state.bar.hasAttribute("nv-neutral") !== neutral) {
@@ -1017,7 +1043,8 @@ class WindowUI {
     }
   }
 
-  /** The band's pin, pressed: the toolbar and the tab list are held in view until it is pressed again. */
+  /** The band's pin, pressed: the toolbar and the tab list are held in view until it is pressed again (a side panel
+      on its own edge too: window-band.css reads the pin's state for it, #346). */
   #togglePin(win, pin) {
     const state = this.#windows.get(win);
     if (!state) {
@@ -1055,6 +1082,91 @@ class WindowUI {
         }
       }, BACKGROUND_TAB_MS);
     }, 0);
+  }
+
+  /** #346: a side panel on the other side of the page (#527) has its own edge in Immersive. One just opened (the
+      assistant's key, a launcher button, a menu) comes into view for a moment, as a tab opened in the background does,
+      and stays while the pointer or the keyboard is in it. */
+  #panelShown(win) {
+    const state = this.#windows.get(win);
+    const root = win.document.documentElement;
+    if (!state || !root.hasAttribute("nulavio-immersive") || !root.hasAttribute("nulavio-panel-opposite")) {
+      return;
+    }
+    const box = win.document.getElementById("sidebar-box");
+    const opening = (state.panelOpenings = (state.panelOpenings ?? 0) + 1); // the last opening's moment counts
+    state.holds.set(box, "panel");
+    this.#applyImmersive(win);
+    win.setTimeout(() => {
+      if (this.#windows.get(win) === state && state.panelOpenings === opening && state.holds.delete(box)) {
+        this.#applyImmersive(win);
+      }
+    }, BACKGROUND_TAB_MS);
+  }
+
+  /** #346: the keyboard in the side panel (its page, or the panel's own header) holds the panel on its own edge in view,
+      as the keyboard in the toolbar holds the toolbar. Read from the window's focused element: with the keyboard in the
+      panel's page, that is the panel's browser. */
+  #panelFocusHold(win) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    const doc = win.document;
+    const box = doc.getElementById("sidebar-box");
+    const key = doc.getElementById("sidebar"); // the panel's browser: one key for this hold, apart from the others
+    const inside = Boolean(box && key && !box.hidden && box.contains(doc.activeElement));
+    if (!key || inside === state.holds.has(key)) {
+      return;
+    }
+    if (inside) {
+      state.holds.set(key, "panel");
+    } else {
+      state.holds.delete(key);
+    }
+    this.#applyImmersive(win);
+  }
+
+  /** #346: a permission request of the assistant's task waits as a card in this window's panel (NulavioAI places it
+      there while the panel is open). A panel on its own edge is open but can be out of view: it is held in view for as
+      long as the card waits, so the request is never answered unseen or left to expire. */
+  #panelCardHold(win) {
+    const state = this.#windows.get(win);
+    if (!state) {
+      return;
+    }
+    // NulavioAI tells of the change before it places the card (#placeApproval): look once that is done.
+    win.setTimeout(() => this.#windows.get(win) === state && this.#panelCard(win, state), 0);
+  }
+
+  #panelCard(win, state) {
+    let waiting = false;
+    try {
+      waiting = lazy.NulavioAI.assistantRuns(win).some(run => run.pendingApproval);
+    } catch {
+      waiting = false; // a private window has no assistant's runs
+    }
+    if (waiting === state.holds.has(state.panelEdge)) {
+      return;
+    }
+    if (waiting) {
+      state.holds.set(state.panelEdge, "panel");
+    } else {
+      state.holds.delete(state.panelEdge);
+    }
+    this.#applyImmersive(win);
+  }
+
+  /** #346: the tab list's side (sidebar.position_start) or the panel's (#527) changed. In Immersive the part that is
+      away moves to its new edge at once: its slide would otherwise run across the window while its edge changes. */
+  #sideChanged(win) {
+    const root = win.document.documentElement;
+    if (!this.#windows.has(win) || !root.hasAttribute("nulavio-immersive")) {
+      return;
+    }
+    root.toggleAttribute("nulavio-immersive-entering", true);
+    win.requestAnimationFrame(() => win.requestAnimationFrame(() => root.removeAttribute("nulavio-immersive-entering")));
+    this.#applyImmersive(win); // the panel's holds count only with the panel on the other side
   }
 
   /** A tab dragged in the tab list (or the tab strip, with the tabs on top): that part stays shown from the start of
@@ -1102,7 +1214,8 @@ class WindowUI {
     const anchor = node.anchorNode ?? node.triggerNode ?? node.parentNode;
     const doc = win.document;
     const part = doc.getElementById("navigator-toolbox")?.contains(anchor) ? "toolbar"
-      : doc.getElementById("sidebar-container")?.contains(anchor) ? "tabs" : "";
+      : doc.getElementById("sidebar-container")?.contains(anchor) ? "tabs"
+      : doc.getElementById("sidebar-box")?.contains(anchor) ? "panel" : "";
     if (part && state.holds.get(node) !== part) {
       state.holds.set(node, part);
       this.#applyImmersive(win);
@@ -1509,6 +1622,12 @@ class WindowUI {
     state.bar.remove();
     state.fullscreen.remove();
     state.edge.remove();
+    state.panelEdge.remove();
+    win.removeEventListener("SidebarShown", state.panelShown);
+    for (const type of ["focus", "blur"]) {
+      win.windowRoot?.removeEventListener(type, state.panelFocus, true);
+    }
+    state.sides.disconnect();
     for (const name of ["nulavio-immersive", "nulavio-immersive-off", "nulavio-immersive-hold", "nulavio-immersive-two-lines",
       "nulavio-immersive-entering", "nulavio-stage"]) {
       win.document.documentElement.removeAttribute(name);

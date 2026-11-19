@@ -501,7 +501,8 @@
   .nv-band-row .nv-band-origin {
     display: none;
   }
-  #nulavio-immersive-edge {
+  #nulavio-immersive-edge,
+  #nulavio-immersive-panel-edge {
     display: none;
   }
   :root[nulavio-immersive]:not([inFullscreen], [inDOMFullscreen], [customizing]) {
@@ -581,6 +582,9 @@
       background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
       translate: calc(-100% - var(--nv-space-5)) 0;
       pointer-events: none;
+      /* #346: no snapshot of it in the engine's view transition while it is away (setPosition() runs in one): its snapshot
+         would move from its old edge to its new one across the window when its side changes. Shown, it has its name. */
+      view-transition-name: none;
       /* #344: the list's top goes back up under the band only once the toolbar is out of view (its hold, then its
          exit), so the leaving toolbar is never drawn over it; it goes down under a toolbar that comes at once. */
       --nulavio-list-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
@@ -643,20 +647,80 @@
     #browser > #sidebar-box[sidebar-positionend] {
       margin-inline: 0 var(--nulavio-frame-margin, 0px);
     }
-    /* #527: the panel on the side opposite the tabs keeps the frame margin on its own outer side, and the page gets it
-       on the side the tab list left. */
+    /* #346: the side panel on the other side of the page (#527) has an edge of its own. It leaves the flow by that edge,
+       as the tab list does by its, and comes back over the page when the pointer reaches the edge, while the pointer or
+       the keyboard is in it (in its page: NulavioWindow), while a menu or a panel anchored in it is open, while the band's pin is pressed, and while
+       the window holds it (NulavioWindow: just opened, a permission request waiting in it). The page keeps the frame margin on
+       both sides and does not move. Under the tab list, never over it; the toolbar never covers its top (above). Its
+       splitter goes with it: the panel is resized with the mode off. */
     &[nulavio-panel-opposite] {
-      #browser > #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) {
-        margin-inline: var(--nulavio-frame-margin, 0px) 0;
-      }
+      #browser > #tabbrowser-tabbox,
+      #browser > #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]),
       #browser > #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] {
-        margin-inline: 0 var(--nulavio-frame-margin, 0px);
+        margin-inline: var(--nulavio-frame-margin, 0px);
       }
-      #browser > #sidebar-box:not([sidebar-positionend]) {
-        margin-inline: 0 var(--nulavio-frame-margin, 0px);
+      #sidebar-splitter {
+        display: none;
       }
-      #browser > #sidebar-box[sidebar-positionend] {
-        margin-inline: var(--nulavio-frame-margin, 0px) 0;
+      /* The strip that brings the panel covers the frame margin, all of it, so the pointer goes from it straight onto the
+         panel shown at that margin, with no gap where neither holds it (with reduced motion nothing waits: CodeRabbit on
+         #564). In a window too short for the frame margin (horizon.css) it is 4 px over the page's edge on that side,
+         where a page draws its scroll bar on the right: reaching for it brings the panel there, as reaching for it
+         brings the tab list on the right (#539). */
+      #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
+        display: block;
+        position: fixed;
+        inset-block: var(--nulavio-band-size) 0;
+        inset-inline: auto 0;
+        inline-size: max(var(--nv-space-2), var(--nulavio-frame-margin, 0px));
+        z-index: calc(var(--nv-zIndex-band) - 3);
+      }
+      &[sidebar-positionend] #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
+        inset-inline: 0 auto;
+      }
+      #browser > #sidebar-box {
+        position: fixed;
+        inset-block: calc(var(--nulavio-band-size) + 1px) 0;
+        inset-inline: auto var(--nulavio-frame-margin, 0px);
+        margin-inline: 0;
+        z-index: calc(var(--nv-zIndex-band) - 2);
+        translate: calc(100% + var(--nv-space-5) + var(--nulavio-frame-margin, 0px)) 0;
+        pointer-events: none;
+        view-transition-name: none; /* as the tab list's, while it is away */
+        --nulavio-panel-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
+        @media (prefers-reduced-motion: no-preference) {
+          transition: var(--nulavio-panel-slide), margin-block-start 0s linear calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
+        }
+      }
+      #browser > #sidebar-box:-moz-locale-dir(rtl) {
+        translate: calc(-100% - var(--nv-space-5) - var(--nulavio-frame-margin, 0px)) 0;
+      }
+      &[sidebar-positionend] #browser > #sidebar-box {
+        inset-inline: var(--nulavio-frame-margin, 0px) auto;
+        translate: calc(-100% - var(--nv-space-5) - var(--nulavio-frame-margin, 0px)) 0;
+      }
+      &[sidebar-positionend] #browser > #sidebar-box:where(:-moz-locale-dir(rtl)) {
+        translate: calc(100% + var(--nv-space-5) + var(--nulavio-frame-margin, 0px)) 0;
+      }
+      #browser:has(> #nulavio-immersive-panel-edge:hover) > #sidebar-box,
+      &[nulavio-immersive-hold~="panel"] #browser > #sidebar-box,
+      &:has(#nulavio-band .nv-band-pin[aria-pressed="true"]) #browser > #sidebar-box,
+      #browser > #sidebar-box:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
+        translate: 0;
+        pointer-events: auto;
+        view-transition-name: sidebar-box; /* the engine's own (sidebar.css) */
+        box-shadow: var(--nv-elevation-3);
+        --nulavio-panel-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
+      }
+      /* Under a toolbar that comes, its top goes down at once (as the tab list's does), and back up only after. */
+      @media (prefers-reduced-motion: no-preference) {
+        &:has(#navigator-toolbox:is(:hover, :focus-within, :has([open]:not([open="false"])))) #browser > #sidebar-box,
+        &[nulavio-immersive-hold~="toolbar"] #browser > #sidebar-box {
+          transition: var(--nulavio-panel-slide);
+        }
+      }
+      &[nulavio-immersive-entering] #browser > #sidebar-box {
+        transition: none;
       }
     }
     #browser:has(> #nulavio-immersive-edge:hover) > #sidebar-container,
@@ -664,6 +728,7 @@
     #sidebar-container:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
       translate: 0;
       pointer-events: auto;
+      view-transition-name: sidebar-launcher; /* the engine's own (sidebar.css) */
       box-shadow: var(--nv-elevation-3); /* only while it is over the page: out of view it casts nothing on it */
       --nulavio-list-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
     }
