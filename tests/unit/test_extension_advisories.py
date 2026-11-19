@@ -154,7 +154,13 @@ class AdvisoryRowsTest(unittest.TestCase):
         advisory = copy.deepcopy(UBO)
         advisory[0]["vulnerabilities"][0]["vulnerable_version_range"] = "< 2027.1.0"
         advisory[0]["vulnerabilities"][0]["package"]["name"] = "@bitwarden/cli"
-        self.assertEqual(watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory), [])
+        rows = watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)
+        self.assertEqual([r.state for r in rows], ["ok"])  # a trace, not a finding: the id and the reason
+        self.assertIn(advisory[0]["ghsa_id"], rows[0].text)
+        self.assertIn("other_packages", rows[0].text)
+        self.assertIn(advisory[0]["ghsa_id"], watch.report([], rows))  # and it reaches the summary
+        self.assertIn(advisory[0]["ghsa_id"], watch.markdown([], rows))
+        self.assertEqual(watch.exit_status(rows), 0)
         advisory[0]["vulnerabilities"][0]["package"]["name"] = "@bitwarden/desktop"  # in neither list
         self.assertEqual([r.state for r in watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)], ["fail"])
         both = copy.deepcopy(advisory)  # the extension's own package in the same advisory still counts
@@ -377,8 +383,11 @@ class BudgetTest(unittest.TestCase):
         import re
 
         text = (ROOT / ".github" / "workflows" / "upstream.yml").read_text()
-        step = re.search(r"timeout-minutes: (\d+)\n(?:(?!- name:).*\n)*?.*watch_dependencies\.py", text)
-        self.assertIsNotNone(step, "the watch step and its timeout were not found in upstream.yml")
+        steps = re.split(r"(?m)^(?=      - )", text)  # the steps of the jobs, at their own indentation
+        mine = [s for s in steps if "watch_dependencies.py" in s and re.match(r"      - name:", s)]
+        self.assertEqual(len(mine), 1, "the watch step was not found in upstream.yml")
+        step = re.search(r"(?m)^        timeout-minutes: (\d+)", mine[0])  # the step's own, not the job's
+        self.assertIsNotNone(step, "the watch step has no timeout-minutes of its own")
         step_seconds = int(step.group(1)) * 60
         self.assertLess(watch.GITHUB_BUDGET, watch.WATCH_BUDGET)
         self.assertLessEqual(watch.WATCH_BUDGET + 60, step_seconds)  # room for Python's start and the summary

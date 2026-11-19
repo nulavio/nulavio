@@ -538,7 +538,7 @@ def advisory_row(
         if advisory["state"] != "published" or advisory.get("withdrawn_at"):
             continue
         ident, link = advisory["ghsa_id"], advisory["html_url"]
-        covered, problems = None, []
+        covered, problems, skipped = None, [], []
         vulns = advisory.get("vulnerabilities")
         if not isinstance(vulns, list) or not vulns:
             problems.append("it lists no affected package or range")
@@ -547,7 +547,8 @@ def advisory_row(
                 raise ValueError(f"{ident}: a vulnerability or its package is not an object")
             name = str((vuln.get("package") or {}).get("name", ""))
             if source["monorepo"] and name.lower() in others:
-                continue  # another product of the monorepo, recorded as such in the table: not this extension
+                skipped.append(name)  # another product of the monorepo, recorded as such in the table
+                continue
             if source["monorepo"] and name.lower() not in packages:
                 problems.append(f"it names package {name!r}, which is not this extension's in the table")
                 continue
@@ -566,6 +567,10 @@ def advisory_row(
             )
         elif problems:
             finding(advisory, f"{key} {version}: {ident} cannot be matched, {'; '.join(problems)}; look at it by hand: {link}")
+        elif skipped:  # a trace in the summary: the advisory was not matched, and why
+            names = ", ".join(map(repr, skipped))
+            text = f"{key}: {ident} skipped, it names only {names}, listed in other_packages (not this extension): {link}"
+            rows.append(Row("advisory", "ok", text, {"key": key, "id": ident, "url": link, "skipped": True}))
     return rows
 
 
@@ -622,14 +627,16 @@ def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = N
                 )
             )
             continue
-        rows += found or [
-            Row(
-                "advisory",
-                "ok",
-                f"{entry['key']} {entry['version']}: no published advisory of {source['repo']} covers it",
-                {"key": entry["key"]},
-            )
-        ]
+        rows += found
+        if all(r.detail.get("skipped") for r in found):
+            rows += [
+                Row(
+                    "advisory",
+                    "ok",
+                    f"{entry['key']} {entry['version']}: no published advisory of {source['repo']} covers it",
+                    {"key": entry["key"]},
+                )
+            ]
     for item in exceptions:
         # an extension whose advisories were not read cannot say its exception is unused: it may still be needed
         if item["ecosystem"] == EXTENSION_ECOSYSTEM and id(item) not in used and item["package"] not in unverified:
@@ -735,6 +742,11 @@ def exit_status(rows: list[Row]) -> int:
     return 2 if any(r.state == "error" for r in rows) else 0
 
 
+def shown(row: Row) -> bool:
+    """The summary lists what needs a look, and an advisory skipped as another product's (a trace, not a finding)."""
+    return row.state != "ok" or bool(row.detail.get("skipped"))
+
+
 def report(deps: list[Dep], rows: list[Row]) -> str:
     shipped = sum(d.ships for d in deps)
     extensions = sum(r.check == "extension" and r.state != "error" for r in rows)
@@ -751,12 +763,12 @@ def report(deps: list[Dep], rows: list[Row]) -> str:
         f" ({', '.join(sourceless)}: no public source)" if sourceless else ""
     )
     lines = [f"{head}; checked {extensions} extensions, {advisories} and {images} base images."]
-    lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
+    lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if shown(r)]
     return "\n".join(lines)
 
 
 def markdown(deps: list[Dep], rows: list[Row]) -> str:
-    items = [f"- **{r.state}** {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
+    items = [f"- **{r.state}** {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if shown(r)]
     head = report(deps, rows).splitlines()[0]
     return "### Pinned dependencies\n\n" + head + "\n\n" + "\n".join(items or ["- nothing to act on"]) + "\n"
 
