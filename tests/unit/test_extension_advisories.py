@@ -143,6 +143,35 @@ class AdvisoryRowsTest(unittest.TestCase):
         self.assertEqual([r.state for r in rows], ["fail"])
         self.assertIn("@bitwarden/cli", rows[0].text)
 
+    def test_another_product_of_the_monorepo_is_skipped_and_an_unknown_name_still_fails(self):
+        mono = {
+            "key": "bitwarden",
+            "repo": "bitwarden/clients",
+            "monorepo": True,
+            "packages": ["@bitwarden/browser"],
+            "other_packages": ["@Bitwarden/CLI"],
+        }
+        advisory = copy.deepcopy(UBO)
+        advisory[0]["vulnerabilities"][0]["vulnerable_version_range"] = "< 2027.1.0"
+        advisory[0]["vulnerabilities"][0]["package"]["name"] = "@bitwarden/cli"
+        rows = watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)
+        self.assertEqual([r.state for r in rows], ["ok"])  # a trace, not a finding: the id and the reason
+        self.assertIn(advisory[0]["ghsa_id"], rows[0].text)
+        self.assertIn("other_packages", rows[0].text)
+        self.assertIn(advisory[0]["ghsa_id"], watch.report([], rows))  # and it reaches the summary
+        self.assertIn(advisory[0]["ghsa_id"], watch.markdown([], rows))
+        self.assertEqual(watch.exit_status(rows), 0)
+        advisory[0]["vulnerabilities"][0]["package"]["name"] = "@bitwarden/desktop"  # in neither list
+        self.assertEqual([r.state for r in watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, advisory)], ["fail"])
+        both = copy.deepcopy(advisory)  # the extension's own package in the same advisory still counts
+        both[0]["vulnerabilities"] = [
+            {**advisory[0]["vulnerabilities"][0], "package": {"name": "@bitwarden/cli"}},
+            {**advisory[0]["vulnerabilities"][0], "package": {"name": "@bitwarden/browser"}},
+        ]
+        self.assertEqual([r.state for r in watch.advisory_row(entry("bitwarden", "2026.10.2"), mono, both)], ["fail"])
+        shipped = watch.load_advisory_sources()["bitwarden"]
+        self.assertIn("@bitwarden/cli", shipped["other_packages"])
+
     def test_an_advisory_without_vulnerabilities_cannot_be_matched(self):
         for empty in (None, [], "x"):
             other = copy.deepcopy(UBO)
@@ -233,6 +262,21 @@ class WatchTest(unittest.TestCase):
         )
         self.assertEqual(watch.vulnerability_rows([], {}, [item], datetime.date(2026, 11, 18)), [])
 
+    def test_an_exception_is_not_called_unused_when_its_extension_could_not_be_read(self):
+        item = AdvisoryRowsTest.exception(self, version="1.76.4")
+        rows = self.run_rows(AdvisoryNet(error=OSError("down")), exceptions=[item])
+        self.assertEqual(watch.exit_status(rows), 2)
+        self.assertEqual([r.text for r in rows if r.check == "exception"], [])
+        # another extension's exception, whose own fetch worked, is still reported
+        net = AdvisoryNet()
+        net.github_json = lambda url: (_ for _ in ()).throw(OSError("down")) if "keepassxc" in url else UBO
+        other = {**item, "package": "keepassxc-browser"}
+        rows = self.run_rows(net, exceptions=[item, other])
+        self.assertEqual(
+            [r.text for r in rows if r.check == "exception"],
+            ["exception GHSA-cmqw-9r2w-6wv2 for ublock-origin 1.76.4 matches nothing now: remove it"],
+        )
+
     def test_a_malformed_reply_is_an_error_not_a_skip(self):
         for reply in ([None], [{}], [{"ghsa_id": "GHSA-x", "html_url": "u"}], ["x"], [{**UBO[0], "state": None}]):
             with self.subTest(reply=reply):
@@ -287,6 +331,10 @@ class WatchTest(unittest.TestCase):
             {"key": "a", "repo": "o/r", "monorepo": False, "packages": ["x"]},  # packages without a monorepo
             {"key": "a", "repo": None},  # no reason
             {"key": "a", "repo": "not a repo", "monorepo": False},
+            {"key": "a", "repo": "o/r", "monorepo": False, "other_packages": ["x"]},  # only a monorepo has them
+            {"key": "a", "repo": "o/r", "monorepo": True, "packages": ["x"], "other_packages": "y"},  # not a list
+            {"key": "a", "repo": "o/r", "monorepo": True, "packages": ["x"], "other_packages": [""]},
+            {"key": "a", "repo": "o/r", "monorepo": True, "packages": ["X"], "other_packages": ["x"]},  # in both
         ]
         for item in bad:
             with tempfile.TemporaryDirectory() as tmp, self.subTest(item=item):
@@ -294,6 +342,55 @@ class WatchTest(unittest.TestCase):
                 path.write_text(json.dumps({"sources": [item]}))
                 with self.assertRaises(ValueError):
                     watch.load_advisory_sources(path)
+
+
+class BudgetTest(unittest.TestCase):
+    def test_a_black_holed_network_ends_inside_the_budget_with_every_check_reported(self):
+        now = [0.0]
+        timeouts = []
+
+        def black_hole(request, timeout):  # every connection hangs until its timeout
+            timeouts.append(timeout)
+            now[0] += timeout
+            raise TimeoutError("timed out")
+
+        net = watch.Net(sleep=lambda d: now.__setitem__(0, now[0] + d), clock=lambda: now[0])
+        with mock.patch("urllib.request.urlopen", side_effect=black_hole):
+            deps, rows = watch.run(net, datetime.datetime(2026, 11, 19, tzinfo=datetime.UTC))
+        self.assertLessEqual(now[0], watch.WATCH_BUDGET)
+        self.assertTrue(all(0 < t <= net.timeout for t in timeouts))
+        self.assertEqual({r.check for r in rows if r.state == "error"}, {"osv", "extension", "advisory", "image"})
+        self.assertEqual(watch.exit_status(rows), 2)
+        self.assertTrue(watch.report(deps, rows))  # the summary can be written
+
+    def test_nothing_is_requested_after_the_budget_and_a_request_never_outlasts_it(self):
+        now = [0.0]
+        net = watch.Net(clock=lambda: now[0], budget=100)
+        reply = mock.MagicMock()
+        reply.__enter__.return_value = io.BytesIO(b"{}")
+        now[0] = 95
+        with mock.patch("urllib.request.urlopen", return_value=reply) as opened:
+            net.json("https://api.osv.dev/v1/x")
+        self.assertEqual(opened.call_args.kwargs["timeout"], 5)
+        now[0] = 100
+        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+            net.json("https://api.osv.dev/v1/x")
+        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+            net.head("https://registry.example/v2/x", {})
+        opened.assert_not_called()
+
+    def test_the_budgets_fit_inside_the_workflow_steps_timeout(self):
+        import re
+
+        text = (ROOT / ".github" / "workflows" / "upstream.yml").read_text()
+        steps = re.split(r"(?m)^(?=      - )", text)  # the steps of the jobs, at their own indentation
+        mine = [s for s in steps if "watch_dependencies.py" in s and re.match(r"      - name:", s)]
+        self.assertEqual(len(mine), 1, "the watch step was not found in upstream.yml")
+        step = re.search(r"(?m)^        timeout-minutes: (\d+)", mine[0])  # the step's own, not the job's
+        self.assertIsNotNone(step, "the watch step has no timeout-minutes of its own")
+        step_seconds = int(step.group(1)) * 60
+        self.assertLess(watch.GITHUB_BUDGET, watch.WATCH_BUDGET)
+        self.assertLessEqual(watch.WATCH_BUDGET + 60, step_seconds)  # room for Python's start and the summary
 
 
 class FetchTest(unittest.TestCase):

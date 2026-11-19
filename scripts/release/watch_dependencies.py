@@ -49,6 +49,7 @@ ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json
 MIN_REQUEST_SECONDS = 10
 RETRY_DELAYS = (2, 8, 30)  # a transient GitHub failure is retried before it is reported (as watch_upstream.py does)
 GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step ends and writes its summary in time
+WATCH_BUDGET = 360  # seconds for the whole watch (every request of every check); the step's timeout-minutes is 8 (480 s)
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
 EXTENSION_LAG_DAYS = 30
@@ -85,13 +86,22 @@ class Row:
 class Net:
     """The only code here that touches the network (the unit tests replace it)."""
 
-    def __init__(self, timeout: int = 30, token: str | None = None, sleep=time.sleep, clock=time.monotonic, wall=time.time):
+    def __init__(
+        self,
+        timeout: int = 30,
+        token: str | None = None,
+        sleep=time.sleep,
+        clock=time.monotonic,
+        wall=time.time,
+        budget: float = WATCH_BUDGET,
+    ):
         self.timeout = timeout
         self.token = token  # the workflow's read-only GITHUB_TOKEN: only for api.github.com, it raises the rate limit
         self.sleep = sleep
         self.clock = clock
         self.wall = wall  # the epoch clock, for the rate limit's reset time
         self.github_started: float | None = None
+        self.deadline = clock() + budget  # no request starts after it, and none may outlast it: the summary always prints
 
     def _open(
         self,
@@ -103,6 +113,9 @@ class Net:
     ):
         if not url.startswith("https://"):
             raise ValueError(f"refusing a non-https URL: {url}")
+        left = self.deadline - self.clock()
+        if left <= 0:
+            raise TimeoutError("the watch's time budget is spent")  # an OSError: the check reports it as unavailable data
         body = json.dumps(data).encode() if data is not None else None
         request = urllib.request.Request(url, data=body, method=method)  # noqa: S310 - https only, checked above
         request.add_header("User-Agent", "nulavio-dependency-watch")
@@ -113,7 +126,7 @@ class Net:
                 request.add_header(key, value)
         if body is not None:
             request.add_header("Content-Type", "application/json")
-        return urllib.request.urlopen(request, timeout=timeout or self.timeout)  # noqa: S310 - https only, checked above
+        return urllib.request.urlopen(request, timeout=min(timeout or self.timeout, left))  # noqa: S310 - https only, checked above
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
         try:
@@ -133,7 +146,7 @@ class Net:
             headers["Authorization"] = f"Bearer {self.token}"
         if self.github_started is None:
             self.github_started = self.clock()
-        deadline = self.github_started + GITHUB_BUDGET
+        deadline = min(self.github_started + GITHUB_BUDGET, self.deadline)
         for attempt in range(len(RETRY_DELAYS) + 1):
             # the budget covers the requests too: a request may not outlast it (but gets a few seconds at least)
             timeout = max(MIN_REQUEST_SECONDS, min(self.timeout, deadline - self.clock()))
@@ -450,7 +463,7 @@ def range_covers(text: str | None, version: str) -> bool:
 
 
 def load_advisory_sources(path: Path = ADVISORY_SOURCES) -> dict[str, dict]:
-    """key -> {"repo", "packages"} or {"reason"}; a malformed table stops the run here."""
+    """key -> {"repo", "packages", "other_packages"} or {"reason"}; a malformed table stops the run here."""
     items = json.loads(path.read_text(encoding="utf-8"))["sources"]
     table: dict[str, dict] = {}
     for item in items:
@@ -458,12 +471,20 @@ def load_advisory_sources(path: Path = ADVISORY_SOURCES) -> dict[str, dict]:
             raise ValueError(f"{path.name}: duplicate or missing key: {item}")
         if item.get("repo"):
             ok = re.fullmatch(r"[\w.-]+/[\w.-]+", item["repo"]) and isinstance(item.get("monorepo"), bool)
-            if not ok or set(item) != {"key", "repo", "monorepo", *(["packages"] if item.get("monorepo") else [])}:
+            allowed = {"key", "repo", "monorepo", *(["packages", "other_packages"] if item.get("monorepo") else [])}
+            if not ok or not {"key", "repo", "monorepo"} <= set(item) <= allowed or item.get("monorepo") != ("packages" in item):
                 raise ValueError(
-                    f"{path.name}: a source needs key, repo, monorepo (true or false) and, for a monorepo, packages: {item}"
+                    f"{path.name}: a source needs key, repo, monorepo (true or false) and, for a monorepo, packages "
+                    f"(and optionally other_packages): {item}"
                 )
-            if item["monorepo"] and not item["packages"]:
-                raise ValueError(f"{path.name}: a monorepo needs the package names of its extension: {item}")
+            if item["monorepo"]:
+                names = {k: item.get(k, []) for k in ("packages", "other_packages")}
+                if not names["packages"]:
+                    raise ValueError(f"{path.name}: a monorepo needs the package names of its extension: {item}")
+                if any(not isinstance(v, list) or not all(isinstance(n, str) and n.strip() for n in v) for v in names.values()):
+                    raise ValueError(f"{path.name}: packages and other_packages are lists of names: {item}")
+                if {n.lower() for n in names["packages"]} & {n.lower() for n in names["other_packages"]}:
+                    raise ValueError(f"{path.name}: a package cannot be both this extension's and another product's: {item}")
         elif set(item) != {"key", "repo", "reason"} or item["repo"] is not None or not str(item["reason"]).strip():
             raise ValueError(f"{path.name}: an extension without a source needs repo null and a reason: {item}")
         table[item["key"]] = item
@@ -481,13 +502,15 @@ def advisory_row(
     """Rows for one extension from its repository's advisories: fail when one covers the pinned version.
 
     A repository of one product accepts any package name (the names are free text); a monorepo is filtered by the
-    names in the table, and a name not in it fails like a range that cannot be read. An exception for the advisory,
-    this extension and this pinned version turns a failure into "accepted" until its date.
+    names in the table (an advisory that names only packages of "other_packages", the monorepo's other products, is
+    not this extension's and is skipped), and a name in neither list fails like a range that cannot be read. An
+    exception for the advisory, this extension and this pinned version turns a failure into "accepted" until its date.
     """
     key, version = entry["key"], entry["version"]
     today = today or _dt.datetime.now(_dt.UTC).date()
     used = used if used is not None else set()
     packages = {p.lower() for p in source.get("packages", [])}
+    others = {p.lower() for p in source.get("other_packages", [])}
     dep = Dep(EXTENSION_ECOSYSTEM, key, version, ())
     rows = []
 
@@ -515,7 +538,7 @@ def advisory_row(
         if advisory["state"] != "published" or advisory.get("withdrawn_at"):
             continue
         ident, link = advisory["ghsa_id"], advisory["html_url"]
-        covered, problems = None, []
+        covered, problems, skipped = None, [], []
         vulns = advisory.get("vulnerabilities")
         if not isinstance(vulns, list) or not vulns:
             problems.append("it lists no affected package or range")
@@ -523,6 +546,9 @@ def advisory_row(
             if not isinstance(vuln, dict) or not isinstance(vuln.get("package") or {}, dict):
                 raise ValueError(f"{ident}: a vulnerability or its package is not an object")
             name = str((vuln.get("package") or {}).get("name", ""))
+            if source["monorepo"] and name.lower() in others:
+                skipped.append(name)  # another product of the monorepo, recorded as such in the table
+                continue
             if source["monorepo"] and name.lower() not in packages:
                 problems.append(f"it names package {name!r}, which is not this extension's in the table")
                 continue
@@ -541,6 +567,10 @@ def advisory_row(
             )
         elif problems:
             finding(advisory, f"{key} {version}: {ident} cannot be matched, {'; '.join(problems)}; look at it by hand: {link}")
+        elif skipped:  # a trace in the summary: the advisory was not matched, and why
+            names = ", ".join(map(repr, skipped))
+            text = f"{key}: {ident} skipped, it names only {names}, listed in other_packages (not this extension): {link}"
+            rows.append(Row("advisory", "ok", text, {"key": key, "id": ident, "url": link, "skipped": True}))
     return rows
 
 
@@ -566,6 +596,7 @@ def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = N
         for k in table
         if k not in keys
     ]
+    unverified = {k for k in keys if k not in table}  # extensions whose advisories could not be read this run
     for entry in lock["extensions"]:
         source = table.get(entry["key"])
         if source is None:
@@ -586,6 +617,7 @@ def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = N
                 raise ValueError("expected a list of fewer than 100 advisories")
             found = advisory_row(entry, source, advisories, exceptions, today, used)
         except UNAVAILABLE as exc:  # the other extensions are still checked
+            unverified.add(entry["key"])
             rows.append(
                 Row(
                     "advisory",
@@ -595,16 +627,19 @@ def advisory_rows(net: Net, root: Path = ROOT, exceptions: list[dict] | None = N
                 )
             )
             continue
-        rows += found or [
-            Row(
-                "advisory",
-                "ok",
-                f"{entry['key']} {entry['version']}: no published advisory of {source['repo']} covers it",
-                {"key": entry["key"]},
-            )
-        ]
+        rows += found
+        if all(r.detail.get("skipped") for r in found):
+            rows += [
+                Row(
+                    "advisory",
+                    "ok",
+                    f"{entry['key']} {entry['version']}: no published advisory of {source['repo']} covers it",
+                    {"key": entry["key"]},
+                )
+            ]
     for item in exceptions:
-        if item["ecosystem"] == EXTENSION_ECOSYSTEM and id(item) not in used:
+        # an extension whose advisories were not read cannot say its exception is unused: it may still be needed
+        if item["ecosystem"] == EXTENSION_ECOSYSTEM and id(item) not in used and item["package"] not in unverified:
             what = f"{item['id']} for {item['package']} {item['version']}"
             rows.append(Row("exception", "warn", f"exception {what} matches nothing now: remove it"))
     return rows
@@ -707,6 +742,11 @@ def exit_status(rows: list[Row]) -> int:
     return 2 if any(r.state == "error" for r in rows) else 0
 
 
+def shown(row: Row) -> bool:
+    """The summary lists what needs a look, and an advisory skipped as another product's (a trace, not a finding)."""
+    return row.state != "ok" or bool(row.detail.get("skipped"))
+
+
 def report(deps: list[Dep], rows: list[Row]) -> str:
     shipped = sum(d.ships for d in deps)
     extensions = sum(r.check == "extension" and r.state != "error" for r in rows)
@@ -723,12 +763,12 @@ def report(deps: list[Dep], rows: list[Row]) -> str:
         f" ({', '.join(sourceless)}: no public source)" if sourceless else ""
     )
     lines = [f"{head}; checked {extensions} extensions, {advisories} and {images} base images."]
-    lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
+    lines += [f"{r.state.upper():8} {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if shown(r)]
     return "\n".join(lines)
 
 
 def markdown(deps: list[Dep], rows: list[Row]) -> str:
-    items = [f"- **{r.state}** {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if r.state != "ok"]
+    items = [f"- **{r.state}** {r.text}" for r in sorted(rows, key=lambda r: ORDER[r.state]) if shown(r)]
     head = report(deps, rows).splitlines()[0]
     return "### Pinned dependencies\n\n" + head + "\n\n" + "\n".join(items or ["- nothing to act on"]) + "\n"
 
