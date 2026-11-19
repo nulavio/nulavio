@@ -51,7 +51,7 @@ A Nulavio release on the same engine ([release](https://github.com/nulavio/nulav
 
 **Nulavio fixes**:
 
-- AI Bridge, engine lookup (#563): the tools installed with Nulavio now use the engine of their own install, and the Bridge drives only the Nulavio build. Nothing to do: it comes with the update. Its advisory is linked here once published.
+- AI Bridge, engine lookup (#563, [advisory GHSA-95h5-h3m4-3jhv](https://github.com/nulavio/nulavio/security/advisories/GHSA-95h5-h3m4-3jhv), medium): on a package install with a distribution Firefox present, an agent connected from Settings got its AI Workspace in that Firefox, without the Nulavio Shell (the agent window's band and lock, the forms guard), uBlock Origin or the engine patches; the user's own profiles opened for an agent too. The tools installed with Nulavio now use the engine of their own install, and the Bridge drives only the Nulavio build. Nothing to do: it comes with the update, and an agent already connected needs no new configuration. The advisory was published on 2026-11-19.
 - AI Bridge, local network (LESIS 929cb094, high; #243): a page an agent opened could reach this computer or the local network through a name that answered the Bridge's DNS lookup with a public address and the engine's with a local one (DNS rebinding), with no `local_resources` grant; R29 listed it as not held. In the AI Workspace the engine's own Local Network Access, which decides on the address it connects to, now refuses a public page's requests to local addresses with no prompt, a pop-up's included. Not covered yet (R29): a rebinding name the agent itself opens, or a redirect on its way, and your own profiles opened for an agent. Nothing to do: it comes with the update.
 
 **Removed**:
