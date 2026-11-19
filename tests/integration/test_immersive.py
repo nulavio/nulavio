@@ -161,6 +161,23 @@ PANELS = {
 }
 
 
+# #346: the engine's own view transition of the sidebar (setPosition() runs in one): the animations of the snapshots of
+# the tab list and of the panel, every frame, so a part that is away is never seen crossing in its snapshot either.
+VIEW_TRANSITIONS = """
+const vt = (window.nvVT = { seen: [], on: true, active: false });
+const tick = () => {
+  if (!vt.on) return;
+  for (const a of document.getAnimations()) {
+    const p = a.effect?.pseudoElement ?? "";
+    vt.active ||= p.startsWith("::view-transition");
+    if (/\\((sidebar-launcher|sidebar-box)\\)/.test(p) && !vt.seen.includes(p)) vt.seen.push(p);
+  }
+  requestAnimationFrame(tick);
+};
+requestAnimationFrame(tick);
+"""
+VIEW_TRANSITIONS_END = "window.nvVT.on = false; return { seen: window.nvVT.seen, active: window.nvVT.active };"
+
 # #346: the side panel on the other side of the page (#527): the setting, the assistant's panel, and the panel as drawn
 # ([left, right] of the box, whether it is in view), with the page's box and the frame margin.
 OPPOSITE = "nulavio.sidebar.panelOpposite"
@@ -1543,13 +1560,20 @@ class ImmersiveTest(unittest.TestCase):
         def flip(where: str) -> None:
             for start in (False, True):
                 self.m.chrome(TRACE)
+                self.m.chrome(VIEW_TRANSITIONS)
                 self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
                 self.assertTrue(harness.wait_until(lambda start=start: self.m.chrome(side) is not start, 10))
                 time.sleep(1)  # longer than any slide
                 frames = self.trace_end()
+                snapshots = self.m.chrome(VIEW_TRANSITIONS_END)
                 self.assertGreater(len(frames), 10)
+                to = f"{where}, to the {'left' if start else 'right'}"
                 seen = [f for f in frames if visible(f["tabs"]) or visible(f["panel"])]
-                self.assertEqual(seen, [], f"{where}, to the {'left' if start else 'right'}: seen crossing")
+                self.assertEqual(seen, [], f"{to}: seen crossing")
+                # The engine's view transition draws snapshots of the parts that have a view-transition name, moved
+                # from their old place to their new one: a part that is away has none, so nothing of it crosses there.
+                self.assertTrue(snapshots["active"], f"{to}: the engine ran no view transition, so this saw nothing")
+                self.assertEqual(snapshots["seen"], [], f"{to}: a snapshot crossing ({snapshots})")
 
         self.rest_pointer()
         self.m.chrome("gBrowser.selectedBrowser.focus();")
