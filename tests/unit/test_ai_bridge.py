@@ -29,6 +29,7 @@ from nulavio_launcher.ai import audit, mcp, policy, registry, tools
 from nulavio_launcher.ai import bidi as bidi_mod
 from nulavio_launcher.ai import cli as ai_cli
 from nulavio_launcher.ai.websocket import GUID, WebSocket, WebSocketError
+from nulavio_launcher.engine import EngineError
 from nulavio_launcher.ai.workspace import OLD_RAW_MARKER, WORKSPACE_PREFS, ProfileTarget, Workspace
 
 
@@ -1800,6 +1801,83 @@ class LocalRequestsTest(Home):
         self.assertEqual(during, [{("127.0.0.1", 8080)}])
         self.assertEqual(bridge._local_ok, set())  # a page left open afterwards reaches it no more
 
+    def test_the_shell_reads_which_local_places_are_allowed_now(self):
+        # #243: the engine connects to its own DNS answer, which the Bridge does not see. The Shell in each engine
+        # checks that address against this file before it shows the page; it must say what the Bridge allows, and
+        # no more: nothing before a call, the place a call was allowed by asking only during that call, and every
+        # place while local_resources is allowed without asking.
+        from nulavio_launcher import paths
+
+        agent, _ = registry.add("shell-net", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("once"))
+        self.addCleanup(bridge.close)
+        folder = paths.state_home() / "ai" / "local"
+        folder.mkdir(parents=True)
+        left = folder / "999999999-0123456789abcdef.json"  # by a Bridge that ended without closing
+        left.write_text('{"v": 1, "all": true, "places": []}')
+        path = bridge._local_path()
+        self.assertFalse(left.exists())
+        self.assertEqual(path.parent, folder)
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(folder.stat().st_mode & 0o777, 0o700)
+
+        def read() -> dict:
+            return json.loads(path.read_text())
+
+        self.assertEqual(read(), {"v": 1, "all": False, "places": []})  # closed before any engine starts
+        self.assertEqual(bridge._workspace().local_file, path)  # the engine is told where it is
+        during = []
+
+        def tabs_list(_self, args, cancel, checked):
+            _self.require("local_resources", "http://127.0.0.1:8080/app", checked=checked)
+            during.append(read())
+            return _self._ok({"tabs": []}), None
+
+        with mock.patch.object(tools.Bridge, "_t_tabs_list", tabs_list):
+            self.assertFalse(bridge.call("tabs_list", {})["isError"])
+        self.assertEqual(during, [{"v": 1, "all": False, "places": [["127.0.0.1", 8080]]}])
+        self.assertEqual(read()["places"], [])  # the call ended
+        registry.grant(agent["id"], "local_resources", "allow")
+        bridge._sync_network()
+        self.assertEqual(read(), {"v": 1, "all": True, "places": []})
+        registry.grant(agent["id"], "local_resources", "block")
+        bridge._sync_network()
+        self.assertEqual(read(), {"v": 1, "all": False, "places": []})
+        # A file that cannot be written is removed, and the Shell then shows no local page at all.
+        registry.grant(agent["id"], "local_resources", "allow")
+        with mock.patch.object(tools.paths, "write_private_file", side_effect=OSError("disk full")):
+            bridge._sync_network()
+        self.assertFalse(path.exists())
+        bridge._sync_network()
+        self.assertTrue(read()["all"])
+        # One that can be neither written nor removed still says "all": the engines that read it are closed, and the
+        # next engine is given a new file that says what is allowed now.
+        workspace = mock.Mock(bidi=mock.Mock())
+        bridge.workspace = workspace
+        registry.grant(agent["id"], "local_resources", "block")
+        real_unlink = Path.unlink
+
+        def unlink(self, *args, **kwargs):
+            if self == path:
+                raise OSError("read-only")
+            return real_unlink(self, *args, **kwargs)
+
+        with (
+            mock.patch.object(tools.paths, "write_private_file", side_effect=OSError("disk full")),
+            mock.patch.object(Path, "unlink", unlink),
+        ):
+            bridge._sync_network()
+        workspace.stop.assert_called_once()
+        self.assertIsNone(bridge.workspace)
+        self.assertTrue(read()["all"])  # still there, and no engine reads it
+        fresh = bridge._local_path()
+        self.assertNotEqual(fresh, path)
+        self.assertEqual(json.loads(fresh.read_text()), {"v": 1, "all": False, "places": []})
+        bridge.close()
+        self.assertFalse(fresh.exists())
+        path.unlink()
+
 
 class WorkspaceTest(Home):
     def test_engine_ends_with_the_bridge(self):
@@ -1884,6 +1962,60 @@ class WorkspaceTest(Home):
         )
         for name, value in lna:
             self.assertIn(f'user_pref("{name}", {value});', user_js)
+
+    def test_the_engine_is_used_only_once_its_shell_checks_local_addresses(self):
+        # #243: what the agent opens is checked by the Shell (workspace.GUARD_READY), not by the engine's Local Network
+        # Access. The Bridge gets the engine only once the Shell says its check is on; a file left from an earlier run
+        # counts for nothing. The path of the Bridge's file of allowed places is in the engine's environment.
+        from nulavio_launcher.ai import workspace
+
+        seen: dict = {}
+        ready = {"write": False}
+
+        def popen(_command, env, **_kwargs):
+            seen.update(env)
+            (ws.profile_dir / "WebDriverBiDiServer.json").write_text('{"ws_port": 1234}')
+            if ready["write"]:
+                (ws.profile_dir / workspace.GUARD_READY).write_text("1")
+            return mock.Mock(**{"poll.return_value": None})
+
+        ws = Workspace("ag-1", engine=mock.Mock(path=Path("/opt/engine/nulavio"), vendor="Nulavio"), headless=True)
+        ws.local_file = self.home / "local.json"
+        ws.profile_dir.mkdir(parents=True)
+        (ws.profile_dir / workspace.GUARD_READY).write_text("1")  # from an earlier run
+        with mock.patch.object(workspace.subprocess, "Popen", side_effect=popen), mock.patch.object(workspace, "Bidi") as bidi:
+            with self.assertRaises(workspace.WorkspaceError):
+                ws.start(timeout=1)
+            bidi.assert_not_called()
+            self.assertEqual(seen[workspace.LOCAL_ENV], str(ws.local_file))
+            ready["write"] = True
+            self.assertIs(ws.start(timeout=5), bidi.return_value)
+            ws.bidi = None
+            # Any other browser is refused before it starts (#563, engine.require_nulavio)...
+            ready["write"] = False
+            ws.engine = mock.Mock(path=Path("/usr/lib64/firefox/firefox"), vendor="Mozilla", label="Mozilla Firefox 160.0")
+            seen.clear()
+            with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": ""}), self.assertRaises(EngineError):
+                ws.start(timeout=5)
+            self.assertEqual(seen, {})  # never started
+            # ...except the test harness's distribution Firefox in a source checkout, which has no Shell to wait for.
+            with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": "1"}):
+                self.assertIs(ws.start(timeout=5), bidi.return_value)
+
+    def test_the_shell_reads_what_the_bridge_writes(self):
+        # #243: the Shell's check (NulavioAgentNetwork.sys.mjs) and the Bridge name the same environment variables and
+        # file, and the Shell pins the same Local Network Access values in an agent's engine as the AI Workspace has.
+        from nulavio_launcher.ai import workspace
+
+        module = Path(__file__).resolve().parents[2] / "browser" / "shell" / "modules" / "NulavioAgentNetwork.sys.mjs"
+        text = module.read_text(encoding="utf-8")
+        for name, value in (("WORKSPACE_ENV", workspace.WORKSPACE_ENV), ("LOCAL_ENV", workspace.LOCAL_ENV),
+                            ("READY_FILE", workspace.GUARD_READY)):  # fmt: skip
+            self.assertIn(f'const {name} = "{value}";', text)
+        listed = text.split("LOCAL_NETWORK_PREFS", 1)[1].split("]);", 1)[0]
+        pinned = dict(re.findall(r'\["([\w.\-]+)", (true|false|\d+)\]', listed))
+        lna = {k: json.dumps(v) for k, v in WORKSPACE_PREFS.items() if k.startswith(("network.lna.", "permissions.default."))}
+        self.assertEqual(pinned, lna)
 
     def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
         """#463: the marker the window read while raw automation was on is not written any more; one left in a

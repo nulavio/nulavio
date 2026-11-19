@@ -34,7 +34,7 @@ flowchart LR
 | Boundary | Crosses | Protection | Limit |
 |---|---|---|---|
 | AB1 Agent ↔ bridge | Tool calls and results | Token per agent (in its MCP config); schema validation; policy per call; no policy tools | Same-user processes can read the token and the policy file |
-| AB2 Bridge ↔ engine | BiDi commands | Loopback only, random port, engine rejects `Origin` and foreign `Host` | Any same-user process can connect to the port while the workspace runs |
+| AB2 Bridge ↔ engine | BiDi commands; the places on this computer and the local network the agent may reach now, which the Shell reads before it shows a page from a local address (#243) | Loopback only, random port, engine rejects `Origin` and foreign `Host`; the places are in a file in the Bridge's private state folder (0600, written atomically) whose path is in the engine's environment, and the Shell takes anything it cannot read as one as no place; in a Nulavio engine the Bridge uses the engine only once the Shell's check is on | Any same-user process can connect to the port while the workspace runs, and rewrite that file, as it can the policy (AB1) |
 | AB3 Web page ↔ agent | Page text, element names, screenshots | Marked as untrusted in every result; content never reaches the PDP; tools cannot change policy | The model may still be misled into misusing what it is allowed to do |
 | AB4 Agent workspace ↔ user profiles | Cookies, history, storage | Separate engine profile per agent; real profiles not reachable in S4 | — |
 

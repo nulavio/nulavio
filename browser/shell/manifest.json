@@ -195,6 +195,9 @@
           [
             "nulavioAI"
           ]
+        ],
+        "events": [
+          "startup"
         ]
       }
     },

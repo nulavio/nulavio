@@ -14,7 +14,8 @@ WebSocket upgrades that carry an Origin header (web pages) or a foreign Host.
 What the Shell in these windows reads (NulavioAI.sys.mjs): the prefs
 `nulavio.ai.workspace` (which agent drives the window) and `nulavio.ai.target`
 ("workspace", or "profile" with `nulavio.ai.target.label` for one of the user's
-own profiles).
+own profiles). NulavioAgentNetwork.sys.mjs reads the engine's environment
+(WORKSPACE_ENV, LOCAL_ENV) and checks the address each page loads from.
 """
 
 from __future__ import annotations
@@ -38,6 +39,14 @@ APP_ID = "nulavio-ai-workspace"
 # browser (about:config included) can change it, so the window's lock does not rest on a pref
 # something in the engine could reset (audit A6). browser/shell/modules/NulavioAI.sys.mjs.
 WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"
+# The engine's Local Network Access does not check what its driver opens (it runs as the system principal), nor a
+# redirect on the way there. The Shell does, in every engine started here: a page whose response comes from an address
+# the engine reads as this computer or the local network is not shown unless local_resources allows that place now
+# (#243, R29; browser/shell/modules/NulavioAgentNetwork.sys.mjs). Which places those are is in a file the Bridge keeps
+# (tools.Bridge._write_local); its path is in the engine's environment, where nothing in the browser can change it.
+LOCAL_ENV = "NULAVIO_AI_LOCAL"
+# The Shell writes this file in the profile once that check is on; until then the Bridge does not use the engine.
+GUARD_READY = "nulavio-ai-guard"
 # Left in a workspace's profile by a version that had raw automation (removed in #463); deleted when it starts.
 OLD_RAW_MARKER = "nulavio-raw.json"
 WORKSPACE_PREFS: dict[str, object] = {
@@ -60,8 +69,8 @@ WORKSPACE_PREFS: dict[str, object] = {
     # which the Bridge cannot see: a name that answers the Bridge with a public address and the engine with a
     # local one (rebinding, LESIS 929cb094, #243). A public page's request to this computer or the local network
     # is refused here with no prompt (nobody should answer one in an agent's window), and a page's own top-level
-    # navigation (a pop-up, a link it follows) is checked too. The agent's own navigation is not: the Bridge
-    # decides that one, with local_resources.
+    # navigation (a pop-up, a link it follows) is checked too. The agent's own navigation is not (the engine lets
+    # its driver through): the Shell checks those pages (LOCAL_ENV).
     "network.lna.enabled": True,
     "network.lna.blocking": True,
     "network.lna.allow_top_level_navigation": False,
@@ -96,6 +105,7 @@ class Workspace:
         self.process: subprocess.Popen | None = None
         self.port: int | None = None  # the engine's WebDriver BiDi port (loopback)
         self.bidi: Bidi | None = None
+        self.local_file: Path | None = None  # LOCAL_ENV: set by the Bridge before start()
         if disposable:
             self.dir = Path(tempfile.mkdtemp(prefix="nulavio-ai-"))
         else:
@@ -156,9 +166,13 @@ class Workspace:
         self._write_prefs()
         port_file = self.profile_dir / "WebDriverBiDiServer.json"
         port_file.unlink(missing_ok=True)
+        ready_file = self.profile_dir / GUARD_READY
+        ready_file.unlink(missing_ok=True)
         env = engine_mod.launch_env()  # sandboxes stay on; no MOZ_* debugging knobs
         env["MOZ_APP_REMOTINGNAME"] = APP_ID
         env[WORKSPACE_ENV] = self.marker()
+        if self.local_file is not None:
+            env[LOCAL_ENV] = str(self.local_file)
         self.process = subprocess.Popen(
             [*die_with_parent(), *self.command()], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, start_new_session=True, preexec_fn=lambda: os.umask(0o077),
@@ -172,12 +186,22 @@ class Workspace:
             except (OSError, ValueError, KeyError):
                 time.sleep(0.2)
                 continue
+            if self.guarded() and not ready_file.exists():
+                time.sleep(0.2)  # the Shell's check of local addresses is not on yet: nothing is opened before it
+                continue
             self.port = port
             self.bidi = Bidi(port)
             self.bidi.command("session.subscribe", {"events": EVENTS})
             return self.bidi
         self.stop()
-        raise WorkspaceError("the engine's automation endpoint did not start")
+        raise WorkspaceError("the engine's automation endpoint, or its check of local addresses, did not start")
+
+    def guarded(self) -> bool:
+        """The engine carries the Shell, which checks local addresses (GUARD_READY). start() drives only the Nulavio
+        build (engine.require_nulavio, #563); the one other engine it accepts is the test harness's distribution
+        Firefox in a source checkout (engine.HARNESS_FIREFOX_ENV), which has no Shell, so there is nothing to wait
+        for, and test_27, test_29 and test_30 need the Nulavio build."""
+        return getattr(self.engine, "vendor", None) == "Nulavio"
 
     def stop(self) -> None:
         if self.bidi is not None:
@@ -241,7 +265,9 @@ class ProfileTarget(Workspace):
         self.headless = headless
         self.engine = engine
         self.process = None
+        self.port = None
         self.bidi = None
+        self.local_file = None
         self.dir = Path(path)
         self.profile_dir = Path(path)
         self.downloads_dir = downloads_dir
@@ -278,6 +304,7 @@ class ProfileTarget(Workspace):
         paths.write_private_file(user_js, existing + "\n".join(lines) + "\n")
 
     def _remove_temporary(self) -> None:
+        (self.profile_dir / GUARD_READY).unlink(missing_ok=True)
         user_js = self.profile_dir / "user.js"
         if not user_js.exists():
             return

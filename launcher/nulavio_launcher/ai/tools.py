@@ -10,8 +10,10 @@ result the agent can read, not a crash.
 from __future__ import annotations
 
 import json
+import os
 import re
 import contextlib
+import secrets
 import threading
 import time
 import urllib.parse
@@ -20,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import paths
 from ..engine import EngineError
 from . import audit, policy, registry
 from .bidi import Bidi, BidiError, Cancelled, script_result
@@ -214,6 +217,16 @@ LOOKUPS_AT_ONCE = 32  # names being looked up at once; while that many are out, 
 NET_WAITING_MAX = 256  # held requests waiting for a name; past that a new one is failed
 
 
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
 class Denied(Exception):
     def __init__(self, decision: policy.Decision, detail: str = ""):
         super().__init__(decision.reason)
@@ -377,6 +390,10 @@ class Bridge:
         self._net_state = threading.Lock()  # what the request threads share
         self._lookups: dict[str, _Lookup] = {}  # names being looked up for held requests
         self._net_waiting = 0  # held requests waiting for a name
+        # What the Shell in each engine reads before it shows a page from a local address (workspace.LOCAL_ENV):
+        # _local_all and _local_ok, as they are now. Written by the call's thread only.
+        self._local_file: Path | None = None
+        self._local_written: str | None = None
 
     # -- policy ----------------------------------------------------------------------
 
@@ -438,6 +455,7 @@ class Bridge:
             self._forms_ok.add(policy.origin(url))
         if capability == "local_resources" and (place := self._request_place(url)):
             self._local_ok.add(place)  # its requests are sent on during this call
+            self._write_local()  # and its pages shown, before the engine is asked to open one
         if capability == "local_resources" and self._may_reach_local():
             self._sync_network()  # "until the agent disconnects": nothing is held from now on, in this call too
 
@@ -532,6 +550,7 @@ class Bridge:
                     result, target_url = getattr(self, "_t_" + name)(arguments, cancel, checked)
                 finally:
                     self._local_ok = set()  # what the user allowed for this call ends with it
+                    self._write_local()
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
             d = denied.decision
@@ -586,9 +605,11 @@ class Bridge:
         if self.workspace is None:
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
-            self.workspace = (self.workspace_factory(agent) if self.workspace_factory else
-                              Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
-                                        headless=self.headless, uploads=uploads))  # fmt: skip
+            workspace = (self.workspace_factory(agent) if self.workspace_factory else
+                         Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
+                                   headless=self.headless, uploads=uploads))  # fmt: skip
+            workspace.local_file = self._local_path()
+            self.workspace = workspace
         return self.workspace
 
     def _engines(self) -> list[tuple[str, Workspace]]:
@@ -629,6 +650,9 @@ class Bridge:
         self.elements.clear()
         self.owner.clear()
         self._downloads_mode = {}
+        if self._local_file is not None:
+            self._local_file.unlink(missing_ok=True)
+            self._local_file, self._local_written = None, None
 
     def _sync_downloads(self) -> None:
         """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""
@@ -733,11 +757,12 @@ class Bridge:
         there, before it leaves: a redirect hop is a request of its own, so a page an agent opened cannot
         send the browser to a local service. Like forms, it follows the permission as the user changes it.
         What the engine does not show the Bridge (a request with no tab, R29) is not held."""
+        hold = not self._may_reach_local()
+        self._local_all = not hold  # requests already held follow the permission as it is now
+        self._write_local()  # and so does the Shell's check of the pages each engine loads
         engines = self._engines()
         if not engines:
             return
-        hold = not self._may_reach_local()
-        self._local_all = not hold  # requests already held follow the permission as it is now
         for _label, target in engines:
             engine = target.bidi
             intercept = self._net_intercepts.get(engine)
@@ -752,6 +777,40 @@ class Bridge:
                 engine.command("network.removeIntercept", {"intercept": intercept})
                 del self._net_intercepts[engine]
             self._net_engines.add(engine)  # only once its intercept is as the permission says
+
+    def _local_path(self) -> Path:
+        """The file each engine's Shell reads (workspace.LOCAL_ENV): one per Bridge, written before any engine starts,
+        in a private folder outside every profile and the downloads. Files a Bridge that ended left behind go."""
+        if self._local_file is None:
+            folder = paths.ensure_private_dir(paths.state_home() / "ai" / "local")
+            for old in folder.glob("*.json"):
+                pid = old.name.partition("-")[0]
+                if pid.isdigit() and not _alive(int(pid)):
+                    old.unlink(missing_ok=True)
+            self._local_file = folder / f"{os.getpid()}-{secrets.token_hex(8)}.json"
+            self._write_local()
+        return self._local_file
+
+    def _write_local(self) -> None:
+        """What the Shell lets through now: every local place (local_resources allowed without asking) or the places
+        the current call was allowed by asking. A file that cannot be written is removed: the Shell then shows no
+        page from a local address at all. One that cannot be removed either may say more than is allowed now: the
+        engines that read it are closed, and the next one gets a file of its own."""
+        if self._local_file is None:
+            return
+        text = json.dumps({"v": 1, "all": self._local_all, "places": sorted([h, p] for h, p in self._local_ok)})
+        if text == self._local_written:
+            return
+        try:
+            paths.write_private_file(self._local_file, text)
+            self._local_written = text
+        except OSError:
+            self._local_written = None
+            try:
+                self._local_file.unlink(missing_ok=True)
+            except OSError:
+                self._local_file = None  # never named to an engine again
+                self.close()
 
     def _on_request(self, engine: Bidi, params: dict) -> None:
         """A request the intercept holds, from the connection's handler thread. An address, a local name and a
@@ -1187,6 +1246,7 @@ class Bridge:
         if target is None:
             target = ProfileTarget(self.agent_id, label, Path(entry["path"]), downloads_dir=self._workspace().downloads_dir,
                                    headless=self.headless)  # fmt: skip
+            target.local_file = self._local_path()
             self.profiles[label] = target
         try:
             bidi = target.start()

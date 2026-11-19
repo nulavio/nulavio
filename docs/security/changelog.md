@@ -29,7 +29,14 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.2)
 
-Nothing yet.
+**Nulavio fixes**:
+
+- AI Bridge, local network, continued (#243, #560):
+  - In your own profiles opened for an agent, the engine's Local Network Access now refuses a public page's requests to local addresses with no prompt, a pop-up's included. This holds for the agent's run only, and none of these settings stays in the profile.
+  - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
+  - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
+  - A page loaded through a proxy is not checked this way, and in your profiles a site you allowed yourself to reach local addresses keeps that permission; R29 lists what else is not.
+  - Nothing to do: it comes with the update.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19
 
