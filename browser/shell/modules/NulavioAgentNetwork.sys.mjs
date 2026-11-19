@@ -93,6 +93,34 @@ export function placeAllowed(allowed, place) {
   return allowed.all || allowed.places.has(`${host} ${port}`) || (port === 443 && allowed.places.has(`${host} 80`));
 }
 
+/** Whether a channel connected by itself: no proxy information, or proxy information that says "direct". */
+function directLoad(channel) {
+  let info = null;
+  try {
+    info = channel.QueryInterface(Ci.nsIProxiedChannel).proxyInfo;
+  } catch (e) {
+    return true;
+  }
+  return !info || info.type === "direct";
+}
+
+/** Whether an address is this computer or the local network, as the engine reads one without its overrides
+    (NetAddr::GetIpAddressSpace: loopback and "any" are local; RFC 1918, 0/8, link-local, unique-local and 100.64/10
+    are private). Throws for text that is not an address. */
+export function localAddress(text) {
+  const literal = String(text);
+  const uri = Services.io.newURI(`http://${literal.includes(":") ? `[${literal}]` : literal}/`);
+  const host = uri.asciiHost.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  if (!/^[0-9a-f.:]+$/.test(host)) {
+    throw new Error("not an address");
+  }
+  // Loopback, also written as an IPv4-mapped IPv6 address (dotted, or as the URL parser writes it, in hex).
+  if (/^(::ffff:)?127\./.test(literal.toLowerCase()) || /^::ffff:7f[0-9a-f]{2}:/.test(host) || host === "::1") {
+    return true;
+  }
+  return Services.io.hostnameIsLocalIPAddress(uri) || Services.io.hostnameIsSharedIPAddress(uri);
+}
+
 class AgentNetwork {
   #armed = false;
   #file = "";
@@ -163,7 +191,24 @@ class AgentNetwork {
     // The engine's reading of the address it got the page from (its address-space overrides included), set once it
     // has connected. A proxied load has none: the proxy connected.
     const space = loadInfo.ipAddressSpace;
-    if (space !== Ci.nsILoadInfo.Local && space !== Ci.nsILoadInfo.Private) {
+    if (space === Ci.nsILoadInfo.Unknown) {
+      // The engine records no address when the channel has proxy information, also when that says "direct" (a PAC
+      // answer like "DIRECT; PROXY …", or a failover to a direct connection). Then the address it connected to is
+      // read here; one that cannot be read, on a connection that is not through a proxy, is not shown.
+      if (!directLoad(channel)) {
+        return; // through a proxy: the proxy connected (R29)
+      }
+      let local;
+      try {
+        local = localAddress(channel.QueryInterface(Ci.nsIHttpChannelInternal).remoteAddress);
+      } catch (e) {
+        channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY);
+        return;
+      }
+      if (!local) {
+        return;
+      }
+    } else if (space !== Ci.nsILoadInfo.Local && space !== Ci.nsILoadInfo.Private) {
       return;
     }
     const place = placeOf(channel.URI);

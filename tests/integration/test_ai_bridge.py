@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 
@@ -1136,6 +1137,53 @@ class AiBridgeTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: posted == ["/post"], timeout=15), posted)
         time.sleep(2)  # a page taken from the cache would be there by now (it was without the change)
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+
+    @unittest.skipUnless(harness.nulavio_engine(), "the check of what the agent opens is the Nulavio Shell's")
+    def test_31_a_page_a_pac_file_sends_direct_is_checked_too(self):
+        # #243: with proxy information, even one that says "direct" (a PAC answer like "DIRECT; PROXY …"), the engine
+        # records no address for the page; the Shell reads the address the engine connected to instead. The Bridge
+        # reads 127.0.0.3 as public; the engine connects to it directly, and to it that is this computer.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = b"<!doctype html><title>Local</title><p>only on this computer"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        local = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/x"
+        pac = "function FindProxyForURL(url, host) { return 'DIRECT; PROXY 127.0.0.1:1'; }"
+        engine_side = {
+            "network.proxy.type": 2,
+            "network.proxy.autoconfig_url": "data:application/x-ns-proxy-autoconfig," + urllib.parse.quote(pac),
+        }
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        local_address = policy._local_address
+        stand_in = mock.patch.object(policy, "_local_address", lambda text: text != "127.0.0.3" and local_address(text))
+        stand_in.start()
+        self.addCleanup(stand_in.stop)
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-pac", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"url": f"{local}-direct"})
+        self.assertNotIn("only on this computer", json.dumps(opened))
+        tab = next(t["tab"] for t in bridge.call("tabs_list", {})["structuredContent"]["tabs"] if "/x-direct" in t["url"])
+        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+        self.assertEqual(hits, ["/x-direct"])  # the engine connected directly, and the page was not shown
+        # The same direct connection opens the page once the agent may reach local resources: nothing else stops it.
+        registry.grant(agent["id"], "local_resources", "allow")
+        allowed = bridge.call("navigate", {"tab": tab, "url": f"{local}-allowed"})
+        self.assertFalse(allowed["isError"], allowed)
+        self.assertEqual(allowed["structuredContent"]["title"], "Local")
 
 
 if __name__ == "__main__":
