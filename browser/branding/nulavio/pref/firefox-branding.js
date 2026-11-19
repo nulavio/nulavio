@@ -94,6 +94,11 @@ pref("intl.locale.requested", "");
 // the upstream look, including the GTK colours of the default theme on Linux.
 pref("nulavio.horizon.enabled", true);
 
+// The side panel (the assistant, bookmarks, history) on the side of the page
+// opposite the tabs (#527): off, it opens beside them, as in the engine.
+// Settings > Aparência writes it; patch 0013 reads it in setPosition().
+pref("nulavio.sidebar.panelOpposite", false);
+
 // Mozilla's AI features are off (decision D-UX7). The Nulavio assistant is the
 // one AI path, governed by ADR 0007: per-profile consent, the recipient shown
 // before Send, and the bridge's policy for tasks. Mozilla's chatbot would send

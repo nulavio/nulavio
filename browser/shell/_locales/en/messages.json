@@ -1415,6 +1415,7 @@
   "layoutChoiceImmersiveHint": {"message": "Takes the address bar and the tabs out of view; the band at the top keeps showing the profile and the site. Ctrl+L brings the address bar back."},
   "hidePageTitleLabel": {"message": "Hide the page title in the window title"},
   "loadLineLabel": {"message": "Show a loading line at the top of the page"},
+  "panelOppositeLabel": {"message": "Side panel opposite the tabs"},
   "keyImmersive": {"message": "Immersive"},
   "keyNone": {"message": "No key"},
   "keysResetTitle": {"message": "Restore the default shortcuts?"},

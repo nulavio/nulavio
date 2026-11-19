@@ -1,0 +1,18 @@
+{
+  "version": "160.0.1-0.3",
+  "date": "2026-11-19",
+  "channel": "alpha",
+  "firefox": "160.0.1",
+  "pt-BR": {
+    "summary": "O painel lateral pode abrir do outro lado das abas, em Aparência.",
+    "new": [
+      "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição e no Imersivo. Vem desligado."
+    ]
+  },
+  "en-US": {
+    "summary": "The side panel can open on the other side of the tabs, in Appearance.",
+    "new": [
+      "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout and in Immersive. It starts off."
+    ]
+  }
+}

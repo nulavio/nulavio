@@ -438,13 +438,15 @@
       disabled: () => Boolean(titleLock()) || lookLocked("hidePageTitle"),
     });
     lookSetting("nulavio-load-line", "loadLine", Boolean); // #458: off in a new profile, NulavioLoadLine
+    // #527: the side panel on the other side of the page from the tabs; the engine places it (patch 0013, setPosition()).
+    lookSetting("nulavio-panel-opposite", "panelOpposite", Boolean);
     lookSetting("nulavio-reduce-transparency", "reduceTransparency", Boolean, {
       get: () => Boolean(lookNow()?.reduceTransparency) || ["system", "contrast"].includes(solidBy()),
       disabled: () => Boolean(solidBy()) || lookLocked("reduceTransparency"),
       getControlConfig: config => (solidBy() ? { ...config, l10nId: `nulavio-reduce-transparency-${solidBy()}` } : config),
     });
     // An option an administrator set cannot be changed here: said once, for the group.
-    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle", "loadLine"];
+    const LOOK = ["accent", "moreContrast", "newtabAmbience", "reduceTransparency", "hidePageTitle", "loadLine", "panelOpposite"];
     setting({ id: "nulavio-look-locked", setup: look.watch, visible: () => LOOK.some(lookLocked) });
     look.refresh();
     added.cleanups.push(shell.NulavioPersonalise.subscribe(look.refresh));
@@ -2560,6 +2562,7 @@
           },
           { id: "nulavio-layout-keep", control: "moz-button" },
           { id: "nulavio-immersive", l10nId: "nulavio-immersive", control: "moz-toggle", controlAttrs: { "data-option": "immersive" } },
+          { id: "nulavio-panel-opposite", l10nId: "nulavio-panel-opposite", control: "moz-toggle", controlAttrs: { "data-option": "panelOpposite" } },
           { id: "nulavio-hide-page-title", l10nId: "nulavio-hide-page-title", control: "moz-toggle", controlAttrs: { "data-option": "hidePageTitle" } },
           { id: "nulavio-load-line", l10nId: "nulavio-load-line", control: "moz-toggle", controlAttrs: { "data-option": "loadLine" } },
         ],

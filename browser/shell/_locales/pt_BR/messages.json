@@ -1415,6 +1415,7 @@
   "layoutChoiceImmersiveHint": {"message": "Tira de vista a barra de endereço e as abas; a faixa do topo continua mostrando o perfil e o site. Ctrl+L traz a barra de endereço de volta."},
   "hidePageTitleLabel": {"message": "Esconder o título da página na barra da janela"},
   "loadLineLabel": {"message": "Mostrar uma linha de carregamento no topo da página"},
+  "panelOppositeLabel": {"message": "Painel lateral do outro lado das abas"},
   "keyImmersive": {"message": "Imersivo"},
   "keyNone": {"message": "Sem tecla"},
   "keysResetTitle": {"message": "Restaurar os atalhos padrão?"},
