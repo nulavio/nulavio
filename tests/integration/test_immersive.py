@@ -1582,6 +1582,32 @@ class ImmersiveTest(unittest.TestCase):
         self.panel_opposite(True)
         flip("the tab list and the panel opposite it")
 
+    def test_29_a_panel_held_in_view_does_not_keep_the_keyboard_in_the_address_bar(self):
+        """#346 with #239: the side panel's own holds are about the panel. With a request waiting in the panel opposite
+        (it is held in view), a click on the band after the keyboard was in the address bar still gives the page the
+        keyboard, and the toolbar goes; the panel stays."""
+        self.panel_opposite(True)
+        ai = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs").NulavioAI'
+        self.addCleanup(
+            self.m.chrome, f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.m.chrome(
+            f"{ai}.assistantRuns = () => [{{ runId: 'r', kind: 'task', state: 'running', pendingApproval: 'a1' }}];"
+            "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.window()["hold"] == "panel", 5), self.window())
+        self.m.chrome("document.getElementById('Browser:OpenLocation').doCommand();")
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.assertTrue(self.m.chrome(FOCUS)["urlbar"])
+        # On the band: a web page takes the keyboard by itself, the band does not, so the window's own rule is what acts.
+        at = self.m.chrome(SPOTS)["band"]
+        self.assertIsNotNone(at, "no free point on the band")
+        self.m.chrome(CLICK_AT, [at])
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(FOCUS)["urlbar"], 5), self.m.chrome(FOCUS))
+        self.m.chrome(AWAY)
+        self.assertFalse(self.settled(False)["toolbar"])
+        self.assertTrue(self.m.chrome(PANEL)["shown"], "the panel left with a request waiting in it")
+
     def rest_pointer(self):
         """The pointer on the page, three quarters across and halfway down, through the engine's own event path."""
         w, h = self.m.chrome("return [innerWidth, innerHeight];")

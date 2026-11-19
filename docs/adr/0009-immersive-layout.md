@@ -154,8 +154,9 @@ The side panel can sit on the side of the page opposite the tabs. This is a sett
   - a menu or a panel anchored in it (hold `panel`);
   - the band's pin;
   - a moment (1.5 s) after it is opened, as for a tab opened in the background: the assistant's key, a launcher button, a menu;
-  - a permission request of the assistant's task waiting as a card in it. The panel is open, so the request goes there and not to a tab in front, and it must not wait unseen in a panel that is out of view (`test_immersive` 26, 27).
-- **A change of side** (the tab list's `sidebar.position_start`, or the panel's setting) moves the part that is away to its new edge at once. Before, its slide ran while its edge changed, and it was seen crossing the window (#539's review; `test_immersive` 28).
+  - a permission request of the assistant's task waiting as a card in it. The panel is open, so the request goes there and not to a tab in front, and it must not wait unseen in a panel that is out of view (`test_immersive` 27; the focus, the menu and the pin: 26).
+- **A change of side** (the tab list's `sidebar.position_start`, or the panel's setting) moves the part that is away to its new edge at once. Before, its slide ran while its edge changed, and it was seen crossing the window (#539's review). The engine changes the side inside a view transition, whose snapshot of a named part moves from the old place to the new one: a part that is away has no view-transition name, so no snapshot of it crosses either (`test_immersive` 28 reads the live boxes and the snapshots' animations).
+- **In a window too short for the frame margin**, the panel's 4 px edge lies over the page's scroll bar on that side, as the tab list's edge on the right does: reaching for the scroll bar there brings the panel. With the margin, the edge sits in it.
 - **With the setting off** the panel stays beside the tabs, in the flow, as #344 decided (`test_immersive` 20, unchanged).
 
 Decision 7 said "no engine patch". That still holds for Immersive itself, its controller and its sheet. The panel's side is the engine's, through patch 0013.

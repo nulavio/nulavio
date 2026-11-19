@@ -652,7 +652,10 @@ class WindowUI {
     // click on a web page does. The window root also sees the clicks inside in-process pages.
     const outside = event => {
       const root = doc.documentElement;
-      if (!event.isTrusted || event.button !== 0 || !root.hasAttribute("nulavio-immersive") || root.hasAttribute("nulavio-immersive-hold")) {
+      // Something anchored on the toolbar or the tab list keeps them, and the keyboard with them; the side panel's own
+      // holds (#346) are about the panel only.
+      const held = (root.getAttribute("nulavio-immersive-hold") ?? "").split(" ").some(part => part && part !== "panel");
+      if (!event.isTrusted || event.button !== 0 || !root.hasAttribute("nulavio-immersive") || held) {
         return;
       }
       const toolbox = doc.getElementById("navigator-toolbox");

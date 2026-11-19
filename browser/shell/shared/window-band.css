@@ -582,6 +582,9 @@
       background-color: var(--toolbox-background-color, var(--nv-color-chrome-toolbox));
       translate: calc(-100% - var(--nv-space-5)) 0;
       pointer-events: none;
+      /* #346: no snapshot of it in the engine's view transition while it is away (setPosition() runs in one): its snapshot
+         would move from its old edge to its new one across the window when its side changes. Shown, it has its name. */
+      view-transition-name: none;
       /* #344: the list's top goes back up under the band only once the toolbar is out of view (its hold, then its
          exit), so the leaving toolbar is never drawn over it; it goes down under a toolbar that comes at once. */
       --nulavio-list-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
@@ -659,6 +662,9 @@
       #sidebar-splitter {
         display: none;
       }
+      /* In a window too short for the frame margin (horizon.css) the edge lies over the page's last 4 px on that side,
+         where a page draws its scroll bar on the right: reaching for it brings the panel there, as reaching for it brings
+         the tab list on the right (#539). With the margin, the edge is in the margin. */
       #browser:has(> #sidebar-box[sidebar-panel-open]) > #nulavio-immersive-panel-edge {
         display: block;
         position: fixed;
@@ -678,6 +684,7 @@
         z-index: calc(var(--nv-zIndex-band) - 2);
         translate: calc(100% + var(--nv-space-5) + var(--nulavio-frame-margin, 0px)) 0;
         pointer-events: none;
+        view-transition-name: none; /* as the tab list's, while it is away */
         --nulavio-panel-slide: translate var(--nv-motion-duration-base) var(--nv-motion-easing-exit) var(--nv-motion-duration-hold);
         @media (prefers-reduced-motion: no-preference) {
           transition: var(--nulavio-panel-slide), margin-block-start 0s linear calc(var(--nv-motion-duration-hold) + var(--nv-motion-duration-base));
@@ -699,6 +706,7 @@
       #browser > #sidebar-box:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
         translate: 0;
         pointer-events: auto;
+        view-transition-name: sidebar-box; /* the engine's own (sidebar.css) */
         box-shadow: var(--nv-elevation-3);
         --nulavio-panel-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
       }
@@ -718,6 +726,7 @@
     #sidebar-container:is(:hover, :focus-within, :has([open]:not([open="false"]))) {
       translate: 0;
       pointer-events: auto;
+      view-transition-name: sidebar-launcher; /* the engine's own (sidebar.css) */
       box-shadow: var(--nv-elevation-3); /* only while it is over the page: out of view it casts nothing on it */
       --nulavio-list-slide: translate var(--nv-motion-duration-fast) var(--nv-motion-easing-enter);
     }
