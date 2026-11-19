@@ -11,6 +11,95 @@ Update an installed Nulavio with `sudo dnf upgrade nulavio`. Only the latest rel
 
 <!-- releases -->
 
+<!-- release:v160.0.1-0.2 -->
+## [160.0.1-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.2) — 2026-11-19
+
+Nulavio 160.0.1-0.2, built from Firefox 160.0.1 (commit be6d3ea3671b).
+
+### What's new
+
+Automatic updates of Nulavio, turned on by you: twice a day the system installs the new version of the package, without waiting for the browser.
+
+#### Changes that need your attention
+
+- Send Link to Device, in a link's menu, is gone: Plasma Browser Integration has its own KDE Connect sharing. The KDE Connect row in Integrations still shows the devices in reach.
+- If you wrote your own list of protections in about:config (privacy.fingerprintingProtection.overrides), add +ScreenSizeConstant: without that entry, sites no longer read the 1920 by 1080 screen, and read the size of yours. If you never changed it, there is nothing to do.
+
+#### What is new
+
+- Automatic updates, in Settings and on the first run: when on, the system installs Nulavio's new version at midnight and noon, only from Nulavio's repository. Turning them on or off asks for the administrator's password; nothing runs until you turn them on.
+- More Nulavio actions in the address bar: Ctrl+Alt+P lists them, and they now include Immersive, a temporary window, switching profile and copying a link to the selected text.
+- The security panels open at once, with no animation: the site's panel (identity and protections), the site's permissions and permission prompts. The sidebar's panels move at the same pace as the sidebar.
+
+In Portuguese and English: https://nulavio.net/novidades/160.0.1-0.2/ and https://nulavio.net/en/whats-new/160.0.1-0.2/
+
+### Features
+
+- packaging: automatic updates shipped off, turned on through polkit (#523) ([e1a376fa1ee6](https://github.com/nulavio/nulavio/commit/e1a376fa1ee61a2971786e99ccfbde4862c33142))
+- shell: automatic updates in the first run and in Settings, About (#538) ([5de838b7084c](https://github.com/nulavio/nulavio/commit/5de838b7084c012b0c17e96a81437415234bfa51))
+- connect: sending a link to a KDE Connect device is left to Plasma Browser Integration (#532) ([d511856f7416](https://github.com/nulavio/nulavio/commit/d511856f74167d2c8685809e382e48946eef83b8))
+- shell: Imersivo's tab list on the right leaves and comes back by the right edge (#539) ([801d3a9c36c2](https://github.com/nulavio/nulavio/commit/801d3a9c36c2dbc84ff494f0a4f6e4fdb48c6300))
+- shell: Nulavio's actions in the address bar, and Ctrl+Alt+P to list them (#533) ([4549d3b77bf5](https://github.com/nulavio/nulavio/commit/4549d3b77bf58dd2c77ee13043a6a1ac4eec06fb))
+- perf: perf.yml fails a release's run past the runner's noise (#525) ([794c6f2c4fc5](https://github.com/nulavio/nulavio/commit/794c6f2c4fc510042ffb28e4eb260d7a2899a42b))
+- window: the motion map, with security panels that open at once and sidebar panels on the motion tokens (#554) ([5c626c72f697](https://github.com/nulavio/nulavio/commit/5c626c72f6977c36166216fc3c89113f59ba3bb7))
+
+### Fixes
+
+- shell: the page menu's submenu is named "Nulavio", not "Nulavio Shell" (#530) ([a5a2704e36c4](https://github.com/nulavio/nulavio/commit/a5a2704e36c458415a225945bd25c40fd4eea8c9))
+- ai: the AI Workspace refuses public pages' requests to local addresses after its own DNS lookup (#542) ([cfd0b07b4608](https://github.com/nulavio/nulavio/commit/cfd0b07b46085b6b62bdea6786d47fe05042890b))
+- vault: the methods page says what a missing method or profile is (#548) ([2313f64d30d4](https://github.com/nulavio/nulavio/commit/2313f64d30d4c64539f6d121d844339692fd4489))
+- ci: the Companion's Gradle steps read Maven Central through a mirror first (#552) ([733fae997fc3](https://github.com/nulavio/nulavio/commit/733fae997fc31247677ef83adf487de7f3537cdc))
+- vault: the phone, unlock and create pages say what a missing profile or method is (#557) ([fca86d0fe2a5](https://github.com/nulavio/nulavio/commit/fca86d0fe2a546757e38c15fb9659c10b7f58330))
+- shell: a temporary window that fails to launch and a link that fails to copy say so (#559) ([0c3bd7e9f622](https://github.com/nulavio/nulavio/commit/0c3bd7e9f62247d33c1c2c25cf3e07753af535d0))
+- ai: harden the AI Bridge's engine lookup (#563) ([8d265dc8320d](https://github.com/nulavio/nulavio/commit/8d265dc8320d50cba301c74a6a341248af712bb6))
+
+### Security-related changes
+
+- release: the daily watch reads each pinned extension's security advisories (#556) ([44c30cc41674](https://github.com/nulavio/nulavio/commit/44c30cc416746312aaf7423680a9a2687079cba3))
+
+### Documentation
+
+- security: 160.0.1-0.1 published within the 24-hour target (#541) ([64658caafee4](https://github.com/nulavio/nulavio/commit/64658caafee41a062ec7e060c6520c67e3473505))
+- research: the side panel opposite the tabs, the #249 spike's result (#528) ([0fd1d3941aae](https://github.com/nulavio/nulavio/commit/0fd1d3941aae04cb8431bb36d42de23a2b27fc4a))
+- security: R83 accepted by the maintainer (#551) ([214a3635c636](https://github.com/nulavio/nulavio/commit/214a3635c6365cf31572932103fbf76cfc4b7eee))
+
+### Tests
+
+- search: a sign-in survives the lock and unlock of a protected profile (#529) ([e63efa18a301](https://github.com/nulavio/nulavio/commit/e63efa18a301507b8a57c3d592208642fad1daea))
+- immersive: the pointer journeys end their tab drag, and the toolbar takes the pointer again (#531) ([25a3d89cbfd1](https://github.com/nulavio/nulavio/commit/25a3d89cbfd11f2a7a4c0c8ae1d49e4968badd48))
+- ai: the dark captures end the buttons' colour transition before they are taken (#537) ([da0b3c6206dc](https://github.com/nulavio/nulavio/commit/da0b3c6206dcdff25534dedda3d839c3fdba650c))
+- services: menus read once the last drawing is in, and a failure says what the engine holds (#545) ([2b170596f40d](https://github.com/nulavio/nulavio/commit/2b170596f40d276f5bde77cdb69b2ab81c449a85))
+- perf: the page-loading line measured in the UX7 frame budget (#534) ([434411a4760d](https://github.com/nulavio/nulavio/commit/434411a4760d18a41bd6f7d0f755f1e3b2ed5ebb))
+- passwords: the popup check waits for the page and retries a discarded tab once (#522) ([a67e4ced8f65](https://github.com/nulavio/nulavio/commit/a67e4ced8f6563be99a4fba1b1f2bf02d579866e))
+- downloads: keep the state that has the button's accessible name (#567) ([be6d3ea3671b](https://github.com/nulavio/nulavio/commit/be6d3ea3671bfd19eb65597b591529da6c3cb9ac))
+
+### Maintenance
+
+- release: record v160.0.1-0.1 (#540) ([94450e598f5e](https://github.com/nulavio/nulavio/commit/94450e598f5e06f9d264d8c52a6426822ba28137))
+- fingerprinting: the engine alone gives pages the constant screen size (#549) ([32fc58b37634](https://github.com/nulavio/nulavio/commit/32fc58b376345d8320b08694009582013c076791))
+
+[Full changelog](https://github.com/nulavio/nulavio/compare/v160.0.1-0.1...be6d3ea3671bfd19eb65597b591529da6c3cb9ac)
+
+### Install and verify
+
+Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/
+
+On Ubuntu, `nulavio.sources` from the download page has the SHA-256 `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`.
+
+Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.1.0.apk`. Its signing certificate's SHA-256 is `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (`apksigner verify --print-certs nulavio-companion-0.1.0.apk` prints it).
+
+Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`): check that first, as the download page shows. Each also has a GitHub build-provenance attestation from the release workflow on `main`; check it with both of these options:
+
+```sh
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
+```
+
+[Build and test run](https://github.com/nulavio/nulavio/actions/runs/44442004774).
+
+[Security changelog](https://github.com/nulavio/nulavio/blob/main/docs/security/changelog.md) and [published advisories](https://github.com/nulavio/nulavio/security/advisories). Commit categories are not a vulnerability assessment.
+
+
 <!-- release:v160.0.1-0.1 -->
 ## [160.0.1-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.1) — 2026-11-18
 
