@@ -1851,8 +1851,32 @@ class LocalRequestsTest(Home):
         self.assertFalse(path.exists())
         bridge._sync_network()
         self.assertTrue(read()["all"])
+        # One that can be neither written nor removed still says "all": the engines that read it are closed, and the
+        # next engine is given a new file that says what is allowed now.
+        workspace = mock.Mock(bidi=mock.Mock())
+        bridge.workspace = workspace
+        registry.grant(agent["id"], "local_resources", "block")
+        real_unlink = Path.unlink
+
+        def unlink(self, *args, **kwargs):
+            if self == path:
+                raise OSError("read-only")
+            return real_unlink(self, *args, **kwargs)
+
+        with (
+            mock.patch.object(tools.paths, "write_private_file", side_effect=OSError("disk full")),
+            mock.patch.object(Path, "unlink", unlink),
+        ):
+            bridge._sync_network()
+        workspace.stop.assert_called_once()
+        self.assertIsNone(bridge.workspace)
+        self.assertTrue(read()["all"])  # still there, and no engine reads it
+        fresh = bridge._local_path()
+        self.assertNotEqual(fresh, path)
+        self.assertEqual(json.loads(fresh.read_text()), {"v": 1, "all": False, "places": []})
         bridge.close()
-        self.assertFalse(path.exists())
+        self.assertFalse(fresh.exists())
+        path.unlink()
 
 
 class WorkspaceTest(Home):

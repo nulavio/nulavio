@@ -605,10 +605,11 @@ class Bridge:
         if self.workspace is None:
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
-            self.workspace = (self.workspace_factory(agent) if self.workspace_factory else
-                              Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
-                                        headless=self.headless, uploads=uploads))  # fmt: skip
-            self.workspace.local_file = self._local_path()
+            workspace = (self.workspace_factory(agent) if self.workspace_factory else
+                         Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
+                                   headless=self.headless, uploads=uploads))  # fmt: skip
+            workspace.local_file = self._local_path()
+            self.workspace = workspace
         return self.workspace
 
     def _engines(self) -> list[tuple[str, Workspace]]:
@@ -793,7 +794,8 @@ class Bridge:
     def _write_local(self) -> None:
         """What the Shell lets through now: every local place (local_resources allowed without asking) or the places
         the current call was allowed by asking. A file that cannot be written is removed: the Shell then shows no
-        page from a local address at all."""
+        page from a local address at all. One that cannot be removed either may say more than is allowed now: the
+        engines that read it are closed, and the next one gets a file of its own."""
         if self._local_file is None:
             return
         text = json.dumps({"v": 1, "all": self._local_all, "places": sorted([h, p] for h, p in self._local_ok)})
@@ -804,8 +806,11 @@ class Bridge:
             self._local_written = text
         except OSError:
             self._local_written = None
-            with contextlib.suppress(OSError):
+            try:
                 self._local_file.unlink(missing_ok=True)
+            except OSError:
+                self._local_file = None  # never named to an engine again
+                self.close()
 
     def _on_request(self, engine: Bidi, params: dict) -> None:
         """A request the intercept holds, from the connection's handler thread. An address, a local name and a

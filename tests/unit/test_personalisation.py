@@ -492,6 +492,11 @@ class PrefWriterInventoryTest(unittest.TestCase):
         self.assertIn('const defaults = Services.prefs.getDefaultBranch("");', body)
         self.assertIn("for (const [name, value] of LOCAL_NETWORK_PREFS) {", body)
         self.assertIn("if (Services.prefs.prefIsLocked(name)) {", body)
+        # a lock to another value (an enterprise policy) stops the start: READY_FILE is written only after the loop
+        locked = body[body.index("if (Services.prefs.prefIsLocked(name)) {") : body.index("if (Services.prefs.prefHasUserValue")]
+        self.assertIn("if (current !== value) {", locked)
+        self.assertIn("throw new Error(", locked)
+        self.assertLess(body.index("for (const [name, value] of LOCAL_NETWORK_PREFS)"), body.index("READY_FILE"))
         # a value of the person's equal to the forced one is left alone: a default equal to it would drop it from prefs.js
         self.assertIn("if (Services.prefs.prefHasUserValue(name) && current === value) {", body)
         self.assertLess(body.index("current === value"), body.index("defaults.setBoolPref"))

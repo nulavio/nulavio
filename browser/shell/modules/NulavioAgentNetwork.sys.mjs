@@ -111,10 +111,15 @@ class AgentNetwork {
     this.#file = Services.env.get(LOCAL_ENV) || "";
     const defaults = Services.prefs.getDefaultBranch("");
     for (const [name, value] of LOCAL_NETWORK_PREFS) {
-      if (Services.prefs.prefIsLocked(name)) {
-        continue; // an enterprise policy decided it: not this module's to change
-      }
       const current = typeof value === "boolean" ? Services.prefs.getBoolPref(name) : Services.prefs.getIntPref(name);
+      if (Services.prefs.prefIsLocked(name)) {
+        // An enterprise policy decided it: not this module's to change. One that weakens it means this engine is not
+        // used for an agent at all: READY_FILE is never written, and the Bridge does not start.
+        if (current !== value) {
+          throw new Error(`${name} is locked to another value`);
+        }
+        continue;
+      }
       if (Services.prefs.prefHasUserValue(name) && current === value) {
         // The person's own value is already this one. A default equal to it would keep it out of prefs.js when the
         // profile is saved (the engine writes only values that differ from the default): it stays as it is.
