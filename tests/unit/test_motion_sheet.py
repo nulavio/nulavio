@@ -178,8 +178,15 @@ class SidebarMotionTest(unittest.TestCase):
             with self.subTest(patch=name):
                 self.assertNotRegex(name, r"motion|animation")
                 text = (patches / name).read_text(encoding="utf-8")
-                added = "\n".join(line for line in text.splitlines() if line.startswith("+") and not line.startswith("+++"))
-                self.assertNotRegex(added, r"sidebar\.animation|--motion-|startViewTransition|_getRects|\.animate\(")
+                # What a patch adds and what it takes away: removing the engine's motion is changing it too.
+                changed = "\n".join(
+                    line for line in text.splitlines() if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+                )
+                motion = (
+                    r"sidebar\.animation|--motion-|startViewTransition|_getRects|\.animate\(|easing|KeyframeEffect"
+                    r"|_animation[A-Z]"
+                )
+                self.assertNotRegex(changed, motion)
 
 
 if __name__ == "__main__":
