@@ -177,6 +177,12 @@ const tick = () => {
 requestAnimationFrame(tick);
 """
 VIEW_TRANSITIONS_END = "window.nvVT.on = false; return { seen: window.nvVT.seen, active: window.nvVT.active };"
+# The change of side over: a view transition ran (VIEW_TRANSITIONS saw it), none of its pseudo-elements is left, and
+# nothing else in the window moves.
+VIEW_TRANSITIONS_DONE = """
+return Boolean(window.nvVT?.active) && !document.getAnimations().some(
+  a => a.playState === "running" || (a.effect?.pseudoElement ?? "").startsWith("::view-transition"));
+"""
 
 # #346: the side panel on the other side of the page (#527): the setting, the assistant's panel, and the panel as drawn
 # ([left, right] of the box, whether it is in view), with the page's box and the frame margin.
@@ -1363,6 +1369,20 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(away, f"{self.m.chrome(PANEL)}, {self.window()}, keyboard in the panel: {self.m.chrome(inside)}")
         return tuple(self.m.chrome("return [innerWidth, innerHeight];"))
 
+    def held_through(self, why: str) -> None:
+        """The pointer away, then every frame for 2 s (past the 0.6 s hold and the exit a pointer gets): the panel is in
+        view in each of them, not only at the end."""
+        self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
+        self.m.chrome(TRACE)
+        self.m.chrome(AWAY)
+        time.sleep(2)  # the window traced throughout, every frame checked below
+        frames = self.trace_end()
+        self.assertGreater(len(frames), 30, why)
+        gone = [n for n, f in enumerate(frames) if not visible(f["panel"])]
+        self.assertEqual(
+            gone, [], f"{why}: the panel left in frames {gone[:5]} of {len(frames)}: {frames[gone[0]] if gone else ''}"
+        )
+
     def panel_away(self) -> bool:
         return not self.m.chrome(PANEL)["shown"] and "panel" not in (self.window()["hold"] or "")
 
@@ -1468,9 +1488,7 @@ class ImmersiveTest(unittest.TestCase):
         self.panel_opposite(True)
 
         def stays(why: str) -> None:
-            self.m.chrome(AWAY)
-            time.sleep(2)  # past the hold and the exit a pointer gets
-            self.assertTrue(self.m.chrome(PANEL)["shown"], f"{why}: the panel left: {self.m.chrome(PANEL)}")
+            self.held_through(why)
 
         def leaves(why: str) -> None:
             self.m.chrome(AWAY)
@@ -1532,9 +1550,7 @@ class ImmersiveTest(unittest.TestCase):
             "Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');"
         )
         self.assertTrue(harness.wait_until(lambda: "panel" in (self.window()["hold"] or ""), 5), self.window())
-        self.m.chrome(AWAY)
-        time.sleep(2)
-        self.assertTrue(self.m.chrome(PANEL)["shown"], "the panel left with a request waiting in it")
+        self.held_through("a request waiting in it")
         self.m.chrome(f"delete {ai}.assistantRuns; Services.obs.notifyObservers(window, 'nulavio-ai-activity-changed');")
         self.assertTrue(harness.wait_until(self.panel_away, 6), self.m.chrome(PANEL))
         # With the panel beside the tabs (the setting off) it stays in the flow (#344): a waiting request holds nothing,
@@ -1563,7 +1579,8 @@ class ImmersiveTest(unittest.TestCase):
                 self.m.chrome(VIEW_TRANSITIONS)
                 self.m.chrome("Services.prefs.setBoolPref('sidebar.position_start', arguments[0]);", [start])
                 self.assertTrue(harness.wait_until(lambda start=start: self.m.chrome(side) is not start, 10))
-                time.sleep(1)  # longer than any slide
+                # Traced until the engine's view transition and every slide are over, not for a fixed time.
+                done = harness.wait_until(lambda: self.m.chrome(VIEW_TRANSITIONS_DONE), 10)
                 frames = self.trace_end()
                 snapshots = self.m.chrome(VIEW_TRANSITIONS_END)
                 self.assertGreater(len(frames), 10)
@@ -1573,6 +1590,7 @@ class ImmersiveTest(unittest.TestCase):
                 # The engine's view transition draws snapshots of the parts that have a view-transition name, moved
                 # from their old place to their new one: a part that is away has none, so nothing of it crosses there.
                 self.assertTrue(snapshots["active"], f"{to}: the engine ran no view transition, so this saw nothing")
+                self.assertTrue(done, f"{to}: the view transition or a slide did not end ({snapshots})")
                 self.assertEqual(snapshots["seen"], [], f"{to}: a snapshot crossing ({snapshots})")
 
         self.rest_pointer()
@@ -1581,6 +1599,30 @@ class ImmersiveTest(unittest.TestCase):
         flip("the tab list")
         self.panel_opposite(True)
         flip("the tab list and the panel opposite it")
+
+    def test_30_from_the_edge_to_the_panel_it_stays_with_reduced_motion(self):
+        """#346 (CodeRabbit on #564): the panel shown sits at the frame margin, so the strip that brings it covers that
+        margin, all of it: the pointer going from the window's edge into the panel never crosses a gap where neither
+        holds it. With reduced motion nothing waits, so such a gap would take the panel away at once."""
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('ui.prefersReducedMotion');")
+        self.m.chrome("Services.prefs.setIntPref('ui.prefersReducedMotion', 1);")
+        self.assertTrue(
+            harness.wait_until(lambda: self.m.chrome("return matchMedia('(prefers-reduced-motion: reduce)').matches;"), 5)
+        )
+        w, h = self.panel_opposite(True)
+        frame = self.m.chrome(PANEL)["frame"]
+        strip = self.m.chrome(
+            "const b = document.getElementById('nulavio-immersive-panel-edge').getBoundingClientRect();"
+            "return [Math.round(b.left), Math.round(b.right)];"
+        )
+        self.assertEqual(strip, [w - max(frame, 4), w], "the strip does not cover the frame margin")
+        # From the page to the very edge, then in one pixel at a time across the margin and into the panel.
+        inward = [(x, h // 2) for x in range(w - 2, w - frame - 31, -1)]
+        frames = self.walk([(w // 3, h // 2), (w - 1, h // 2, 300), *inward, (w - frame - 30, h // 2, 600)], 0)
+        first = next((n for n, f in enumerate(frames) if visible(f["panel"])), None)
+        self.assertIsNotNone(first, "the edge did not bring the panel")
+        gone = [n for n, f in enumerate(frames[first:], first) if not visible(f["panel"])]
+        self.assertEqual(gone, [], f"the panel left on the way in, frames {gone[:5]}: {frames[gone[0]] if gone else ''}")
 
     def test_29_a_panel_held_in_view_does_not_keep_the_keyboard_in_the_address_bar(self):
         """#346 with #239: the side panel's own holds are about the panel. With a request waiting in the panel opposite
