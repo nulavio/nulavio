@@ -153,16 +153,18 @@ class DownloadsIndicatorTest(unittest.TestCase):
         self.m.set_context("content")
 
     def test_01_completed_program_render_and_native_names(self):
-        self.assertTrue(harness.wait_until(lambda: self.state()["name"], 5), self.state())
-        before = self.state()
+        # The state that has an accessible name is the one kept: read again a moment later, the engine may be
+        # rebuilding the button's accessible (a theme change does) and answer no name for that instant.
+        before = harness.wait_until(lambda: (state := self.state())["name"] and state, 5)
+        self.assertTrue(before, self.state())
         self.assertTrue(self.add()["succeeded"])
         measurements = []
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
             time.sleep(2.5)  # native completion notification ends; no changed deadline/assertion
-            self.assertTrue(harness.wait_until(lambda: self.state()["name"], 5), self.state())
+            state = harness.wait_until(lambda: (now := self.state())["name"] and now, 5)
+            self.assertTrue(state, self.state())
             self.capture(("dark" if dark else "light") + "-completed")
-            state = self.state()
             measurements.append({"dark": dark, **state})
         (self.out / "completed.json").write_text(json.dumps(measurements, indent=2) + "\n")
         for state in measurements:
