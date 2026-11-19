@@ -18,7 +18,6 @@ import tempfile
 import threading
 import time
 import unittest
-import urllib.parse
 from pathlib import Path
 from unittest import mock
 
@@ -1159,16 +1158,40 @@ class AiBridgeTest(unittest.TestCase):
                 pass
 
         local = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/x"
-        pac = "function FindProxyForURL(url, host) { return 'DIRECT; PROXY 127.0.0.1:1'; }"
+
+        pac = b"function FindProxyForURL(url, host) { return 'DIRECT; PROXY 127.0.0.1:1'; }"
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/proxy.pac":  # the engine reads its PAC file from here
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/x-ns-proxy-autoconfig")
+                    self.send_header("Content-Length", str(len(pac)))
+                    self.end_headers()
+                    self.wfile.write(pac)
+                    return
+                self.send_response(302)
+                self.send_header("Location", f"{local}-redirect")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
         engine_side = {
+            # 127.0.0.2's port is public to the engine (its address-space override, as in test_26)
+            "network.lna.address_space.public.override": f"127.0.0.2:{port}",
             "network.proxy.type": 2,
-            "network.proxy.autoconfig_url": "data:application/x-ns-proxy-autoconfig," + urllib.parse.quote(pac),
+            "network.proxy.autoconfig_url": f"http://127.0.0.2:{port}/proxy.pac",
         }
         patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
         patched.start()
         self.addCleanup(patched.stop)
         local_address = policy._local_address
-        stand_in = mock.patch.object(policy, "_local_address", lambda text: text != "127.0.0.3" and local_address(text))
+        stand_in = mock.patch.object(
+            policy, "_local_address", lambda text: text not in ("127.0.0.2", "127.0.0.3") and local_address(text)
+        )
         stand_in.start()
         self.addCleanup(stand_in.stop)
         agent, _ = self.agent("autonomous", local=False)
@@ -1181,6 +1204,12 @@ class AiBridgeTest(unittest.TestCase):
         self.assertNotIn("only on this computer", json.dumps(went))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
         self.assertEqual(hits, ["/x-direct"])  # the engine connected directly, and the page was not shown
+        # A public page that redirects there, both hops direct: the second hop keeps the first one's address space in
+        # the engine, so the Shell reads the address it connected to.
+        moved = bridge.call("navigate", {"tab": tab, "url": f"http://127.0.0.2:{port}/moved"})
+        self.assertNotIn("only on this computer", json.dumps(moved))
+        self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+        self.assertEqual(hits, ["/x-direct", "/x-redirect"])
         # The same direct connection opens the page once the agent may reach local resources: nothing else stops it.
         registry.grant(agent["id"], "local_resources", "allow")
         allowed = bridge.call("navigate", {"tab": tab, "url": f"{local}-allowed"})

@@ -93,26 +93,44 @@ export function placeAllowed(allowed, place) {
   return allowed.all || allowed.places.has(`${host} ${port}`) || (port === 443 && allowed.places.has(`${host} 80`));
 }
 
-/** Whether a channel connected by itself: no proxy information, or proxy information that says "direct". */
-function directLoad(channel) {
-  let info = null;
+/** The type of a channel's proxy information ("direct", "http", …), or "" when it has none. */
+function proxyType(channel) {
   try {
-    info = channel.QueryInterface(Ci.nsIProxiedChannel).proxyInfo;
+    return channel.QueryInterface(Ci.nsIProxiedChannel).proxyInfo?.type ?? "";
   } catch (e) {
-    return true;
+    return "";
   }
-  return !info || info.type === "direct";
 }
 
-/** Whether an address is this computer or the local network, as the engine reads one without its overrides
-    (NetAddr::GetIpAddressSpace: loopback and "any" are local; RFC 1918, 0/8, link-local, unique-local and 100.64/10
-    are private). Throws for text that is not an address. */
-export function localAddress(text) {
+/** The engine's address-space override for an address and port (network.lna.address_space.*.override, which tests
+    use to make a loopback server count as public): true (private or local), false (public), or null (none). */
+function overridden(address, port) {
+  if (!Services.prefs.getBoolPref("network.lna.enabled", true)) {
+    return null;
+  }
+  const key = address.includes(":") ? `[${address}]:${port}` : `${address}:${port}`;
+  for (const [space, local] of [["public", false], ["private", true], ["local", true]]) {
+    const listed = Services.prefs.getStringPref(`network.lna.address_space.${space}.override`, "");
+    if (listed.split(",").some(entry => entry.replace(/\s/g, "") === key)) {
+      return local;
+    }
+  }
+  return null;
+}
+
+/** Whether an address is this computer or the local network, as the engine reads one (NetAddr::GetIpAddressSpace:
+    its address-space overrides first; then loopback and "any" are local; RFC 1918, 0/8, link-local, unique-local and
+    100.64/10 are private). Throws for text that is not an address. */
+export function localAddress(text, port = -1) {
   const literal = String(text);
   const uri = Services.io.newURI(`http://${literal.includes(":") ? `[${literal}]` : literal}/`);
   const host = uri.asciiHost.toLowerCase().replace(/^\[(.*)\]$/, "$1");
   if (!/^[0-9a-f.:]+$/.test(host)) {
     throw new Error("not an address");
+  }
+  const forced = overridden(literal, port);
+  if (forced !== null) {
+    return forced;
   }
   // Loopback, also written as an IPv4-mapped IPv6 address (dotted, or as the URL parser writes it, in hex).
   if (/^(::ffff:)?127\./.test(literal.toLowerCase()) || /^::ffff:7f[0-9a-f]{2}:/.test(host) || host === "::1") {
@@ -191,16 +209,15 @@ class AgentNetwork {
     // The engine's reading of the address it got the page from (its address-space overrides included), set once it
     // has connected. A proxied load has none: the proxy connected.
     const space = loadInfo.ipAddressSpace;
-    if (space === Ci.nsILoadInfo.Unknown) {
+    const proxy = proxyType(channel);
+    if (proxy === "direct" || (space === Ci.nsILoadInfo.Unknown && !proxy)) {
       // The engine records no address when the channel has proxy information, also when that says "direct" (a PAC
-      // answer like "DIRECT; PROXY …", or a failover to a direct connection). Then the address it connected to is
-      // read here; one that cannot be read, on a connection that is not through a proxy, is not shown.
-      if (!directLoad(channel)) {
-        return; // through a proxy: the proxy connected (R29)
-      }
+      // answer like "DIRECT; PROXY …", or a failover to a direct connection), and a redirect hop then keeps the one
+      // of the hop before it. So the address it connected to is read here; one that cannot be read is not shown.
       let local;
       try {
-        local = localAddress(channel.QueryInterface(Ci.nsIHttpChannelInternal).remoteAddress);
+        const internal = channel.QueryInterface(Ci.nsIHttpChannelInternal);
+        local = localAddress(internal.remoteAddress, internal.remotePort);
       } catch (e) {
         channel.cancel(Cr.NS_ERROR_BLOCKED_BY_POLICY);
         return;
