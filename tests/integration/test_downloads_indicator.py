@@ -21,6 +21,7 @@ from test_horizon import rgb
 from test_horizon_groups import KEY
 from test_profiles import chrome_async
 
+DARK = "return matchMedia('(prefers-color-scheme: dark)').matches;"
 STATE = """
 const b=document.getElementById('downloads-button'), badge=b.querySelector('.toolbarbutton-badge');
 const s=getComputedStyle(badge), r=b.getBoundingClientRect();
@@ -162,7 +163,10 @@ class DownloadsIndicatorTest(unittest.TestCase):
         for dark in (0, 1):
             self.m.chrome("Services.prefs.setIntPref('ui.systemUsesDarkTheme',arguments[0]);", [dark])
             time.sleep(2.5)  # native completion notification ends; no changed deadline/assertion
-            state = harness.wait_until(lambda: (now := self.state())["name"] and now, 5)
+            # The window in this theme (not the previous one's last frame), with the button's accessible name.
+            state = harness.wait_until(
+                lambda want=bool(dark): self.m.chrome(DARK) is want and (now := self.state())["name"] and now, 5
+            )
             self.assertTrue(state, self.state())
             self.capture(("dark" if dark else "light") + "-completed")
             measurements.append({"dark": dark, **state})
