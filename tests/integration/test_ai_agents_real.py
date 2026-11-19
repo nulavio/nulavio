@@ -25,6 +25,7 @@ import harness
 
 from nulavio_launcher.ai import audit, registry
 from nulavio_launcher.ai.cli import client_config
+from nulavio_launcher.engine import HARNESS_FIREFOX_ENV
 
 ROOT = Path(__file__).resolve().parents[2]
 ENABLED = os.environ.get("NULAVIO_AGENT_TESTS") == "1"
@@ -66,6 +67,7 @@ class RealAgentsTest(unittest.TestCase):
         agent, token = self.register("claude-code")
         config = json.loads(client_config("claude-code", token, headless=True))
         config["mcpServers"]["nulavio"]["env"]["NULAVIO_AI_APPROVER"] = "none"
+        config["mcpServers"]["nulavio"]["env"].update({k: os.environ[k] for k in (HARNESS_FIREFOX_ENV,) if k in os.environ})
         path = self.home / "mcp.json"
         path.write_text(json.dumps(config))
         result = subprocess.run(
@@ -81,8 +83,9 @@ class RealAgentsTest(unittest.TestCase):
     def test_codex_cli(self):
         agent, token = self.register("codex")
         env = {"NULAVIO_AGENT_TOKEN": token, "NULAVIO_HOME": str(self.home), "NULAVIO_AI_APPROVER": "none"}
-        if os.environ.get("NULAVIO_ENGINE"):
-            env["NULAVIO_ENGINE"] = os.environ["NULAVIO_ENGINE"]
+        for key in ("NULAVIO_ENGINE", HARNESS_FIREFOX_ENV):
+            if os.environ.get(key):
+                env[key] = os.environ[key]
         overrides = [
             f"mcp_servers.nulavio.command={json.dumps(str(ROOT / 'bin' / 'nulavio'))}",
             'mcp_servers.nulavio.args=["ai","serve","--headless"]',

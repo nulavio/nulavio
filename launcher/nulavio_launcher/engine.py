@@ -83,10 +83,44 @@ def _is_script(path: Path) -> bool:
         return False
 
 
+TOOLS_DIR = "nulavio-tools"
+
+
+def installed_tools() -> bool:
+    """Whether these are the tools a Nulavio install carries (<install>/nulavio-tools), not a source checkout."""
+    from . import paths
+
+    return paths.repo_root().name == TOOLS_DIR
+
+
+def bundled_engine() -> Path | None:
+    """The engine of the install these tools belong to; None in a source checkout.
+
+    A Nulavio install carries its tools at <install>/nulavio-tools, beside the engine <install>/nulavio and its
+    application.ini (the RPM, the .deb, the Flatpak and the tarball alike). The installed tools use the engine of
+    their own install, found from this file's own path, never from PATH or the environment. An install without
+    that engine is an error, not a reason to use another browser."""
+    from . import paths
+
+    if not installed_tools():
+        return None
+    install = paths.repo_root().parent
+    candidate = install / "nulavio"
+    if candidate.is_file() and (install / "application.ini").is_file():
+        return candidate
+    raise EngineError(
+        f"the Nulavio install in {install} is incomplete (no engine or application.ini beside {TOOLS_DIR}): "
+        "reinstall the Nulavio package"
+    )
+
+
 def _candidates() -> list[Path]:
     explicit = os.environ.get("NULAVIO_ENGINE")
     if explicit:
         return [Path(explicit)]
+    bundled = bundled_engine()
+    if bundled is not None:
+        return [bundled]  # the installed tools use their own engine, never another browser found on the system
     found = [p for p in KNOWN_BINARIES if p.exists()]
     on_path = shutil.which("firefox")
     if on_path:
@@ -147,7 +181,8 @@ def check_supported(engine: Engine) -> None:
 
 
 # Set by the test harness (tests/lib/harness.py) only: pull-request CI runs the integration suite on the
-# distribution's Firefox, with no Nulavio build. It is not a way to use Nulavio, and nothing documents it as one.
+# distribution's Firefox, with no Nulavio build. It is not a way to use Nulavio: the docs name it only as the
+# harness's (docs/ai/compatibility.md), and the tools of an install do not read it (require_nulavio).
 HARNESS_FIREFOX_ENV = "NULAVIO_TEST_DISTRIBUTION_FIREFOX"
 PREVIEW_GONE = (
     "{label} is not the Nulavio build. The preview that ran Nulavio's profile on the distribution's Firefox is no "
@@ -157,14 +192,23 @@ PREVIEW_GONE = (
 )
 
 
-def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None) -> None:
-    """Refuse an engine that is not the Nulavio build, unless the test harness asked for the distribution's Firefox."""
+# The AI Bridge's refusal: what keeps an agent's session visible and contained lives in the Nulavio build (the window's
+# band and lock, the guard that holds forms a page sends by itself, Nulavio's pages refusing permission requests).
+BRIDGE_NEEDS_NULAVIO = (
+    "{label} is not the Nulavio build, and the AI Bridge drives only Nulavio's own engine. Install the Nulavio "
+    "package (https://nulavio.net/en/download/), or set NULAVIO_ENGINE to a Nulavio build."
+)
+
+
+def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None, *, refusal: str = PREVIEW_GONE) -> None:
+    """Refuse an engine that is not the Nulavio build, unless the test harness asked for the distribution's Firefox
+    (in a source checkout only: the tools of an install drive only the Nulavio build)."""
     environ = os.environ if environ is None else environ
-    if engine.vendor == "Nulavio" or environ.get(HARNESS_FIREFOX_ENV) == "1":
+    if engine.vendor == "Nulavio" or (environ.get(HARNESS_FIREFOX_ENV) == "1" and not installed_tools()):
         return
     from . import paths
 
-    raise EngineError(PREVIEW_GONE.format(label=engine.label, profiles=paths.profiles_root()))
+    raise EngineError(refusal.format(label=engine.label, profiles=paths.profiles_root()))
 
 
 def validate_url(url: str) -> str:
