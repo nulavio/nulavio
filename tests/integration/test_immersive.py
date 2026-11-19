@@ -1372,6 +1372,9 @@ class ImmersiveTest(unittest.TestCase):
     def held_through(self, why: str) -> None:
         """The pointer away, then every frame for 2 s (past the 0.6 s hold and the exit a pointer gets): the panel is in
         view in each of them, not only at the end."""
+        # In view first, past its slide in (the hold has just begun), then the window traced from there.
+        shown = harness.wait_until(lambda: self.m.chrome(PANEL)["shown"] and self.m.chrome(STILL), 5)
+        self.assertTrue(shown, f"{why}: the panel did not come: {self.m.chrome(PANEL)}, {self.window()}")
         self.addCleanup(self.m.chrome, "if (window.nvTrace) window.nvTrace.on = false;")
         self.m.chrome(TRACE)
         self.m.chrome(AWAY)
