@@ -290,37 +290,57 @@ class PanelOppositeTest(unittest.TestCase):
 
     def test_04_foco_the_launcher_expanded_over_the_page_moves_neither_the_page_nor_the_panel(self):
         """In Foco the launcher opens over the page on hover. The engine keeps the collapsed launcher's room beside it,
-        where it takes the panel to be; with the panel opposite, the page is there and must not move under it."""
+        where it takes the panel to be; with the panel opposite, the page is there and must not move under it. Also in a
+        window too short for Horizon's frame (1366 x 600) and with Horizon off, where the page's edge facing the panel is
+        drawn as the engine draws an edge facing chrome."""
         self.needs_the_patch()
         self.addCleanup(self.restore)
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('nulavio.horizon.enabled');")
         self.addCleanup(self.apply, "lateral")
+        self.addCleanup(
+            self.m.chrome, "window.resizeTo(arguments[0], arguments[1]);", self.m.chrome("return [outerWidth, outerHeight];")
+        )
         self.apply("focus")
-        for start in (True, False):
-            with self.subTest(start=start):
-                self.m.chrome(f"Services.prefs.clearUserPref('{PREF}');")
-                self.side(f"focus, {start}", start, False)
-                self.show()
-                rest = self.opposite(True)
-                self.assertFalse(rest["expanded"], rest)
-                x = (rest["launcher"][0] + rest["launcher"][1]) // 2
-                self.m.set_context("chrome")
-                try:
-                    move = {"type": "pointerMove", "origin": "viewport", "x": x, "y": rest["height"] // 2, "duration": 100}
-                    pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": [move]}
-                    self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
-                finally:
-                    self.m.set_context("content")
-                expanded = self.settle(lambda g: g["expanded"], "the launcher expanded")
-                self.assertGreater(width(expanded["launcher"]), width(rest["launcher"]), expanded)
-                self.assertEqual((expanded["page"], expanded["panel"]), (rest["page"], rest["panel"]), f"{rest} / {expanded}")
-                self.m.set_context("chrome")
-                try:
-                    self.m.send("WebDriver:ReleaseActions")
-                finally:
-                    self.m.set_context("content")
-                self.m.chrome(AWAY)
-                self.settle(lambda g: not g["expanded"], "the launcher back")
-                self.opposite(False)
+        edge = (
+            "const c = getComputedStyle(gBrowser.selectedBrowser.closest('.browserContainer'));"
+            "return [Math.round(parseFloat(c.borderLeftWidth)), Math.round(parseFloat(c.borderRightWidth))];"
+        )
+        for case in ("as it is", "a short window", "Horizon off"):
+            self.m.chrome("window.resizeTo(arguments[0], arguments[1]);", [1366, 600 if case == "a short window" else 768])
+            if case == "Horizon off":
+                self.m.chrome("Services.prefs.setBoolPref('nulavio.horizon.enabled', false);")
+            for start in (True, False):
+                with self.subTest(case=case, start=start):
+                    self.m.chrome(f"Services.prefs.clearUserPref('{PREF}');")
+                    self.side(f"focus, {start}", start, False)
+                    self.show()
+                    rest = self.opposite(True)
+                    self.assertFalse(rest["expanded"], rest)
+                    if case != "as it is":
+                        # No card here: the page's edge facing the panel is a separator, as the one facing the launcher.
+                        left, right = self.m.chrome(edge)
+                        self.assertGreater(right if start else left, 0, f"no edge facing the panel: {rest}")
+                    x = (rest["launcher"][0] + rest["launcher"][1]) // 2
+                    self.m.set_context("chrome")
+                    try:
+                        move = {"type": "pointerMove", "origin": "viewport", "x": x, "y": rest["height"] // 2, "duration": 100}
+                        pointer = {"type": "pointer", "id": "mouse", "parameters": {"pointerType": "mouse"}, "actions": [move]}
+                        self.m.send("WebDriver:PerformActions", {"actions": [pointer]})
+                    finally:
+                        self.m.set_context("content")
+                    expanded = self.settle(lambda g: g["expanded"], "the launcher expanded")
+                    self.assertGreater(width(expanded["launcher"]), width(rest["launcher"]), expanded)
+                    self.assertEqual(
+                        (expanded["page"], expanded["panel"]), (rest["page"], rest["panel"]), f"{case}: {rest} / {expanded}"
+                    )
+                    self.m.set_context("chrome")
+                    try:
+                        self.m.send("WebDriver:ReleaseActions")
+                    finally:
+                        self.m.set_context("content")
+                    self.m.chrome(AWAY)
+                    self.settle(lambda g: not g["expanded"], "the launcher back")
+                    self.opposite(False)
 
     def test_05_the_splitter_resizes_the_panel_from_the_page_side(self):
         """A drag of the splitter with the pointer, through the engine's own event path (the #249 probe's synthetic drag
