@@ -44,6 +44,7 @@ WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"
 # the engine reads as this computer or the local network is not shown unless local_resources allows that place now
 # (#243, R29; browser/shell/modules/NulavioAgentNetwork.sys.mjs). Which places those are is in a file the Bridge keeps
 # (tools.Bridge._write_local); its path is in the engine's environment, where nothing in the browser can change it.
+# An engine with patch 0015 (#561) reads the same file, and refuses such a load before it is sent.
 LOCAL_ENV = "NULAVIO_AI_LOCAL"
 # The Shell writes this file in the profile once that check is on; until then the Bridge does not use the engine.
 GUARD_READY = "nulavio-ai-guard"
@@ -70,7 +71,8 @@ WORKSPACE_PREFS: dict[str, object] = {
     # local one (rebinding, LESIS 929cb094, #243). A public page's request to this computer or the local network
     # is refused here with no prompt (nobody should answer one in an agent's window), and a page's own top-level
     # navigation (a pop-up, a link it follows) is checked too. The agent's own navigation is not (the engine lets
-    # its driver through): the Shell checks those pages (LOCAL_ENV).
+    # its driver through) up to engine patch 0015 (#561), which checks it against LOCAL_ENV's file before it is sent;
+    # the Shell checks those pages too (LOCAL_ENV).
     "network.lna.enabled": True,
     "network.lna.blocking": True,
     "network.lna.allow_top_level_navigation": False,

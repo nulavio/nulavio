@@ -1,0 +1,333 @@
+Subject: [PATCH] lna: an agent's engine refuses a local page its driver opens, before sending it
+
+In an engine the AI Bridge starts for an agent, Local Network Access already
+refuses, with no prompt, a public page's requests to this computer and the
+local network. It let through what the engine's driver opens at the top level
+(the agent's own navigation runs as the system principal, which every
+permission check allows, and a new tab has no address space to compare with),
+and each redirect hop on the way there. The Shell then checked those pages on
+the address the engine connected to, after the request had gone out: a local
+service that a rebinding name pointed to still received it (#561, R29).
+
+With this, in such an engine (its environment carries NULAVIO_AI_WORKSPACE,
+which workspace.py sets and the Shell reads too), a top-level load whose
+triggering principal is the system principal is checked as a public page's
+request is. One to this computer or the local network is refused at the point
+where Local Network Access refuses a subresource, before the request is sent,
+unless the agent may reach that place (host and port) now, as the Bridge's
+file says: the file whose path is in NULAVIO_AI_LOCAL, which the Shell reads
+for its own check (same format and limits, an http place covering its https
+upgrade). A refusal ends as the Shell's does, with NS_ERROR_BLOCKED_BY_POLICY
+and a blocked page in the tab in place of the page that was there. Outside an
+agent's engine, and for any load another principal triggers, nothing changes.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (the AI Bridge, its environment and its file are Nulavio's).
+---
+diff --git a/netwerk/protocol/http/NulavioAgentLocalAccess.cpp b/netwerk/protocol/http/NulavioAgentLocalAccess.cpp
+new file mode 100644
+--- /dev/null
++++ b/netwerk/protocol/http/NulavioAgentLocalAccess.cpp
+@@ -0,0 +1,167 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "NulavioAgentLocalAccess.h"
++
++#include <string>
++
++#include "json/json.h"
++#include "mozilla/BasePrincipal.h"
++#include "nsIContentPolicy.h"
++#include "nsILoadInfo.h"
++#include "nsIPrincipal.h"
++#include "nsIURI.h"
++#include "nsReadableUtils.h"
++#include "nsString.h"
++#include "prenv.h"
++#include "prio.h"
++
++namespace mozilla::net::nulavio {
++
++namespace {
++
++// launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV and LOCAL_ENV.
++constexpr const char kWorkspaceEnv[] = "NULAVIO_AI_WORKSPACE";
++constexpr const char kLocalEnv[] = "NULAVIO_AI_LOCAL";
++// The Shell's limits for the Bridge's file (MAX_FILE_BYTES, MAX_PLACES).
++constexpr uint32_t kMaxFileBytes = 65536;
++constexpr uint32_t kMaxPlaces = 1024;
++
++bool InAgentEngine() {
++  static const bool sAgent = [] {
++    const char* agent = PR_GetEnv(kWorkspaceEnv);
++    return agent && *agent;
++  }();
++  return sAgent;
++}
++
++// The Bridge's file, whole. False when there is none, it cannot be read, or it
++// is longer than the Shell reads. The file is small and local, and it is read
++// only when a load of the driver's has met a local address.
++bool ReadGrant(nsACString& aText) {
++  const char* path = PR_GetEnv(kLocalEnv);
++  if (!path || !*path) {
++    return false;
++  }
++  PRFileDesc* fd = PR_Open(path, PR_RDONLY, 0);
++  if (!fd) {
++    return false;
++  }
++  aText.Truncate();
++  bool ok = true;
++  char buffer[4096];
++  for (;;) {
++    int32_t count = PR_Read(fd, buffer, sizeof(buffer));
++    if (count < 0 || aText.Length() + uint32_t(count) > kMaxFileBytes) {
++      ok = false;
++      break;
++    }
++    if (count == 0) {
++      break;
++    }
++    aText.Append(buffer, uint32_t(count));
++  }
++  PR_Close(fd);
++  return ok;
++}
++
++// The place a page comes from, as the Bridge writes it (and the Shell's
++// placeOf): the host in lower case without brackets or a final dot, and the
++// port, the scheme's when the address has none.
++bool PlaceOf(nsIURI* aURI, std::string& aHost, int32_t& aPort) {
++  if (!aURI) {
++    return false;
++  }
++  const bool https = aURI->SchemeIs("https");
++  if (!https && !aURI->SchemeIs("http")) {
++    return false;
++  }
++  nsAutoCString host;
++  int32_t port = -1;
++  if (NS_FAILED(aURI->GetAsciiHost(host)) || NS_FAILED(aURI->GetPort(&port))) {
++    return false;
++  }
++  ToLowerCase(host);
++  if (host.Length() >= 2 && host.First() == '[' && host.Last() == ']') {
++    host.Cut(host.Length() - 1, 1);
++    host.Cut(0, 1);
++  }
++  if (!host.IsEmpty() && host.Last() == '.') {
++    host.Truncate(host.Length() - 1);
++  }
++  if (host.IsEmpty()) {
++    return false;
++  }
++  aHost.assign(host.BeginReading(), host.Length());
++  aPort = port == -1 ? (https ? 443 : 80) : port;
++  return true;
++}
++
++}  // namespace
++
++bool IsAgentDriverTopLevelLoad(nsILoadInfo* aLoadInfo) {
++  if (!aLoadInfo ||
++      aLoadInfo->GetExternalContentPolicyType() !=
++          ExtContentPolicy::TYPE_DOCUMENT) {
++    return false;
++  }
++  nsIPrincipal* triggering = aLoadInfo->TriggeringPrincipal();
++  return triggering && triggering->IsSystemPrincipal() && InAgentEngine();
++}
++
++bool AgentMayReach(nsIURI* aURI) {
++  std::string host;
++  int32_t port = 0;
++  if (!PlaceOf(aURI, host, port)) {
++    return false;
++  }
++  nsAutoCString text;
++  if (!ReadGrant(text)) {
++    return false;
++  }
++  // {"v": 1, "all": <bool>, "places": [[<host>, <port>], ...]}
++  // (launcher/nulavio_launcher/ai/tools.py, Bridge._write_local; the Shell's
++  // parseAllowed). Every value's type is checked before it is read.
++  Json::Value parsed;
++  Json::Reader reader;
++  if (!reader.parse(text.BeginReading(), text.EndReading(), parsed, false)) {
++    return false;
++  }
++  const Json::Value& root = parsed;
++  if (!root.isObject()) {
++    return false;
++  }
++  const Json::Value& version = root["v"];
++  const Json::Value& all = root["all"];
++  const Json::Value& places = root["places"];
++  if (!version.isInt() || version.asInt() != 1 || !all.isBool() ||
++      !places.isArray() || places.size() > kMaxPlaces) {
++    return false;
++  }
++  bool allowed = all.asBool();
++  for (Json::ArrayIndex i = 0; i < places.size(); ++i) {
++    const Json::Value& place = places[i];
++    if (!place.isArray() || place.size() != 2) {
++      return false;
++    }
++    const Json::Value& placeHost = place[0u];
++    const Json::Value& placePort = place[1u];
++    if (!placeHost.isString() || !placePort.isInt()) {
++      return false;
++    }
++    const std::string name = placeHost.asString();
++    const int number = placePort.asInt();
++    if (name.empty() || name.size() > 255 || number < 1 || number > 65535) {
++      return false;
++    }
++    // An http place allowed by asking covers the engine's upgrade of it to
++    // https (the Shell's placeAllowed).
++    if (name == host && (number == port || (port == 443 && number == 80))) {
++      allowed = true;
++    }
++  }
++  return allowed;
++}
++
++}  // namespace mozilla::net::nulavio
+diff --git a/netwerk/protocol/http/NulavioAgentLocalAccess.h b/netwerk/protocol/http/NulavioAgentLocalAccess.h
+new file mode 100644
+--- /dev/null
++++ b/netwerk/protocol/http/NulavioAgentLocalAccess.h
+@@ -0,0 +1,33 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#ifndef mozilla_net_NulavioAgentLocalAccess_h
++#define mozilla_net_NulavioAgentLocalAccess_h
++
++class nsILoadInfo;
++class nsIURI;
++
++// Nulavio (#561, R29): what the driver of an engine the AI Bridge started opens
++// at the top level (the agent's own navigation, which runs as the system
++// principal, and each redirect hop on its way) goes through Local Network
++// Access like a public page's request: one to this computer or the local
++// network is refused before it is sent, unless the agent may reach that place
++// now, as the Bridge's file says. The Shell reads the same file
++// (browser/shell/modules/NulavioAgentNetwork.sys.mjs).
++namespace mozilla::net::nulavio {
++
++// A top-level load (TYPE_DOCUMENT) whose triggering principal is the system
++// principal, in an engine whose environment names the agent
++// (NULAVIO_AI_WORKSPACE, which launcher/nulavio_launcher/ai/workspace.py sets
++// and nothing in the browser can change).
++bool IsAgentDriverTopLevelLoad(nsILoadInfo* aLoadInfo);
++
++// Whether the Bridge's file (its path in NULAVIO_AI_LOCAL) lets the agent reach
++// aURI's place (host and port) now. A file that is missing, longer than the
++// Shell reads or not as the Bridge writes it allows nothing.
++bool AgentMayReach(nsIURI* aURI);
++
++}  // namespace mozilla::net::nulavio
++
++#endif  // mozilla_net_NulavioAgentLocalAccess_h
+diff --git a/netwerk/protocol/http/moz.build b/netwerk/protocol/http/moz.build
+--- a/netwerk/protocol/http/moz.build
++++ b/netwerk/protocol/http/moz.build
+@@ -89,6 +89,12 @@ SOURCES += [
+     "nsHttpChannelAuthProvider.cpp",  # redefines GetAuthType
+ ]
+ 
++# Nulavio (#561): reads the AI Bridge's JSON file with jsoncpp, which libxul
++# already links (caps/moz.build). Built on its own, out of the unified files.
++SOURCES += [
++    "NulavioAgentLocalAccess.cpp",
++]
++
+ UNIFIED_SOURCES += [
+     "AltDataOutputStreamChild.cpp",
+     "AltDataOutputStreamParent.cpp",
+@@ -232,6 +238,10 @@ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
+ 
++LOCAL_INCLUDES += [
++    "/toolkit/components/jsoncpp/include",
++]
++
+ LOCAL_INCLUDES += [
+     "/dom/base",
+     "/netwerk/base",
+diff --git a/netwerk/protocol/http/nsHttpChannel.cpp b/netwerk/protocol/http/nsHttpChannel.cpp
+--- a/netwerk/protocol/http/nsHttpChannel.cpp
++++ b/netwerk/protocol/http/nsHttpChannel.cpp
+@@ -19,6 +19,7 @@
+ #include "LNAPermissionRequest.h"
+ #include "LoadContextInfo.h"
+ #include "NetworkMarker.h"
++#include "NulavioAgentLocalAccess.h"
+ #include "ThirdPartyUtil.h"
+ #include "mozilla/AntiTrackingRedirectHeuristic.h"
+ #include "mozilla/AntiTrackingUtils.h"
+@@ -2218,9 +2219,21 @@ nsresult nsHttpChannel::InitTransaction() {
+   nsILoadInfo::IPAddressSpace parentAddressSpace =
+       mozilla::net::GetParentIPAddressSpace(mLoadInfo);
+ 
++  // Nulavio (#561): in an engine the AI Bridge started, what its driver opens
++  // at the top level is checked as a public page's request, whatever the tab
++  // shows now (a new tab's context has no address space): one to this
++  // computer or the local network is refused before it is sent, and
++  // ProcessLNAActions decides on the Bridge's file.
++  const bool nulavioAgentDriverLoad =
++      nulavio::IsAgentDriverTopLevelLoad(mLoadInfo);
++  if (nulavioAgentDriverLoad) {
++    parentAddressSpace = nsILoadInfo::IPAddressSpace::Public;
++  }
++
+   // Check if this is a top-level navigation load and grant LNA permissions
+   // to skip local network access verification for navigational loads
+-  if (mLoadInfo && StaticPrefs::network_lna_allow_top_level_navigation()) {
++  if (mLoadInfo && StaticPrefs::network_lna_allow_top_level_navigation() &&
++      !nulavioAgentDriverLoad) {
+     ExtContentPolicyType contentPolicyType =
+         mLoadInfo->GetExternalContentPolicyType();
+     if (contentPolicyType == ExtContentPolicy::TYPE_DOCUMENT) {
+@@ -9319,6 +9332,24 @@ nsresult nsHttpChannel::ProcessLNAActions() {
+     return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;
+   }
+ 
++  // Nulavio (#561): a top-level load of the driver's in an engine the AI
++  // Bridge started goes on only when the agent may reach that place now, as
++  // the Bridge's file says; neither the system principal nor a saved
++  // permission grants it. A refusal is decided here, before anything a prompt
++  // would need, and ends as the Shell's own refusal does: a blocked page in
++  // the tab, in place of the page that was there.
++  const bool nulavioAgentDriverLoad =
++      nulavio::IsAgentDriverTopLevelLoad(mLoadInfo);
++  if (nulavioAgentDriverLoad && !nulavio::AgentMayReach(mURI)) {
++    mLNAPromptAction.AssignLiteral("auto_deny");
++    if (!mSuspendCount) {
++      return ContinueOnStartRequest1(NS_ERROR_BLOCKED_BY_POLICY);
++    }
++    return CallOrWaitForResume([](auto* self) {
++      return self->ContinueOnStartRequest1(NS_ERROR_BLOCKED_BY_POLICY);
++    });
++  }
++
+   // Suspend to block any notification to the channel.
+   // This will get resumed in
+   // nsHttpChannel::OnPermissionPromptResult
+@@ -9330,7 +9361,9 @@ nsresult nsHttpChannel::ProcessLNAActions() {
+                            ? LOOPBACK_NETWORK_PERMISSION_KEY
+                            : LOCAL_NETWORK_PERMISSION_KEY;
+   LNAPermission permissionUpdateResult =
+-      UpdateLocalNetworkAccessPermissions(permissionKey);
++      nulavioAgentDriverLoad
++          ? LNAPermission::Granted
++          : UpdateLocalNetworkAccessPermissions(permissionKey);
+ 
+   if (LNAPermission::Granted == permissionUpdateResult) {
+     // permission granted (auto-allow via permanent permission)
