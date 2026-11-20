@@ -11,8 +11,8 @@ the same noise, in the five places where they leave the graph:
 2. A ScriptProcessorNode's input buffer, as the audioprocess event is made.
 3. An AudioWorklet's inputs, as they are copied into the arrays process()
    reads, on the rendering thread.
-4. The values of a worklet's parameter that a node is connected to, which
-   carry that node's samples.
+4. The values of a worklet's parameter that a node is connected to, in the
+   blocks where that node gave samples: they carry its samples.
 5. A DynamicsCompressorNode's reduction, a number the compressor makes of
    the samples.
 
@@ -183,21 +183,24 @@ bug 1358149.
      }
    }
  
-@@ -568,6 +580,13 @@
+@@ -568,6 +580,16 @@
      size_t frames =
          mParamTimelines[i].mTimeline.HasSimpleValue() ? 1 : WEBAUDIO_BLOCK_SIZE;
      mParamTimelines[i].mTimeline.GetValuesAtTime(tick, dest, frames);
 +    // Nulavio: a node connected to the parameter puts its samples in these
-+    // values, so they get the noise as an input does. A parameter that only
-+    // has its own value and schedule is not changed.
-+    if (frames == WEBAUDIO_BLOCK_SIZE && mParamTimelines[i].mTimeline.Track()) {
++    // values, so they get the noise as an input does. Only in a block where
++    // that node gave samples (as AudioNodeInputValue asks): a parameter's own
++    // value and schedule are not changed.
++    AudioNodeTrack* connected = mParamTimelines[i].mTimeline.Track();
++    if (frames == WEBAUDIO_BLOCK_SIZE && connected &&
++        !connected->LastChunks()[0].IsNull()) {
 +      nsRFPService::RandomizeAudioSamplesWithKey(mNoiseKey, dest,
 +                                                 WEBAUDIO_BLOCK_SIZE);
 +    }
      // https://bugzilla.mozilla.org/show_bug.cgi?id=1616599
      if (frames == 1) {
        std::fill_n(dest + 1, WEBAUDIO_BLOCK_SIZE - 1, dest[0]);
-@@ -804,7 +823,7 @@
+@@ -804,7 +826,7 @@
  
    auto engine = new WorkletNodeEngine(
        audioWorkletNode, aAudioContext.Destination(), std::move(paramTimelines),
