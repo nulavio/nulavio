@@ -31,7 +31,7 @@ Neither makes two people identical. The language, the window's size and the inte
 | Usable screen area | the screen minus panels | the whole screen | the same 1920×1080, at 0,0 | tested (08) |
 | Time zone (`Intl`, `Date`) | the system's | the system's | **UTC on every computer** (the engine names it `Atlantic/Reykjavik`). A site gets the system's from the switch "Usar meu fuso horário neste site" in the shield's panel ([ADR 0017](../adr/0017-pages-read-utc-with-a-switch-per-site.md)) | tested (09) |
 | Touch points | real | 0, 1 or 5 | 0, 1 or 5 | in the set (02) |
-| Rendered audio (what an `OfflineAudioContext` returns) | the same on every site | the same on every site | **differs per site** (engine patch 0012, [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md)) | tested (11) |
+| Rendered audio: what an `OfflineAudioContext` returns, and what a node inside that rendering hands to script (an `AnalyserNode`'s data, a `ScriptProcessorNode`'s input, an `AudioWorklet`'s inputs and connected parameter, a compressor's `reduction`) | the same on every site | the same on every site | **differs per site** (engine patch 0012 for the returned buffer, patch 0016 for the nodes; [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md)) | tested (11, 11b) |
 | Reduced motion, more contrast (`prefers-reduced-motion`, `prefers-contrast`) | the system's | the system's | **"no preference" on every computer**, until the person turns on "Deixar os sites verem minhas preferências de movimento e contraste" ([ADR 0018](../adr/0018-sites-are-not-told-motion-and-contrast-preferences.md)) | tested (10) |
 
 "Differs per site" means: two sites read different values, the same site reads the same value again during the day (so sites that read twice keep working), and the value changes with the next session or day. The engine does it by changing the lowest bit of a few colour values, chosen from a random key per site.
@@ -51,7 +51,7 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 | Date format, language | A wrong language breaks forms and reading. The time zone is no longer left alone: pages read UTC, with a switch per site (ADR 0017) |
 | Window size, zoom | Hiding them means fixed window sizes with margins (letterboxing). The screen's size is no longer left alone (ADR 0016) |
 | Dark mode | It is how a site respects the person's theme. Reduced motion and contrast are no longer left alone: sites are not told them unless the person says so (ADR 0018) |
-| Audio read inside the graph, or from a context that plays (an `AnalyserNode`, a `ScriptProcessorNode`, an `AudioWorklet`) | Engine patch 0012 covers the buffer an offline rendering returns, which is what the probes it was measured against read (ADR 0019). A node inside an offline graph still hands script the samples without the noise, the same on every site; that is a gap for a later patch. Readings from sound that plays are not changed either: noise there would have to stay out of what the person hears |
+| Audio read from a context that plays (through an `AnalyserNode`, a `ScriptProcessorNode`, an `AudioWorklet`) | The noise is on offline renderings only (ADR 0019, decision 2). In a context that plays, a script processor and a worklet make their own sound from what they read, so noise there would go on to what the person hears or sends; and noise on the analyser alone would leave the same reading open through a worklet. The engine starts such a context only after a click or a key in the page, or on a site allowed to play sound by itself |
 | Speech voices, cameras and microphones (count only, no names before permission) | Hiding them breaks reading aloud and device choice in calls |
 | System font name and size | No protection in the engine outside `privacy.resistFingerprinting` |
 | Keyboard layout | Faking a layout breaks shortcuts in web apps on non-US keyboards |
@@ -69,11 +69,11 @@ The whole set in effect is the engine's own for Strict (`CanvasRandomization`, `
 - **Other distributions.** The engine has font lists for Fedora and Ubuntu only. Elsewhere every installed font stays visible.
 - **Cost.** A page that reads canvas pixels back gets a few of them changed by one step. Image editors and games that draw and read many times pay for the extra work on each read.
 - **Extensions.** uBlock Origin, which Nulavio installs, can be noticed by what it blocks, as in any browser that has it.
-- **Distribution Firefox (Track A).** The launcher seeds the same additions, but patches 0009, 0010 and 0012 exist only in the Nulavio build. Distribution Firefox already says "Firefox"; its fonts on Fedora stay visible, its rendered audio is the same on every site and its screen is the display's.
+- **Distribution Firefox (Track A).** The launcher seeds the same additions, but patches 0009, 0010, 0012 and 0016 exist only in the Nulavio build. Distribution Firefox already says "Firefox"; its fonts on Fedora stay visible, its rendered audio is the same on every site and its screen is the display's.
 
 ## Kept true by
 
-- `tests/integration/test_fingerprinting.py`, fifteen tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
+- `tests/integration/test_fingerprinting.py`, eighteen tests on the real engine. The plain values are read in the same session with the protections off, so the comparison holds on any machine. The font test installs a font made for the test in the throwaway home.
 - `tests/unit/test_prefs_and_guard.py`: the additions are the same in both tracks, and nothing that breaks sites or accessibility without a decision (language, colour scheme, keyboard, window rounding) can enter the default.
 - Guard at run time: a change to `privacy.fingerprintingProtection` or its branch made while the browser was closed is reported at the next start.
 - `tests/integration/test_privacy.py` (`test_04`) still compares Strict with Standard.
