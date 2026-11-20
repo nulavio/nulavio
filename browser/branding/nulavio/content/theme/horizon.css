@@ -160,6 +160,17 @@
       &:not([nulavio-immersive]) #browser:not(:has(> #sidebar-container:not([hidden]))) #tabbrowser-tabbox {
         margin-inline: var(--nv-space-3);
       }
+      /* #565: no launcher in the window (the engine's "hide tabs and sidebar") and a side panel open beside the page, on
+         the tabs' side (the default arrangement). The rule above gives the page the frame margin on both sides, and the
+         panel has none at the window's edge: the panel would touch it and the gap to the page would be the splitter plus
+         that margin. The window's margin is the panel's, on its outer side, and the splitter alone is the gap, as with
+         the panel beside the launcher. Not in Imersivo (window-band.css), nor with the panel opposite (below). */
+      &:not([nulavio-immersive], [nulavio-panel-opposite]) #browser:not(:has(> #sidebar-container:not([hidden]))) {
+        #tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) { margin-inline-start: 0; }
+        #tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] { margin-inline-end: 0; }
+        #sidebar-box[sidebar-panel-open]:not([sidebar-positionend]) { margin-inline-start: var(--nv-space-3); }
+        #sidebar-box[sidebar-panel-open][sidebar-positionend] { margin-inline-end: var(--nv-space-3); }
+      }
       /* #527: the side panel on the other side of the page (nulavio.sidebar.panelOpposite; the engine orders it, patch
          0013). While it is open the window's margin is the panel's, on its outer side, and the splitter alone is the gap
          between the page and the panel, as with the panel beside the tabs. */
