@@ -13,9 +13,9 @@ fingerprinting protection does not cover without full resistFingerprinting:
    sound. Every sample gets its own step, so the noise cannot be divided out
    as one factor. Only the buffer an offline rendering returns is covered.
    What a page reads from a context that plays is not changed, and neither
-   is what a node inside the offline graph itself hands to script while it
-   renders (an AnalyserNode, a ScriptProcessorNode, an AudioWorklet): a
-   probe built on those still reads the same on every site. The per-site
+   is, by this patch, what a node inside the offline graph itself hands to
+   script while it renders (an AnalyserNode, a ScriptProcessorNode, an
+   AudioWorklet): patch 0016 gives those the same noise. The per-site
    key is made for this target alone too, without the canvas noise.
 
 2. The screen's size. A new target, ScreenSizeConstant, makes screen.width and
