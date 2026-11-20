@@ -35,7 +35,7 @@ Patch 0012 changes only the buffer an offline rendering returns, and patch 0016 
 - **A script processor's input and a worklet's inputs** are what the page's script makes its own sound from. Noise on them would go on, through the script, to the speakers, a recording or a call. It would be about 80 dB below the sound and not heard, but it would be in what is sent, and a script that needs exact samples (an effect, an echo canceller) would not get them. That is what this decision rules out.
 - **An analyser's data and a compressor's reduction** are only read: nothing a script reads there goes back into the sound, so noise there could not be heard. It is left out all the same, because it would not close the reading: a probe would read the same sound through a worklet, which stays plain.
 
-So in a context that plays these readers give the plain values, the same on every site. Two things limit that reading, and neither is Nulavio's doing. By the engine's autoplay rules a context starts to play only after the person has clicked or typed in the page, or on a site allowed to play sound by itself. And what an analyser reads there depends on the moment the script asks. (Read in the engine's source, `dom/media/autoplay/AutoplayPolicy.cpp`; not run.)
+So in a context that plays these readers give the plain values, the same on every site. Two things limit that reading, and neither is Nulavio's doing. By the engine's autoplay rules a context starts to play only after the person has clicked or typed in the page, or on a site the person allowed to play sound by itself or to use the camera or the microphone. And what an analyser reads there depends on the moment the script asks. (Read in the engine's source, `dom/media/autoplay/AutoplayPolicy.cpp`; not run.)
 
 The other choices, for whoever takes this up again:
 
@@ -57,6 +57,7 @@ Patch 0016 ([#406](https://github.com/nulavio/nulavio/issues/406)). While an off
 | An `AudioWorklet`'s `parameters`, for a parameter a node is connected to (its values carry that node's samples) | The same way. A parameter with only its own value and schedule is not changed |
 | A `DynamicsCompressorNode`'s `reduction`, a number the compressor makes of the samples | On the number, as it is read |
 
+- **A probe in use reads two of them.** CreepJS's audio module reads an analyser's float data and the compressor's `reduction` when an offline rendering completes, beside the returned buffer (its `src/audio/index.ts`, read on 2026-11-20; its page was not run against the build).
 - **On the copy script reads.** What the graph holds and passes to the next node is not changed, so the buffer the rendering returns gets decision 1's noise once, as before. A script that writes what it read into its own output passes that noise on.
 - **Keyed the same way.** Two sites read different values; one site reads the same values again for the same sound, in one page and in the next.
 - **Each reading has its own noise.** The factors come from the values that reading hands over (the samples an analyser was asked for, a worklet's block of 128), so two readers of the same samples do not get the same factors.
