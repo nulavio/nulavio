@@ -17,7 +17,10 @@ engine, in a patch or in a default that weakens it fails a run:
   Ubuntu, the distributions the engine has font lists for);
 * with WebGL available, the graphics card's model is not given out;
 * with the Nulavio engine's own patch (0012), what an offline audio context
-  renders differs between two sites and stays the same within one;
+  renders differs between two sites and stays the same within one; and so
+  does what a node inside that rendering hands to script (patch 0016): an
+  analyser's data, a script processor's input, a worklet's inputs and
+  connected parameter, a compressor's reduction;
 * a page reads UTC as its time zone; a site with "use my time zone on this
   site" on, in the shield's panel, reads the system's, with its subdomains
   and nothing else;
@@ -133,6 +136,21 @@ RELIED_ON = {"CanvasRandomization", "FontVisibilityLangPack", "NavigatorHWConcur
 # under this tree's Shell) skips the names in the overrides, and the tests that need them say so: there rendered
 # audio is the same on every site and pages read the display's size, which nothing else hides (#468).
 PATCHED_IN = {"AudioRandomization", "ScreenSizeConstant"}
+# What a node inside an offline rendering hands to script, and engine patch 0016 puts the audio noise on: where
+# each is in what /fp-audio-readers reports. The analyser's two byte getters are apart (BYTE_READERS): they round
+# to 256 steps, which hides most of the noise.
+READERS = {
+    "an analyser's samples": ("analyser", "floatTime"),
+    "an analyser's spectrum": ("analyser", "floatFrequency"),
+    "a script processor's input": ("scriptProcessor",),
+    "a worklet's inputs": ("worklet", "inputs"),
+    "a worklet's connected parameter": ("worklet", "parameter"),
+    "a compressor's reduction": ("reduction",),
+}
+BYTE_READERS = {
+    "an analyser's samples as bytes": ("analyser", "byteTime"),
+    "an analyser's spectrum as bytes": ("analyser", "byteFrequency"),
+}
 TARGETS = """
 const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");
 const set = Services.rfp.enabledFingerprintingProtections;
@@ -274,6 +292,18 @@ class FingerprintingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.execute(read), 30), "the page never finished")
         result = json.loads(self.m.execute(read))
         self.assertNotIn("fatal", result, result)
+        return result
+
+    def readers(self, host: str) -> dict:
+        """What the nodes inside an offline rendering hand to the page at this site, read twice (first, again)."""
+        type(self).n += 1
+        self.m.navigate(f"http://{host}:{self.server.port}/fp-audio-readers?n={self.n}")
+        read = "return document.getElementById('fp')?.textContent ?? '';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(read), 60), "the page never finished")
+        result = json.loads(self.m.execute(read))
+        self.assertNotIn("fatal", result, result)
+        for rendering in ("first", "again"):
+            self.assertIsInstance(result[rendering], dict, result[rendering])
         return result
 
     @contextlib.contextmanager
@@ -759,6 +789,127 @@ class FingerprintingTest(unittest.TestCase):
         self.assertAlmostEqual(
             first["audio"]["first"]["peak"], plain["audio"]["first"]["peak"], delta=plain["audio"]["first"]["peak"] / 1000
         )
+
+    def test_11b_what_a_node_reads_inside_an_offline_rendering_differs_per_site_too(self):
+        """#406: the noise of test 11 is on the buffer a rendering returns. A node inside the rendering hands the
+        same sound to script before it; engine patch 0016 puts the noise there too, in an offline context only."""
+
+        def at(page: dict, where: tuple, rendering: str = "first"):
+            value = page[rendering]
+            for key in where:
+                self.assertIsInstance(value, dict, f"{where}: {value}")  # a reader that failed says why here
+                value = value[key]
+            return value
+
+        def values(reading) -> object:
+            """What two readings are compared by: every value's digest (the four reductions as they are)."""
+            return reading if isinstance(reading, list) else (reading["sum"], reading["digest"])
+
+        first, other, again = self.readers("127.0.0.1"), self.readers("localhost"), self.readers("127.0.0.1")
+        with self.unprotected():
+            plain, plain_other = self.readers("127.0.0.1"), self.readers("localhost")
+        every = {**READERS, **BYTE_READERS}
+        self.record(
+            "audio-readers",
+            {
+                name: {
+                    "site": values(at(first, where)),
+                    "other-site": values(at(other, where)),
+                    "plain": values(at(plain, where)),
+                }
+                for name, where in every.items()
+            },
+        )
+        # Every reader read the sound, not silence (noise on silence is silence): eight input buffers, all 64
+        # blocks, a compressor that was at work.
+        self.assertEqual(at(plain, ("scriptProcessor", "events")), 8)
+        for name, where in READERS.items():
+            reading = at(plain, where)
+            with self.subTest(read=name):
+                if isinstance(reading, list):
+                    self.assertEqual(len(set(reading)), 4, reading)
+                    self.assertTrue(all(float(r) < -1 for r in reading), reading)
+                else:
+                    self.assertGreater(float(reading["sum"]), 1, reading)
+        # Without the protection both sites, and two renderings, read the same: every difference comes from it.
+        for name, where in every.items():
+            with self.subTest(plain=name):
+                self.assertEqual(values(at(plain, where)), values(at(plain_other, where)))
+                self.assertEqual(values(at(plain, where)), values(at(plain, where, "again")))
+        # A parameter's own schedule is not sound: on any engine it reads as written, also with a node connected that
+        # gives no samples (the patch asks whether the node gave samples in the block, not whether one is connected).
+        schedule = at(plain, ("worklet", "schedule"))
+        self.assertGreater(float(schedule["sum"]), 2000, schedule)  # a ramp from 0.25 to 1 over 8192 samples
+        self.assertLessEqual(schedule["peak"], 1)
+        for page in (first, other):
+            self.assertEqual(
+                values(at(page, ("worklet", "schedule"))), values(schedule), "a parameter's own schedule got the noise"
+            )
+        moved = [name for name, where in READERS.items() if values(at(first, where)) != values(at(plain, where))]
+        if not moved:
+            if harness.built_from_this_tree():
+                self.fail("this engine is a build of this tree and every reader gets the plain values: patch 0016 is missing")
+            self.skipTest("this engine is from before patch 0016: inside an offline rendering every site reads the same")
+        for name, where in READERS.items():
+            with self.subTest(read=name):
+                site = values(at(first, where))
+                self.assertNotEqual(site, values(at(plain, where)), "the plain value was given out")
+                self.assertNotEqual(site, values(at(other, where)), "two sites read the same value")
+                # The same sound on the same site reads the same, in one page and in the next (sites keep working).
+                self.assertEqual(site, values(at(first, where, "again")))
+                self.assertEqual(site, values(at(again, where)))
+        # The noise comes from the values handed over: the same values in the same blocks get the same noise, as
+        # here, where the parameter carries the very samples the input does. (A reading of another extent, the
+        # script processor's buffers of 1024, gets other noise for them.)
+        self.assertEqual(values(at(plain, ("worklet", "inputs"))), values(at(plain, ("worklet", "parameter"))))
+        self.assertEqual(values(at(first, ("worklet", "inputs"))), values(at(first, ("worklet", "parameter"))))
+        self.assertEqual(values(at(plain, ("worklet", "inputs"))), values(at(plain, ("scriptProcessor",))))
+        self.assertNotEqual(values(at(first, ("worklet", "inputs"))), values(at(first, ("scriptProcessor",))))
+        # The two byte getters are made from the same samples, so they are as steady within a site. Rounding to
+        # 256 steps hides most of the noise (and of what differs between computers): how many bytes it moved is
+        # recorded, not asserted.
+        for name, where in BYTE_READERS.items():
+            with self.subTest(read=name):
+                self.assertEqual(values(at(first, where)), values(at(first, where, "again")))
+                self.assertEqual(values(at(first, where)), values(at(again, where)))
+
+        def differing(a: dict, b: dict) -> int:
+            return sum(x != y for x, y in zip(a["bytes"], b["bytes"], strict=True))
+
+        self.record(
+            "audio-readers-bytes",
+            {
+                name: {
+                    "of": len(at(first, where)["bytes"]),
+                    "site-and-plain": differing(at(first, where), at(plain, where)),
+                    "site-and-other-site": differing(at(first, where), at(other, where)),
+                }
+                for name, where in BYTE_READERS.items()
+            },
+        )
+        # The noise cannot be heard: the loudest sample a reader gets moves by less than one part in a thousand.
+        for where in (("analyser", "floatTime"), ("scriptProcessor",), ("worklet", "inputs"), ("worklet", "parameter")):
+            with self.subTest(peak=where):
+                quiet = at(plain, where)["peak"]
+                self.assertAlmostEqual(at(first, where)["peak"], quiet, delta=quiet / 1000)
+        for noisy, quiet in zip(at(first, ("reduction",)), at(plain, ("reduction",)), strict=True):
+            self.assertAlmostEqual(float(noisy), float(quiet), delta=abs(float(quiet)) / 1000)
+        # The buffer the rendering returns keeps test 11's noise.
+        self.assertNotEqual(values(at(first, ("buffer",))), values(at(plain, ("buffer",))))
+        # A site the person exempts with the shield reads the plain values, and only that site.
+        self.readers("127.0.0.1")
+        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")  # the shield's switch in the address bar
+        try:
+            exempt, beside = self.readers("127.0.0.1"), self.readers("localhost")
+            for name, where in READERS.items():
+                with self.subTest(exempt=name):
+                    self.assertEqual(values(at(exempt, where)), values(at(plain, where)))
+                    self.assertEqual(values(at(beside, where)), values(at(other, where)), "the exemption reached another site")
+        finally:
+            self.readers("127.0.0.1")
+            self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
+        back = self.readers("127.0.0.1")
+        self.assertEqual(values(at(back, ("worklet", "inputs"))), values(at(first, ("worklet", "inputs"))))
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         self.needs_the_engines_screen()

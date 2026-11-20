@@ -29,6 +29,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.2)
 
+**New protections and their limits**:
+
+- Fingerprinting: the per-site noise on rendered audio also reaches what a node inside an offline rendering hands to script (engine patch 0016, [ADR 0019](../adr/0019-rendered-audio-differs-per-site.md), #406): an analyser's data, a script processor's input, a worklet's inputs and connected parameter, and a compressor's reduction. Up to 160.0.1-0.2 those read the same on every site while the returned buffer differed. Sound that plays is not changed, and neither is what a page reads from it, so a probe that plays a sound and reads it still gets the same values on every site; a script written against the noise can average it out (R56). Distribution Firefox (Track A) does not have the patch.
+
 **Nulavio fixes**:
 
 - AI Bridge, local network, continued (#243, #560):

@@ -1,0 +1,367 @@
+Subject: [PATCH] rfp: the per-site audio noise on what a node reads inside an offline rendering
+
+Patch 0012 puts per-site noise (RFPTarget::AudioRandomization) on the buffer
+an OfflineAudioContext returns. A node inside the offline graph hands values
+to script while the rendering runs, before that noise, and they are as
+steady as the returned buffer: the same on every site. This patch gives them
+the same noise, in the five places where they leave the graph:
+
+1. An AnalyserNode's four getters. They are all made from one copy of the
+   last samples (GetTimeDomainData), and that copy gets the noise.
+2. A ScriptProcessorNode's input buffer, as the audioprocess event is made.
+3. An AudioWorklet's inputs, as they are copied into the arrays process()
+   reads, on the rendering thread.
+4. The values of a worklet's parameter that a node is connected to, in the
+   blocks where that node gave samples: they carry its samples.
+5. A DynamicsCompressorNode's reduction, a number the compressor makes of
+   the samples.
+
+In each place the noise goes on the copy that script reads. What the graph
+holds and passes on is not changed.
+
+The noise is the one patch 0012 added: each value moves by at most one part
+in ten thousand, by a step of its own. It comes from the site's key (random
+per site and per session, the canvas noise's) and from the values
+themselves, so two sites read different values and one site reads the same
+values again for the same sound. The worklet's part runs on the rendering
+thread, where the document and its cookie jar settings may not be used. So
+the context copies the site's key once, when it is made, and
+RandomizeAudioSamplesWithKey makes the seed from that copy with no object
+of the main thread, no pref and no allocation (the seed the engine's canvas
+noise makes for a small image).
+
+Only an offline context has a key. A context that plays is not changed:
+a script processor or a worklet can pass what it read on to the speakers
+or into a call, and what a person hears is not touched (ADR 0019).
+The byte getters of an analyser round to 256 steps, which hides most of the
+noise, and most of what differs between two computers with it.
+
+No new target and no pref: the readers follow AudioRandomization, which
+Nulavio already turns on, with the engine's exemptions per site.
+
+Owner: Nulavio maintainers
+Upstream: not proposed. Mozilla's own audio protection is tracked in its
+bug 1358149.
+---
+--- a/dom/media/webaudio/AnalyserNode.cpp
++++ b/dom/media/webaudio/AnalyserNode.cpp
+@@ -11,6 +11,7 @@
+ #include "mozilla/PodOperations.h"
+ #include "mozilla/dom/AnalyserNodeBinding.h"
+ #include "nsMathUtils.h"
++#include "nsRFPService.h"
+ 
+ namespace mozilla {
+ 
+@@ -381,6 +382,16 @@
+     readChunk++;
+     writeIndex += copyLength;
+   }
++
++  // Nulavio: in an offline rendering these samples are as steady as the
++  // buffer it returns, and a page can read them here instead. This copy,
++  // which the four getters are made from, gets the site's noise
++  // (RFPTarget::AudioRandomization). What the node passes on is not changed,
++  // and neither is anything in a context that plays, whose key is empty.
++  if (AudioContext* context = Context()) {
++    nsRFPService::RandomizeAudioSamplesWithKey(context->AudioNoiseKey(), aData,
++                                               static_cast<uint32_t>(aLength));
++  }
+ }
+ 
+ }  // namespace dom
+--- a/dom/media/webaudio/AudioContext.cpp
++++ b/dom/media/webaudio/AudioContext.cpp
+@@ -76,6 +76,7 @@
+ #include "mozilla/dom/WaveShaperNodeBinding.h"
+ #include "nsContentUtils.h"
+ #include "nsGlobalWindowInner.h"
++#include "nsICookieJarSettings.h"
+ #include "nsIScriptError.h"
+ #include "nsNetCID.h"
+ #include "nsNetUtil.h"
+@@ -154,6 +155,20 @@
+   }
+ }
+ 
++// Nulavio: see AudioContext::AudioNoiseKey().
++static nsTArray<uint8_t> AudioNoiseKeyFor(nsPIDOMWindowInner* aWindow,
++                                          bool aIsOffline) {
++  nsTArray<uint8_t> key;
++  Document* doc = aIsOffline ? aWindow->GetExtantDoc() : nullptr;
++  if (doc && doc->ShouldResistFingerprinting(RFPTarget::AudioRandomization) &&
++      NS_FAILED(
++          doc->CookieJarSettings()->GetFingerprintingRandomizationKey(key))) {
++    // The site has no key: the protection is off for it.
++    key.Clear();
++  }
++  return key;
++}
++
+ AudioContext::AudioContext(nsPIDOMWindowInner* aWindow, bool aIsOffline,
+                            uint32_t aNumberOfChannels, uint32_t aLength,
+                            float aSampleRate)
+@@ -170,6 +185,7 @@
+           aWindow->AsGlobal()->ShouldResistFingerprinting(
+               RFPTarget::AudioContext)),
+       mIsOffline(aIsOffline),
++      mAudioNoiseKey(AudioNoiseKeyFor(aWindow, aIsOffline)),
+       mIsStarted(!aIsOffline),
+       mIsShutDown(false),
+       mIsDisconnecting(false),
+--- a/dom/media/webaudio/AudioContext.h
++++ b/dom/media/webaudio/AudioContext.h
+@@ -319,6 +319,14 @@
+ 
+   bool IsOffline() const { return mIsOffline; }
+ 
++  // Nulavio: the site's key for the noise on what a node inside an offline
++  // rendering hands to script (RFPTarget::AudioRandomization, with
++  // nsRFPService::RandomizeAudioSamplesWithKey). It is empty for a context
++  // that plays, where nothing is changed, and where the protection does not
++  // apply to the document. It is set once, when the context is made, so the
++  // rendering thread may copy it.
++  const nsTArray<uint8_t>& AudioNoiseKey() const { return mAudioNoiseKey; }
++
+   bool ShouldResistFingerprinting() const {
+     return mShouldResistFingerprinting;
+   }
+@@ -431,6 +439,8 @@
+   const RTPCallerType mRTPCallerType;
+   const bool mShouldResistFingerprinting;
+   const bool mIsOffline;
++  // Nulavio: see AudioNoiseKey().
++  const nsTArray<uint8_t> mAudioNoiseKey;
+   // true iff realtime or startRendering() has been called.
+   bool mIsStarted;
+   bool mIsShutDown;
+--- a/dom/media/webaudio/AudioWorkletNode.cpp
++++ b/dom/media/webaudio/AudioWorkletNode.cpp
+@@ -30,6 +30,7 @@
+ #include "mozilla/dom/Worklet.h"
+ #include "nsIScriptGlobalObject.h"
+ #include "nsPrintfCString.h"
++#include "nsRFPService.h"
+ #include "nsReadableUtils.h"
+ 
+ namespace mozilla::dom {
+@@ -61,10 +62,12 @@
+   WorkletNodeEngine(AudioWorkletNode* aNode,
+                     AudioDestinationNode* aDestinationNode,
+                     nsTArray<NamedAudioParamTimeline>&& aParamTimelines,
+-                    const Optional<Sequence<uint32_t>>& aOutputChannelCount)
++                    const Optional<Sequence<uint32_t>>& aOutputChannelCount,
++                    nsTArray<uint8_t>&& aNoiseKey)
+       : AudioNodeEngine(aNode),
+         mDestination(aDestinationNode->Track()),
+-        mParamTimelines(std::move(aParamTimelines)) {
++        mParamTimelines(std::move(aParamTimelines)),
++        mNoiseKey(std::move(aNoiseKey)) {
+     if (aOutputChannelCount.WasPassed()) {
+       mOutputChannelCount = aOutputChannelCount.Value();
+     }
+@@ -153,6 +156,9 @@
+   RefPtr<AudioNodeTrack> mDestination;
+   nsTArray<uint32_t> mOutputChannelCount;
+   nsTArray<NamedAudioParamTimeline> mParamTimelines;
++  // Nulavio: the context's AudioNoiseKey(), copied on the main thread when
++  // the node was made. Empty in a context that plays.
++  const nsTArray<uint8_t> mNoiseKey;
+   // The AudioWorkletGlobalScope-associated objects referenced from
+   // WorkletNodeEngine are typically kept alive as long as the
+   // AudioWorkletNode in the main-thread global.  The objects must be released
+@@ -544,6 +550,12 @@
+       float* dest = JS_GetFloat32ArrayData(float32Arrays[c], &isShared, nogc);
+       MOZ_ASSERT(!isShared);  // Was created as unshared
+       AudioBlockCopyChannelWithScale(channelData[c], volume, dest);
++      // Nulavio: in an offline rendering the samples process() reads are as
++      // steady as the buffer the rendering returns. This copy gets the
++      // site's noise (RFPTarget::AudioRandomization); the block the graph
++      // holds is not changed.
++      nsRFPService::RandomizeAudioSamplesWithKey(mNoiseKey, dest,
++                                                 WEBAUDIO_BLOCK_SIZE);
+     }
+   }
+ 
+@@ -568,6 +580,16 @@
+     size_t frames =
+         mParamTimelines[i].mTimeline.HasSimpleValue() ? 1 : WEBAUDIO_BLOCK_SIZE;
+     mParamTimelines[i].mTimeline.GetValuesAtTime(tick, dest, frames);
++    // Nulavio: a node connected to the parameter puts its samples in these
++    // values, so they get the noise as an input does. Only in a block where
++    // that node gave samples (as AudioNodeInputValue asks): a parameter's own
++    // value and schedule are not changed.
++    AudioNodeTrack* connected = mParamTimelines[i].mTimeline.Track();
++    if (frames == WEBAUDIO_BLOCK_SIZE && connected &&
++        !connected->LastChunks()[0].IsNull()) {
++      nsRFPService::RandomizeAudioSamplesWithKey(mNoiseKey, dest,
++                                                 WEBAUDIO_BLOCK_SIZE);
++    }
+     // https://bugzilla.mozilla.org/show_bug.cgi?id=1616599
+     if (frames == 1) {
+       std::fill_n(dest + 1, WEBAUDIO_BLOCK_SIZE - 1, dest[0]);
+@@ -804,7 +826,7 @@
+ 
+   auto engine = new WorkletNodeEngine(
+       audioWorkletNode, aAudioContext.Destination(), std::move(paramTimelines),
+-      aOptions.mOutputChannelCount);
++      aOptions.mOutputChannelCount, aAudioContext.AudioNoiseKey().Clone());
+   audioWorkletNode->mTrack = AudioNodeTrack::Create(
+       &aAudioContext, engine, AudioNodeTrack::NO_TRACK_FLAGS,
+       aAudioContext.Graph());
+--- a/dom/media/webaudio/DynamicsCompressorNode.cpp
++++ b/dom/media/webaudio/DynamicsCompressorNode.cpp
+@@ -11,6 +11,7 @@
+ #include "WebAudioUtils.h"
+ #include "blink/DynamicsCompressor.h"
+ #include "mozilla/dom/DynamicsCompressorNodeBinding.h"
++#include "nsRFPService.h"
+ 
+ using WebCore::DynamicsCompressor;
+ 
+@@ -222,4 +223,18 @@
+   return DynamicsCompressorNode_Binding::Wrap(aCx, this, aGivenProto);
+ }
+ 
++float DynamicsCompressorNode::Reduction() const {
++  // Nulavio: in an offline rendering this is a value the compressor made of
++  // the samples, as steady as the buffer the rendering returns, and a page
++  // can read it instead. It gets the site's noise
++  // (RFPTarget::AudioRandomization). A context that plays has an empty key,
++  // and nothing is changed there.
++  float reduction = mReduction;
++  if (AudioContext* context = Context()) {
++    nsRFPService::RandomizeAudioSamplesWithKey(context->AudioNoiseKey(),
++                                               &reduction, 1);
++  }
++  return reduction;
++}
++
+ }  // namespace mozilla::dom
+--- a/dom/media/webaudio/DynamicsCompressorNode.h
++++ b/dom/media/webaudio/DynamicsCompressorNode.h
+@@ -42,7 +42,8 @@
+   // Called GetRelease to prevent clashing with the nsISupports::Release name
+   AudioParam* GetRelease() const { return mRelease; }
+ 
+-  float Reduction() const { return mReduction; }
++  // Nulavio: not inline, see the definition.
++  float Reduction() const;
+ 
+   const char* NodeType() const override { return "DynamicsCompressorNode"; }
+ 
+--- a/dom/media/webaudio/ScriptProcessorNode.cpp
++++ b/dom/media/webaudio/ScriptProcessorNode.cpp
+@@ -17,6 +17,7 @@
+ #include "mozilla/dom/ScriptProcessorNodeBinding.h"
+ #include "mozilla/dom/ScriptSettings.h"
+ #include "nsGlobalWindowInner.h"
++#include "nsRFPService.h"
+ 
+ namespace mozilla::dom {
+ 
+@@ -409,6 +410,19 @@
+         // Create the input buffer
+         RefPtr<AudioBuffer> inputBuffer;
+         if (mInputBuffer) {
++          // Nulavio: in an offline rendering the samples the event hands to
++          // script are as steady as the buffer the rendering returns. They
++          // get the site's noise (RFPTarget::AudioRandomization). This
++          // buffer is the event's alone. A context that plays has an empty
++          // key, and nothing is changed there.
++          const nsTArray<uint8_t>& noiseKey = context->AudioNoiseKey();
++          if (!noiseKey.IsEmpty()) {
++            for (uint32_t i = 0; i < mInputBuffer->GetChannels(); ++i) {
++              nsRFPService::RandomizeAudioSamplesWithKey(
++                  noiseKey, mInputBuffer->GetDataForWrite(i),
++                  aNode->BufferSize());
++            }
++          }
+           ErrorResult rv;
+           inputBuffer = AudioBuffer::Create(
+               context->GetOwnerWindow(), inputChannelCount, aNode->BufferSize(),
+--- a/toolkit/components/resistfingerprinting/nsRFPService.cpp
++++ b/toolkit/components/resistfingerprinting/nsRFPService.cpp
+@@ -1871,6 +1871,20 @@
+                            bytesPerPixel, bytesPerChannel, offset, true);
+ }
+ 
++// Nulavio: the noise itself, from the two halves of a seed that the callers
++// below make of the site's key and the samples.
++static void MoveAudioSamples(uint64_t aSeed0, uint64_t aSeed1, float* aData,
++                             uint32_t aLength) {
++  non_crypto::XorShift128PlusRNG rng(aSeed0, aSeed1);
++
++  // A different step for every sample, so that the ratio of two samples
++  // moves too: one factor for the whole buffer could be divided out.
++  for (uint32_t i = 0; i < aLength; ++i) {
++    const int32_t step = static_cast<int32_t>(rng.next() & 0xFFFF) - 0x8000;
++    aData[i] *= 1.0f + static_cast<float>(step) * (1.0e-4f / 32768.0f);
++  }
++}
++
+ // static
+ void nsRFPService::RandomizeAudioSamples(
+     nsICookieJarSettings* aCookieJarSettings, float* aData, uint32_t aLength) {
+@@ -1892,16 +1906,35 @@
+     return;
+   }
+ 
+-  non_crypto::XorShift128PlusRNG rng(
+-      *reinterpret_cast<uint64_t*>(key.Elements()),
+-      *reinterpret_cast<uint64_t*>(key.Elements() + 8));
++  MoveAudioSamples(*reinterpret_cast<uint64_t*>(key.Elements()),
++                   *reinterpret_cast<uint64_t*>(key.Elements() + 8), aData,
++                   aLength);
++}
+ 
+-  // A different step for every sample, so that the ratio of two samples
+-  // moves too: one factor for the whole buffer could be divided out.
+-  for (uint32_t i = 0; i < aLength; ++i) {
+-    const int32_t step = static_cast<int32_t>(rng.next() & 0xFFFF) - 0x8000;
+-    aData[i] *= 1.0f + static_cast<float>(step) * (1.0e-4f / 32768.0f);
++// static
++void nsRFPService::RandomizeAudioSamplesWithKey(
++    const nsTArray<uint8_t>& aSiteKey, float* aData, uint32_t aLength) {
++  // Three 64-bit words of the key are read; a site's key has four.
++  uint64_t words[3];
++  if (aSiteKey.Length() < sizeof(words) || !aData || !aLength) {
++    return;
+   }
++  memcpy(words, aSiteKey.Elements(), sizeof(words));
++
++  // The seed GenerateCanvasKeyFromImageData makes for a small image: a hash
++  // of the data, scrambled with the first half of the site's key, and spread
++  // with its third word. Unlike that function it reads no cookie jar
++  // settings and no pref, and it allocates nothing: a worklet's inputs come
++  // through here on the rendering thread, one block at a time.
++  const mozilla::HashNumber dataHash =
++      mozilla::HashBytes(aData, size_t(aLength) * sizeof(float));
++  const mozilla::HashNumber scrambled =
++      mozilla::HashCodeScrambler(words[0], words[1]).scramble(dataHash);
++  non_crypto::XorShift128PlusRNG spread(
++      static_cast<uint64_t>(scrambled) << 32 | dataHash, words[2]);
++  const uint64_t seed0 = spread.next();
++  const uint64_t seed1 = spread.next();
++  MoveAudioSamples(seed0, seed1, aData, aLength);
+ }
+ 
+ // static
+--- a/toolkit/components/resistfingerprinting/nsRFPService.h
++++ b/toolkit/components/resistfingerprinting/nsRFPService.h
+@@ -538,6 +538,15 @@
+   static void RandomizeAudioSamples(nsICookieJarSettings* aCookieJarSettings,
+                                     float* aData, uint32_t aLength);
+ 
++  // Nulavio: the same noise for what a node inside an offline rendering hands
++  // to script (an analyser's data, a script processor's input, a worklet's
++  // inputs, a compressor's reduction), from the site's key itself
++  // (nsICookieJarSettings::GetFingerprintingRandomizationKey; an empty key
++  // changes nothing). It uses no object that belongs to the main thread, so
++  // the rendering thread may call it.
++  static void RandomizeAudioSamplesWithKey(const nsTArray<uint8_t>& aSiteKey,
++                                           float* aData, uint32_t aLength);
++
+   // This function is plumbed to RandomizeElements function.
+   static nsresult RandomizePixels(nsICookieJarSettings* aCookieJarSettings,
+                                   nsIPrincipal* aPrincipal, uint8_t* aData,
