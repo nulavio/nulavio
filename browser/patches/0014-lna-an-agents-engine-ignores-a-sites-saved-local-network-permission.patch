@@ -1,0 +1,92 @@
+Subject: [PATCH] lna: an agent's engine ignores a site's saved local-network permission
+
+In an engine the AI Bridge starts for an agent, the Shell sets Local Network
+Access to refuse, with no prompt, a public page's requests to this computer
+and the local network (permissions.default.{loopback,local}-network = 2, on
+the default branch and locked for that run). In one of the user's own
+profiles opened for an agent, a site the user allowed there keeps its saved
+permission all the same: nsHttpChannel reads the site's own entry before any
+default, and the prompt code reads it again (the front end's permission
+check, a worker's saved permission). Its pages' requests to local addresses
+were therefore let through in the agent's run (#570, R29).
+
+With this, in such an engine (its environment carries NULAVIO_AI_WORKSPACE,
+which workspace.py sets and the Shell reads too), a site's saved allow grants
+nothing and a request that Local Network Access would ask about is refused
+before it is sent. A saved deny still refuses. The driver's own loads (the
+system principal, which the permission manager allows everything) are
+granted as before: the Shell checks the pages they open. Nothing is written to or
+removed from permissions.sqlite, so the user's permission is there as before
+once the agent's run ends. Outside an agent's engine nothing changes.
+
+Owner: Nulavio maintainers
+Upstream: not applicable (the AI Bridge and its environment are Nulavio's).
+---
+--- a/netwerk/base/LNAPermissionRequest.h
++++ b/netwerk/base/LNAPermissionRequest.h
+@@ -14,6 +14,13 @@
+ static constexpr nsLiteralCString LOCAL_NETWORK_PERMISSION_KEY =
+     "local-network"_ns;
+ 
++// Nulavio: whether the AI Bridge started this engine for an agent (its
++// environment names the agent: NULAVIO_AI_WORKSPACE, which nothing in the
++// browser can change). There a site's saved permission to reach this computer
++// or the local network grants nothing, and no prompt is shown: a request that
++// Local Network Access would ask about is refused.
++bool InNulavioAgentEngine();
++
+ using PermissionPromptCallback =
+     std::function<void(bool granted, const nsACString& type, bool promptShown)>;
+ 
+--- a/netwerk/base/LNAPermissionRequest.cpp
++++ b/netwerk/base/LNAPermissionRequest.cpp
+@@ -20,10 +20,19 @@
+ #include "nsIOService.h"
+ #include "nsIPermissionManager.h"
+ #include "nsPIDOMWindow.h"
++#include "prenv.h"
+ #include "xpcpublic.h"
+ 
+ namespace mozilla::net {
+ 
++bool InNulavioAgentEngine() {
++  // launcher/nulavio_launcher/ai/workspace.py (WORKSPACE_ENV) sets it for the
++  // engines the Bridge starts: the AI Workspace and the user's own profiles
++  // opened for an agent. The Shell reads the same (NulavioAgentNetwork).
++  const char* agent = PR_GetEnv("NULAVIO_AI_WORKSPACE");
++  return agent && *agent;
++}
++
+ //-------------------------------------------------
+ // LNA Permission Requests
+ //-------------------------------------------------
+@@ -149,6 +158,12 @@
+ nsresult LNAPermissionRequest::RequestPermission() {
+   MOZ_ASSERT(NS_IsMainThread());
+ 
++  // Nulavio: in an engine an agent drives, nothing below grants, neither a
++  // site's saved or temporary permission nor a prompt: refused, no prompt.
++  if (InNulavioAgentEngine()) {
++    return Cancel();
++  }
++
+   // Enforce Permissions Policy for Local Network Access (Bug 1978550)
+   if (!mLoadInfo) {
+     NS_WARNING("LNA permission request without load info");
+--- a/netwerk/protocol/http/nsHttpChannel.cpp
++++ b/netwerk/protocol/http/nsHttpChannel.cpp
+@@ -2104,7 +2104,13 @@
+   }
+ 
+   // Step 1. Check for  Existing Allow or Deny permission
+-  if (nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),
++  // Nulavio: in an engine an agent drives, a site's saved allow grants nothing
++  // (its saved deny still refuses); LNAPermissionRequest then refuses. The
++  // system principal is no site: the driver's own loads are granted here as
++  // before (the permission manager allows it everything).
++  if ((!InNulavioAgentEngine() ||
++       mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal()) &&
++      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),
+                                            aPermissionType)) {
+     userPerms = LNAPermission::Granted;
+     return userPerms;
