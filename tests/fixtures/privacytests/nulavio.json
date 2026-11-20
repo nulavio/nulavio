@@ -1,0 +1,50 @@
+{
+ "comment": "Written by scripts/site/privacytests_pages.py refresh from the release's privacytests run. Do not edit.",
+ "version": "160.0.1-0.2",
+ "tag": "v160.0.1-0.2",
+ "commit": "be6d3ea3671bfd19eb65597b591529da6c3cb9ac",
+ "published_at": "2026-11-19T10:53:58Z",
+ "release_url": "https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.2",
+ "pages": "5e675fa8a73b876a924d2ec1be648db43ebaf050",
+ "run": {
+  "id": 44509893266,
+  "url": "https://github.com/nulavio/nulavio/actions/runs/44509893266",
+  "event": "release"
+ },
+ "job": {
+  "id": 135511066604,
+  "name": "the Device probes on a second machine (a published release, on GitHub's runner)",
+  "url": "https://github.com/nulavio/nulavio/actions/runs/44509893266/job/135511066604",
+  "conclusion": "success",
+  "runner": "ubuntu-24.04",
+  "completed_at": "2026-11-19T10:55:50Z"
+ },
+ "log": [
+  "test_00b_what_the_engine_does_not_have_reads_unsupported_with_and_without_the_protections (test_privacytests.PrivacyTestsProbes.test_00b_what_the_engine_does_not_have_reads_unsupported_with_and_without_the_protections) ... ok",
+  "PrivacyTests, Device: Logical CPU cores ... ok",
+  "PrivacyTests, Device: Device memory ... ok",
+  "PrivacyTests, Device: JavaScript heap size limit ... ok",
+  "PrivacyTests, Device: Math: Infinity - Infinity ... ok",
+  "PrivacyTests, Device: Math.tan(-1e300) ... ok",
+  "PrivacyTests, Device: Math.sin(-1e300) ... ok",
+  "PrivacyTests, Device: Math.tanh(0.123) ... ok",
+  "PrivacyTests, Device: AudioContext fingerprint ... ok",
+  "PrivacyTests, Device: Canvas2D geometry ... ok",
+  "PrivacyTests, Device: userAgentData.architecture ... ok",
+  "PrivacyTests, Device: userAgentData.platformVersion ... ok",
+  "PrivacyTests, Device: AudioContext base latency ... ok",
+  "PrivacyTests, Screen: Screen width ... ok",
+  "PrivacyTests, Screen: Screen height ... ok",
+  "PrivacyTests, Settings: Time zone ... ok",
+  "PrivacyTests, Settings: Reduced motion preference ... ok",
+  "PrivacyTests, Settings: Reduced transparency preference ... ok",
+  "PrivacyTests, Settings: Display contrast preference ... ok",
+  "PrivacyTests, Settings: Keyboard layout ... ok",
+  "PrivacyTests, Settings: Available screen width ... ok",
+  "PrivacyTests, Settings: Available screen height ... ok",
+  "PrivacyTests, Settings: Available screen left ... ok",
+  "PrivacyTests, Settings: Available screen top ... ok",
+  "PrivacyTests, Settings: User-installed font (DOM) ... ok",
+  "PrivacyTests, Settings: User-installed font (canvas) ... ok"
+ ]
+}

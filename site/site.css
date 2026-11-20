@@ -524,6 +524,70 @@ td .icon { display: inline-block; vertical-align: -3px; margin-right: var(--nv-s
 .colophon a { color: var(--nv-color-text-secondary); }
 .colophon .mono { font-size: inherit; }
 
+/* -- fingerprinting comparison (engenharia/impressao-digital/, generated; issue 437) ------ */
+
+.mark {
+  display: inline-block;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  vertical-align: -5px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mark .fill { fill: currentColor; stroke: none; }
+.mark-passed, .mark-one-architecture { color: var(--nv-color-accent-default); }
+.mark-failed { color: var(--nv-color-status-critical); }
+.mark-unsupported, .mark-not-on-page { color: var(--nv-color-text-secondary); }
+
+.marks-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nv-space-2) var(--nv-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+}
+.marks-key li { display: inline-flex; align-items: center; gap: var(--nv-space-2); }
+.marks-legend { display: grid; gap: var(--nv-space-3); margin: 0; max-width: 48rem; }
+.marks-legend div { display: grid; gap: var(--nv-space-1) var(--nv-space-4); }
+.marks-legend dt { display: flex; align-items: center; gap: var(--nv-space-3); font-weight: var(--nv-font-weight-semibold); }
+.marks-legend dd { margin: 0; color: var(--nv-color-text-secondary); }
+@media (min-width: 48rem) {
+  .marks-legend div { grid-template-columns: 14rem minmax(0, 1fr); align-items: baseline; }
+}
+
+.comparison { margin-top: var(--nv-space-7); }
+.comparison table { min-width: 0; width: 100%; }
+.comparison th, .comparison td { padding-inline: var(--nv-space-2); }
+.comparison thead th {
+  vertical-align: bottom;
+  font-size: var(--nv-type-caption-size);
+  line-height: 1.3;
+}
+.comparison thead th:first-child { font-size: 0.9375rem; }
+.head-meta {
+  display: block;
+  margin-top: var(--nv-space-1);
+  font-weight: var(--nv-font-weight-regular);
+  color: var(--nv-color-text-secondary);
+}
+.comparison tbody th { width: 13rem; min-width: 11rem; padding-inline: var(--nv-space-3); }
+.comparison td { text-align: center; vertical-align: middle; }
+.comparison .col-nulavio { background: var(--nv-color-accent-tint); }
+.probe { display: block; font-family: var(--nv-font-family-mono); font-size: var(--nv-type-code-size); }
+.gloss { display: block; margin-top: var(--nv-space-1); font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
+.notes li + li { margin-top: var(--nv-space-3); }
+.notes code { overflow-wrap: anywhere; }
+#sources h3 { margin-top: var(--nv-space-7); }
+@media (max-width: 47.9375rem) {
+  .comparison tbody th { min-width: 10rem; max-width: 10rem; width: 10rem; }
+}
+
 /* -- 404 ------------------------------------------------------------------------------- */
 
 .notfound { padding-block: var(--nv-space-9); }
@@ -534,7 +598,8 @@ td .icon { display: inline-block; vertical-align: -3px; margin-right: var(--nv-s
 
 @media (prefers-contrast: more) {
   .lead, .pill, .facts dt, .receipt dt, .receipt-title, .refs, .state, .item span, figcaption, .onscreen,
-  .toc .gist, .bands dd, .managers dd, .colophon, .colophon a, caption, td, .excerpt-label, .d-muted, .claim-state {
+  .toc .gist, .bands dd, .managers dd, .colophon, .colophon a, caption, td, .excerpt-label, .d-muted, .claim-state,
+  .gloss, .head-meta, .marks-legend dd {
     color: var(--nv-color-text-primary);
   }
   .d-muted { fill: var(--nv-color-text-primary); }
@@ -549,6 +614,8 @@ td .icon { display: inline-block; vertical-align: -3px; margin-right: var(--nv-s
   .d-arrow { stroke: CanvasText; }
   .icon { stroke: CanvasText; }
   .icon .fill { fill: CanvasText; }
+  .mark { stroke: CanvasText; }
+  .mark .fill { fill: CanvasText; }
   .receipt, .pre-scroll, .refs, .facts, .limits-box { border: 1px solid CanvasText; }
 }
 

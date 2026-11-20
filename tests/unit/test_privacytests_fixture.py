@@ -16,7 +16,9 @@ PINNED = json.loads((FIXTURES / "pinned.json").read_text(encoding="utf-8"))
 SPEC = importlib.util.spec_from_file_location("watch_privacytests", ROOT / "scripts" / "research" / "watch_privacytests.py")
 watch = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(watch)
-OURS = {"README.md", "pinned.json"}  # written here; everything else in the folder is theirs
+# Written here; everything else in the folder is theirs. published.json, nulavio.json and picture.json are the
+# fingerprinting comparison's data (#437; scripts/site/privacytests_pages.py, tests/unit/test_privacytests_comparison.py).
+OURS = {"README.md", "pinned.json", "published.json", "nulavio.json", "picture.json"}
 
 
 class PrivacyTestsFixtureTest(unittest.TestCase):
