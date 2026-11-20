@@ -28,11 +28,6 @@ import make_tools  # noqa: E402
 import refresh_extensions_lock  # noqa: E402
 
 
-def run_with(env, name, value, probe, install):
-    return subprocess.run([sys.executable, "-I", str(probe), str(install)], env={**env, name: value}, capture_output=True,
-                          text=True, check=False)  # fmt: skip
-
-
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
 BRANDING = ROOT / "browser" / "branding" / "nulavio"
 FORBIDDEN_OPTIONS = (
@@ -898,13 +893,14 @@ class PackagingTest(unittest.TestCase):
 
     def test_package_checks_install_a_distribution_firefox_and_run_the_lookup_probe(self):
         # GHSA-95h5-h3m4-3jhv (#575): the installed tools must use the package's engine with a distribution Firefox
-        # present and no NULAVIO_ENGINE. Fedora gets a stub at Fedora's path; the Ubuntu image has Mozilla's package.
+        # present and no NULAVIO_ENGINE. Both checks put a stub at the path their distribution uses.
         for check, directory, firefox in (
             ("check_rpm.sh", "/usr/lib64/nulavio", "/usr/lib64/firefox/firefox"),
             ("check_deb.sh", "/usr/lib/nulavio", "/usr/lib/firefox/firefox"),
         ):
             text = (ROOT / "scripts" / "release" / check).read_text(encoding="utf-8")
-            self.assertIn(firefox, text)
+            self.assertIn(f"> {firefox}", text)
+            self.assertIn(f'[ "$({firefox} --version)" = "Mozilla Firefox 160.0" ]', text)
             self.assertIn("engine_lookup_probe.py:/checks/engine_lookup_probe.py:ro", text)
             self.assertIn(f'su tester -c "env -u NULAVIO_ENGINE python3 -I /checks/engine_lookup_probe.py {directory}"', text)
 
@@ -925,14 +921,14 @@ class PackagingTest(unittest.TestCase):
             firefox.chmod(0o755)
             env = {"PATH": f"{firefox.parent}:/usr/bin:/bin"}
 
-            def run():
-                return subprocess.run([sys.executable, "-I", str(probe), str(install)], env=env, capture_output=True,
+            def run(**extra):
+                return subprocess.run([sys.executable, "-I", str(probe), str(install)], env={**env, **extra}, capture_output=True,
                                       text=True, check=False)  # fmt: skip
 
             good = run()
             self.assertEqual(good.returncode, 0, good.stdout + good.stderr)
             self.assertIn("(Nulavio)", good.stdout)
-            self.assertEqual(run_with(env, "NULAVIO_ENGINE", str(firefox), probe, install).returncode, 1)
+            self.assertEqual(run(NULAVIO_ENGINE=str(firefox)).returncode, 1)
             # The advisory's lookup: bundled_engine() reverted, so the tools take a distribution Firefox.
             module = install / "nulavio-tools" / "launcher" / "nulavio_launcher" / "engine.py"
             source = module.read_text(encoding="utf-8")

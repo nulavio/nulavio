@@ -37,9 +37,13 @@ podman run --rm --security-opt label=disable -v "$here/sysdir_probe.py:/checks/s
     [ "$sysdir" = "/usr/lib/mozilla" ] && echo "system Mozilla directory read: $sysdir" || { echo "reads $sysdir, expected /usr/lib/mozilla"; exit 1; }
     answer=$(su tester -c "printf %s \"{}\" | /usr/lib/nulavio/nulavio-tools/bin/nulavio temporary api")
     [ "$answer" = "{\"error\": \"bad-request\"}" ] && echo "nulavio-tools: answer" || { echo "nulavio-tools: $answer"; exit 1; }
-    # A distribution Firefox next to Nulavio (GHSA-95h5-h3m4-3jhv, #575): the image has Mozilla'"'"'s own package, which the
-    # tools'"'"' old lookup found first. The installed tools, without NULAVIO_ENGINE, must still resolve to the package'"'"'s engine.
-    [ "$(/usr/lib/firefox/firefox --version 2>/dev/null | head -1 | cut -d" " -f1,2)" = "Mozilla Firefox" ] || { echo "no distribution Firefox at /usr/lib/firefox/firefox"; exit 1; }
+    # A distribution Firefox next to Nulavio (GHSA-95h5-h3m4-3jhv, #575): a stub at the path Mozilla'"'"'s APT package and Debian
+    # use, saying it is Mozilla'"'"'s (the image has no Firefox). The installed tools, without NULAVIO_ENGINE, must still resolve
+    # to the package'"'"'s own engine.
+    mkdir -p /usr/lib/firefox
+    printf "#!/bin/sh\necho \"Mozilla Firefox 160.0\"\n" > /usr/lib/firefox/firefox
+    chmod 755 /usr/lib/firefox/firefox
+    [ "$(/usr/lib/firefox/firefox --version)" = "Mozilla Firefox 160.0" ] || { echo "the Firefox stub does not answer"; exit 1; }
     su tester -c "env -u NULAVIO_ENGINE python3 -I /checks/engine_lookup_probe.py /usr/lib/nulavio"
     # The diagnostics a package install can run (#470): its own engine, owned by the package, the codecs it recommends.
     su tester -c "nulavio-doctor --json" > /tmp/doctor.json || true
