@@ -1022,12 +1022,15 @@ class AiBridgeTest(unittest.TestCase):
                 pass
 
         local = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}"
-        # A public page that asks for the local address every 200 ms; refused while the tab's context is public.
+        # A public page that asks for the local address every 200 ms (refused while the tab's context is public), and
+        # for its own /ping, which shows whether it is still in the tab.
         page = (
             "<!doctype html><title>Public</title><p>a public page<script>"
             f"setInterval(() => fetch({json.dumps(local + '/from-page')}, {{mode: 'no-cors'}}).catch(() => {{}}), 200);"
+            "setInterval(() => fetch('/ping').catch(() => {}), 200);"
             "</script>"
         ).encode()
+        pings: list[float] = []
 
         class Public(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
@@ -1037,6 +1040,11 @@ class AiBridgeTest(unittest.TestCase):
                     self.send_header("Content-Length", str(len(page)))
                     self.end_headers()
                     self.wfile.write(page)
+                    return
+                if self.path == "/ping":
+                    pings.append(time.monotonic())
+                    self.send_response(204)
+                    self.end_headers()
                     return
                 self.send_response(302)
                 self.send_header("Location", f"{local}/redirect")
@@ -1063,6 +1071,7 @@ class AiBridgeTest(unittest.TestCase):
         tab = opened["structuredContent"]["tab"]
         time.sleep(1)  # the page's own requests, refused by the engine's Local Network Access (test_26)
         self.assertEqual(hits, [])
+        self.assertTrue(pings)  # the page runs
         for url in (f"{local}/agent", f"http://127.0.0.2:{port}/moved"):
             with self.subTest(url=url):
                 went = bridge.call("navigate", {"tab": tab, "url": url})
@@ -1070,6 +1079,7 @@ class AiBridgeTest(unittest.TestCase):
                 self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
         time.sleep(2)  # the public page would have asked about ten times more by now, had it stayed
         self.assertEqual(hits, [])  # not the new tab, the agent's navigation, the redirect or the page's own requests
+        self.assertLess(pings[-1], time.monotonic() - 1.5)  # a blocked page took its place: it asks for nothing
         logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         self.assertEqual([e for e in logged if e.get("tool") == "network"], [])  # the Bridge refused nothing
         registry.grant(agent["id"], "local_resources", "allow")

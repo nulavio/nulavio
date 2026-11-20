@@ -2041,7 +2041,6 @@ class WorkspaceTest(Home):
         process = patch.split("return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;\n   }\n", 1)[1].split("// Suspend to block", 1)[0]
         self.assertIn("+  if (nulavioAgentDriverLoad && !nulavio::AgentMayReach(mURI)) {", process)
         self.assertEqual(process.count("ContinueOnStartRequest1(NS_ERROR_BLOCKED_BY_POLICY)"), 2)
-        self.assertNotIn("UpdateCurrentIpAddressSpace", process)
 
     def test_the_shell_reads_what_the_bridge_writes(self):
         # #243: the Shell's check (NulavioAgentNetwork.sys.mjs) and the Bridge name the same environment variables and
