@@ -118,6 +118,26 @@ class EngineCommandTest(unittest.TestCase):
         with mock.patch.dict(os.environ, clean, clear=True):
             self.assertEqual(environment().status, "ok")
 
+    def test_doctor_warns_when_the_engine_is_not_the_nulavio_build(self):
+        # #574: since #563 the AI Bridge refuses such an engine; the doctor says why an agent cannot start.
+        def build_check(eng):
+            env = {k: v for k, v in os.environ.items() if k != engine.HARNESS_FIREFOX_ENV}
+            with (
+                mock.patch.dict(os.environ, env, clear=True),
+                mock.patch.object(doctor.engine_mod, "find_engine", return_value=eng),
+                mock.patch.object(doctor, "package_of", return_value="pkg-1"),
+                mock.patch.object(doctor.os, "stat", return_value=mock.Mock(st_uid=0, st_mode=0o100755)),
+            ):
+                return next(c for c in doctor.check_engine() if c.name == "Nulavio build")
+
+        check = build_check(FAKE_ENGINE)
+        self.assertEqual(check.status, "warn")
+        self.assertIn(str(FAKE_ENGINE.path), check.detail)
+        self.assertIn("Mozilla Firefox", check.detail)
+        self.assertIn("AI Bridge will refuse", check.detail)
+        nulavio = engine.Engine(path=Path("/opt/nulavio/nulavio"), version="160.0.1", vendor="Nulavio")
+        self.assertEqual(build_check(nulavio).status, "ok")
+
     def test_only_the_nulavio_build_ships_the_window_theme(self):
         self.assertFalse(FAKE_ENGINE.builtin_theme)
         nulavio = engine.Engine(path=Path("/opt/nulavio/nulavio"), version="158.0.1", vendor="Nulavio")
