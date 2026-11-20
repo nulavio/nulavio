@@ -4,23 +4,27 @@
 
 /* This computer and the local network, in an engine an agent drives (#243, R29).
 
-   The AI Bridge decides on its own DNS lookup of a name, and the engine connects
-   to its own answer: a name can answer the Bridge with a public address and the
-   engine with a local one (rebinding). The engine's Local Network Access decides
-   on the address it connects to, but it lets through what its driver opens (the
-   agent's own navigation runs as the system principal) and a redirect on the way
-   there. So, in an engine the Bridge started (its environment says so, which
+   The AI Bridge decides on its own DNS lookup of a name, and the engine
+   connects to its own answer: a name can answer the Bridge with a public
+   address and the engine with a local one (rebinding). The engine's Local
+   Network Access decides on the address it connects to, but it lets through
+   what its driver opens (the agent's own navigation runs as the system
+   principal) and a redirect on the way there, unless it carries patch 0015
+   (below). So, in an engine the Bridge started (its environment says so, which
    nothing in the browser can change), this module checks every top-level page
    on the address the engine got it from: a response from an address the engine
    reads as this computer or the local network is cancelled before the tab shows
    it, unless the agent may reach that place now, as the Bridge's file says
-   (launcher/nulavio_launcher/ai/tools.py, Bridge._write_local). The request has
-   been sent by then: what is held back is the page. A load through a proxy is
-   not checked (the proxy connects, not the engine), as Local Network Access
-   does not check one either. A page from the HTTP cache carries no address
-   when the check runs, so in these engines every top-level page is fetched,
-   never taken from the cache: each one is asked to skip it, and one that comes
-   from the cache all the same (a redirect hop can) is cancelled.
+   (launcher/nulavio_launcher/ai/tools.py, Bridge._write_local). Without patch
+   0015 the request has been sent by then: what is held back is the page. A load
+   through a proxy is not checked (the proxy connects, not the engine), as Local
+   Network Access does not check one either. A page from the HTTP cache carries
+   no address when the check runs, so in these engines every top-level page is
+   fetched, never taken from the cache: each one is asked to skip it, and one
+   that comes from the cache all the same (a redirect hop can) is cancelled. An
+   engine with patch 0015 (#561) refuses those loads itself, before they are
+   sent, on the same file (LOCAL_ENV): this check stays for an engine without
+   it, and for what the patch does not see.
 
    In the same engines it sets the engine's Local Network Access to refuse a
    public page's requests to local addresses with no prompt, a pop-up's

@@ -36,6 +36,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
   - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
   - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
   - A page loaded through a proxy is not checked this way, and in your profiles a site you allowed yourself to reach local addresses keeps that permission; R29 lists what else is not.
+  - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address, and the tab shows a blocked page. A page loaded through a proxy is not checked this way either (R29).
   - Nothing to do: it comes with the update.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19
