@@ -524,6 +524,36 @@ class SiteTest(unittest.TestCase):
             loads = re.findall(r'(?:src|href)="[^"]*_worker[^"]*"', self.read(page))
             self.assertEqual(loads, [], f"{page}: no page loads the worker, it is server code")
 
+    def test_engineering_pages_count_the_site_run_as_its_evidence_does(self):
+        # Claim 2.7 retells the latest real-site run: the pages reached, the pages flagged and the unflagged
+        # pages checked must be the evidence's counts, recomputed from its per-site rows (#202).
+        run = json.loads(SITE_RUN.read_text(encoding="utf-8"))
+        sites = run["sites"].values()
+        flagged = sum(1 for site in sites if site["flags"])
+        checked = sum(1 for site in sites if not site["flags"] and site["triage"] != "No difference that matters.")
+        reached = sum(site["reached_with_protections"] for site in sites)
+        summary = run["summary"]
+        self.assertEqual(
+            (flagged, checked, reached),
+            (summary["flagged"], summary["checked_unflagged"], summary["reached_with_protections"]),
+        )
+        words = {
+            "pt": "zero um dois três quatro cinco seis sete oito nove dez onze doze treze catorze quinze",
+            "en": "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen",
+        }
+        words = {lang: names.split(" ") for lang, names in words.items()}
+        for page, lang, flagged_text, checked_text in (
+            ("engenharia/index.html", "pt", "{} páginas foram sinalizadas", "outras {} foram conferidas"),
+            ("en/engineering/index.html", "en", "{} pages were flagged", "{} more were checked"),
+        ):
+            with self.subTest(page=page):
+                claim = next(n for n in self.tree(page).all() if n.attrs.get("id") == "s2-7")
+                text = " ".join(claim.text().split())
+                self.assertIn(flagged_text.format(words[lang][flagged]).lower(), text.lower())
+                self.assertIn(checked_text.format(words[lang][checked]), text)
+                self.assertIn(f" {reached} ", text)
+                self.assertIn(SITE_RUN.name, text)
+
     def test_comparison_names_the_browsers_and_its_date(self):
         for page in LANDING:
             tables = self.tree(page).all("table")

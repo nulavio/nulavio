@@ -31,7 +31,7 @@
   "tried": 50,
   "reached_with_protections": 48,
   "flagged": 12,
-  "checked_by_hand": 8,
+  "checked_unflagged": 8,
   "breakages": 0
  },
  "sites": {
@@ -227,7 +227,7 @@
     "changed": 0.128
    },
    "flags": [],
-   "triage": "Checked by hand: the stock run stopped at Cloudflare's bot check ('Um momento…'), in this run and both re-runs, so there is no stock page to compare with; the protected run loaded the questions list each time and it is whole. Why the check met only the stock side is not established.",
+   "triage": "Checked by the agent: the stock run stopped at Cloudflare's bot check ('Um momento…'), in this run and both re-runs, so there is no stock page to compare with; the protected run loaded the questions list each time and it is whole. Why the check met only the stock side is not established.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -339,7 +339,7 @@
     "changed": 0.016
    },
    "flags": [],
-   "triage": "Checked by hand: more text with protections (the stock run stopped at a shorter page, as in October); an ad in the stock run's side column. No breakage.",
+   "triage": "Checked by the agent: more text with protections (the stock run stopped at a shorter page, as in October); an ad in the stock run's side column. No breakage.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -515,7 +515,7 @@
     "changed": 0.093
    },
    "flags": [],
-   "triage": "Checked by hand: same landing; less text measured with protections because lower sections were still loading; the stock run shows the site's cookie notice.",
+   "triage": "Checked by the agent: same landing; less text measured with protections, cause not established (the screenshots cover only the visible area, and the October run measured the same gap: 5018 / 9411); the stock run shows the site's cookie notice.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -660,7 +660,7 @@
     "text 5283 vs 10688",
     "looks different (50% of the screen)"
    ],
-   "triage": "The site's own modal in both runs (a Genius sign-in offer with protections, a Black Friday offer without); the search form is identical underneath. Less text measured because lower sections were still loading.",
+   "triage": "The site's own modal in both runs (a Genius sign-in offer with protections, a Black Friday offer without); the search form is identical underneath. Why less text was measured with protections is not established: the screenshots cover only the visible area, and in October the counts were close (9782 / 9469).",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -744,7 +744,7 @@
     "changed": 0.344
    },
    "flags": [],
-   "triage": "Checked by hand: ad slot removed (grey placeholder band in the stock run); content identical.",
+   "triage": "Checked by the agent: ad slot removed (grey placeholder band in the stock run); content identical.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -1090,7 +1090,7 @@
     "changed": 0.231
    },
    "flags": [],
-   "triage": "Checked by hand: the stock run's load timed out after the page was drawn (3458 characters measured); both runs show the bank's own promotional modal.",
+   "triage": "Checked by the agent: the stock run's load timed out after the page was drawn (3458 characters measured); both runs show the bank's own promotional modal.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -1374,7 +1374,7 @@
     "changed": 0.14
    },
    "flags": [],
-   "triage": "Checked by hand: the stock run shows the site's cookie notice (its links are the difference); the landing and sign-up field are identical.",
+   "triage": "Checked by the agent: the stock run shows the site's cookie notice (its links are the difference); the landing and sign-up field are identical.",
    "reached_with_protections": true,
    "breakage": false
   },
@@ -1591,6 +1591,7 @@
   }
  },
  "amazon_order_reversed": {
+  "note": "One throwaway profile, visits in this order. Step 4 was a click on the check's button, made only if visit 3 met the check; visit 3 loaded the store, so step 4 did not run. Step 5 is one more Strict + uBlock Origin visit in the same profile, to see whether the check comes back.",
   "1-stock": {
    "text": 161,
    "links": 2,
