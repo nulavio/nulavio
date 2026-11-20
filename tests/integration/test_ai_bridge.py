@@ -855,7 +855,9 @@ class AiBridgeTest(unittest.TestCase):
         self.addCleanup(bridge.close)
         opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
         self.assertFalse(opened["isError"], opened)
-        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=10), ran)
+        # Both reports arrive once the page has run. A prompt left waiting would never answer, so a generous wait still
+        # tells that apart from a loaded machine (#571: 10 s was too short once, on the shared test machine).
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 2, timeout=45), ran)
         self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?popup=opened"])
         time.sleep(2)
         self.assertEqual(hits, [])
