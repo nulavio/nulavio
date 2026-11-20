@@ -67,7 +67,8 @@ A_GAP = 17.0  # to the next letter, the wordmark's own n-to-u spacing
 
 
 def _wordmark_without_initial() -> tuple[str, list[tuple[float, float, float]], float]:
-    """The wordmark's path, dots and advance without its first letter ("ulavio", from x = 0)."""
+    """The wordmark's path, dots and advance without its first letter: "ulavio", still where the
+    wordmark draws it (the u starts at x = 41)."""
     path, dots, advance = bl.wordmark_paths()
     x, top, base, r = 0.0, bl.X_TOP, bl.BASE, bl.ARCH_R
     first = f"M{x} {base} V{top} M{x} {top + r} A{r} {r} 0 0 1 {x + 2 * r} {top + r} V{base} "
@@ -280,7 +281,8 @@ def mark_report() -> list[str]:
 
 def accent_report(data: dict) -> tuple[list[str], str]:
     """The accent candidates as a table, and how much was checked. It depends on every token the
-    accent is kept apart from, so the document dates it instead of the test pinning it."""
+    accent is kept apart from, so the document dates it instead of the test pinning it. The failing
+    count is over the variant rows, which include the pairs as they are without a variant."""
     rows = accent_candidates(data)
     lines = [
         "| Accent | Dark / light value | Hue | On navy | On Cloud White | Contrast pairs failing "
@@ -292,7 +294,7 @@ def accent_report(data: dict) -> tuple[list[str], str]:
         nearest = row["nearest"].split(".", 2)[2]
         lines.append(
             f"| {row['name']} | `{row['scale']['400']}` / `{row['scale']['700']}` | {row['hue']:.0f}° "
-            f"| {row['on_navy']:.2f}:1 | {row['on_cloud']:.2f}:1 | {row['failed'] + row['variant_failed']} "
+            f"| {row['on_navy']:.2f}:1 | {row['on_cloud']:.2f}:1 | {row['variant_failed']} "
             f"| `{nearest}` at {row['separation']:.3f}: {ok} |"
         )
     checked = f"{rows[0]['pairs']} checked pairs, {rows[0]['variant_rows']} rows across every appearance variant"
