@@ -15,6 +15,8 @@ For each run the runner records the final address, title, length of the visible 
 
 **50 sites, 0 load errors, 0 breakages caused by Nulavio's protections.** 6 pages were flagged and 3 more checked by hand; every difference was an ad slot removed, a site variant (A/B tests, personalised banners) or a modal of the site itself. No per-site fix was needed.
 
+Correction (2026-11-20): two of the 50 were not reached. IMDb (titled "Human Verification", 214 / 188 characters, no links) and iFood ("Um momento…", 277 / 277, 2 links) were the sites' own bot-check pages in both runs, so nothing behind them was measured; this run reached 48. The [November run](site-regression-2026-11.md) met the same checks and leaves them out.
+
 | Site | Category | Text (Nulavio / stock) | Links | Flag | Triage |
 |---|---|---|---|---|---|
 | google | search | 147 / 147 | 11 / 11 | ok | — |
