@@ -52,3 +52,5 @@ Checked on 2026-10-26 on Fedora 44 KDE (Wayland), engine Gecko 158.0.1 (Nulavio 
 | Fedora 44 KDE (Wayland), Nulavio build | SUPPORTED | All tests above |
 | Fedora / Ubuntu with distribution Firefox (Track A) | UNSUPPORTED | The Bridge drives only the Nulavio build, whose windows carry the agent's band and lock; an installed Nulavio's tools use the engine beside them. Only the test harness, in a source checkout, runs the Bridge on distribution Firefox (`NULAVIO_TEST_DISTRIBUTION_FIREFOX`, set by `tests/lib/harness.py`; an install's tools do not read it): CI runs the engine tests that way in Fedora and Ubuntu containers |
 | Windows | UNTESTED | stdio works the same; workspace launch, paths and the approval prompt need a Windows port |
+
+`nulavio-doctor` (`nulavio doctor`) checks this: its engine section has a "Nulavio build" line that warns when the engine it resolves (`NULAVIO_ENGINE`, or the lookup) is not the Nulavio build. The warning names the binary and its vendor and says the Bridge will refuse it. It does not read the configuration of an agent such as Claude Code or Codex, so a `NULAVIO_ENGINE` set there is not reported (#574).

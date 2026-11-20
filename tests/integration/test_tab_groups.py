@@ -187,9 +187,19 @@ class TabGroupsTest(unittest.TestCase):
         closed = "return SessionStore.getClosedTabGroups({ sourceWindow: window }).map(g => [g.id, g.name, g.tabs.length]);"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(closed), 10))
         self.assertEqual(self.m.chrome(closed)[0], [group, "Trabalho", 2])
+        # The order the engine saved the tabs in, from its own state (the last history entry of each, in saved order).
+        saved = self.m.chrome(
+            "const g = SessionStore.getClosedTabGroups({ sourceWindow: window }).find(g => g.id == arguments[0]);"
+            "return g.tabs.map(t => new URL(t.state.entries[t.state.entries.length - 1].url).pathname);",
+            [group],
+        )
+        self.assertEqual(sorted(saved), ["/page/dois", "/page/tres"], saved)
         self.m.chrome("SessionStore.undoCloseTabGroup(window, arguments[0], window);", [group])
-        self.assertTrue(harness.wait_until(lambda: self.groups(), 10))
-        self.assertEqual(self.groups(), [[group, "Trabalho", "cyan", False, ["/page/dois", "/page/tres"]]])
+        # The restored tabs come back one by one and take their pages a moment later: wait for all of them, then compare
+        # with what the engine saved (#571: the first read once caught them before they had settled).
+        want = [[group, "Trabalho", "cyan", False, saved]]
+        harness.wait_until(lambda: self.groups() == want, 15)
+        self.assertEqual(self.groups(), want)
         self.assertEqual(self.m.chrome(closed), [])
 
     def test_06_with_imersivo_a_group_stays_as_it_was(self):

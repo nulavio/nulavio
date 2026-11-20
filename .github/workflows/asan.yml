@@ -12,6 +12,11 @@ on:
   schedule:
     - cron: "23 3 1 * *" # monthly, on the 1st (Blacksmith minutes: about US$3 a run)
   workflow_dispatch:
+    inputs:
+      sandbox:
+        description: "Also build the content sandbox (--enable-sandbox) to see whether it works under AddressSanitizer (#490); a trial, the scheduled run keeps it off"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -46,7 +51,14 @@ jobs:
           mkdir -p "$HOME/.config/nulavio-build"
           printf '%s' "$KEY" > "$HOME/.config/nulavio-build/google-safebrowsing.key"
       - name: Build with AddressSanitizer
+        env:
+          SANDBOX: ${{ inputs.sandbox }}
         run: |
+          # The engine's configure turns the sandbox off for an AddressSanitizer build on Linux. A trial run (#490)
+          # asks for it, in this runner's copy of the file only.
+          if [ "$SANDBOX" = "true" ]; then
+            echo 'ac_add_options --enable-sandbox' >> browser/build/mozconfig.asan
+          fi
           firefox=$(python3 -I -c 'import json; print(json.load(open("browser/build/engine.json"))["firefox"])')
           scripts/build/build_nulavio.sh "$firefox"
       - name: Remove the Safe Browsing key

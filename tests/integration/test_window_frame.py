@@ -121,6 +121,51 @@ class WindowFrameTest(unittest.TestCase):
         seen = harness.wait_until(lambda: self.m.chrome(panel), 15)
         self.assertEqual(seen, {"radius": 10, "outline": ["solid", 1], "bottom": 8, "gap": 8, "pageBottom": 8})
 
+    def test_01bb_without_a_launcher_the_panel_has_the_frame_margin_and_one_gap(self):
+        """#565: "hide tabs and sidebar" leaves no launcher; a panel beside the page, on the tabs' side, has the frame
+        margin at the window's edge, one gap (the splitter) to the page, and the page its margin on the other side."""
+        self.apply("top")
+        self.addCleanup(self.apply, "lateral")
+        self.m.chrome("Services.prefs.setStringPref('sidebar.visibility', 'hide-sidebar');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.visibility');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('sidebar.position_start');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('intl.l10n.pseudo');")
+        probe = """
+          const box = document.getElementById("sidebar-box"), page = document.getElementById("tabbrowser-tabbox");
+          const split = document.getElementById("sidebar-splitter");
+          const launcher = document.getElementById("sidebar-container");
+          const b = box.getBoundingClientRect(), p = page.getBoundingClientRect();
+          if (box.hidden || !b.width || (launcher && !launcher.hidden && launcher.getBoundingClientRect().width)) return null;
+          const card = gBrowser.selectedBrowser.closest(".browserContainer").getBoundingClientRect();
+          return {
+            panel: [Math.round(b.left), Math.round(b.right)], card: [Math.round(card.left), Math.round(card.right)],
+            width: innerWidth, splitter: Math.round(split.getBoundingClientRect().width),
+          };
+        """
+        self.m.chrome("SidebarController.show('viewBookmarksSidebar');")
+        self.addCleanup(self.m.chrome, "SidebarController.hide();")
+        for name, setup in (
+            ("tabs start", ""),
+            ("tabs end", "Services.prefs.setBoolPref('sidebar.position_start', false);"),
+            ("right to left", "Services.prefs.setStringPref('intl.l10n.pseudo', 'bidi');"),
+        ):
+            with self.subTest(name):
+                self.m.chrome("Services.prefs.clearUserPref('sidebar.position_start');")
+                self.m.chrome("Services.prefs.clearUserPref('intl.l10n.pseudo');")
+                if setup:
+                    self.m.chrome(setup)
+                seen = harness.wait_until(lambda: self.m.chrome(probe), 15)
+                panel, card, width = seen["panel"], seen["card"], seen["width"]
+                # The panel is first, in reading order of the window, on the side of the tabs; mirrored when the
+                # tabs are on the right (and right to left puts them there, as `sidebar.position_start` does).
+                left_panel = panel[0] < card[0]
+                if left_panel:
+                    edge, gap, other = panel[0], card[0] - panel[1], width - card[1]
+                else:
+                    edge, gap, other = width - panel[1], panel[0] - card[1], card[0]
+                self.assertEqual((edge, other), (8, 8), f"the margins at the window's edges: {seen}")
+                self.assertEqual(gap, seen["splitter"], f"one gap between the panel and the page: {seen}")
+
     def test_01c_a_dialog_of_the_tab_still_overlaps_the_toolbar(self):
         # The engine draws a tab's dialog a few pixels over the toolbar, where no page can draw. The card must not cut that.
         self.assertFalse(self.frame()["tabBoxClips"])
