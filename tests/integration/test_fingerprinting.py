@@ -828,7 +828,11 @@ class FingerprintingTest(unittest.TestCase):
             if now is not None:
                 seen.append(now)
             time.sleep(0.1)
-        self.assertGreaterEqual(len(seen), 5, "the slow page came at once: the page before it was never read while waiting")
+        self.assertGreaterEqual(
+            len(seen),
+            5,
+            f"too few reads of the page before the slow one ({len(seen)}): it came at once or the probe read nothing; {seen!r}",
+        )
         self.assertEqual(set(seen), {"localhost 1920x1080"})
         # Arrived: the exempted site reads the display's size, from its first script.
         self.assertTrue(self.arrives(first, plain), self.m.execute(first))

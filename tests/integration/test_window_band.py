@@ -310,7 +310,8 @@ class WindowBandTest(unittest.TestCase):
 
         def seen(wanted=None) -> dict:
             # Wait for the identity the page was asked to have, not for the first read that has its kind: the
-            # sanitised engine is slow to set a page's own identity, and the read before it is the previous page's.
+            # sanitised engine is slow, and the read before the wanted identity may be the previous page's (the run
+            # that failed read scheme http and no add-on after about 11 s; the 30 s is a margin, not a measurement).
             # The wait ends on the state wanted (the Shell's whole identity for a Shell page), and what was on
             # the page when it did not is in the failure message of the assertion that follows.
             def reached(now: dict) -> bool:
