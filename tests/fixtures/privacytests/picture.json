@@ -1,0 +1,13 @@
+{
+ "comment": "Written by scripts/site/privacytests_pages.py picture: each PNG and the SVG it was drawn from.",
+ "pt-BR": {
+  "png": "assets/og-fingerprinting-pt.png",
+  "png_sha256": "ae4917ad7ff49428c8add80030de6fda69cef03ebc1bc6ec0440a042b0b5b213",
+  "svg_sha256": "9f4057da56369f3c613429e8282555fb5f15a3713452baae9fdf6e5cfde132ff"
+ },
+ "en-US": {
+  "png": "assets/og-fingerprinting-en.png",
+  "png_sha256": "06c705f656eee9d5ec921456c790aa25c5c30664d587702cd6b2f91398ab51b8",
+  "svg_sha256": "906e666289096fd11289d05ba2b776864d6cd465c8d375090f43042babc2ed9e"
+ }
+}

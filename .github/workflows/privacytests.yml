@@ -4,7 +4,9 @@ name: privacytests
 # tests/integration/test_privacytests.py mirrors their pass rule. They add probes and change the rule. Once a week
 # this compares their repository with the pins (scripts/research/watch_privacytests.py) and fails when a copied
 # file or their scoring changed, so the copy is brought up to date by a person or an agent who reads the change.
-# It reads raw.githubusercontent.com only, runs nothing it downloads, and holds no secret.
+# It also says when PrivacyTests.org's published results moved, which nulavio.net's comparison is built from
+# (#437; scripts/site/privacytests_pages.py refresh). It reads raw.githubusercontent.com and privacytests.org
+# only, runs nothing it downloads, and holds no secret.
 #
 # A second job answers their comparison between machines. A Device probe passes on their site when it reads the
 # same on their machines; here the test holds each such value to one written value (DEVICE_CONSTANTS). That test

@@ -31,7 +31,9 @@ LANDING = {"index.html": "pt-BR", "en/index.html": "en-US"}
 WAITLIST = {"lista/index.html": "pt-BR", "en/waitlist/index.html": "en-US"}
 LINK = {"lista/link/index.html": "pt-BR", "en/waitlist/link/index.html": "en-US"}
 DOCUMENT = {"engenharia/index.html": "pt-BR", "en/engineering/index.html": "en-US"}
-PAGES = [*LANDING, *WAITLIST, *LINK, *DOCUMENT, "404.html"]
+# PrivacyTests.org's fingerprinting probes side by side, generated from tests/fixtures/privacytests/ (#437).
+COMPARISON = {"engenharia/impressao-digital/index.html": "pt-BR", "en/engineering/fingerprinting/index.html": "en-US"}
+PAGES = [*LANDING, *WAITLIST, *LINK, *DOCUMENT, *COMPARISON, "404.html"]
 FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's "lang" field
 WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
@@ -239,7 +241,7 @@ class SiteTest(unittest.TestCase):
             self.assertNotIn("{{", self.read(page), page)
 
     def test_both_languages_have_the_same_ids(self):
-        for pages in (LANDING, WAITLIST, LINK, DOCUMENT):
+        for pages in (LANDING, WAITLIST, LINK, DOCUMENT, COMPARISON):
             ids = {page: [n.attrs["id"] for n in self.tree(page).all() if "id" in n.attrs] for page in pages}
             pt, en = ids.values()
             with self.subTest(pages=list(pages)):
@@ -271,7 +273,7 @@ class SiteTest(unittest.TestCase):
                         self.assertTrue(img.attrs["alt"].strip())
 
     def test_figures_tables_and_scroll_regions_are_labelled(self):
-        for page in (*LANDING, *WAITLIST, *LINK, *DOCUMENT):
+        for page in (*LANDING, *WAITLIST, *LINK, *DOCUMENT, *COMPARISON):
             tree = self.tree(page)
             with self.subTest(page=page):
                 figures = tree.all("figure")
@@ -349,6 +351,10 @@ class SiteTest(unittest.TestCase):
         border_pairs += [("accent-default", bg) for bg in ("bg-canvas", "bg-surface", "bg-sunken", "accent-tint")]
         border_pairs += [("status-warning", "accent-tint"), ("text-muted", "accent-tint"), ("status-critical", "bg-surface")]
         border_pairs += [("control-selected-edge", "bg-sunken"), ("security-temporary-edge", "bg-canvas")]
+        # The fingerprinting comparison's marks (#437): on the table and in the tinted Nulavio column.
+        border_pairs += [
+            (mark, bg) for mark in ("accent-default", "status-critical", "text-secondary") for bg in ("bg-surface", "accent-tint")
+        ]
         for scheme, values in (("light", light), ("dark", dark)):
             for pairs, minimum in ((text_pairs, 4.5), (border_pairs, 3.0)):
                 for fg, bg in pairs:
@@ -373,7 +379,7 @@ class SiteTest(unittest.TestCase):
                 self.assertIn(f"Firefox {build_site.firefox_version(ROOT)}", self.read(page))
 
     def test_link_preview_image_is_ours_and_has_the_declared_size(self):
-        for page in LANDING:
+        for page in (*LANDING, *COMPARISON):
             html = self.read(page)
             image = re.search(r'<meta property="og:image" content="([^"]+)">', html).group(1)
             with self.subTest(page=page):

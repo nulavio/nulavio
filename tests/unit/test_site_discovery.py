@@ -22,6 +22,7 @@ class DiscoveryTest(unittest.TestCase):
             sitemap = ET.parse(out / "sitemap.xml")
             urls = [n.text for n in sitemap.findall("s:url/s:loc", NS)]
             expected = {BASE + p for p in ("", "en/", "lista/", "en/waitlist/", "engenharia/", "en/engineering/")}
+            expected |= {BASE + "engenharia/impressao-digital/", BASE + "en/engineering/fingerprinting/"}  # #437
             if (out / "baixar/index.html").exists():
                 expected |= {BASE + "baixar/", BASE + "en/download/"}
             # What's new: the index and a page per published version, in both languages (#198).
@@ -50,7 +51,9 @@ class DiscoveryTest(unittest.TestCase):
             urls = {n.text for n in ET.parse(out / "sitemap.xml").findall("s:url/s:loc", NS)}
             self.assertNotIn(BASE + "baixar/", urls)
             self.assertNotIn(BASE + "en/download/", urls)
-            self.assertEqual(len(urls), 6)
+            # the landing, the waitlist and the engineering pages, and the fingerprinting comparison (#437), whose
+            # Nulavio column names the release it measured in its own data, not packaging/release.json
+            self.assertEqual(len(urls), 8)
 
     def test_sitemap_respects_noindex_even_when_a_page_has_a_canonical(self):
         with tempfile.TemporaryDirectory() as tmp:
