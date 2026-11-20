@@ -107,8 +107,13 @@ class AudioReadersTest(unittest.TestCase):
         for name in sorted(readers):
             with self.subTest(reader=name):
                 self.assertIn("nsRFPService::RandomizeAudioSamplesWithKey(", self.added[self.WEBAUDIO + name])
-        # A worklet has two places: its inputs, and the values of a parameter a node is connected to.
-        self.assertEqual(self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"].count("RandomizeAudioSamplesWithKey("), 2)
+        # A worklet has two places: its inputs, and the values of a parameter a node is connected to, in a block
+        # where that node gave samples (a parameter's own value and schedule are left alone).
+        worklet = self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"]
+        self.assertEqual(worklet.count("RandomizeAudioSamplesWithKey("), 2)
+        self.assertIn(
+            "if (frames == WEBAUDIO_BLOCK_SIZE && connected &&\n        !connected->LastChunks()[0].IsNull()) {", worklet
+        )
         # The noise is patch 0012's own steps, moved to one function, not a second set of numbers.
         service = self.added["toolkit/components/resistfingerprinting/nsRFPService.cpp"]
         self.assertEqual(service.count("1.0e-4f / 32768.0f"), 1)

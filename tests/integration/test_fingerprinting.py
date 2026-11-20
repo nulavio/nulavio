@@ -836,6 +836,15 @@ class FingerprintingTest(unittest.TestCase):
             with self.subTest(plain=name):
                 self.assertEqual(values(at(plain, where)), values(at(plain_other, where)))
                 self.assertEqual(values(at(plain, where)), values(at(plain, where, "again")))
+        # A parameter's own schedule is not sound: on any engine it reads as written, also with a node connected that
+        # gives no samples (the patch asks whether the node gave samples in the block, not whether one is connected).
+        schedule = at(plain, ("worklet", "schedule"))
+        self.assertGreater(float(schedule["sum"]), 2000, schedule)  # a ramp from 0.25 to 1 over 8192 samples
+        self.assertLessEqual(schedule["peak"], 1)
+        for page in (first, other):
+            self.assertEqual(
+                values(at(page, ("worklet", "schedule"))), values(schedule), "a parameter's own schedule got the noise"
+            )
         moved = [name for name, where in READERS.items() if values(at(first, where)) != values(at(plain, where))]
         if not moved:
             if harness.built_from_this_tree():

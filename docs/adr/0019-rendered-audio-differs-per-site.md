@@ -54,7 +54,7 @@ Patch 0016 ([#406](https://github.com/nulavio/nulavio/issues/406)). While an off
 | An `AnalyserNode`'s data: `getFloatTimeDomainData`, `getByteTimeDomainData`, `getFloatFrequencyData`, `getByteFrequencyData` | On the copy of the last samples that all four are made from |
 | A `ScriptProcessorNode`'s `inputBuffer`, in its `audioprocess` event | On that buffer, as the event is made |
 | An `AudioWorklet`'s `inputs`, in `process()` | On the arrays `process()` reads, as each block of 128 samples is copied into them, on the rendering thread |
-| An `AudioWorklet`'s `parameters`, for a parameter a node is connected to (its values carry that node's samples) | The same way. A parameter with only its own value and schedule is not changed |
+| An `AudioWorklet`'s `parameters`, for a parameter a node is connected to (its values carry that node's samples) | The same way, in the blocks where that node gave samples. A parameter's own value and schedule are not changed |
 | A `DynamicsCompressorNode`'s `reduction`, a number the compressor makes of the samples | On the number, as it is read |
 
 - **A probe in use reads two of them.** CreepJS's audio module reads an analyser's float data and the compressor's `reduction` when an offline rendering completes, beside the returned buffer (its `src/audio/index.ts`, read on 2026-11-20; its page was not run against the build).
@@ -67,7 +67,7 @@ Patch 0016 ([#406](https://github.com/nulavio/nulavio/issues/406)). While an off
 
 ## Consequences
 
-- **The change cannot be heard.** One part in ten thousand is about 80 dB below the sound itself. `test_fingerprinting` 11 holds the loudest sample within one part in a thousand of the plain one, and 11b does the same for what each reader hands over.
+- **The change cannot be heard.** One part in ten thousand is about 80 dB below the sound itself. `test_fingerprinting` 11 holds the loudest sample within one part in a thousand of the plain one. 11b does the same for the samples an analyser, a script processor and a worklet hand over (its inputs and its connected parameter) and for the compressor's reduction; it does not check the analyser's spectrum or its two byte getters that way.
 - **A page that needs exact samples does not get them.** An audio editor that renders offline and compares with a reference bit for bit, a page that analyses a sound offline through an analyser or a worklet, or a test suite for audio code, sees the difference. The shield's switch for that site turns it off.
 - **Other ways to read audio are not covered.** The noise is on what an offline rendering returns and on what its nodes hand to script, and only there:
   - what a page reads from a context that plays is not changed (decision 2);

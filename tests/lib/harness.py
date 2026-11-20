@@ -169,19 +169,27 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
 # What a node inside an offline audio rendering hands to script while it renders
 # (tests/integration/test_fingerprinting.py, 11b): an analyser's four getters, a script processor's input buffers,
 # a worklet's inputs and the values of a parameter a node is connected to, and a compressor's reduction. The sound
-# is the usual probe's (FP_SURFACE_PAGE): an oscillator through a compressor. Each read happens twice.
+# is the usual probe's (FP_SURFACE_PAGE): an oscillator through a compressor. Each read happens twice. A second
+# parameter has a schedule of its own and a node connected that gives no samples (a source never started).
 FP_AUDIO_READERS_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-audio-readers</title><pre id=fp></pre>
 <script type="text/plain" id=worklet>
 registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
-  static get parameterDescriptors() { return [{ name: 'tap', defaultValue: 0, automationRate: 'a-rate' }]; }
-  constructor() { super(); this.heard = new Float32Array(8192); this.tap = new Float32Array(8192); this.at = 0; }
+  static get parameterDescriptors() {
+    return ['tap', 'ramp'].map(name => ({ name, defaultValue: 0, automationRate: 'a-rate' }));
+  }
+  constructor() {
+    super();
+    this.heard = new Float32Array(8192); this.tap = new Float32Array(8192); this.ramp = new Float32Array(8192); this.at = 0;
+  }
   process(inputs, outputs, parameters) {
     if (this.at < 8192) {
       if (inputs[0][0]) this.heard.set(inputs[0][0], this.at);
-      const tap = parameters.tap;
-      this.tap.set(tap.length === 128 ? tap : new Float32Array(128).fill(tap[0]), this.at);
+      for (const name of ['tap', 'ramp']) {
+        const values = parameters[name];
+        this[name].set(values.length === 128 ? values : new Float32Array(128).fill(values[0]), this.at);
+      }
       this.at += 128;
-      if (this.at === 8192) this.port.postMessage({ inputs: this.heard, parameter: this.tap });
+      if (this.at === 8192) this.port.postMessage({ inputs: this.heard, parameter: this.tap, schedule: this.ramp });
     }
     return true;
   }
@@ -223,6 +231,9 @@ registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
       const node = new AudioWorkletNode(context, 'nulavio-reader', options);
       heard = new Promise(r => { node.port.onmessage = e => r(e.data); });
       compressor.connect(node); compressor.connect(node.parameters.get('tap')); node.connect(context.destination);
+      const ramp = node.parameters.get('ramp');
+      ramp.setValueAtTime(0.25, 0); ramp.linearRampToValueAtTime(1, 8192 / 44100);
+      context.createConstantSource().connect(ramp);  // connected and never started: it gives no samples
       return null;
     });
     out.buffer = await read((await context.startRendering()).getChannelData(0));
@@ -244,7 +255,8 @@ registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
       return { events: events.length, ...(await read(all)) };
     });
     if (out.worklet === null) {
-      out.worklet = sent ? { inputs: await read(sent.inputs), parameter: await read(sent.parameter) } : 'error: no message';
+      out.worklet = !sent ? 'error: no message'
+        : { inputs: await read(sent.inputs), parameter: await read(sent.parameter), schedule: await read(sent.schedule) };
     }
     // One number is a small thing to tell two sites apart by, so four sounds give four of them.
     const reductions = [String(compressor.reduction)];
