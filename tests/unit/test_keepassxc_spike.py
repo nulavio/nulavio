@@ -60,6 +60,33 @@ class ConnectUntilDialogTest(unittest.TestCase):
         self.assertEqual((result["answered"], result["attempts"], presses), (False, 3, 3))
 
 
+class SettlePopupTest(unittest.TestCase):
+    def settle(self, states, max_reloads=4):
+        states = list(states)
+        log = []
+        with mock.patch.object(spike.time, "sleep", lambda s: None):
+            result = spike.settle_popup(
+                lambda: states.pop(0), lambda i: log.append(("reload", i)), lambda: log.append("close"), max_reloads=max_reloads
+            )
+        return result, log
+
+    def test_reload_is_pressed_until_connect_shows(self):
+        cannot = {"text": "Cannot connect to KeePassXC", "buttons": [{"id": "reload-status-button", "text": "Reload"}]}
+        result, log = self.settle([cannot, cannot, NOT_CONFIGURED])
+        self.assertEqual(result["reloads"], 2)
+        self.assertEqual(result["buttons"], NOT_CONFIGURED["buttons"])
+        self.assertEqual(log, [("reload", "reload-status-button"), "close"] * 2)
+
+    def test_stops_at_the_limit(self):
+        cannot = {"text": "Cannot connect", "buttons": [{"id": "reload-status-button", "text": "Reload"}]}
+        result, _ = self.settle([cannot] * 3, max_reloads=2)
+        self.assertEqual(result["reloads"], 2)
+
+    def test_connected_popup_is_left_alone(self):
+        result, log = self.settle([{"text": "Nulavio is connected", "buttons": []}])
+        self.assertEqual((result["reloads"], log), (0, []))
+
+
 class WatcherTest(unittest.TestCase):
     def test_dialog_renamed_after_opening_is_still_answered(self):
         watcher = spike.DialogWatcher({})
@@ -81,6 +108,25 @@ class WatcherTest(unittest.TestCase):
             watcher.run()
         self.assertEqual(len(watcher.actions), 1)
         self.assertEqual(watcher.titles, {"KeePassXC", "KeePassXC - Association"})
+
+    def test_answered_window_renamed_again_is_not_answered_twice(self):
+        watcher = spike.DialogWatcher({})
+        rounds = iter([{"7": "KeePassXC - Association"}, {"7": "KeePassXC - Associate key"}, {"7": "KeePassXC - Associate key"}])
+
+        def windows():
+            try:
+                return next(rounds)
+            except StopIteration:
+                watcher.stop.set()
+                return {}
+
+        watcher.windows = windows
+        with (
+            mock.patch.object(spike, "run", lambda cmd, **kw: None),
+            mock.patch.object(spike.time, "sleep", lambda s: None),
+        ):
+            watcher.run()
+        self.assertEqual(len(watcher.actions), 1)
 
 
 if __name__ == "__main__":
