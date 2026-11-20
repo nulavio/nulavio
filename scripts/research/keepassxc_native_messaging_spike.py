@@ -363,6 +363,8 @@ def main() -> int:
                 # KeePassXC asks for the key's name in a dialog of its own (the watcher answers it).
                 # The popup stays open until then, as it would in front of a person.
                 report["steps"]["association"] = connect_until_dialog(open_popup, press_connect, lambda: len(watcher.actions))
+                # Reloads pressed while retrying Connect count too: the report shows every recovery step.
+                report["steps"]["popup_reloads"] = reloads
             # The popup tab is closed, as a person would: with it open, the tab opened next is a background one
             # (the harness switches without focus) and its login page is not filled (#498).
             close_popup()
