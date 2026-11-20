@@ -2002,6 +2002,47 @@ class WorkspaceTest(Home):
             with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": "1"}):
                 self.assertIs(ws.start(timeout=5), bidi.return_value)
 
+    def test_the_engine_refuses_a_local_page_its_driver_opens_before_sending_it(self):
+        # #561: patch 0015 keys on the variable the Bridge sets and reads the file the Shell reads, with the Shell's
+        # limits. It checks only the top-level loads of the engine's driver (the system principal), and ends a refusal
+        # as the Shell's own does. Of the engine's code it changes two lines, and loosens no check. What it does is
+        # tests/integration/test_ai_bridge.py test_33, against a build of this tree.
+        from nulavio_launcher.ai import workspace
+
+        root = Path(__file__).resolve().parents[2]
+        name = "0015-lna-an-agents-engine-refuses-a-local-page-before-sending.patch"
+        self.assertIn(name, (root / "browser" / "patches" / "series").read_text(encoding="utf-8").split())
+        patch = (root / "browser" / "patches" / name).read_text(encoding="utf-8")
+        http = "netwerk/protocol/http/"
+        self.assertEqual(
+            set(re.findall(r"(?m)^\+\+\+ b/(\S+)", patch)),
+            {http + "NulavioAgentLocalAccess.cpp", http + "NulavioAgentLocalAccess.h", http + "moz.build",
+             http + "nsHttpChannel.cpp"},
+        )  # fmt: skip
+        self.assertIn(f'kWorkspaceEnv[] = "{workspace.WORKSPACE_ENV}";', patch)
+        self.assertIn(f'kLocalEnv[] = "{workspace.LOCAL_ENV}";', patch)
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAgentNetwork.sys.mjs").read_text(encoding="utf-8")
+        for ours, theirs in (("kMaxFileBytes", "MAX_FILE_BYTES"), ("kMaxPlaces", "MAX_PLACES")):
+            value = re.search(rf"(?m)^const {theirs} = (\d+);", shell)[1]
+            self.assertIn(f"+constexpr uint32_t {ours} = {value};", patch)
+        self.assertIn("ExtContentPolicy::TYPE_DOCUMENT", patch)
+        self.assertIn("triggering->IsSystemPrincipal() && InAgentEngine()", patch)
+        removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(
+            removed,
+            ["  if (mLoadInfo && StaticPrefs::network_lna_allow_top_level_navigation()) {",
+             "      UpdateLocalNetworkAccessPermissions(permissionKey);"],
+        )  # fmt: skip
+        # The driver's load is checked as a public page's request, and never granted by the top-level pref.
+        self.assertIn("+    parentAddressSpace = nsILoadInfo::IPAddressSpace::Public;", patch)
+        self.assertIn("StaticPrefs::network_lna_allow_top_level_navigation() &&\n+      !nulavioAgentDriverLoad) {", patch)
+        # The refusal comes first in ProcessLNAActions, right after its transaction check, and ends as a blocked page;
+        # the load goes on only when the Bridge's file allows its place.
+        process = patch.split("return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;\n   }\n", 1)[1].split("// Suspend to block", 1)[0]
+        self.assertIn("+  if (nulavioAgentDriverLoad && !nulavio::AgentMayReach(mURI)) {", process)
+        self.assertEqual(process.count("ContinueOnStartRequest1(NS_ERROR_BLOCKED_BY_POLICY)"), 2)
+        self.assertNotIn("UpdateCurrentIpAddressSpace", process)
+
     def test_the_shell_reads_what_the_bridge_writes(self):
         # #243: the Shell's check (NulavioAgentNetwork.sys.mjs) and the Bridge name the same environment variables and
         # file, and the Shell pins the same Local Network Access values in an agent's engine as the AI Workspace has.
