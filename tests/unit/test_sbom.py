@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import MappingProxyType
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "release" / "sbom.py"
@@ -178,6 +179,43 @@ class CompanionTest(unittest.TestCase):
         """CI builds the Companion SBOM from the real lock: every locked library has a pinned hash."""
         bom = run("--companion")
         self.assertTrue(all(c["purl"] and c["hashes"] for c in bom["components"] if c["bom-ref"].startswith("pkg:maven/")))
+
+
+class ExtensionLockTest(unittest.TestCase):
+    """The committed copies of what the lock pins (the SBOM and LICENSES.md) follow the lock (#497)."""
+
+    LICENSES_ROW = MappingProxyType(
+        {
+            "ublock-origin": "uBlock Origin",
+            "proton-pass": "Proton Pass extension",
+            "keepassxc-browser": "KeePassXC-Browser",
+            "bitwarden": "Bitwarden extension",
+            "1password": "1Password extension",
+        }
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lock = json.loads(sbom.LOCK.read_text())["extensions"]
+
+    def test_the_committed_sbom_names_the_locked_extensions(self):
+        committed = json.loads((ROOT / "sbom" / "nulavio-preview.cdx.json").read_text())
+        found = {c["bom-ref"]: c["version"] for c in committed["components"] if c["bom-ref"].startswith("xpi:")}
+        expected = {f"xpi:{e['id']}": e["version"] for e in self.lock}
+        self.assertEqual(found, expected, "regenerate it: python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json")
+
+    def test_licenses_md_names_the_locked_extensions(self):
+        rows = {}
+        for line in (ROOT / "LICENSES.md").read_text().splitlines():
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            if line.startswith("|") and len(cells) >= 2:
+                rows[cells[0]] = cells[1]
+        for entry in self.lock:
+            with self.subTest(extension=entry["key"]):
+                self.assertIn(entry["key"], self.LICENSES_ROW, "name its LICENSES.md row in this test")
+                label = self.LICENSES_ROW[entry["key"]]
+                self.assertIn(label, rows, f"LICENSES.md has no row for {label}")
+                self.assertEqual(rows[label], entry["version"])
 
 
 if __name__ == "__main__":
