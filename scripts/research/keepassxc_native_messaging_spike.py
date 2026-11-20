@@ -109,25 +109,29 @@ class DialogWatcher(threading.Thread):
             time.sleep(0.4)
 
 
-def connect_until_dialog(open_popup, click_connect, dialog_seen, attempts: int = 4, wait: float = 25.0) -> dict:
+def connect_until_dialog(open_popup, click_connect, dialogs_answered, attempts: int = 4, wait: float = 25.0) -> dict:
     """Presses the popup's Connect button until KeePassXC shows (and the watcher answers) the association dialog.
 
     One press can be lost on a slow machine: the popup may not have its Connect button yet, or the extension's
     key exchange with KeePassXC may not have finished, and then no dialog ever opens (#498). The dialog is
     waited for, not slept for, and when it does not come the popup is opened again and the button pressed again,
     as a person would. `open_popup()` returns the popup's state, `click_connect(state)` presses Connect (False
-    when the popup has no such button) and `dialog_seen()` is true once the dialog has been answered.
+    when the popup has no such button) and `dialogs_answered()` is how many dialogs the watcher has answered so
+    far. It is a count, and each attempt compares it with its own start: a dialog answered before (or by an
+    earlier attempt that was only slow) must not satisfy a later press.
     """
     log: list[str] = []
+    first_count = dialogs_answered()
     for attempt in range(1, attempts + 1):
         state = open_popup()
         if "is connected" in state["text"]:
             log.append(f"attempt {attempt}: already connected")
-            return {"answered": bool(dialog_seen()), "attempts": attempt, "log": log}
+            return {"answered": dialogs_answered() > first_count, "attempts": attempt, "log": log}
+        before_press = dialogs_answered()
         if not click_connect(state):
             log.append(f"attempt {attempt}: no Connect button, popup says {state['text'][:80]!r}")
             continue
-        if harness.wait_until(dialog_seen, timeout=wait, interval=0.5):
+        if harness.wait_until(lambda start=before_press: dialogs_answered() > start, timeout=wait, interval=0.5):
             log.append(f"attempt {attempt}: dialog answered")
             return {"answered": True, "attempts": attempt, "log": log}
         log.append(f"attempt {attempt}: Connect pressed, no dialog within {wait:.0f} s")
@@ -358,7 +362,7 @@ def main() -> int:
             if connect or "is connected" not in before["text"]:
                 # KeePassXC asks for the key's name in a dialog of its own (the watcher answers it).
                 # The popup stays open until then, as it would in front of a person.
-                report["steps"]["association"] = connect_until_dialog(open_popup, press_connect, lambda: watcher.actions)
+                report["steps"]["association"] = connect_until_dialog(open_popup, press_connect, lambda: len(watcher.actions))
             # The popup tab is closed, as a person would: with it open, the tab opened next is a background one
             # (the harness switches without focus) and its login page is not filled (#498).
             close_popup()

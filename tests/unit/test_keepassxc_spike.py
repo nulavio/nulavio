@@ -20,8 +20,8 @@ def instant_wait(predicate, timeout=0.0, interval=0.0):
 
 
 class ConnectUntilDialogTest(unittest.TestCase):
-    def run_flow(self, dialog_after_press: int | None, popups=None, attempts: int = 4):
-        """Dialog opens on the Nth press of Connect (None: never)."""
+    def run_flow(self, dialog_after_press: int | None, popups=None, attempts: int = 4, answered_before: int = 0):
+        """Dialog opens on the Nth press of Connect (None: never); `answered_before` dialogs were answered earlier."""
         presses = []
         popups = list(popups or [])
 
@@ -35,7 +35,8 @@ class ConnectUntilDialogTest(unittest.TestCase):
             return True
 
         def seen():
-            return dialog_after_press is not None and len(presses) >= dialog_after_press
+            opened = dialog_after_press is not None and len(presses) >= dialog_after_press
+            return answered_before + (1 if opened else 0)
 
         with mock.patch.object(spike.harness, "wait_until", instant_wait):
             return spike.connect_until_dialog(open_popup, press, seen, attempts=attempts, wait=0), len(presses)
@@ -54,6 +55,10 @@ class ConnectUntilDialogTest(unittest.TestCase):
         result, presses = self.run_flow(1, popups=[bare, bare])
         self.assertEqual((result["answered"], result["attempts"], presses), (True, 3, 1))
         self.assertIn("no Connect button", result["log"][0])
+
+    def test_dialog_answered_earlier_does_not_satisfy_a_later_press(self):
+        result, presses = self.run_flow(None, attempts=3, answered_before=1)
+        self.assertEqual((result["answered"], result["attempts"], presses), (False, 3, 3))
 
     def test_gives_up_and_says_so(self):
         result, presses = self.run_flow(None, attempts=3)
