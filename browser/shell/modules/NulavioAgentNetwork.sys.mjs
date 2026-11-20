@@ -25,7 +25,10 @@
    In the same engines it sets the engine's Local Network Access to refuse a
    public page's requests to local addresses with no prompt, a pop-up's
    included, on the default branch and locked: nothing reaches the profile's
-   prefs.js, which matters in the user's own profiles opened for an agent. Both
+   prefs.js, which matters in the user's own profiles opened for an agent. The
+   engine reads a site's own saved permission before that default: in these
+   engines, keyed on the same variable, engine patch 0014 gives a saved allow no
+   effect and refuses what Local Network Access would ask about (#570). Both
    are on before the Shell writes READY_FILE in the profile, and the Bridge uses
    the engine only once it is there (workspace.py, GUARD_READY). */
 
