@@ -270,27 +270,33 @@ def accent_candidates(data: dict) -> list[dict]:
     return rows
 
 
-def report(data: dict) -> list[str]:
-    """The measured tables of docs/brand/review-2026-11.md, line by line (the test compares them)."""
+def mark_report() -> list[str]:
+    """The marks' own pairs as the table of docs/brand/review-2026-11.md (the test compares it line by line)."""
     lines = ["| Pair | Colours | Ratio | Needs |", "|---|---|---:|---:|"]
     for what, fg, bg, minimum in MARK_PAIRS:
         lines.append(f"| {what} | `{fg}` on `{bg}` | {contrast.ratio(fg, bg):.2f}:1 | {minimum:g}:1 |")
-    lines += [
-        "",
-        "| Accent | Dark / light value | Hue | On navy | On Cloud White | Declared pairs failing "
+    return lines
+
+
+def accent_report(data: dict) -> tuple[list[str], str]:
+    """The accent candidates as a table, and how much was checked. It depends on every token the
+    accent is kept apart from, so the document dates it instead of the test pinning it."""
+    rows = accent_candidates(data)
+    lines = [
+        "| Accent | Dark / light value | Hue | On navy | On Cloud White | Contrast pairs failing "
         "| Nearest reserved colour (OKLab) |",
         "|---|---|---:|---:|---:|---:|---|",
     ]
-    for row in accent_candidates(data):
+    for row in rows:
         ok = "holds" if row["separation"] >= row["separation_min"] else f"**under the {row['separation_min']:g} rule**"
         nearest = row["nearest"].split(".", 2)[2]
         lines.append(
             f"| {row['name']} | `{row['scale']['400']}` / `{row['scale']['700']}` | {row['hue']:.0f}° "
-            f"| {row['on_navy']:.2f}:1 | {row['on_cloud']:.2f}:1 "
-            f"| {row['failed']} of {row['pairs']}; {row['variant_failed']} of {row['variant_rows']} with variants "
+            f"| {row['on_navy']:.2f}:1 | {row['on_cloud']:.2f}:1 | {row['failed'] + row['variant_failed']} "
             f"| `{nearest}` at {row['separation']:.3f}: {ok} |"
         )
-    return lines
+    checked = f"{rows[0]['pairs']} checked pairs, {rows[0]['variant_rows']} rows across every appearance variant"
+    return lines, checked
 
 
 def write_proposals() -> list[Path]:
@@ -574,7 +580,7 @@ def context_sheet(option: dict, tmp: Path, out: Path) -> None:
 
     s.heading(
         "Android launcher and the X avatar",
-        "adaptive icon under four masks and a themed tint; the icon in X's circle crop at 200 and 48 px",
+        "adaptive icon under four masks and a themed tint; the icon in X's circle crop at 128 and 48 px",
     )
     x = 24
     s.rect(x, s.y, 714, 150, "#E9EEF3", rx=8)
@@ -758,7 +764,8 @@ def main() -> int:
     parser.add_argument("--render", action="store_true", help="also write the sheets (ImageMagick)")
     args = parser.parse_args()
     if args.report:
-        print("\n".join(report(json.loads(contrast.TOKENS.read_text(encoding="utf-8")))))
+        accents, checked = accent_report(json.loads(contrast.TOKENS.read_text(encoding="utf-8")))
+        print("\n".join([*mark_report(), "", *accents, "", f"Checked for each accent: {checked}."]))
         return 0
     written = write_proposals()
     if args.render:

@@ -99,21 +99,23 @@ class ColourTest(unittest.TestCase):
     def test_the_other_hues_pass_contrast_and_break_the_separation_rule(self):
         # The review's reason to keep the palette: a turned accent is not ruled out by contrast,
         # it is ruled out by the distance the tokens keep between the accent and what it must not mean.
+        stale = "the review's palette conclusion no longer holds on these tokens: run build_review.py --report and refresh it"
         others = [row for name, row in self.candidates.items() if name != "Mint, as today"]
         self.assertEqual(len(others), 3)
         for row in others:
             with self.subTest(accent=row["name"]):
-                self.assertEqual((row["failed"], row["variant_failed"]), (0, 0))
-                self.assertLess(row["separation"], build_tokens.SEPARATION_MIN)
+                self.assertEqual((row["failed"], row["variant_failed"]), (0, 0), stale)
+                self.assertLess(row["separation"], build_tokens.SEPARATION_MIN, stale)
                 self.assertAlmostEqual(build_review.oklch(row["scale"]["400"])[2], row["hue"], places=6)
                 self.assertGreater(abs(row["hue"] - build_review.oklch(build_review.MINT)[2]), 10)
 
-    def test_the_review_quotes_the_measured_tables(self):
+    def test_the_review_quotes_the_marks_measured_pairs(self):
+        # Only the marks' own pairs, which depend on the brand's colours alone. The accent table is
+        # dated in the document: it moves with every token the accent is kept apart from.
         text = REVIEW.read_text(encoding="utf-8")
-        for line in build_review.report(self.data):
-            if line:
-                with self.subTest(line=line):
-                    self.assertIn(line + "\n", text, "run scripts/brand/build_review.py --report")
+        for line in build_review.mark_report():
+            with self.subTest(line=line):
+                self.assertIn(line + "\n", text, "run scripts/brand/build_review.py --report")
 
 
 class DocumentTest(unittest.TestCase):
