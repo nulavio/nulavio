@@ -2036,8 +2036,11 @@ class WorkspaceTest(Home):
         self.assertIn(f'PR_GetEnv("{workspace.WORKSPACE_ENV}")', patch)
         removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
         self.assertEqual(removed, ["  if (nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),"])
+        # The driver's own loads carry the system principal, which the permission manager allows everything: they
+        # are granted at this step as before (test_27 shows they are still sent, and the Shell checks their pages).
         self.assertIn(
-            "+  if (!InNulavioAgentEngine() &&\n+      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),",
+            "+  if ((!InNulavioAgentEngine() ||\n+       mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal()) &&\n"
+            "+      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),",
             patch,
         )
         self.assertNotIn("IsExactSitePermDeny", "".join(removed))  # a saved deny keeps refusing

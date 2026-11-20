@@ -11,9 +11,11 @@ check, a worker's saved permission). Its pages' requests to local addresses
 were therefore let through in the agent's run (#570, R29).
 
 With this, in such an engine (its environment carries NULAVIO_AI_WORKSPACE,
-which workspace.py sets and the Shell reads too), a saved allow grants
+which workspace.py sets and the Shell reads too), a site's saved allow grants
 nothing and a request that Local Network Access would ask about is refused
-before it is sent. A saved deny still refuses. Nothing is written to or
+before it is sent. A saved deny still refuses. The driver's own loads (the
+system principal, which the permission manager allows everything) are
+granted as before: the Shell checks the pages they open. Nothing is written to or
 removed from permissions.sqlite, so the user's permission is there as before
 once the agent's run ends. Outside an agent's engine nothing changes.
 
@@ -73,14 +75,17 @@ Upstream: not applicable (the AI Bridge and its environment are Nulavio's).
      NS_WARNING("LNA permission request without load info");
 --- a/netwerk/protocol/http/nsHttpChannel.cpp
 +++ b/netwerk/protocol/http/nsHttpChannel.cpp
-@@ -2104,7 +2104,10 @@
+@@ -2104,7 +2104,13 @@
    }
  
    // Step 1. Check for  Existing Allow or Deny permission
 -  if (nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),
 +  // Nulavio: in an engine an agent drives, a site's saved allow grants nothing
-+  // (its saved deny still refuses); LNAPermissionRequest then refuses.
-+  if (!InNulavioAgentEngine() &&
++  // (its saved deny still refuses); LNAPermissionRequest then refuses. The
++  // system principal is no site: the driver's own loads are granted here as
++  // before (the permission manager allows it everything).
++  if ((!InNulavioAgentEngine() ||
++       mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal()) &&
 +      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),
                                             aPermissionType)) {
      userPerms = LNAPermission::Granted;
