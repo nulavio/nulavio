@@ -1319,10 +1319,13 @@ class AiBridgeTest(unittest.TestCase):
         bridge.close()
         with closing(sqlite3.connect(work / "permissions.sqlite")) as db:
             kept = db.execute(
-                "SELECT origin, type, permission, expireType, expireTime FROM moz_perms WHERE origin = ? ORDER BY type",
+                "SELECT origin, type, permission, expireType, expireTime FROM moz_perms"
+                " WHERE origin = ? AND type IN ('loopback-network', 'local-network') ORDER BY type",
                 (origin,),
             ).fetchall()
-        self.assertEqual(kept, sorted(row[:5] for row in saved))  # the user's, as they were: nothing removed or added
+        # The user's, as they were, neither removed nor turned into a session entry. (The agent's click adds the
+        # engine's own storageAccessAPI entry for the site, as any click does: not one of these.)
+        self.assertEqual(kept, sorted(row[:5] for row in saved))
         self.assertFalse(reached, hits)
 
 
