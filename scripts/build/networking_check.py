@@ -115,6 +115,7 @@ READ_WITH = (
     "scripts/build/networking_check.py",
     "scripts/build/apply_patches.py",
     "scripts/build/build_nulavio.sh",
+    "scripts/build/build_image.sh",
     "ci/containers/fedora-build.Containerfile",
     ".github/workflows/networking-check.yml",
 )
