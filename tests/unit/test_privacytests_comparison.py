@@ -94,6 +94,7 @@ class ComparisonTest(unittest.TestCase):
         self.assertEqual(len(every), 25)
         self.assertEqual(set(pt.GLOSS), every, "every probe has a plain-words line in both languages")
         self.assertEqual(set(self.published["rows"]) | set(self.published["not_on_page"]), every)
+        self.assertEqual(set(self.published["not_on_page"]), set(pt.NOT_ON_THEIR_PAGE))
         self.assertIn(pt.ONE_ARCHITECTURE, self.constants["DEVICE_CONSTANTS"])
 
     # -- PrivacyTests.org's columns ------------------------------------------------------------
@@ -134,7 +135,7 @@ class ComparisonTest(unittest.TestCase):
                     differ.add((browser, probe))
         self.assertEqual(differ, set(pt.PAGE_OVER_RULE))
 
-    def test_a_cell_typed_in_by_hand_stops_the_build(self):
+    def test_refresh_rebuilds_the_fixture_and_stops_on_a_cell_typed_in_by_hand(self):
         fixture = copy.deepcopy(self.published)
         cell = fixture["rows"]["Logical CPU cores"]["chrome"]
         cell["verdict"] = "passed" if cell["verdict"] == "failed" else "failed"
@@ -191,6 +192,23 @@ class ComparisonTest(unittest.TestCase):
                 pt.parse_page(page(cells))
         with self.assertRaisesRegex(pt.ComparisonError, "one browser each"):
             pt.parse_page(page(good + good, columns=("brave", "brave")))
+        # Rows with attributes are still rows: a section read as empty would put "·" across every probe in it.
+        self.assertEqual(
+            set(pt.parse_page(page(good + na).replace("<tr>", '<tr class="x">'))["rows"]), {"Device memory", "Time zone"}
+        )
+
+    def test_a_probe_that_leaves_their_page_stops_refresh(self):
+        fixture = self.published
+        page = {
+            "issue": fixture["issue"],
+            "updated": fixture["updated"],
+            "columns": [b["id"] for b in fixture["browsers"]],
+            "rows": {p: {b: c["verdict"] for b, c in cells.items()} for p, cells in fixture["rows"].items()},
+        }
+        data = {"time_started": "", "harness": "", "browsers": {b["id"]: {} for b in fixture["browsers"]}}
+        del page["rows"]["Time zone"]
+        with self.assertRaisesRegex(pt.ComparisonError, "no row for"):
+            pt.published(page, data, self.constants["PROBES"], fixture["sources"])
 
     def test_their_data_file_is_one_version_per_browser_and_no_private_mode(self):
         def run(version, **flags):
@@ -310,6 +328,7 @@ class ComparisonTest(unittest.TestCase):
                 self.assertIn(f"Nulavio {self.release['version']}", svg)
                 self.assertIn(str(self.published["issue"]), svg)
                 self.assertNotIn("<image", svg, "no logos")
+                self.assertIn(">nulavio.net</text>", svg, "the picture says whose it is")
                 self.assertEqual(svg.count("<g transform"), 13 * 25 + len(pt.MARKS), "a mark per cell and the legend's")
                 page = self.pages[f"{pt.BASE[locale]}index.html"]
                 self.assertIn(f'<meta property="og:image" content="https://nulavio.net/{path}">', page)

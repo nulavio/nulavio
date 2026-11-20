@@ -127,6 +127,20 @@ class WatchTest(unittest.TestCase):
             self.assertIn(path, PINNED["files"])
         self.assertEqual(sorted(PINNED["mentions"]), ["scripts/render.js", "scripts/test.js"])
 
+    def test_the_watcher_says_when_the_published_results_moved(self):
+        # #437: nulavio.net's comparison is built from published.json; the weekly run says when theirs moved.
+        published = json.loads((FIXTURES / "published.json").read_text(encoding="utf-8"))
+        sources = published["sources"]
+        files = {sources["page"]["url"]: b"page", sources["data"]["url"]: b"data"}
+        same = {
+            "sources": {kind: {**sources[kind], "sha256": watch.digest(files[sources[kind]["url"]])} for kind in ("page", "data")}
+        }
+        self.assertEqual(watch.published_moved(same, files.__getitem__), [])
+        files[sources["data"]["url"]] = b"new data"
+        moved = watch.published_moved(same, files.__getitem__)
+        self.assertEqual(len(moved), 1)
+        self.assertIn(f"{sources['data']['url']} changed", moved[0])
+
     def test_a_ref_is_a_plain_name(self):
         for ref in ("../etc", "a b", "x" * 81, "main;rm"):
             with self.subTest(ref=ref), self.assertRaises(SystemExit):

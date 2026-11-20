@@ -71,6 +71,11 @@ PAGE_OVER_RULE = {
         "their page shows it passed: three of the five runs were randomized and the other two read 8 and 4"
     ),
 }
+# Probes the integration test runs that their page has no row for, and why. Their columns show "·" there. A probe
+# that leaves their page, or comes back to it, stops `refresh` until this list says so.
+NOT_ON_THEIR_PAGE = {
+    "Math.tanh(0.123)": "their data file of No. 106 has values for it, but their page has no row for it",
+}
 # Read a byte of NaN that differs between arm64 and x86 processors; Nulavio has an x86-64 build only, so its
 # value is constant for that reason alone (#79). It is a Device constant of the integration test.
 ONE_ARCHITECTURE = "Math: Infinity - Infinity"
@@ -115,7 +120,7 @@ def parse_page(text: str) -> dict:
     table = re.search(r'<table class="comparison-table">(.*?)</table>', text, re.S)
     if not banner or not table:
         raise ComparisonError("their page has no issue banner or no comparison table")
-    header = re.search(r"<tr>(.*?)</tr>", table.group(1), re.S).group(1)
+    header = re.search(r"<tr\b[^>]*>(.*?)</tr>", table.group(1), re.S).group(1)
     columns = re.findall(r'<img\b[^>]*\balt="([a-z]+) logo"', header)
     if not columns or len(set(columns)) != len(columns):
         raise ComparisonError(f"their page's columns are not one browser each: {columns}")
@@ -126,7 +131,7 @@ def parse_page(text: str) -> dict:
             raise ComparisonError(f"their page has no section {title!r}")
         end = table.group(1).find('<span class="subheading-title">', start + 1)
         section = table.group(1)[start : end if end > 0 else None]
-        for row in re.findall(r"<tr>(.*?)</tr>", section, re.S):
+        for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", section, re.S):
             cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row, re.S)
             if not cells:
                 continue  # the section's own heading
@@ -208,6 +213,10 @@ def published(page: dict, data: dict, probes: dict, sources: dict) -> dict:
         raise ComparisonError("their page and their data file do not have the same browsers")
     if set(page["rows"]) - names:
         raise ComparisonError(f"probes on their page that the integration test does not run: {sorted(set(page['rows']) - names)}")
+    if names - set(page["rows"]) != set(NOT_ON_THEIR_PAGE):
+        raise ComparisonError(
+            f"their page has no row for {sorted(names - set(page['rows']))}, NOT_ON_THEIR_PAGE says {sorted(NOT_ON_THEIR_PAGE)}"
+        )
     rows = {}
     for probe in sorted(page["rows"], key=lambda p: [*GROUPS].index(group_of(probes, p))):
         group, cells = group_of(probes, probe), {}
@@ -318,6 +327,8 @@ def comparison(src: Path) -> dict:
     names = {probe for group in groups.values() for probe in group}
     if set(pub["rows"]) | set(pub["not_on_page"]) != names or set(pub["rows"]) & set(pub["not_on_page"]):
         raise ComparisonError("published.json's probes are not the integration test's")
+    if set(pub["not_on_page"]) != set(NOT_ON_THEIR_PAGE):
+        raise ComparisonError("published.json's probes without a row on their page are not NOT_ON_THEIR_PAGE's")
     columns = [b["id"] for b in pub["browsers"]]
     if set(columns) - set(BROWSERS):
         raise ComparisonError(f"published.json names an unknown browser: {sorted(set(columns) - set(BROWSERS))}")
@@ -945,6 +956,10 @@ def picture_svg(c: dict, locale: str) -> str:
                 kind = c["nulavio"][probe] if browser == "nulavio" else c["marks"][probe][browser]
                 out.append(picture_mark(kind, xs[probe] + 4, y + 4))
         y += row_h
+    out.append(
+        f'<text x="{width - left}" y="{height - 40}" text-anchor="end" font-family="{FONT}" font-size="18" '
+        f'font-weight="600" fill="{k["text"]}">nulavio.net</text>'
+    )
     legend_y, lx = height - 40, left
     for kind in MARKS:
         out.append(picture_mark(kind, lx, legend_y - 15))
