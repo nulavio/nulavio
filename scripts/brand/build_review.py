@@ -13,7 +13,7 @@ under docs/brand/assets/review/2026-11/:
 
 Run:
   python3 -I scripts/brand/build_review.py            the proposal SVGs
-  python3 -I scripts/brand/build_review.py --report   the palette table of docs/brand/review-2026-11.md
+  python3 -I scripts/brand/build_review.py --report   the measured tables, sizes and ratios of docs/brand/review-2026-11.md
   python3 -I scripts/brand/build_review.py --render   the sheets too (needs ImageMagick 7 with librsvg,
                                                       a font for the labels, and git for the captures)
 """
@@ -301,6 +301,45 @@ def accent_report(data: dict) -> tuple[list[str], str]:
     return lines, checked
 
 
+# --- What the audit quotes in prose: the trail's sizes (finding 3, proposal A) and the tile (finding 4) ---
+# Where today's lockup is used it is given a width, and its height follows the file's own ratio.
+SITE_HEADER_WIDTH = 132.0  # site/site.css and site/landing.css: .brand img { width: 132px; height: auto }
+LINK_PREVIEW_WIDTH = 236.0 * 240 / 1200  # scripts/site/og-template.html: 236 px in the 1200 px image, shown 240 px wide
+# The KDE launcher's background and its selected row, as the captures in docs/design/screenshots/install-2026-11
+# have them: 05-menu-entry.webp has the icon on the selected row, 08-two-menu-entries-after-default.webp on both.
+KDE_LAUNCHER, KDE_SELECTED = "#202427", "#284E61"
+BREEZE_LIGHT, BREEZE_DARK = "#EFF0F1", "#2A2E32"
+
+
+def trail_report() -> list[tuple[str, str]]:
+    """(where, the trail's three points in px across), as the review's prose quotes them."""
+    lockup_width = natural_size(ASSETS / "logo" / "nulavio-lockup-horizontal.svg")[0]
+
+    def across(dots, px_per_unit: float) -> str:
+        first, second, third = (f"{2 * r * px_per_unit:.1f}" for _cx, _cy, r in dots)
+        return f"{first}, {second} and {third} px"
+
+    header, preview = SITE_HEADER_WIDTH / lockup_width, LINK_PREVIEW_WIDTH / lockup_width
+    return [
+        (f"today's lockup in the site header, {SITE_HEADER_WIDTH:g} px wide", across(bl.DOTS, header)),
+        (f"today's lockup in a 240 px link preview, {LINK_PREVIEW_WIDTH:.0f} px wide", across(bl.DOTS, preview)),
+        # The lockup draws its wordmark at 0.85, and proposal A is shown with letters of that size.
+        ("proposal A's initial in the site header", across(initial_dots(), header * 0.85)),
+    ]
+
+
+def tile_report() -> list[tuple[str, str, float, float]]:
+    """(surface, its colour, the icon tile's navy against it, the tile's lightest corner against it)."""
+    surfaces = (
+        ("About dialog, the tile's own navy", NAVY),
+        ("black, behind the X avatar", "#000000"),
+        ("KDE launcher background", KDE_LAUNCHER),
+        ("Breeze Dark panel", BREEZE_DARK),
+        ("KDE launcher selected row", KDE_SELECTED),
+    )
+    return [(what, bg, contrast.ratio(NAVY, bg), contrast.ratio(bl.SLATE, bg)) for what, bg in surfaces]
+
+
 def write_proposals() -> list[Path]:
     written = []
     for name, text in proposal_svgs().items():
@@ -315,7 +354,6 @@ def write_proposals() -> list[Path]:
 FONT = "Noto Sans, Cantarell, sans-serif"
 INK, PAPER, RULE, NOTE = "#0B1623", "#FFFFFF", "#D7DEE2", "#4F6470"
 GITHUB_LIGHT, GITHUB_DARK = "#FFFFFF", "#0D1117"
-BREEZE_LIGHT, BREEZE_DARK = "#EFF0F1", "#2A2E32"
 LOSSLESS = ["-strip", "-define", "webp:lossless=true"]
 
 
@@ -565,8 +603,8 @@ def context_sheet(option: dict, tmp: Path, out: Path) -> None:
         "a KDE launcher row (32 px) and a store page (128 px, the Flatpak's name and summary)",
     )
     x = 24
-    s.rect(x, s.y, 714, 150, "#202427", rx=8)
-    s.rect(x + 12, s.y + 52, 690, 46, "#284E61", rx=4)
+    s.rect(x, s.y, 714, 150, KDE_LAUNCHER, rx=8)
+    s.rect(x + 12, s.y + 52, 690, 46, KDE_SELECTED, rx=4)
     s.place(icon, x + 20, s.y + 59, 32, 32)
     s.text(x + 66, s.y + 72, "Nulavio", size=14, fill="#FCFCFC")
     s.text(x + 66, s.y + 90, "Web Browser", size=12, fill="#BDC3C7")
@@ -685,6 +723,11 @@ CAPTURES = (
     (f"{INSTALL}/01-landing.webp", "520x70+20+84", "Site header in Firefox on Fedora KDE, 2026-11-14 (#276)"),
     (f"{INSTALL}/01-landing.webp", "270x44+0+0", "Tab icon (the 16 px favicon), same capture"),
     (f"{INSTALL}/05-menu-entry.webp", "655x74+0+300", "KDE launcher result after installing the RPM, 2026-11-14 (#276)"),
+    (
+        f"{INSTALL}/08-two-menu-entries-after-default.webp",
+        "655x106+0+298",
+        "KDE launcher, 2026-11-14 (#276): the first result is selected, the second is on the launcher's own background",
+    ),
     ("docs/brand/assets/review/trackb-about-dialog.png", "619x290+0+0", "About dialog, build 158.0.1 of 2026-10-25"),
 )
 
@@ -767,7 +810,11 @@ def main() -> int:
     args = parser.parse_args()
     if args.report:
         accents, checked = accent_report(json.loads(contrast.TOKENS.read_text(encoding="utf-8")))
+        trail = [f"- {where}: {sizes}" for where, sizes in trail_report()]
+        tile = [f"- {what} `{bg}`: {navy:.2f}:1, {corner:.2f}:1" for what, bg, navy, corner in tile_report()]
         print("\n".join([*mark_report(), "", *accents, "", f"Checked for each accent: {checked}."]))
+        print("\n".join(["", "The trail's three points, across:", *trail]))
+        print("\n".join(["", "The icon tile against dark surfaces (its navy, its lightest corner):", *tile]))
         return 0
     written = write_proposals()
     if args.render:

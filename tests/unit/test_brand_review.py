@@ -119,6 +119,41 @@ class ColourTest(unittest.TestCase):
 
 
 class DocumentTest(unittest.TestCase):
+    def test_the_review_quotes_the_trails_measured_sizes(self):
+        text = REVIEW.read_text(encoding="utf-8")
+        report = build_review.trail_report()
+        self.assertEqual(len(report), 3)
+        for where, sizes in report:
+            with self.subTest(trail=where):
+                self.assertIn(f"points are {sizes}", text, "run scripts/brand/build_review.py --report")
+
+    def test_the_trails_sizes_are_at_the_widths_the_site_gives_the_lockup(self):
+        # The sizes are the points at the lockup's width, with the height following the file's ratio.
+        stale = "the review's trail sizes assume this rule: measure again (build_review.py --report)"
+        for css in ("site.css", "landing.css"):
+            with self.subTest(css=css):
+                rules = (ROOT / "site" / css).read_text(encoding="utf-8")
+                self.assertRegex(rules, r"\.brand img \{[^}]*\bwidth: 132px;[^}]*\bheight: auto;", stale)
+        preview = (ROOT / "scripts" / "site" / "og-template.html").read_text(encoding="utf-8")
+        self.assertRegex(preview, r"\bimg \{ width: 236px; height: auto; \}", stale)
+        self.assertIn("width: 1200px;", preview, stale)
+        self.assertEqual((build_review.SITE_HEADER_WIDTH, build_review.LINK_PREVIEW_WIDTH), (132.0, 47.2))
+
+    def test_the_review_quotes_the_tiles_ratios_on_dark_surfaces(self):
+        finding = next(line for line in REVIEW.read_text(encoding="utf-8").splitlines() if line.startswith("4. **"))
+        report = build_review.tile_report()
+        self.assertEqual([bg for _what, bg, _navy, _corner in report], ["#0B1623", "#000000", "#202427", "#2A2E32", "#284E61"])
+        for what, bg, navy, corner in report:
+            with self.subTest(surface=what):
+                quoted = rf"`{bg}`\D+{navy:.2f}:1 and \D*{corner:.2f}:1"
+                self.assertRegex(finding, quoted, "run scripts/brand/build_review.py --report")
+        # The first launcher capture has the icon on the selected row only. The finding cites the
+        # launcher's own background from the capture that has it there, which the sheet must crop.
+        self.assertNotIn("as the launcher capture shows", finding)
+        self.assertIn("the second result in the second launcher crop", finding)
+        launcher = [crop for tracked, crop, _caption in build_review.CAPTURES if "menu-entr" in tracked]
+        self.assertEqual(launcher, ["655x74+0+300", "655x106+0+298"])
+
     def test_the_review_shows_every_sheet_and_says_nothing_is_chosen(self):
         text = REVIEW.read_text(encoding="utf-8")
         for sheet in (
