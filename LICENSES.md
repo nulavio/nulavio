@@ -23,6 +23,7 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 | Proton Pass extension | 1.41.1 | GPL-3.0-only | Downloaded on explicit request |
 | KeePassXC-Browser | 1.10.4.1 | GPL-3.0-only | Downloaded on explicit request |
 | Bitwarden extension | 2026.10.2 | Not declared on AMO. The upstream repo mixes GPL-3.0 and the Bitwarden License | Downloaded on explicit request; **must not be bundled** until clarified |
+| 1Password extension | 8.12.44.33 | Proprietary (AMO: All Rights Reserved) | Downloaded from AMO on explicit request; **must not be bundled** |
 | Inter, JetBrains Mono, Noto Sans (fonts) | — | SIL OFL 1.1 | Referenced by CSS only; **not bundled** (system fonts are used if absent) |
 | PrivacyTests.org's fingerprinting probe pages | commit `5e675fa8` (2026-11-16) | MIT (Arthur Edelstein and contributors) | **In the source repository only, not in any package.** Copied unchanged into `tests/fixtures/privacytests/` with their `LICENSE`; the integration tests load them from this machine ([#79](https://github.com/nulavio/nulavio/issues/79)) |
 | ruff (dev tool) | 0.17.2 | MIT | Lint/format in development and CI only; hash-pinned |
@@ -32,6 +33,6 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 
 ## SBOM
 
-`python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run and attaches it as a build artifact.
+`python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run and attaches it as a build artifact. The committed copy has to name the extensions of `browser/distribution/extensions.lock.json` with their versions, as does the table above: `tests/unit/test_sbom.py` fails when either differs.
 
 The Companion app has its own: `scripts/release/sbom.py --companion` lists every library of its release build, from the lock of its release classpath (`android/app/gradle.lockfile`), each with its Maven purl and the SHA-256 Gradle verifies. With `--gradle-dependencies <report>` it also records the dependency graph as Gradle resolved it ([build](docs/architecture/build.md#packages-s18)).

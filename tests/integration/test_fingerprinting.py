@@ -818,10 +818,21 @@ class FingerprintingTest(unittest.TestCase):
             [site + "/slow"],
         )
         seen = []
-        while (now := self.m.execute(live)).startswith("localhost ") and len(seen) < 200:
-            seen.append(now)
+        for _ in range(200):
+            # While the navigation is on its way the probe may read nothing (the engine is between two documents,
+            # and a sanitised one stays there longer): that is not a page, so it is neither counted nor taken as
+            # the arrival. The loop ends on a page that is not the one before it.
+            now = self.m.execute(live)
+            if now is not None and not now.startswith("localhost "):
+                break
+            if now is not None:
+                seen.append(now)
             time.sleep(0.1)
-        self.assertGreaterEqual(len(seen), 5, "the slow page came at once: the page before it was never read while waiting")
+        self.assertGreaterEqual(
+            len(seen),
+            5,
+            f"too few reads of the page before the slow one ({len(seen)}): it came at once or the probe read nothing; {seen!r}",
+        )
         self.assertEqual(set(seen), {"localhost 1920x1080"})
         # Arrived: the exempted site reads the display's size, from its first script.
         self.assertTrue(self.arrives(first, plain), self.m.execute(first))

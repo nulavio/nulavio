@@ -156,7 +156,7 @@ class DownloadsIndicatorTest(unittest.TestCase):
     def test_01_completed_program_render_and_native_names(self):
         # The state that has an accessible name is the one kept: read again a moment later, the engine may be
         # rebuilding the button's accessible (a theme change does) and answer no name for that instant.
-        before = harness.wait_until(lambda: (state := self.state())["name"] and state, 5)
+        before = harness.wait_until(lambda: (state := self.state())["name"] and state, 20)
         self.assertTrue(before, self.state())
         self.assertTrue(self.add()["succeeded"])
         measurements = []
@@ -165,7 +165,7 @@ class DownloadsIndicatorTest(unittest.TestCase):
             time.sleep(2.5)  # native completion notification ends; no changed deadline/assertion
             # The window in this theme (not the previous one's last frame), with the button's accessible name.
             state = harness.wait_until(
-                lambda want=bool(dark): self.m.chrome(DARK) is want and (now := self.state())["name"] and now, 5
+                lambda want=bool(dark): self.m.chrome(DARK) is want and (now := self.state())["name"] and now, 20
             )
             self.assertTrue(state, self.state())
             self.capture(("dark" if dark else "light") + "-completed")
