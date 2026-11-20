@@ -114,6 +114,20 @@ def check_engine() -> list[Check]:
         checks.append(Check("engine", "version floor", "ok", f">= {engine_mod.MIN_ENGINE_MAJOR}"))
     except engine_mod.EngineError as exc:
         checks.append(Check("engine", "version floor", "fail", str(exc)))
+    try:
+        engine_mod.require_nulavio(eng, refusal=engine_mod.BRIDGE_NEEDS_NULAVIO)
+        checks.append(Check("engine", "Nulavio build", "ok", f"{eng.vendor}: the AI Bridge can drive it"))
+    except engine_mod.EngineError:
+        checks.append(
+            Check(
+                "engine",
+                "Nulavio build",
+                "warn",
+                f"{eng.path} is {eng.label}, not the Nulavio build: the AI Bridge will refuse it and an agent's "
+                "tools will return an error. Install the Nulavio package (https://nulavio.net/en/download/), "
+                "or set NULAVIO_ENGINE to a Nulavio build",
+            )
+        )
     owner = package_of(eng.path)
     if owner:
         checks.append(

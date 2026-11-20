@@ -309,7 +309,17 @@ class WindowBandTest(unittest.TestCase):
         own |= {"system": False, "addon": "shell@nulavio.net", "scheme": "moz-extension"}
 
         def seen(wanted=None) -> dict:
-            harness.wait_until(lambda: wanted is None or self.m.chrome(identity)["kind"] == wanted, 10)
+            # Wait for the identity the page was asked to have, not for the first read that has its kind: the
+            # sanitised engine is slow, and the read before the wanted identity may be the previous page's (the run
+            # that failed read scheme http and no add-on after about 11 s; the 30 s is a margin, not a measurement).
+            # The wait ends on the state wanted (the Shell's whole identity for a Shell page), and what was on
+            # the page when it did not is in the failure message of the assertion that follows.
+            def reached(now: dict) -> bool:
+                if wanted is None:
+                    return True
+                return now == own if wanted == "chromeUI" and now["addon"] == "shell@nulavio.net" else now["kind"] == wanted
+
+            harness.wait_until(lambda: reached(self.m.chrome(identity)), 30)
             return self.m.chrome(identity)
 
         self.m.navigate(base + "vault/unlock.html?p=0")

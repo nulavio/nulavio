@@ -101,7 +101,7 @@ What changed from the prototype, each for a reason found on the engine or in the
 | A side panel as a square white area down to the window's edge | A second card of the same shape; the splitter is the gap and still resizes | It was the one surface that did not follow the frame |
 | The card in a window of any size | None in a window 600 px tall or less | The existing first-run test failed: on a 1280×800 screen at 150 % the layout choice's main action ended 7 px below the first screen. The margin gives the height back there |
 
-`tests/integration/test_window_frame.py` (nine tests): one tone and the card's shape; the side panel as a card; a dialog of the tab still drawn over the toolbar; the margin with the tabs on either side, right to left, in Immersive, with tabs on top and in Foco; no card in full screen or in a short window; the splitters' highlight under the pointer; a private window keeps its band's fill and line and its own colours, with the card's shape; the system's contrast setting gives the edge the text colour.
+`tests/integration/test_window_frame.py` (ten tests): one tone and the card's shape; the side panel as a card, also in a window without a launcher, where it has the frame margin at the edge and one gap to the page (#565); a dialog of the tab still drawn over the toolbar; the margin with the tabs on either side, right to left, in Immersive, with tabs on top and in Foco; no card in full screen or in a short window; the splitters' highlight under the pointer; a private window keeps its band's fill and line and its own colours, with the card's shape; the system's contrast setting gives the edge the text colour.
 
 ### Independent review of the frame (2026-11-11)
 
