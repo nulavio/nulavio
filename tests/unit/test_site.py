@@ -36,6 +36,38 @@ FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's
 WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
 SHOTS = ROOT / "site" / "assets" / "shots"
+# The latest real-site regression run (tests/regression/run_sites.py), behind the landing's compatibility figure.
+SITE_RUN = ROOT / "docs" / "research" / "evidence" / "site-regression-2026-11-20.json"
+MONTHS = {
+    "pt": [
+        "janeiro",
+        "fevereiro",
+        "março",
+        "abril",
+        "maio",
+        "junho",
+        "julho",
+        "agosto",
+        "setembro",
+        "outubro",
+        "novembro",
+        "dezembro",
+    ],
+    "en": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ],
+}
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -203,11 +235,29 @@ class SiteTest(unittest.TestCase):
                 self.assertEqual(len(fine), 1, feature.attrs)
                 self.assertIn(label, fine[0].text())
         # Selling the launch stops where the download starts: what the published alpha does not
-        # have yet is marked as coming, and the compatibility figure says when it was measured
-        # (frontend audit N-01, N-04).
-        for page, soon, when, packages in (
-            ("index.html", "Em breve", "outubro de 2026", "Pacotes assinados para Fedora e Ubuntu"),
-            ("en/index.html", "Coming soon", "October 2026", "Signed packages for Fedora and Ubuntu"),
+        # have yet is marked as coming, and the compatibility figure is the latest real-site run's:
+        # the pages it reached with the protections on, its month, and "none broke" only while it found no breakage
+        # (frontend audit N-01, N-04; #202).
+        run = json.loads(SITE_RUN.read_text(encoding="utf-8"))
+        reached = sum(site["reached_with_protections"] for site in run["sites"].values())
+        broken = sum(site["breakage"] for site in run["sites"].values())
+        self.assertEqual((reached, broken), (run["summary"]["reached_with_protections"], run["summary"]["breakages"]))
+        year, month = (int(part) for part in run["date"].split("-")[:2])
+        for page, soon, when, intact, packages in (
+            (
+                "index.html",
+                "Em breve",
+                f"{MONTHS['pt'][month - 1]} de {year}",
+                "nenhum quebrou",
+                "Pacotes assinados para Fedora e Ubuntu",
+            ),
+            (
+                "en/index.html",
+                "Coming soon",
+                f"{MONTHS['en'][month - 1]} {year}",
+                "none broke",
+                "Signed packages for Fedora and Ubuntu",
+            ),
         ):
             with self.subTest(page=page):
                 tree = self.tree(page)
@@ -219,8 +269,14 @@ class SiteTest(unittest.TestCase):
                 for node in tree.all():
                     if node.tag in ("p", "td") and "FIDO2" in node.text():
                         self.assertRegex(node.text(), f"(?i){soon}", node.text())
-                figure = next(n.text() for n in tree.all("dt") if "50" in n.parent.text() and "sites" in n.text())
-                self.assertIn(when, figure)
+                figure = next(
+                    n.parent for n in tree.all("dt") if "sites" in n.text() and ("testados" in n.text() or "tested" in n.text())
+                )
+                label = next(n.text() for n in figure.children if isinstance(n, Node) and n.tag == "dt")
+                number = next(n.text() for n in figure.children if isinstance(n, Node) and n.tag == "dd")
+                self.assertEqual(number.strip(), str(reached))
+                self.assertIn(when, label)
+                self.assertEqual(intact in label, broken == 0, label)
                 self.assertNotIn(packages, self.read(page))
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:

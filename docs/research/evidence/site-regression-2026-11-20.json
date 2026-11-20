@@ -1,0 +1,1613 @@
+{
+ "date": "2026-11-20",
+ "engine": "Nulavio build, Firefox 160.0.1 (build 20261119020726, the published 160.0.1-0.2 engine)",
+ "content_filter": {
+  "ublock_origin": "1.76.4",
+  "selected_lists": [
+   "adguard-cookies",
+   "adguard-generic",
+   "adguard-spyware-url",
+   "easylist",
+   "easylist-newsletters",
+   "easylist-notifications",
+   "easyprivacy",
+   "fanboy-cookiemonster",
+   "plowe-0",
+   "spa-1",
+   "ublock-annoyances",
+   "ublock-badware",
+   "ublock-cookies-easylist",
+   "ublock-filters",
+   "ublock-privacy",
+   "ublock-quick-fixes",
+   "ublock-unbreak",
+   "urlhaus-1",
+   "user-filters"
+  ]
+ },
+ "protected": "Strict tracking protection + uBlock Origin (policy-installed, the build's default lists)",
+ "stock": "Standard tracking protection, uBlock Origin off",
+ "summary": {
+  "tried": 50,
+  "reached_with_protections": 48,
+  "flagged": 12,
+  "checked_by_hand": 8,
+  "breakages": 0
+ },
+ "sites": {
+  "google": {
+   "url": "https://www.google.com/",
+   "category": "search",
+   "nulavio": {
+    "error": null,
+    "title": "Google",
+    "text": 126,
+    "links": 18,
+    "images": 7,
+    "blocked": 3
+   },
+   "stock": {
+    "error": null,
+    "title": "Google",
+    "text": 126,
+    "links": 19,
+    "images": 7,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 0.08,
+    "changed": 0.001
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "duckduckgo": {
+   "url": "https://duckduckgo.com/",
+   "category": "search",
+   "nulavio": {
+    "error": null,
+    "title": "DuckDuckGo - Proteção. Privacidade. Tranquilidade.",
+    "text": 8657,
+    "links": 123,
+    "images": 47,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "DuckDuckGo - Proteção. Privacidade. Tranquilidade.",
+    "text": 8657,
+    "links": 123,
+    "images": 47,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "bing": {
+   "url": "https://www.bing.com/",
+   "category": "search",
+   "nulavio": {
+    "error": null,
+    "title": "Pesquisa - Microsoft Bing",
+    "text": 2252,
+    "links": 94,
+    "images": 30,
+    "blocked": 10
+   },
+   "stock": {
+    "error": null,
+    "title": "Pesquisa - Microsoft Bing",
+    "text": 2840,
+    "links": 98,
+    "images": 31,
+    "blocked": 10
+   },
+   "visual": {
+    "mean": 43.1,
+    "changed": 0.297
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "wikipedia-pt": {
+   "url": "https://pt.wikipedia.org/wiki/Navegador_web",
+   "category": "reference",
+   "nulavio": {
+    "error": null,
+    "title": "Navegador web – Wikipédia, a enciclopédia livre",
+    "text": 17861,
+    "links": 641,
+    "images": 15,
+    "blocked": 5
+   },
+   "stock": {
+    "error": null,
+    "title": "Navegador web – Wikipédia, a enciclopédia livre",
+    "text": 17861,
+    "links": 641,
+    "images": 15,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 0.44,
+    "changed": 0.003
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "wikipedia-en": {
+   "url": "https://en.wikipedia.org/wiki/Web_browser",
+   "category": "reference",
+   "nulavio": {
+    "error": null,
+    "title": "Web browser - Wikipedia",
+    "text": 20365,
+    "links": 1226,
+    "images": 12,
+    "blocked": 4
+   },
+   "stock": {
+    "error": null,
+    "title": "Web browser - Wikipedia",
+    "text": 20365,
+    "links": 1226,
+    "images": 12,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 0.58,
+    "changed": 0.003
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "github": {
+   "url": "https://github.com/mozilla-firefox/firefox",
+   "category": "developer",
+   "nulavio": {
+    "error": null,
+    "title": "GitHub - mozilla-firefox/firefox: The official repository of Mozilla's Firefox web browser. · GitHub",
+    "text": 12516,
+    "links": 536,
+    "images": 25,
+    "blocked": 2
+   },
+   "stock": {
+    "error": null,
+    "title": "GitHub - mozilla-firefox/firefox: The official repository of Mozilla's Firefox web browser. · GitHub",
+    "text": 12516,
+    "links": 536,
+    "images": 25,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 0.5,
+    "changed": 0.003
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "stackoverflow": {
+   "url": "https://stackoverflow.com/questions",
+   "category": "developer",
+   "nulavio": {
+    "error": null,
+    "title": "Newest Questions - Stack Overflow",
+    "text": 9586,
+    "links": 230,
+    "images": 18,
+    "blocked": 14
+   },
+   "stock": {
+    "error": null,
+    "title": "Um momento…",
+    "text": 278,
+    "links": 2,
+    "images": 1,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 19.29,
+    "changed": 0.128
+   },
+   "flags": [],
+   "triage": "Checked by hand: the stock run stopped at Cloudflare's bot check ('Um momento…'), in this run and both re-runs, so there is no stock page to compare with; the protected run loaded the questions list each time and it is whole. Why the check met only the stock side is not established.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "mdn": {
+   "url": "https://developer.mozilla.org/en-US/docs/Web/HTML",
+   "category": "developer",
+   "nulavio": {
+    "error": null,
+    "title": "HTML: HyperText Markup Language | MDN",
+    "text": 7872,
+    "links": 457,
+    "images": 0,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "HTML: HyperText Markup Language | MDN",
+    "text": 7872,
+    "links": 457,
+    "images": 0,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 29.35,
+    "changed": 0.185
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "youtube": {
+   "url": "https://www.youtube.com/",
+   "category": "video",
+   "nulavio": {
+    "error": null,
+    "title": "YouTube",
+    "text": 176,
+    "links": 8,
+    "images": 8,
+    "blocked": 6
+   },
+   "stock": {
+    "error": null,
+    "title": "YouTube",
+    "text": 176,
+    "links": 8,
+    "images": 8,
+    "blocked": 7
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "twitch": {
+   "url": "https://www.twitch.tv/directory",
+   "category": "video",
+   "nulavio": {
+    "error": null,
+    "title": "Todas as categorias - Twitch",
+    "text": 2600,
+    "links": 112,
+    "images": 49,
+    "blocked": 8
+   },
+   "stock": {
+    "error": null,
+    "title": "Todas as categorias - Twitch",
+    "text": 2601,
+    "links": 112,
+    "images": 48,
+    "blocked": 7
+   },
+   "visual": {
+    "mean": 0.34,
+    "changed": 0.003
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "reddit": {
+   "url": "https://www.reddit.com/r/firefox/",
+   "category": "social",
+   "nulavio": {
+    "error": null,
+    "title": "Firefox",
+    "text": 12867,
+    "links": 181,
+    "images": 123,
+    "blocked": 12
+   },
+   "stock": {
+    "error": null,
+    "title": "Firefox",
+    "text": 2155,
+    "links": 67,
+    "images": 25,
+    "blocked": 9
+   },
+   "visual": {
+    "mean": 3.52,
+    "changed": 0.016
+   },
+   "flags": [],
+   "triage": "Checked by hand: more text with protections (the stock run stopped at a shorter page, as in October); an ad in the stock run's side column. No breakage.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "x": {
+   "url": "https://x.com/mozilla",
+   "category": "social",
+   "nulavio": {
+    "error": null,
+    "title": "Mozilla (@mozilla) / X",
+    "text": 2407,
+    "links": 72,
+    "images": 15,
+    "blocked": 5
+   },
+   "stock": {
+    "error": null,
+    "title": "Mozilla (@mozilla) / X",
+    "text": 2407,
+    "links": 72,
+    "images": 15,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "instagram": {
+   "url": "https://www.instagram.com/mozilla/",
+   "category": "social",
+   "nulavio": {
+    "error": null,
+    "title": "Mozilla (@mozilla) • Fotos e vídeos do Instagram",
+    "text": 561,
+    "links": 49,
+    "images": 24,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "Mozilla (@mozilla) • Fotos e vídeos do Instagram",
+    "text": 762,
+    "links": 51,
+    "images": 25,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 140.14,
+    "changed": 0.729
+   },
+   "flags": [
+    "looks different (72% of the screen)"
+   ],
+   "triage": "The stock run shows the site's own sign-up modal over the profile; the profile and posts are identical underneath.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "facebook": {
+   "url": "https://www.facebook.com/",
+   "category": "social",
+   "nulavio": {
+    "error": null,
+    "title": "Facebook",
+    "text": 619,
+    "links": 34,
+    "images": 1,
+    "blocked": 2
+   },
+   "stock": {
+    "error": null,
+    "title": "Facebook",
+    "text": 619,
+    "links": 34,
+    "images": 1,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 3.77,
+    "changed": 0.028
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "linkedin": {
+   "url": "https://www.linkedin.com/company/mozilla-corporation",
+   "category": "social",
+   "nulavio": {
+    "error": null,
+    "title": "Mozilla | LinkedIn",
+    "text": 12204,
+    "links": 271,
+    "images": 88,
+    "blocked": 7
+   },
+   "stock": {
+    "error": null,
+    "title": "Mozilla | LinkedIn",
+    "text": 12630,
+    "links": 266,
+    "images": 86,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 107.59,
+    "changed": 0.7
+   },
+   "flags": [
+    "looks different (70% of the screen)"
+   ],
+   "triage": "The stock run shows the site's own sign-in modal and a Google sign-in prompt; the company page is identical underneath.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "amazon": {
+   "url": "https://www.amazon.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "Amazon.com.br",
+    "text": 161,
+    "links": 2,
+    "images": 0,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "Amazon.com.br | Tudo pra você, de A a Z.",
+    "text": 7123,
+    "links": 167,
+    "images": 75,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 106.28,
+    "changed": 0.686
+   },
+   "flags": [
+    "text 161 vs 7123",
+    "links 2 vs 167",
+    "looks different (68% of the screen)"
+   ],
+   "triage": "The protected run stopped at Amazon's first-visit check ('Continuar comprando'), in this run and in both re-runs, where the protected run always comes first. With the order reversed in one throwaway profile, the stock visit got the check and the Strict, then Strict + uBlock Origin visits loaded the store (5124 and 6871 characters). The check follows the first visit, not the protections.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "mercadolivre": {
+   "url": "https://www.mercadolivre.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "Mercado Livre Brasil - Frete Grátis no mesmo dia",
+    "text": 5188,
+    "links": 259,
+    "images": 77,
+    "blocked": 8
+   },
+   "stock": {
+    "error": null,
+    "title": "Mercado Livre Brasil - Frete Grátis no mesmo dia",
+    "text": 10079,
+    "links": 287,
+    "images": 112,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 15.1,
+    "changed": 0.093
+   },
+   "flags": [],
+   "triage": "Checked by hand: same landing; less text measured with protections because lower sections were still loading; the stock run shows the site's cookie notice.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "magalu": {
+   "url": "https://www.magazineluiza.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "Black Friday Magalu | Ofertas, Cupons, Frete Rápido e Até 21x",
+    "text": 2904,
+    "links": 199,
+    "images": 46,
+    "blocked": 15
+   },
+   "stock": {
+    "error": null,
+    "title": "Black Friday Magalu | Ofertas, Cupons, Frete Rápido e Até 21x",
+    "text": 2904,
+    "links": 199,
+    "images": 46,
+    "blocked": 13
+   },
+   "visual": {
+    "mean": 11.86,
+    "changed": 0.093
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "americanas": {
+   "url": "https://www.americanas.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "Americanas | Black Friday 2026 com até 80% de desconto",
+    "text": 5313,
+    "links": 305,
+    "images": 288,
+    "blocked": 4
+   },
+   "stock": {
+    "error": null,
+    "title": "Americanas | Black Friday 2026 com até 80% de desconto",
+    "text": 3904,
+    "links": 140,
+    "images": 171,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 63.07,
+    "changed": 0.413
+   },
+   "flags": [
+    "looks different (41% of the screen)"
+   ],
+   "triage": "Banner rotation and an extra 'black cestas' band in the stock run, with the site's cookie notice (hidden by the cookie-notice lists in the protected run); the protected run measured more text and links. Same store.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "olx": {
+   "url": "https://www.olx.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "OLX - O Maior Site de Compra e Venda do Brasil",
+    "text": 12205,
+    "links": 311,
+    "images": 176,
+    "blocked": 14
+   },
+   "stock": {
+    "error": null,
+    "title": "OLX - O Maior Site de Compra e Venda do Brasil",
+    "text": 12501,
+    "links": 316,
+    "images": 176,
+    "blocked": 24
+   },
+   "visual": {
+    "mean": 14.73,
+    "changed": 0.095
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "ifood": {
+   "url": "https://www.ifood.com.br/",
+   "category": "shopping",
+   "nulavio": {
+    "error": null,
+    "title": "Um momento…",
+    "text": 277,
+    "links": 2,
+    "images": 1,
+    "blocked": 2
+   },
+   "stock": {
+    "error": null,
+    "title": "Um momento…",
+    "text": 277,
+    "links": 2,
+    "images": 1,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 0.41,
+    "changed": 0.002
+   },
+   "flags": [],
+   "triage": "Not reached: both runs, here and in both re-runs, stopped at Cloudflare's bot check ('Um momento…'); cause not established. The October run's counts for this page (277 / 277, 2 links) look like the same check.",
+   "reached_with_protections": false,
+   "breakage": false
+  },
+  "booking": {
+   "url": "https://www.booking.com/",
+   "category": "travel",
+   "nulavio": {
+    "error": null,
+    "title": "Booking.com | Site oficial | Os melhores hotéis, voos, aluguéis de carro e acomodações",
+    "text": 5283,
+    "links": 281,
+    "images": 70,
+    "blocked": 6
+   },
+   "stock": {
+    "error": null,
+    "title": "Booking.com | Site oficial | Os melhores hotéis, voos, aluguéis de carro e acomodações",
+    "text": 10688,
+    "links": 328,
+    "images": 117,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 51.97,
+    "changed": 0.5
+   },
+   "flags": [
+    "text 5283 vs 10688",
+    "looks different (50% of the screen)"
+   ],
+   "triage": "The site's own modal in both runs (a Genius sign-in offer with protections, a Black Friday offer without); the search form is identical underneath. Less text measured because lower sections were still loading.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "airbnb": {
+   "url": "https://www.airbnb.com.br/",
+   "category": "travel",
+   "nulavio": {
+    "error": null,
+    "title": "Airbnb | Locações por temporada, chalés, casas de praia e muito mais",
+    "text": 8172,
+    "links": 197,
+    "images": 40,
+    "blocked": 2
+   },
+   "stock": {
+    "error": null,
+    "title": "Airbnb | Locações por temporada, chalés, casas de praia e muito mais",
+    "text": 8583,
+    "links": 197,
+    "images": 40,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 14.08,
+    "changed": 0.095
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "globo": {
+   "url": "https://www.globo.com/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "globo.com - Absolutamente tudo sobre notícias, esportes e entretenimento",
+    "text": 9375,
+    "links": 587,
+    "images": 145,
+    "blocked": 23
+   },
+   "stock": {
+    "error": null,
+    "title": "globo.com - Absolutamente tudo sobre notícias, esportes e entretenimento",
+    "text": 9731,
+    "links": 587,
+    "images": 144,
+    "blocked": 21
+   },
+   "visual": {
+    "mean": 37.58,
+    "changed": 0.217
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "g1": {
+   "url": "https://g1.globo.com/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "g1 - O portal de notícias da Globo",
+    "text": 3672,
+    "links": 710,
+    "images": 44,
+    "blocked": 26
+   },
+   "stock": {
+    "error": null,
+    "title": "g1 - O portal de notícias da Globo",
+    "text": 3672,
+    "links": 710,
+    "images": 44,
+    "blocked": 24
+   },
+   "visual": {
+    "mean": 50.71,
+    "changed": 0.344
+   },
+   "flags": [],
+   "triage": "Checked by hand: ad slot removed (grey placeholder band in the stock run); content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "uol": {
+   "url": "https://www.uol.com.br/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "UOL - Seu universo online",
+    "text": 11529,
+    "links": 436,
+    "images": 189,
+    "blocked": 25
+   },
+   "stock": {
+    "error": null,
+    "title": "UOL - Seu universo online",
+    "text": 11985,
+    "links": 447,
+    "images": 190,
+    "blocked": 40
+   },
+   "visual": {
+    "mean": 71.77,
+    "changed": 0.38
+   },
+   "flags": [
+    "looks different (38% of the screen)"
+   ],
+   "triage": "Ad slot removed (the 'Publicidade' band in the stock run pushes the page down); content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "folha": {
+   "url": "https://www.folha.uol.com.br/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "Notícias de hoje do Brasil e do Mundo | Folha de S.Paulo",
+    "text": 27926,
+    "links": 758,
+    "images": 79,
+    "blocked": 9
+   },
+   "stock": {
+    "error": null,
+    "title": "Notícias de hoje do Brasil e do Mundo | Folha de S.Paulo",
+    "text": 28175,
+    "links": 758,
+    "images": 79,
+    "blocked": 33
+   },
+   "visual": {
+    "mean": 18.99,
+    "changed": 0.117
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "estadao": {
+   "url": "https://www.estadao.com.br/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "Estadão | As Últimas Notícias do Brasil e do Mundo - Estadão",
+    "text": 14253,
+    "links": 397,
+    "images": 116,
+    "blocked": 39
+   },
+   "stock": {
+    "error": null,
+    "title": "Estadão | As Últimas Notícias do Brasil e do Mundo - Estadão",
+    "text": 15261,
+    "links": 398,
+    "images": 118,
+    "blocked": 26
+   },
+   "visual": {
+    "mean": 39.73,
+    "changed": 0.248
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "bbc": {
+   "url": "https://www.bbc.com/news",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "BBC News - Breaking news, video and the latest top stories from the U.S. and around the world",
+    "text": 8295,
+    "links": 160,
+    "images": 34,
+    "blocked": 10
+   },
+   "stock": {
+    "error": null,
+    "title": "BBC News - Breaking news, video and the latest top stories from the U.S. and around the world",
+    "text": 8283,
+    "links": 160,
+    "images": 36,
+    "blocked": 14
+   },
+   "visual": {
+    "mean": 64.47,
+    "changed": 0.433
+   },
+   "flags": [
+    "looks different (43% of the screen)"
+   ],
+   "triage": "Ad slot removed (empty band at the top in the stock run); content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "nytimes": {
+   "url": "https://www.nytimes.com/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "The New York Times - Breaking News, US News, World News and Videos",
+    "text": 10631,
+    "links": 1020,
+    "images": 123,
+    "blocked": 18
+   },
+   "stock": {
+    "error": null,
+    "title": "The New York Times - Breaking News, US News, World News and Videos",
+    "text": 10590,
+    "links": 996,
+    "images": 123,
+    "blocked": 18
+   },
+   "visual": {
+    "mean": 5.55,
+    "changed": 0.053
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "theguardian": {
+   "url": "https://www.theguardian.com/international",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "Latest news, sport and opinion from the Guardian",
+    "text": 18263,
+    "links": 354,
+    "images": 111,
+    "blocked": 4
+   },
+   "stock": {
+    "error": null,
+    "title": "Latest news, sport and opinion from the Guardian",
+    "text": 18263,
+    "links": 354,
+    "images": 111,
+    "blocked": 5
+   },
+   "visual": {
+    "mean": 26.57,
+    "changed": 0.181
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "reuters": {
+   "url": "https://www.reuters.com/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "Reuters | Breaking International News & Views",
+    "text": 24945,
+    "links": 363,
+    "images": 5,
+    "blocked": 13
+   },
+   "stock": {
+    "error": null,
+    "title": "Reuters | Breaking International News & Views",
+    "text": 14428,
+    "links": 354,
+    "images": 6,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 100.17,
+    "changed": 0.692
+   },
+   "flags": [
+    "looks different (69% of the screen)"
+   ],
+   "triage": "The stock run shows the site's consent dialog and an empty ad band at the top; the protected run measured more text. Content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "cnn": {
+   "url": "https://edition.cnn.com/",
+   "category": "news",
+   "nulavio": {
+    "error": null,
+    "title": "Breaking News, Latest News and Videos | CNN",
+    "text": 12347,
+    "links": 564,
+    "images": 111,
+    "blocked": 17
+   },
+   "stock": {
+    "error": null,
+    "title": "Breaking News, Latest News and Videos | CNN",
+    "text": 12721,
+    "links": 564,
+    "images": 111,
+    "blocked": 11
+   },
+   "visual": {
+    "mean": 111.59,
+    "changed": 0.602
+   },
+   "flags": [
+    "looks different (60% of the screen)"
+   ],
+   "triage": "Ad slot removed at the top and the site's cookie notice in the stock run; the lead story's picture differs (rotation). Content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "govbr": {
+   "url": "https://www.gov.br/pt-br",
+   "category": "government",
+   "nulavio": {
+    "error": null,
+    "title": "GOV.BR",
+    "text": 5741,
+    "links": 285,
+    "images": 26,
+    "blocked": 5
+   },
+   "stock": {
+    "error": null,
+    "title": "GOV.BR",
+    "text": 5689,
+    "links": 285,
+    "images": 26,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 127.44,
+    "changed": 0.796
+   },
+   "flags": [
+    "looks different (79% of the screen)"
+   ],
+   "triage": "The site's own first-visit tooltip and dimmed overlay in the protected run, the cookie notice and cards still loading in the stock run; page identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "receita": {
+   "url": "https://www.gov.br/receitafederal/pt-br",
+   "category": "government",
+   "nulavio": {
+    "error": null,
+    "title": "Receita Federal — Receita Federal",
+    "text": 6817,
+    "links": 881,
+    "images": 24,
+    "blocked": 5
+   },
+   "stock": {
+    "error": null,
+    "title": "Receita Federal — Receita Federal",
+    "text": 7213,
+    "links": 881,
+    "images": 24,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 54.57,
+    "changed": 0.329
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "caixa": {
+   "url": "https://www.caixa.gov.br/",
+   "category": "banking",
+   "nulavio": {
+    "error": null,
+    "title": "Caixa - Vem Realizar",
+    "text": 3905,
+    "links": 279,
+    "images": 165,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "Caixa - Vem Realizar",
+    "text": 4264,
+    "links": 283,
+    "images": 165,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 17.06,
+    "changed": 0.097
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "bb": {
+   "url": "https://www.bb.com.br/site/",
+   "category": "banking",
+   "nulavio": {
+    "error": null,
+    "title": "Pra Você | Banco do Brasil",
+    "text": 3234,
+    "links": 46,
+    "images": 32,
+    "blocked": 10
+   },
+   "stock": {
+    "error": "timeout: Navigation timed out after 25000 ms",
+    "title": "Pra Você | Banco do Brasil",
+    "text": 3458,
+    "links": 46,
+    "images": 32,
+    "blocked": 22
+   },
+   "visual": {
+    "mean": 21.73,
+    "changed": 0.231
+   },
+   "flags": [],
+   "triage": "Checked by hand: the stock run's load timed out after the page was drawn (3458 characters measured); both runs show the bank's own promotional modal.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "itau": {
+   "url": "https://www.itau.com.br/",
+   "category": "banking",
+   "nulavio": {
+    "error": null,
+    "title": "Abra sua conta no Banco Itaú: Soluções financeiras para você",
+    "text": 4100,
+    "links": 137,
+    "images": 38,
+    "blocked": 6
+   },
+   "stock": {
+    "error": null,
+    "title": "Abra sua conta no Banco Itaú: Soluções financeiras para você",
+    "text": 4100,
+    "links": 138,
+    "images": 39,
+    "blocked": 9
+   },
+   "visual": {
+    "mean": 6.68,
+    "changed": 0.042
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "nubank": {
+   "url": "https://nubank.com.br/",
+   "category": "banking",
+   "nulavio": {
+    "error": null,
+    "title": "Somos incansáveis pra você não precisar ser | Nubank",
+    "text": 4551,
+    "links": 138,
+    "images": 122,
+    "blocked": 3
+   },
+   "stock": {
+    "error": null,
+    "title": "Somos incansáveis pra você não precisar ser | Nubank",
+    "text": 4551,
+    "links": 138,
+    "images": 122,
+    "blocked": 16
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "paypal": {
+   "url": "https://www.paypal.com/br/home",
+   "category": "banking",
+   "nulavio": {
+    "error": null,
+    "title": "Enviar & Solicitar Dinheiro, Comprar, Gerenciar Pagamentos e Muito Mais | PayPal BR",
+    "text": 2199,
+    "links": 17,
+    "images": 3,
+    "blocked": 8
+   },
+   "stock": {
+    "error": null,
+    "title": "paypal.com",
+    "text": 0,
+    "links": 0,
+    "images": 0,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 76.9,
+    "changed": 0.854
+   },
+   "flags": [
+    "looks different (85% of the screen)"
+   ],
+   "triage": "The stock run stopped at PayPal's human check (slider); the protected run loaded the page, which is whole. In both re-runs both runs got the check. Why the check met one side or the other is not established; the protected side loaded once.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "correios": {
+   "url": "https://www.correios.com.br/",
+   "category": "government",
+   "nulavio": {
+    "error": null,
+    "title": "Correios",
+    "text": 3774,
+    "links": 217,
+    "images": 117,
+    "blocked": 4
+   },
+   "stock": {
+    "error": null,
+    "title": "Correios",
+    "text": 4159,
+    "links": 217,
+    "images": 117,
+    "blocked": 4
+   },
+   "visual": {
+    "mean": 9.47,
+    "changed": 0.05
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "proton": {
+   "url": "https://proton.me/pass",
+   "category": "privacy",
+   "nulavio": {
+    "error": null,
+    "title": "Proton Pass: Free password manager with identity protection | Proton",
+    "text": 8384,
+    "links": 212,
+    "images": 87,
+    "blocked": 3
+   },
+   "stock": {
+    "error": null,
+    "title": "Proton Pass: Free password manager with identity protection | Proton",
+    "text": 8384,
+    "links": 212,
+    "images": 87,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "mozilla": {
+   "url": "https://www.mozilla.org/pt-BR/",
+   "category": "software",
+   "nulavio": {
+    "error": null,
+    "title": "Mozilla — Internet para pessoas, sem fins lucrativos",
+    "text": 5512,
+    "links": 86,
+    "images": 22,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "Mozilla — Internet para pessoas, sem fins lucrativos",
+    "text": 5512,
+    "links": 86,
+    "images": 22,
+    "blocked": 1
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "microsoft": {
+   "url": "https://www.microsoft.com/pt-br",
+   "category": "software",
+   "nulavio": {
+    "error": null,
+    "title": "Microsoft: IA, nuvem, produtividade, computação, jogos e aplicativos",
+    "text": 3733,
+    "links": 111,
+    "images": 24,
+    "blocked": 8
+   },
+   "stock": {
+    "error": null,
+    "title": "Microsoft: IA, nuvem, produtividade, computação, jogos e aplicativos",
+    "text": 4203,
+    "links": 111,
+    "images": 24,
+    "blocked": 6
+   },
+   "visual": {
+    "mean": 78.07,
+    "changed": 0.403
+   },
+   "flags": [
+    "looks different (40% of the screen)"
+   ],
+   "triage": "The site's cookie notice in the stock run pushes the page down; content identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "apple": {
+   "url": "https://www.apple.com/br/",
+   "category": "software",
+   "nulavio": {
+    "error": null,
+    "title": "Apple (Brasil)",
+    "text": 3949,
+    "links": 277,
+    "images": 33,
+    "blocked": 2
+   },
+   "stock": {
+    "error": null,
+    "title": "Apple (Brasil)",
+    "text": 3949,
+    "links": 277,
+    "images": 33,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 44.21,
+    "changed": 0.304
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "spotify": {
+   "url": "https://open.spotify.com/",
+   "category": "music",
+   "nulavio": {
+    "error": null,
+    "title": "Spotify – Web player: ouça músicas, podcasts e audiolivros online",
+    "text": 2710,
+    "links": 356,
+    "images": 53,
+    "blocked": 6
+   },
+   "stock": {
+    "error": null,
+    "title": "Spotify – Web player: ouça músicas, podcasts e audiolivros online",
+    "text": 2917,
+    "links": 342,
+    "images": 41,
+    "blocked": 5
+   },
+   "visual": {
+    "mean": 17.07,
+    "changed": 0.105
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "netflix": {
+   "url": "https://www.netflix.com/br/",
+   "category": "video",
+   "nulavio": {
+    "error": null,
+    "title": "Netflix Brasil - assistir a séries online, assistir a filmes online",
+    "text": 1787,
+    "links": 19,
+    "images": 2,
+    "blocked": 9
+   },
+   "stock": {
+    "error": null,
+    "title": "Netflix Brasil - assistir a séries online, assistir a filmes online",
+    "text": 2078,
+    "links": 27,
+    "images": 4,
+    "blocked": 11
+   },
+   "visual": {
+    "mean": 29.87,
+    "changed": 0.14
+   },
+   "flags": [],
+   "triage": "Checked by hand: the stock run shows the site's cookie notice (its links are the difference); the landing and sign-up field are identical.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "imdb": {
+   "url": "https://www.imdb.com/",
+   "category": "reference",
+   "nulavio": {
+    "error": null,
+    "title": "Vamos confirmar que você é humano",
+    "text": 214,
+    "links": 0,
+    "images": 3,
+    "blocked": 1
+   },
+   "stock": {
+    "error": null,
+    "title": "Vamos confirmar que você é humano",
+    "text": 214,
+    "links": 0,
+    "images": 3,
+    "blocked": 2
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "Not reached: both runs, here and in both re-runs, stopped at IMDb's human check ('Vamos confirmar que você é humano'); cause not established. The October run's counts for this page (214 / 188, 0 links) look like the same check.",
+   "reached_with_protections": false,
+   "breakage": false
+  },
+  "openstreetmap": {
+   "url": "https://www.openstreetmap.org/",
+   "category": "maps",
+   "nulavio": {
+    "error": null,
+    "title": "OpenStreetMap",
+    "text": 605,
+    "links": 42,
+    "images": 21,
+    "blocked": 3
+   },
+   "stock": {
+    "error": null,
+    "title": "OpenStreetMap",
+    "text": 605,
+    "links": 42,
+    "images": 21,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 0.0,
+    "changed": 0.0
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  },
+  "googlemaps": {
+   "url": "https://www.google.com/maps",
+   "category": "maps",
+   "nulavio": {
+    "error": null,
+    "title": "Google Maps",
+    "text": 411,
+    "links": 2,
+    "images": 8,
+    "blocked": 4
+   },
+   "stock": {
+    "error": null,
+    "title": "Google Maps",
+    "text": 387,
+    "links": 2,
+    "images": 8,
+    "blocked": 3
+   },
+   "visual": {
+    "mean": 0.87,
+    "changed": 0.004
+   },
+   "flags": [],
+   "triage": "No difference that matters.",
+   "reached_with_protections": true,
+   "breakage": false
+  }
+ },
+ "reruns": {
+  "note": "amazon, imdb, ifood, paypal and stackoverflow again, twice, each in a new throwaway profile (--settle 6)",
+  "r1": {
+   "stackoverflow": {
+    "nulavio": {
+     "title": "Newest Questions - Stack Overflow",
+     "text": 9619,
+     "links": 229
+    },
+    "stock": {
+     "title": "Um momento…",
+     "text": 278,
+     "links": 2
+    }
+   },
+   "amazon": {
+    "nulavio": {
+     "title": "Amazon.com.br",
+     "text": 161,
+     "links": 2
+    },
+    "stock": {
+     "title": "Amazon.com.br | Tudo pra você, de A a Z.",
+     "text": 6906,
+     "links": 167
+    }
+   },
+   "ifood": {
+    "nulavio": {
+     "title": "Um momento…",
+     "text": 277,
+     "links": 2
+    },
+    "stock": {
+     "title": "Um momento…",
+     "text": 277,
+     "links": 2
+    }
+   },
+   "paypal": {
+    "nulavio": {
+     "title": "paypal.com",
+     "text": 0,
+     "links": 0
+    },
+    "stock": {
+     "title": "paypal.com",
+     "text": 0,
+     "links": 0
+    }
+   },
+   "imdb": {
+    "nulavio": {
+     "title": "Vamos confirmar que você é humano",
+     "text": 214,
+     "links": 0
+    },
+    "stock": {
+     "title": "Vamos confirmar que você é humano",
+     "text": 214,
+     "links": 0
+    }
+   }
+  },
+  "r2": {
+   "stackoverflow": {
+    "nulavio": {
+     "title": "Newest Questions - Stack Overflow",
+     "text": 9720,
+     "links": 230
+    },
+    "stock": {
+     "title": "Um momento…",
+     "text": 278,
+     "links": 2
+    }
+   },
+   "amazon": {
+    "nulavio": {
+     "title": "Amazon.com.br",
+     "text": 161,
+     "links": 2
+    },
+    "stock": {
+     "title": "Amazon.com.br | Tudo pra você, de A a Z.",
+     "text": 6175,
+     "links": 158
+    }
+   },
+   "ifood": {
+    "nulavio": {
+     "title": "Um momento…",
+     "text": 277,
+     "links": 2
+    },
+    "stock": {
+     "title": "Um momento…",
+     "text": 277,
+     "links": 2
+    }
+   },
+   "paypal": {
+    "nulavio": {
+     "title": "paypal.com",
+     "text": 0,
+     "links": 0
+    },
+    "stock": {
+     "title": "paypal.com",
+     "text": 0,
+     "links": 0
+    }
+   },
+   "imdb": {
+    "nulavio": {
+     "title": "Vamos confirmar que você é humano",
+     "text": 214,
+     "links": 0
+    },
+    "stock": {
+     "title": "Vamos confirmar que você é humano",
+     "text": 214,
+     "links": 0
+    }
+   }
+  }
+ },
+ "amazon_order_reversed": {
+  "1-stock": {
+   "text": 161,
+   "links": 2,
+   "title": "Amazon.com.br",
+   "note": "first-visit check"
+  },
+  "2-strict-only": {
+   "text": 5124,
+   "links": 158
+  },
+  "3-strict-ublock": {
+   "text": 6871,
+   "links": 167
+  },
+  "5-strict-ublock-again": {
+   "text": 6402,
+   "links": 159
+  }
+ }
+}
