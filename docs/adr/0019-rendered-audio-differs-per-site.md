@@ -35,7 +35,7 @@ Patch 0012 changes only the buffer an offline rendering returns, and patch 0016 
 - **A script processor's input and a worklet's inputs** are what the page's script makes its own sound from. Noise on them would go on, through the script, to the speakers, a recording or a call. It would be about 80 dB below the sound and not heard, but it would be in what is sent, and a script that needs exact samples (an effect, an echo canceller) would not get them. That is what this decision rules out.
 - **An analyser's data and a compressor's reduction** are only read: nothing a script reads there goes back into the sound, so noise there could not be heard. It is left out all the same, because it would not close the reading: a probe would read the same sound through a worklet, which stays plain.
 
-So in a context that plays these readers give the plain values, the same on every site. Two things limit that reading, and neither is Nulavio's doing. By the engine's autoplay rules a context starts to play only after the person has clicked or typed in the page, or on a site the person allowed to play sound by itself or to use the camera or the microphone. And what an analyser reads there depends on the moment the script asks. (Read in the engine's source, `dom/media/autoplay/AutoplayPolicy.cpp`; not run.)
+So in a context that plays these readers give the plain values, the same on every site. Two things limit that reading, and neither is Nulavio's doing. By the engine's autoplay rules a context starts to play only after the person has clicked or typed in the page, or on a site the person allowed to play sound by itself or to use the camera or the microphone. And what an analyser reads there depends on the moment the script asks. (Read in the engine's source, `dom/media/autoplay/AutoplayPolicy.cpp`. Not run: the test session has no sound output, and without one the engine does not start a context that plays. Tried on 2026-11-20, after a real click the context stayed suspended.)
 
 The other choices, for whoever takes this up again:
 
@@ -90,7 +90,7 @@ The screen's part of the patch is one more comparison where the engine answers `
 - `test_privacytests`: PrivacyTests' own audio probe reads three different values on three sites.
 - `test_fingerprinting` 11, on the real engine: two sites read different sums and different digests of the whole buffer; one site reads the same again in the same page and in a later one; with the protections off both sites read the same; the loudest sample stays within one part in a thousand. Measured on 2026-11-16: the probe's sum was `35.749972093850374` plain, `35.74992819688123` on one site and `35.750030019269616` on another; the loudest sample was 0.113791 plain and 0.113782 with the noise.
 
-Not checked: a second session (the key is the canvas noise's, whose change per session the engine's own tests hold); live contexts, which the patch does not touch.
+Not checked: a second session (the key is the canvas noise's, whose change per session the engine's own tests hold); a context that plays, which neither patch touches and which does not start in the test session (decision 2). That a playing context gets no key is held by the patch's shape (`test_fingerprinting_shell`, `AudioReadersTest`).
 
 ## Alternatives
 

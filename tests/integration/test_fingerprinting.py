@@ -878,7 +878,7 @@ class FingerprintingTest(unittest.TestCase):
                 self.assertAlmostEqual(at(first, where)["peak"], quiet, delta=quiet / 1000)
         for noisy, quiet in zip(at(first, ("reduction",)), at(plain, ("reduction",)), strict=True):
             self.assertAlmostEqual(float(noisy), float(quiet), delta=abs(float(quiet)) / 1000)
-        # The buffer the rendering returns keeps test 11's noise, and none of the readers is that buffer's copy.
+        # The buffer the rendering returns keeps test 11's noise.
         self.assertNotEqual(values(at(first, ("buffer",))), values(at(plain, ("buffer",))))
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
