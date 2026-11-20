@@ -9,9 +9,10 @@ is returned. Each length is measured with the build's default protections and ag
 turned off (the engine's set with -AudioRandomization), in turns, so a machine that slows down slows both. The
 noise is one pass over the returned samples, on the page's main thread, after the rendering.
 
---worklet (#406, engine patch 0016) puts an AudioWorklet in the graph that reads its two input channels. Its
-inputs get the noise on the rendering thread, one block of 128 samples at a time, so the difference is then that
-pass and the returned buffer's together; compare it with a run without the flag.
+--worklet (#406, engine patch 0016) puts an AudioWorklet in the graph that reads the same sound as two channels.
+Its inputs get the noise on the rendering thread, one block of 128 samples at a time, so the difference is then
+that pass and the returned buffer's together; compare it with a run without the flag. The table's last line says
+how many channels the worklet read.
 
 Prints a table of medians. The page's clock is the engine's protected one (1 ms steps).
 """
@@ -42,13 +43,18 @@ const [seconds, pitch, worklet] = arguments;
   const compressor = context.createDynamicsCompressor();
   oscillator.connect(compressor);
   compressor.connect(context.destination);
+  let channels = null;
   if (worklet) {
     const code = "registerProcessor('reader', class extends AudioWorkletProcessor {" +
-      " process(inputs) { let sum = 0; for (const channel of inputs[0]) sum += channel[0]; this.sum = sum; return true; } });";
+      " process(inputs) { let sum = 0; for (const channel of inputs[0]) sum += channel[0]; this.sum = sum;" +
+      " if (inputs[0].length && !this.told) { this.told = true; this.port.postMessage(inputs[0].length); } return true; } });";
     const blob = new window.Blob([code], { type: "text/javascript" });
     await context.audioWorklet.addModule(window.URL.createObjectURL(blob));
+    // Two channels whatever the sound has: the compressor passes on one for one oscillator.
     const options = { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] };
+    Object.assign(options, { channelCount: 2, channelCountMode: "explicit" });
     const node = new window.AudioWorkletNode(context, "reader", options);
+    channels = new Promise(resolve => { node.port.onmessage = event => resolve(event.data); });
     compressor.connect(node);
     node.connect(context.destination);
   }
@@ -56,7 +62,8 @@ const [seconds, pitch, worklet] = arguments;
   const before = window.performance.now();
   const buffer = await context.startRendering();
   const took = window.performance.now() - before;
-  return { ms: took, length: buffer.length };
+  const read = channels && (await Promise.race([channels, new Promise(resolve => window.setTimeout(resolve, 5000, 0))]));
+  return { ms: took, length: buffer.length, channels: read };
 })().then(done, error => done({ error: String(error) }));
 """
 KNOWN = f"""
@@ -85,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
             default = m.chrome(f"return Services.prefs.getDefaultBranch('').getStringPref('{OVERRIDES}');")
             sides = {"with the noise": None, "without": f"{default},-{TARGET}"}
             times: dict[tuple[int, str], list[float]] = {}
+            read: set[int | None] = set()
             pitch = 440
             for seconds in args.seconds:
                 for _ in range(args.runs):
@@ -100,6 +108,7 @@ def main(argv: list[str] | None = None) -> int:
                         if "error" in result:
                             raise SystemExit(f"rendering failed: {result['error']}")
                         times.setdefault((seconds, side), []).append(result["ms"])
+                        read.add(result.get("channels"))
         finally:
             session.cleanup()
     print(f"{'sound':>8}  {'samples':>11}  {'with the noise':>15}  {'without':>9}  {'difference':>11}")
@@ -107,7 +116,9 @@ def main(argv: list[str] | None = None) -> int:
         on = statistics.median(times[(seconds, "with the noise")])
         off = statistics.median(times[(seconds, "without")])
         print(f"{seconds:>6} s  {2 * 44100 * seconds:>11,}  {on:>12.0f} ms  {off:>6.0f} ms  {on - off:>+8.0f} ms")
-    graph = "an oscillator through a compressor" + (", read by a worklet too" if args.worklet else "")
+    graph = "an oscillator through a compressor"
+    if args.worklet:
+        graph += f", read by a worklet too (channels read: {sorted(read, key=str)})"
     print(f"{graph}; medians of {args.runs} renderings a side; the page's clock moves in 1 ms steps")
     return 0
 

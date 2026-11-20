@@ -849,6 +849,13 @@ class FingerprintingTest(unittest.TestCase):
                 # The same sound on the same site reads the same, in one page and in the next (sites keep working).
                 self.assertEqual(site, values(at(first, where, "again")))
                 self.assertEqual(site, values(at(again, where)))
+        # The noise comes from the values handed over: the same values in the same blocks get the same noise, as
+        # here, where the parameter carries the very samples the input does. (A reading of another extent, the
+        # script processor's buffers of 1024, gets other noise for them.)
+        self.assertEqual(values(at(plain, ("worklet", "inputs"))), values(at(plain, ("worklet", "parameter"))))
+        self.assertEqual(values(at(first, ("worklet", "inputs"))), values(at(first, ("worklet", "parameter"))))
+        self.assertEqual(values(at(plain, ("worklet", "inputs"))), values(at(plain, ("scriptProcessor",))))
+        self.assertNotEqual(values(at(first, ("worklet", "inputs"))), values(at(first, ("scriptProcessor",))))
         # The two byte getters are made from the same samples, so they are as steady within a site. Rounding to
         # 256 steps hides most of the noise (and of what differs between computers): how many bytes it moved is
         # recorded, not asserted.
@@ -880,6 +887,20 @@ class FingerprintingTest(unittest.TestCase):
             self.assertAlmostEqual(float(noisy), float(quiet), delta=abs(float(quiet)) / 1000)
         # The buffer the rendering returns keeps test 11's noise.
         self.assertNotEqual(values(at(first, ("buffer",))), values(at(plain, ("buffer",))))
+        # A site the person exempts with the shield reads the plain values, and only that site.
+        self.readers("127.0.0.1")
+        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")  # the shield's switch in the address bar
+        try:
+            exempt, beside = self.readers("127.0.0.1"), self.readers("localhost")
+            for name, where in READERS.items():
+                with self.subTest(exempt=name):
+                    self.assertEqual(values(at(exempt, where)), values(at(plain, where)))
+                    self.assertEqual(values(at(beside, where)), values(at(other, where)), "the exemption reached another site")
+        finally:
+            self.readers("127.0.0.1")
+            self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
+        back = self.readers("127.0.0.1")
+        self.assertEqual(values(at(back, ("worklet", "inputs"))), values(at(first, ("worklet", "inputs"))))
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         self.needs_the_engines_screen()
