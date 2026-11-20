@@ -1313,8 +1313,9 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(clicked["isError"], clicked)
         self.assertTrue(harness.wait_until(lambda: len(ran) == 3, timeout=10), ran)
         self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?permission=granted", "/ran?popup=opened"])
-        # As in test_29: the frame and the pop-up report no end when refused, so they get the same few seconds.
-        self.assertFalse(harness.wait_until(lambda: hits, timeout=3), hits)
+        # As in test_29: the frame and the pop-up report no end when refused, so they get the same few seconds. The fetch
+        # answers "refused" either way (the listener sends no CORS header): what the listener received is the test.
+        reached = harness.wait_until(lambda: hits, timeout=3)
         bridge.close()
         with closing(sqlite3.connect(work / "permissions.sqlite")) as db:
             kept = db.execute(
@@ -1322,6 +1323,7 @@ class AiBridgeTest(unittest.TestCase):
                 (origin,),
             ).fetchall()
         self.assertEqual(kept, sorted(row[:5] for row in saved))  # the user's, as they were: nothing removed or added
+        self.assertFalse(reached, hits)
 
 
 if __name__ == "__main__":
