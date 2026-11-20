@@ -98,6 +98,21 @@ class HorizonThemeTest(unittest.TestCase):
         selector = f":root:not([lwtheme]) #tab-group-editor :is({swatches}):not(:checked)"
         self.assertEqual(re.sub(r"\s+", " ", hidden[0]).strip(), f"{selector}, {selector} + label")
 
+    def test_a_panel_without_a_launcher_has_the_frame_margin_and_one_gap(self):
+        """#565: no launcher, the panel beside the page: the page gives up its margin on the panel's side and the
+        panel takes it on the window's edge; the splitter alone is the gap."""
+        code = re.sub(r"\s+", " ", without_comments(CSS))
+        scope = ":not([nulavio-immersive], [nulavio-panel-opposite]) #browser:not(:has(> #sidebar-container:not([hidden]))) {"
+        self.assertIn(scope, code)
+        block = code.split(scope, 1)[1].split("} } ", 1)[0] + "}"
+        for rule in (
+            "#tabbrowser-tabbox[sidebar-panel-open]:not([sidebar-positionend]) { margin-inline-start: 0; }",
+            "#tabbrowser-tabbox[sidebar-panel-open][sidebar-positionend] { margin-inline-end: 0; }",
+            "#sidebar-box[sidebar-panel-open]:not([sidebar-positionend]) { margin-inline-start: var(--nv-space-3); }",
+            "#sidebar-box[sidebar-panel-open][sidebar-positionend] { margin-inline-end: var(--nv-space-3); }",
+        ):
+            self.assertIn(rule, block)
+
     def test_rtl_safe_geometry(self):
         code = without_comments(CSS)
         self.assertNotRegex(code, r"(?<![-\w])(left|right|margin-left|margin-right|padding-left|padding-right)\s*:")
