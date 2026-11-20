@@ -13,11 +13,13 @@ import http.server
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -1220,6 +1222,106 @@ class AiBridgeTest(unittest.TestCase):
         allowed = bridge.call("navigate", {"tab": tab, "url": f"{local}-allowed"})
         self.assertFalse(allowed["isError"], allowed)
         self.assertEqual(allowed["structuredContent"]["title"], "Local")
+
+    @unittest.skipUnless(harness.built_from_this_tree(), "patch 0014 is in this tree's engine build")
+    def test_32_a_sites_saved_local_network_permission_in_a_users_profile_reaches_nothing_local(self):
+        # #570 (R29): the user allowed this site, in their own profile, to reach this computer and the local network (a
+        # saved permission in permissions.sqlite). The engine's Local Network Access reads a site's own entry before
+        # the default the Shell sets for an agent's run, so without patch 0014 that site's fetch, frame and pop-up
+        # reached 127.0.0.3. With it, an engine the Bridge started refuses them all the same, and the user's
+        # permission is still there, unchanged, after the run.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "6")
+                self.end_headers()
+                self.wfile.write(b"secret")
+
+            def log_message(self, *_args):
+                pass
+
+        secret = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/secret"
+        # The page reports back to its own (public) server: what the engine says of its permission (so the saved one
+        # was read: "granted"), how the fetch ended, and that the pop-up the agent's click opens was opened.
+        page = (
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
+            f"<button onclick=\"fetch('/ran?popup=' + (window.open('{secret}-popup') ? 'opened' : 'blocked'))\">Open</button>"
+            '<script>navigator.permissions.query({name: "loopback-network"}).then(p => p.state, e => e.name)'
+            '.then(state => fetch("/ran?permission=" + state));'
+            f'fetch("{secret}-fetch").then(() => "sent", () => "refused")'
+            '.then(how => fetch("/ran?fetch=" + how));</script>'
+        ).encode()
+        ran: list[str] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/ran"):
+                    ran.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        fixture: dict = {}
+        self.rebinding(fixture, port)
+        agent, _ = self.agent("autonomous", local=False)
+        work = self.home / "user-profiles" / "work"
+        work.mkdir(parents=True)
+        accepted = 'user_pref("termsofuse.acceptedVersion", 4);\nuser_pref("termsofuse.acceptedDate", "1761436800000");'
+        (work / "prefs.js").write_text(f"{accepted}\n")
+        (work / "user.js").write_text(prefs_lines(fixture))
+        # The user's saved permissions, as the engine writes them (PermissionManager::CreateTable, schema 13): allowed
+        # for good (expireType 0), for both kinds of local address, and used today.
+        origin = f"http://127.0.0.2:{port}"
+        now = int(time.time() * 1000)
+        saved = [(origin, kind, 1, 0, 0, now) for kind in ("loopback-network", "local-network")]
+        with closing(sqlite3.connect(work / "permissions.sqlite")) as db, db:
+            db.execute("PRAGMA user_version = 13")
+            db.execute(
+                "CREATE TABLE moz_perms (id INTEGER PRIMARY KEY, origin TEXT, type TEXT, permission INTEGER,"
+                " expireType INTEGER, expireTime INTEGER, modificationTime INTEGER)"
+            )
+            db.execute(
+                "CREATE TABLE moz_hosts (id INTEGER PRIMARY KEY, host TEXT, type TEXT, permission INTEGER,"
+                " expireType INTEGER, expireTime INTEGER, modificationTime INTEGER, isInBrowserElement INTEGER)"
+            )
+            db.execute("CREATE TABLE moz_origin_interactions (origin TEXT PRIMARY KEY, lastInteractionTime INTEGER)")
+            db.executemany(
+                "INSERT INTO moz_perms (origin, type, permission, expireType, expireTime, modificationTime)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                saved,
+            )
+            db.execute("INSERT INTO moz_origin_interactions VALUES (?, ?)", (origin, now))
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
+        bridge = tools.Bridge(agent["id"], "s-profile-saved", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"profile": "Trabalho"})
+        self.assertFalse(opened["isError"], opened)
+        tab = opened["structuredContent"]["tab"]
+        self.assertFalse(bridge.call("navigate", {"tab": tab, "url": f"{origin}/page"})["isError"])
+        clicked = bridge.call(
+            "click", {"tab": tab, "element": self.element(bridge.call("page_snapshot", {"tab": tab}), name="Open")}
+        )
+        self.assertFalse(clicked["isError"], clicked)
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 3, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?permission=granted", "/ran?popup=opened"])
+        # As in test_29: the frame and the pop-up report no end when refused, so they get the same few seconds.
+        self.assertFalse(harness.wait_until(lambda: hits, timeout=3), hits)
+        bridge.close()
+        with closing(sqlite3.connect(work / "permissions.sqlite")) as db:
+            kept = db.execute(
+                "SELECT origin, type, permission, expireType, expireTime FROM moz_perms WHERE origin = ? ORDER BY type",
+                (origin,),
+            ).fetchall()
+        self.assertEqual(kept, sorted(row[:5] for row in saved))  # the user's, as they were: nothing removed or added
 
 
 if __name__ == "__main__":
