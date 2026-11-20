@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:ef12a103-ab06-56b4-92b1-983146c0c27a",
+  "serialNumber": "urn:uuid:b1e1c43d-0fcb-519e-bd3d-0e3ee21f8e97",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "fc349802b8a08d6f765b8896be57d3fcd32a12ed"
+          "value": "7050c25d866d2cc1c11c8c48d74f9ec6ad177fb3"
         }
       ]
     }
@@ -78,18 +78,18 @@
       "type": "library",
       "bom-ref": "xpi:uBlock0@raymondhill.net",
       "name": "uBlock Origin",
-      "version": "1.75.0",
+      "version": "1.76.4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "5b74415860456370644bd80f16125e865b0e6c356bb5dfcfb84069967eaa5287"
+          "content": "66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e"
         }
       ],
       "scope": "required",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5034826/ublock_origin-1.75.0.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5257481/ublock_origin-1.76.4.xpi"
         },
         {
           "type": "website",
@@ -100,10 +100,14 @@
         {
           "name": "nulavio:role",
           "value": "content-filter"
+        },
+        {
+          "name": "nulavio:redistributed",
+          "value": "assets/assets.json (sha256 e994253fe9987f987149bec99bf366e1e3636f166e6acf444bfe0702fc15cfcc) in distribution/policies.json"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/ublock-origin@1.75.0",
-      "cpe": "cpe:2.3:a:ublockorigin:ublock_origin:1.75.0:*:*:*:*:*:*:*",
+      "purl": "pkg:generic/addons.mozilla.org/ublock-origin@1.76.4",
+      "cpe": "cpe:2.3:a:ublockorigin:ublock_origin:1.76.4:*:*:*:*:*:*:*",
       "licenses": [
         {
           "license": {
@@ -191,18 +195,18 @@
       "type": "library",
       "bom-ref": "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}",
       "name": "Bitwarden Password Manager",
-      "version": "2026.10.0",
+      "version": "2026.10.2",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "a25e02e961f4ffcecda12584f32f1993102ad7509e9ca84582e5287109f5bd20"
+          "content": "abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73"
         }
       ],
       "scope": "optional",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5125667/bitwarden_password_manager-2026.10.0.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5198653/bitwarden_password_manager-2026.10.2.xpi"
         },
         {
           "type": "website",
@@ -215,12 +219,49 @@
           "value": "credential-provider"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.10.0",
-      "cpe": "cpe:2.3:a:bitwarden:bitwarden:2026.10.0:*:*:*:browser:*:*:*",
+      "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.10.2",
+      "cpe": "cpe:2.3:a:bitwarden:bitwarden:2026.10.2:*:*:*:browser:*:*:*",
       "licenses": [
         {
           "license": {
             "name": "UNDECLARED on AMO; upstream repo mixes GPL-3.0 and the Bitwarden License (bitwarden_license/). Not redistributed by Nulavio; verify before any bundling."
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "xpi:{d634138d-c276-4fc8-924b-40a0ea21d284}",
+      "name": "1Password \u2013 Password Manager",
+      "version": "8.12.44.33",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "dd896610a3e6776582b76f180ea0d3180b03413a244314f9d3c6b08ec6c59819"
+        }
+      ],
+      "scope": "optional",
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5203941/1password_x_password_manager-8.12.44.33.xpi"
+        },
+        {
+          "type": "website",
+          "url": "https://1password.com"
+        }
+      ],
+      "properties": [
+        {
+          "name": "nulavio:role",
+          "value": "credential-provider"
+        }
+      ],
+      "purl": "pkg:generic/addons.mozilla.org/1password@8.12.44.33",
+      "licenses": [
+        {
+          "license": {
+            "name": "Proprietary (AMO: All Rights Reserved). Not redistributed by Nulavio: installed from addons.mozilla.org on the person's request."
           }
         }
       ]
@@ -235,7 +276,8 @@
         "xpi:uBlock0@raymondhill.net",
         "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
         "xpi:keepassxc-browser@keepassxc.org",
-        "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}"
+        "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}",
+        "xpi:{d634138d-c276-4fc8-924b-40a0ea21d284}"
       ]
     }
   ]
