@@ -1,6 +1,6 @@
 # PrivacyTests.org's fingerprinting probe pages
 
-These files are copied, unchanged, from [privacytests/privacytests](https://github.com/privacytests/privacytests) at commit `5e675fa8a73b876a924d2ec1be648db43ebaf050` (2026-11-16), directory `static/`. The first copy was of `12e48c75` (2026-11-11). They are © Arthur Edelstein and contributors, under the MIT license in [`LICENSE`](LICENSE), which is their repository's.
+These files are copied, unchanged, from [privacytests/privacytests](https://github.com/privacytests/privacytests) at commit `ec9ad19f3cc7b2f02bf7d511b3d78cae115b0111` (2026-11-17), directory `static/`. The first copy was of `12e48c75` (2026-11-11), then `5e675fa8` (2026-11-16); the move to this one only renamed the Settings probe `Time zone` to `Time zone region` (#587). They are © Arthur Edelstein and contributors, under the MIT license in [`LICENSE`](LICENSE), which is their repository's.
 
 | File | What it is |
 |---|---|
