@@ -310,15 +310,15 @@
 <div class="claim" id="s2-7">
 <div class="claim-text">
 <h3><span class="num">2.7</span> What these defaults break</h3>
-<p>On 2026-10-26 we opened 50 public pages twice on the Nulavio build, which then used Firefox 158.0.1: once with the protections and once without. None broke because of the protections. Six pages were flagged and three more were checked by hand; the differences were removed ad slots, the site's own variants or the site's own pop-ups.</p>
+<p>On 2026-11-20 we opened 50 public pages twice on the Nulavio build with Firefox 160.0.1 and the filter lists a new profile gets: once with the protections and once without. Two stopped at the site's own bot check both times and were left out; of the 48 that opened with the protections on, none broke because of them. Twelve pages were flagged and eight more were checked, this time by an AI agent rather than a person; the differences were removed ad slots, the site's own pop-ups and cookie notices, or bot checks; Amazon's follows the first visit, with or without the protections. The first run, on 2026-10-26 with Firefox 158.0.1, is in the same directory.</p>
 <p class="limit"><strong>Limit:</strong> These were public pages, with no sign-in and no forms.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">How to check</p>
 <dl>
 <dt>File</dt>
-<dd><code class="ref" translate="no">docs/research/site-regression-2026-10.md</code></dd>
-<dd><code class="ref" translate="no">docs/research/evidence/site-regression-2026-10-26.json</code></dd>
+<dd><code class="ref" translate="no">docs/research/site-regression-2026-11.md</code></dd>
+<dd><code class="ref" translate="no">docs/research/evidence/site-regression-2026-11-20.json</code></dd>
 <dt>Runner</dt>
 <dd><code class="ref" translate="no">tests/regression/run_sites.py</code></dd>
 </dl>

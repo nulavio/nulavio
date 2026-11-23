@@ -37,6 +37,22 @@ COLLECT = (
     " links: document.links.length, images: document.images.length,"
     " frames: document.querySelectorAll('iframe').length};"
 )
+ENGINE = (
+    "return {version: Services.appinfo.version, build: Services.appinfo.appBuildID,"
+    f" ublock: WebExtensionPolicy.getByID('{UBLOCK}')?.extension?.version || null}};"
+)
+# The filter lists uBlock Origin selected for this new profile (the build's defaults, #83), read and never
+# written from its extension storage, as tests/integration/test_content_filter.py reads them.
+LISTS = (
+    "const done = arguments[arguments.length - 1];"
+    "(async () => {"
+    "const {ExtensionStorageIDB} = ChromeUtils.importESModule('resource://gre/modules/ExtensionStorageIDB.sys.mjs');"
+    f"const policy = WebExtensionPolicy.getByID('{UBLOCK}');"
+    "const store = await ExtensionStorageIDB.open(ExtensionStorageIDB.getStoragePrincipal(policy.extension));"
+    "const data = await store.get(['selectedFilterLists']);"
+    "return data.selectedFilterLists ?? null;"
+    "})().then(done, () => done(null));"
+)
 BLOCKED = (
     "const log = JSON.parse(gBrowser.selectedBrowser.getContentBlockingLog());"
     "return Object.values(log).filter(events => events.some(e => e[1])).length;"
@@ -97,6 +113,21 @@ def main() -> int:
             print("uBlock Origin was not installed by policy (network?)", file=sys.stderr)
             return 2
         category = m.chrome("return Services.prefs.getStringPref('browser.contentblocking.category');")
+        engine = m.chrome(ENGINE)
+        lists: list = []
+
+        def selected() -> bool:
+            m.set_context("chrome")
+            try:
+                lists[:] = m.execute_async(LISTS) or []
+            finally:
+                m.set_context("content")
+            return bool(lists)
+
+        if not harness.wait_until(selected, 120):
+            print("uBlock Origin selected no filter list (network?)", file=sys.stderr)
+            return 2
+        engine["filter_lists"] = sorted(lists)
         results: dict = {s["id"]: {"url": s["url"], "category": s["category"]} for s in sites}
         for site in sites:
             print(f"nulavio  {site['id']}", flush=True)
@@ -131,7 +162,7 @@ def main() -> int:
         entry["visual"] = visual
         entry["flags"] = flags(entry["nulavio"], entry["stock"], visual)
         flagged += bool(entry["flags"])
-    report = {"protected_category": category, "sites": results, "flagged": flagged}
+    report = {"engine": engine, "protected_category": category, "sites": results, "flagged": flagged}
     (args.out / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(f"{len(sites)} sites, {flagged} flagged for triage; report: {args.out / 'report.json'}")
     return 0

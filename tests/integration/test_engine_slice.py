@@ -175,16 +175,7 @@ class EngineSliceTest(unittest.TestCase):
         self.assertEqual(state["network.cookie.cookieBehavior"]["value"], 5)
 
     def test_04_content_processes_are_sandboxed(self):
-        built = self.m.chrome(
-            'const {AppConstants} = ChromeUtils.importESModule("resource://gre/modules/AppConstants.sys.mjs");'
-            'return {asan: AppConstants.ASAN, sandbox: Cc["@mozilla.org/sandbox/sandbox-settings;1"] !== undefined};'
-        )
-        if built["asan"] and not built["sandbox"] and os.environ.get("ASAN_OPTIONS"):
-            # The engine's configure turns the sandbox off by default for an AddressSanitizer build on Linux (LeakSanitizer
-            # conflicts with it: toolkit/moz.configure, sandbox_default). That build is asan.yml's, which looks for
-            # memory errors and is the only run that sets ASAN_OPTIONS (run_integration.sh, for its reports). Any
-            # other run of such a build fails below; the sandbox is checked in every other run, the release's included.
-            self.skipTest("an AddressSanitizer build has no sandbox on Linux (the engine's default)")
+        built = self.m.chrome('return {sandbox: Cc["@mozilla.org/sandbox/sandbox-settings;1"] !== undefined};')
         self.assertTrue(built["sandbox"], "this build has no sandbox: it was configured without one")
         self.m.navigate(self.server.url("/page/sandbox-probe"))
         level = self.m.chrome(

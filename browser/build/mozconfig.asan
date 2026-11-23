@@ -5,6 +5,10 @@
 # the run. Never packaged or published (rehearse_release.sh refuses a variant).
 # Options follow Mozilla's own ASan builds (build/unix/mozconfig.asan): ASan
 # replaces jemalloc as the allocator; line tables keep reports readable.
+# The content sandbox stays on: the engine's configure turns it off for an AddressSanitizer
+# build on Linux (LeakSanitizer conflicts with it), but leak detection is off in this run
+# and a trial showed the sandbox works (#490).
+ac_add_options --enable-sandbox
 ac_add_options --enable-address-sanitizer
 ac_add_options --disable-jemalloc
 ac_add_options --enable-debug-symbols=-gline-tables-only
