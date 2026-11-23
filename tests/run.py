@@ -25,12 +25,14 @@ for extra in (ROOT / "launcher", ROOT / "tests" / "lib", ROOT / "scripts" / "bra
 
 def main(argv: list[str]) -> int:
     which = argv[1] if len(argv) > 1 else "unit"
-    pattern = argv[2] if len(argv) > 2 else "test*.py"
+    patterns = argv[2:] or ["test*.py"]
     suites = {"unit": ["unit"], "integration": ["integration"], "all": ["unit", "integration"], "fuzz": ["fuzz"]}[which]
     loader = unittest.TestLoader()
     combined = unittest.TestSuite()
     for name in suites:
-        combined.addTests(loader.discover(str(ROOT / "tests" / name), pattern=pattern, top_level_dir=str(ROOT / "tests" / name)))
+        top = str(ROOT / "tests" / name)
+        for pattern in patterns:
+            combined.addTests(loader.discover(top, pattern=pattern, top_level_dir=top))
     if "integration" not in suites:
         # tests/lib/harness.py sets this for the engines and tools it starts (#464); a unit module that imports it
         # must not leave the launcher's refusal of the distribution's Firefox off for the whole unit run.

@@ -69,6 +69,8 @@ class DialogWatcher(threading.Thread):
         super().__init__(daemon=True)
         self.env = env
         self.seen: dict[str, str] = {}
+        self.answered: set[str] = set()
+        self.titles: set[str] = set()  # every title a window had, for the report: a window can be renamed after it opens
         self.actions: list[str] = []
         self.stop = threading.Event()
 
@@ -82,22 +84,77 @@ class DialogWatcher(threading.Thread):
     def run(self) -> None:
         while not self.stop.is_set():
             for wid, name in self.windows().items():
-                if wid in self.seen:
+                # A dialog can open under a generic title and get its own a moment later (slow runners), so a window
+                # is looked at again whenever its title changes, and answered once.
+                if self.seen.get(wid) == name:
                     continue
                 self.seen[wid] = name
+                self.titles.add(name)
                 lowered = name.lower()
+                if wid in self.answered:
+                    continue
                 if "association" in lowered or "associate" in lowered:
+                    self.answered.add(wid)
                     time.sleep(0.8)
                     run(["xdotool", "windowfocus", "--sync", wid], env=self.env)
                     run(["xdotool", "type", "--window", wid, "--delay", "40", "nulavio-spike"], env=self.env)
                     run(["xdotool", "key", "--window", wid, "Return"], env=self.env)
                     self.actions.append(f"association dialog '{name}': named key and confirmed")
                 elif "access" in lowered or "request" in lowered:
+                    self.answered.add(wid)
                     time.sleep(0.8)
                     run(["xdotool", "windowfocus", "--sync", wid], env=self.env)
                     run(["xdotool", "key", "--window", wid, "Return"], env=self.env)
                     self.actions.append(f"access dialog '{name}': pressed default button")
             time.sleep(0.4)
+
+
+def connect_until_dialog(open_popup, click_connect, dialogs_answered, attempts: int = 4, wait: float = 25.0) -> dict:
+    """Presses the popup's Connect button until KeePassXC shows (and the watcher answers) the association dialog.
+
+    One press can be lost on a slow machine: the popup may not have its Connect button yet, or the extension's
+    key exchange with KeePassXC may not have finished, and then no dialog ever opens (#498). The dialog is
+    waited for, not slept for, and when it does not come the popup is opened again and the button pressed again,
+    as a person would. `open_popup()` returns the popup's state, `click_connect(state)` presses Connect (False
+    when the popup has no such button) and `dialogs_answered()` is how many dialogs the watcher has answered so
+    far. It is a count, and each attempt compares it with its own start: a dialog answered before (or by an
+    earlier attempt that was only slow) must not satisfy a later press.
+    """
+    log: list[str] = []
+    first_count = dialogs_answered()
+    for attempt in range(1, attempts + 1):
+        state = open_popup()
+        if "is connected" in state["text"]:
+            log.append(f"attempt {attempt}: already connected")
+            return {"answered": dialogs_answered() > first_count, "attempts": attempt, "log": log}
+        before_press = dialogs_answered()
+        if not click_connect(state):
+            log.append(f"attempt {attempt}: no Connect button, popup says {state['text'][:80]!r}")
+            continue
+        if harness.wait_until(lambda start=before_press: dialogs_answered() > start, timeout=wait, interval=0.5):
+            log.append(f"attempt {attempt}: dialog answered")
+            return {"answered": True, "attempts": attempt, "log": log}
+        log.append(f"attempt {attempt}: Connect pressed, no dialog within {wait:.0f} s")
+    return {"answered": False, "attempts": attempts, "log": log}
+
+
+def settle_popup(open_popup, press_reload, close_popup, max_reloads: int = 4, pause: float = 4.0) -> dict:
+    """Opens the popup and, while it says "Cannot connect" with a Reload button, presses Reload and opens it again.
+
+    A press of Connect that got lost leaves the popup in that state too (#498), so the retry in
+    `connect_until_dialog` needs it as much as the first opening. Returns the popup's state plus `reloads`.
+    """
+    reloads = 0
+    while True:
+        state = open_popup()
+        has_connect = any("connect" in b["text"].lower() for b in state["buttons"])
+        reload_button = next((b for b in state["buttons"] if b["id"] == "reload-status-button"), None)
+        if has_connect or "is connected" in state["text"] or not reload_button or reloads >= max_reloads:
+            return {**state, "reloads": reloads}
+        press_reload(reload_button["id"])
+        reloads += 1
+        time.sleep(pause)
+        close_popup()
 
 
 POPUP_STATE = (
@@ -263,28 +320,54 @@ def main() -> int:
             # 5. popup before, connect + associate, popup after
             # If the extension's first attempt raced KeePassXC's startup, the popup shows
             # "Cannot connect" with a Reload button: press it, as a user would.
-            reloads = 0
-            while True:
-                before = popup_state(m, info["popup"], "before", args.artifacts)
-                connect = next((b for b in before["buttons"] if "connect" in b["text"].lower()), None)
-                reload_button = next((b for b in before["buttons"] if b["id"] == "reload-status-button"), None)
-                if connect or "is connected" in before["text"] or not reload_button or reloads >= 4:
-                    break
-                m.execute("document.getElementById(arguments[0]).click();", [reload_button["id"]])
-                reloads += 1
-                time.sleep(4)
+            def close_popup():
                 m.send("WebDriver:CloseWindow")
                 m.switch_to(m.window_handles()[0])
+
+            def reload_status(button_id):
+                m.execute("document.getElementById(arguments[0]).click();", [button_id])
+
+            reloads = 0
+
+            def open_ready_popup():
+                nonlocal reloads
+                state = settle_popup(lambda: popup_state(m, info["popup"], "before", args.artifacts), reload_status, close_popup)
+                reloads += state.pop("reloads")
+                return state
+
+            before = open_ready_popup()
+            connect = next((b for b in before["buttons"] if "connect" in b["text"].lower()), None)
             report["steps"]["popup_reloads"] = reloads
             report["steps"]["popup_before_association"] = {k: before[k] for k in ("text", "buttons")}
             report["diagnostics_before_association"] = diagnostics(runtime, work)
-            if connect:
-                m.execute("document.getElementById(arguments[0]).click();", [connect["id"]])
+
+            def reopen():
+                """Close the popup that is open and open a fresh one: its state is what Connect depends on."""
+                close_popup()
+                return open_ready_popup()
+
+            def press_connect(state):
+                button = next((b for b in state["buttons"] if "connect" in b["text"].lower()), None)
+                if not button:
+                    return False
+                m.execute("document.getElementById(arguments[0]).click();", [button["id"]])
+                return True
+
+            first = [before]
+
+            def open_popup():
+                # The popup opened above is used for the first attempt; later attempts open a new one.
+                return first.pop() if first else reopen()
+
+            if connect or "is connected" not in before["text"]:
                 # KeePassXC asks for the key's name in a dialog of its own (the watcher answers it).
                 # The popup stays open until then, as it would in front of a person.
-                harness.wait_until(lambda: watcher.actions, timeout=30, interval=0.5)
-            m.send("WebDriver:CloseWindow")
-            m.switch_to(m.window_handles()[0])
+                report["steps"]["association"] = connect_until_dialog(open_popup, press_connect, lambda: len(watcher.actions))
+                # Reloads pressed while retrying Connect count too: the report shows every recovery step.
+                report["steps"]["popup_reloads"] = reloads
+            # The popup tab is closed, as a person would: with it open, the tab opened next is a background one
+            # (the harness switches without focus) and its login page is not filled (#498).
+            close_popup()
             # The association is finished when a newly opened popup says so; a login page loaded
             # before that is not filled.
             deadline = time.monotonic() + 60
@@ -340,7 +423,7 @@ def main() -> int:
         finally:
             if watcher is not None:
                 watcher.stop.set()
-                report["keepassxc_windows_seen"] = sorted(set(watcher.seen.values()))
+                report["keepassxc_windows_seen"] = sorted(watcher.titles)
                 report["dialog_actions"] = watcher.actions
             if session is not None:
                 session.cleanup()

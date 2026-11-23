@@ -24,7 +24,9 @@ sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 import apply_patches  # noqa: E402
 import fetch_firefox_l10n  # noqa: E402
 import make_distribution  # noqa: E402
+import make_tools  # noqa: E402
 import refresh_extensions_lock  # noqa: E402
+
 
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
 BRANDING = ROOT / "browser" / "branding" / "nulavio"
@@ -888,6 +890,54 @@ class PackagingTest(unittest.TestCase):
         for name, checks in bad.items():
             with self.subTest(name):
                 self.assertEqual(run(checks).returncode, 1)
+
+    def test_package_checks_install_a_distribution_firefox_and_run_the_lookup_probe(self):
+        # GHSA-95h5-h3m4-3jhv (#575): the installed tools must use the package's engine with a distribution Firefox
+        # present and no NULAVIO_ENGINE. Both checks put a stub at the path their distribution uses.
+        for check, directory, firefox in (
+            ("check_rpm.sh", "/usr/lib64/nulavio", "/usr/lib64/firefox/firefox"),
+            ("check_deb.sh", "/usr/lib/nulavio", "/usr/lib/firefox/firefox"),
+        ):
+            text = (ROOT / "scripts" / "release" / check).read_text(encoding="utf-8")
+            self.assertIn(f"> {firefox}", text)
+            self.assertIn(f'[ "$({firefox} --version)" = "Mozilla Firefox 160.0" ]', text)
+            self.assertIn("engine_lookup_probe.py:/checks/engine_lookup_probe.py:ro", text)
+            self.assertIn(f'su tester -c "env -u NULAVIO_ENGINE python3 -I /checks/engine_lookup_probe.py {directory}"', text)
+
+    def test_the_engine_lookup_probe_fails_when_the_tools_resolve_to_the_distribution_firefox(self):
+        probe = ROOT / "scripts" / "release" / "engine_lookup_probe.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            install = tmp / "usr" / "lib64" / "nulavio"
+            install.mkdir(parents=True)
+            engine = install / "nulavio"
+            engine.write_text("#!/bin/sh\necho 'Nulavio Nulavio 160.0.1'\n")
+            engine.chmod(0o755)
+            (install / "application.ini").write_text("[App]\nVersion=160.0.1\n")
+            make_tools.build(install / "nulavio-tools")
+            firefox = tmp / "bin" / "firefox"
+            firefox.parent.mkdir()
+            firefox.write_text("#!/bin/sh\necho 'Mozilla Firefox 160.0'\n")
+            firefox.chmod(0o755)
+            env = {"PATH": f"{firefox.parent}:/usr/bin:/bin"}
+
+            def run(**extra):
+                return subprocess.run([sys.executable, "-I", str(probe), str(install)], env={**env, **extra}, capture_output=True,
+                                      text=True, check=False)  # fmt: skip
+
+            good = run()
+            self.assertEqual(good.returncode, 0, good.stdout + good.stderr)
+            self.assertIn("(Nulavio)", good.stdout)
+            self.assertEqual(run(NULAVIO_ENGINE=str(firefox)).returncode, 1)
+            # The advisory's lookup: bundled_engine() reverted, so the tools take a distribution Firefox.
+            module = install / "nulavio-tools" / "launcher" / "nulavio_launcher" / "engine.py"
+            source = module.read_text(encoding="utf-8")
+            reverted = source.replace("    bundled = bundled_engine()\n", "    bundled = None\n")
+            self.assertNotEqual(source, reverted)
+            module.write_text(reverted, encoding="utf-8")
+            bad = run()
+            self.assertEqual(bad.returncode, 1)
+            self.assertIn("expected", bad.stdout)
 
     def test_one_build_reads_the_system_directory_the_distribution_has(self):
         series = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8")

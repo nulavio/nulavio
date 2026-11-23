@@ -35,7 +35,8 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
   - In your own profiles opened for an agent, the engine's Local Network Access now refuses a public page's requests to local addresses with no prompt, a pop-up's included. This holds for the agent's run only, and none of these settings stays in the profile.
   - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
   - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
-  - A page loaded through a proxy is not checked this way, and in your profiles a site you allowed yourself to reach local addresses keeps that permission; R29 lists what else is not.
+  - A page loaded through a proxy is not checked this way; R29 lists what else is not.
+  - In your profiles opened for an agent, a site you allowed yourself to reach this computer or the local network no longer keeps that permission for the agent's run: engine patch 0014 refuses its pages' requests to local addresses there too, before they are sent. The permission stays in the profile, for the windows you browse (#570).
   - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address, and the tab shows a blocked page. A page loaded through a proxy is not checked this way either (R29).
   - Nothing to do: it comes with the update.
 

@@ -13,4 +13,5 @@
 0011-profiles-unlock-a-protected-profile-in-the-chooser.patch
 0012-rfp-per-site-audio-noise-and-one-screen-size.patch
 0013-sidebar-the-side-panel-can-open-opposite-the-tabs.patch
+0014-lna-an-agents-engine-ignores-a-sites-saved-local-network-permission.patch
 0015-lna-an-agents-engine-refuses-a-local-page-before-sending.patch

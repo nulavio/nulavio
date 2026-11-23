@@ -2057,6 +2057,36 @@ class WorkspaceTest(Home):
         lna = {k: json.dumps(v) for k, v in WORKSPACE_PREFS.items() if k.startswith(("network.lna.", "permissions.default."))}
         self.assertEqual(pinned, lna)
 
+    def test_the_engine_ignores_a_sites_saved_local_network_permission_where_the_bridge_started_it(self):
+        # #570: patch 0014 keys on the variable the Bridge sets and the Shell reads, and in such an engine it skips the
+        # site's saved allow (its saved deny still applies) and refuses before anything the prompt code would grant.
+        # What it does is tests/integration/test_ai_bridge.py test_32, against a build of this tree.
+        from nulavio_launcher.ai import workspace
+
+        root = Path(__file__).resolve().parents[2]
+        name = "0014-lna-an-agents-engine-ignores-a-sites-saved-local-network-permission.patch"
+        series = (root / "browser" / "patches" / "series").read_text(encoding="utf-8").split()
+        self.assertIn(name, series)
+        patch = (root / "browser" / "patches" / name).read_text(encoding="utf-8")
+        self.assertEqual(
+            set(re.findall(r"(?m)^\+\+\+ b/(\S+)", patch)),
+            {"netwerk/base/LNAPermissionRequest.h", "netwerk/base/LNAPermissionRequest.cpp",
+             "netwerk/protocol/http/nsHttpChannel.cpp"},
+        )  # fmt: skip
+        self.assertIn(f'PR_GetEnv("{workspace.WORKSPACE_ENV}")', patch)
+        removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(removed, ["  if (nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),"])
+        # The driver's own loads carry the system principal, which the permission manager allows everything: they
+        # are granted at this step as before (test_27 shows they are still sent, and the Shell checks their pages).
+        self.assertIn(
+            "+  if ((!InNulavioAgentEngine() ||\n+       mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal()) &&\n"
+            "+      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),",
+            patch,
+        )
+        self.assertNotIn("IsExactSitePermDeny", "".join(removed))  # a saved deny keeps refusing
+        request = patch.split("LNAPermissionRequest::RequestPermission() {", 1)[1].split("// Enforce Permissions Policy", 1)[0]
+        self.assertIn("+  if (InNulavioAgentEngine()) {\n+    return Cancel();\n+  }", request)
+
     def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
         """#463: the marker the window read while raw automation was on is not written any more; one left in a
         workspace's profile by an earlier version goes when the workspace starts."""
