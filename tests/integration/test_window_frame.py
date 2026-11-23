@@ -30,6 +30,8 @@ return {
   },
   frame: win.getComputedStyle(doc.documentElement).getPropertyValue("--toolbar-background-color").trim(),
   neutral: band.hasAttribute("nv-neutral"),
+  // Set when the band draws the window's state (its row is there before, from the window's load).
+  private: band.querySelector(".nv-band-row")?.dataset.private ?? null,
   // The rule line under the band, if one is drawn: its colour, or transparent when there is none.
   bandLine: (cs => (parseFloat(cs.borderBlockEndWidth) > 0 && cs.borderBlockEndStyle !== "none"
     ? cs.borderBlockEndColor : "rgba(0, 0, 0, 0)"))(win.getComputedStyle(band)),
@@ -79,8 +81,8 @@ class WindowFrameTest(unittest.TestCase):
     def frame(self, other: bool = False) -> dict:
         return self.m.chrome(FRAME, [other])
 
-    def settled(self, want, other: bool = False) -> dict:
-        harness.wait_until(lambda: want(self.frame(other)), 10)
+    def settled(self, want, other: bool = False, timeout: float = 10) -> dict:
+        harness.wait_until(lambda: want(self.frame(other)), timeout)
         return self.frame(other)
 
     def test_01_one_tone_and_the_page_is_a_card(self):
@@ -252,8 +254,11 @@ class WindowFrameTest(unittest.TestCase):
         self.assertTrue(opened)
         close = "[...Services.wm.getEnumerator('navigator:browser')].find(w => w !== window)?.close();"
         self.addCleanup(self.m.chrome, close)
-        private = self.settled(lambda f: not f["neutral"] and f["radius"] == 10, other=True)
-        self.assertFalse(private["neutral"], private)
+        # The private band as drawn: its row is there from the window's load, and takes the window's state only once
+        # the window has started (#544: under the sanitiser it was read before, still the frame's tone).
+        drawn = lambda f: f["private"] == "true" and not f["neutral"] and f["radius"] == 10  # noqa: E731
+        private = self.settled(drawn, other=True, timeout=30)
+        self.assertTrue(drawn(private), private)
         # The private band is not the frame's tone, its row is filled, and its rule line is drawn.
         self.assertNotEqual(private["row"], "rgba(0, 0, 0, 0)", private)
         self.assertNotEqual(private["row"], plain["tones"]["band"], private)
