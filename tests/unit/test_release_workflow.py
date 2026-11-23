@@ -394,10 +394,15 @@ class AsanWorkflowTest(unittest.TestCase):
         # it, and test_engine_slice 04 checks it there like in every other run (no skip).
         asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")
         self.assertRegex(asan, r"(?m)^ac_add_options\s+--enable-sandbox\s*$")
+        # the trial input is gone, so no run can build the variant without it
         text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
-        self.assertNotIn("sandbox", text.lower())
+        self.assertNotIn("inputs.sandbox", text)
+        self.assertNotIn("--enable-sandbox' >>", text)
+        # the sandbox test has no skip of its own
         engine = (ROOT / "tests" / "integration" / "test_engine_slice.py").read_text(encoding="utf-8")
-        self.assertNotIn('skipTest("an AddressSanitizer build', engine)
+        start = engine.index("    def test_04_content_processes_are_sandboxed(self):")
+        end = engine.index("\n    def ", start + 1)
+        self.assertNotIn("skipTest(", engine[start:end])
 
     @unittest.skipUnless(shutil.which("bash"), "bash not available")
     def test_a_variant_build_is_never_rehearsed_as_a_release(self):
