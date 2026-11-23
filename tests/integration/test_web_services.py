@@ -157,15 +157,17 @@ class WebServicesTest(unittest.TestCase):
         """The fixture page in this window's tab, with its text there. A new window's own first page can replace one
         navigated to while it still loads (as in test_routing): under the sanitiser a private window's tab showed its
         first page, with no `#text`, after the navigation to the fixture (#544). So the page is navigated to again
-        until it is the one shown, and a failure says what the tab holds."""
+        until it is the one shown and nothing loads in the tab, and a failure says what the tab holds."""
         url = self.server.url(path)
+        self.m.navigate(url)
+        idle = "return !gBrowser.selectedBrowser.webProgress?.isLoadingDocument;"
 
         def shown() -> bool:
             try:
-                if urlsplit(self.m.current_url()).path != urlsplit(url).path:
+                if self.m.current_url() != url:
                     self.m.navigate(url)
                     return False
-                return bool(self.m.execute("return !!document.getElementById('text');"))
+                return bool(self.m.chrome(idle)) and bool(self.m.execute("return !!document.getElementById('text');"))
             except MarionetteError:
                 return False  # a script run while the tab changes page
 
