@@ -1,7 +1,7 @@
 # ADR 0019 — What a page renders as audio differs per site
 
 - **Status:** Accepted (2026-11-14) for the direction. The maintainer decided on [issue #79](https://github.com/nulavio/nulavio/issues/79) that day (decision 4 there) that the audio fingerprint is answered with an engine patch, with its cost measured. This ADR writes down how the patch works, what it leaves out and what it costs. **Proposed** for those details, until the pull request that carries this ADR is merged.
-- **Changed** (2026-11-20): the noise also reaches what a node inside an offline rendering hands to script (engine patch 0016, [#406](https://github.com/nulavio/nulavio/issues/406), decision 3), and decision 2 says what that means for a context that plays. **Proposed** for those two parts, until the pull request that carries them is merged.
+- **Changed** (2026-11-20): the noise also reaches what a node inside an offline rendering hands to script (engine patch 0016, [#406](https://github.com/nulavio/nulavio/issues/406), decision 3), and decision 2 says what that means for a context that plays. **Accepted** (2026-11-23) for those two parts: the maintainer chose to leave a context that plays alone, the first of the three choices below ([#593](https://github.com/nulavio/nulavio/pull/593)).
 - **Related:** [ADR 0016](0016-one-screen-size-and-processor-count-for-pages.md) (the screen, in the same patch), [fingerprinting, measured](../research/fingerprinting.md), [hardening](../security/hardening.md).
 
 ## Context
