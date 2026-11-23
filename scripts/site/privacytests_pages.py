@@ -65,10 +65,13 @@ BROWSERS = {
 CELL = {("Passed", "good"): "passed", ("Failed", "bad"): "failed", ("Unsupported", "na"): "unsupported"}
 # Cells where their page's verdict is not the plain rule over the runs (every run randomized, or one value on
 # every run; for Settings, every run passed). Their page is what people read, so the cell is the page's; each
-# such cell is named here with what the page shows, and `refresh` stops on one that is not.
+# such cell is named here with the verdict their page shows, the verdict the rule gives and why, and `refresh`
+# stops on a cell that is not here, or on one here whose pair of verdicts changed.
 PAGE_OVER_RULE = {
     ("brave", "Device memory"): (
-        "their page shows it passed: three of the five runs were randomized and the other two read 8 and 4"
+        "passed",
+        "failed",
+        "their page shows it passed: three of the five runs were randomized and the other two read 8 and 4",
     ),
 }
 # Probes the integration test runs that their page has no row for, and why. Their columns show "·" there. A probe
@@ -226,8 +229,10 @@ def published(page: dict, data: dict, probes: dict, sources: dict) -> dict:
                 raise ComparisonError(f"{probe}, {browser}: on their page but not in their data file")
             verdict = page["rows"][probe][browser]
             plain = "passed" if rule(group, runs) else "failed"
-            exception = (browser, probe) in PAGE_OVER_RULE
-            if verdict != "unsupported" and (verdict != plain) != exception:
+            exception = PAGE_OVER_RULE.get((browser, probe))
+            if verdict != "unsupported" and (
+                (exception is None and verdict != plain) or (exception is not None and exception[:2] != (verdict, plain))
+            ):
                 raise ComparisonError(f"{probe}, {browser}: their page says {verdict}, the runs say {plain}: read the cell")
             cells[browser] = {"verdict": verdict, "runs": runs}
         rows[probe] = cells
@@ -987,6 +992,15 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# What the headless Firefox that draws the picture is given of this process's environment: what it needs to start
+# and draw, nothing else, so no credential of the refresh (a GitHub token, say) reaches it (REVIEW.md I3).
+RENDERER_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "XDG_RUNTIME_DIR", "FONTCONFIG_FILE", "FONTCONFIG_PATH")
+
+
+def renderer_env() -> dict:
+    return {**{k: os.environ[k] for k in RENDERER_ENV if k in os.environ}, "MOZ_HEADLESS": "1"}
+
+
 def draw_pictures(src: Path, firefox: str) -> dict:
     """Draw each language's picture with a headless Firefox in a throwaway profile; return picture.json."""
     c = comparison(src)
@@ -1003,7 +1017,7 @@ def draw_pictures(src: Path, firefox: str) -> dict:
                 [firefox, "--headless", "--no-remote", "--profile", str(profile),
                  f"--window-size={OG_SIZE[0]},{OG_SIZE[1]}", "--screenshot", str(target), source.as_uri()],
                 check=True, timeout=120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                env={**os.environ, "MOZ_HEADLESS": "1"},
+                env=renderer_env(),
             )  # fmt: skip
             data = target.read_bytes()
             size = (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big"))

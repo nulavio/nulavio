@@ -12,11 +12,13 @@ import html
 import copy
 import hashlib
 import json
+import os
 import re
 import sys
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "site"))
@@ -134,6 +136,10 @@ class ComparisonTest(unittest.TestCase):
                 if cell["verdict"] != ("passed" if pt.rule(group, cell["runs"]) else "failed"):
                     differ.add((browser, probe))
         self.assertEqual(differ, set(pt.PAGE_OVER_RULE))
+        for (browser, probe), (page_says, rule_says, _why) in pt.PAGE_OVER_RULE.items():
+            cell = self.published["rows"][probe][browser]
+            plain = "passed" if pt.rule(pt.group_of(groups, probe), cell["runs"]) else "failed"
+            self.assertEqual((cell["verdict"], plain), (page_says, rule_says), (browser, probe))
 
     def test_refresh_rebuilds_the_fixture_and_stops_on_a_cell_typed_in_by_hand(self):
         fixture = copy.deepcopy(self.published)
@@ -163,6 +169,21 @@ class ComparisonTest(unittest.TestCase):
         page["rows"]["Logical CPU cores"]["chrome"] = cell["verdict"]
         rebuilt = pt.published(page, data, self.constants["PROBES"], fixture["sources"])
         self.assertEqual(rebuilt["rows"], self.published["rows"], "the fixture is what refresh makes of its sources")
+        # An exception holds only for the pair of verdicts it names: a cell whose verdicts disagree the other way is a
+        # change to read, not one the exception lets through.
+        reversed_pair = {("brave", "Device memory"): ("failed", "passed", "the reversed pair")}
+        with (
+            mock.patch.object(pt, "PAGE_OVER_RULE", reversed_pair),
+            self.assertRaisesRegex(pt.ComparisonError, "Device memory, brave"),
+        ):
+            pt.published(page, data, self.constants["PROBES"], fixture["sources"])
+
+    def test_the_firefox_that_draws_the_picture_is_given_no_credential(self):
+        with mock.patch.dict(os.environ, {"GH_TOKEN": "x", "GITHUB_TOKEN": "x", "AWS_SECRET_ACCESS_KEY": "x", "HOME": "/h"}):
+            env = pt.renderer_env()
+        self.assertEqual(env["MOZ_HEADLESS"], "1")
+        self.assertEqual(env["HOME"], "/h")
+        self.assertLessEqual(set(env) - {"MOZ_HEADLESS"}, set(pt.RENDERER_ENV))
 
     def test_their_page_is_read_cell_by_cell(self):
         def page(cells: str, columns=("brave", "tor")) -> str:
