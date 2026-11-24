@@ -72,7 +72,9 @@ def pages(server) -> dict[str, dict]:
         "settings-appearance": {"path": "settings/settings.html#appearance", "settled": ready},
         "assistant": {"path": None, "sidebar": True},
         "lookalike": {
-            "path": "passwords/lookalike.html?" + "url=" + server.url("/page/Login") + "&site=examp1e.com&similar=example.com",
+            # The page names only what the passwords module finds for this address in the profile's saved
+            # logins; without a saved login it imitates, this captures the "nothing to compare" state.
+            "path": "passwords/lookalike.html?" + "url=" + server.url("/page/Login"),
             "settled": "return document.readyState === 'complete';",
         },
         "guard-review": {"path": "guard/review.html", "settled": ready},

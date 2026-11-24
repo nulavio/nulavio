@@ -145,6 +145,22 @@ class RoutingTest(unittest.TestCase):
                 urls.append("")
         return urls
 
+    def held_page(self, client, page: str, needle: str) -> bool:
+        """Switch `client` to its tab showing `page` (ask or blocked) for an address containing `needle`. The
+        page's own address carries only the id of the held link, so the address is read from the page."""
+        ready = "return document.documentElement?.dataset.ready === 'true';"
+        for handle in client.window_handles():
+            client.switch_to(handle)
+            try:
+                if f"/routing/{page}.html" not in client.current_url():
+                    continue
+                harness.wait_until(lambda: client.execute(ready), timeout=10)
+                if needle in client.execute("return document.getElementById('url').textContent;"):
+                    return True
+            except MarionetteError:
+                continue
+        return False
+
     def own_tabs(self) -> list[str]:
         return self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);")
 
@@ -980,17 +996,10 @@ class RoutingTest(unittest.TestCase):
         self.wait_shared(work, 99999)
         try:
             self.deliver("Trabalho", [self.ip("/page/fallback-gone")])
-            blocked = harness.wait_until(
-                lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "by=default" in u], 20
-            )
+            blocked = harness.wait_until(lambda: self.held_page(work, "blocked", "/page/fallback-gone"), 20)
             self.assertTrue(blocked, self.tabs(work))
             time.sleep(1)
             self.assertEqual(self.hits("/page/fallback-gone"), 0, "the link opened in the wrong profile")
-            for handle in work.window_handles():
-                work.switch_to(handle)
-                if "by=default" in work.current_url():
-                    break
-            harness.wait_until(lambda: work.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
             self.assertIn(
                 "perfil escolhido para esses links", work.execute("return document.getElementById('explain').textContent;")
             )
@@ -1059,9 +1068,7 @@ class RoutingTest(unittest.TestCase):
         work = self.receiver()
         self.wait_shared(work, gone)
         self.deliver("Trabalho", [self.ip("/page/to-the-heir")])
-        blocked = harness.wait_until(
-            lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "to-the-heir" in u], 20
-        )
+        blocked = harness.wait_until(lambda: self.held_page(work, "blocked", "/page/to-the-heir"), 20)
         self.assertTrue(blocked, self.tabs(work))
         time.sleep(1)
         self.assertEqual(self.hits("/page/to-the-heir"), 0)

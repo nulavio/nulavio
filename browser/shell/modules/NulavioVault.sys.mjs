@@ -302,7 +302,8 @@ class Vault {
     }
     const params = new URLSearchParams({ p: String(profileId) });
     if (url) {
-      params.set("u", url);
+      // The page gets only an id for the link: it reads the link and the profile from the routing module.
+      params.set("h", lazy.NulavioRouting.hold("vault/unlock.html", { u: url, p: Number(profileId), src: source }));
     }
     if (source) {
       params.set("src", source);

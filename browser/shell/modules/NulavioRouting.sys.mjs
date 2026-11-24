@@ -83,6 +83,9 @@ function webUrl(url) {
 
 // How long a link another profile sent here waits for its tab to show it (D-UX19).
 const ARRIVAL_MS = 60000;
+// The pages that show a held-back link, and how many held links this instance keeps for them.
+const HELD_PAGES = new Set(["routing/ask.html", "routing/blocked.html", "vault/unlock.html"]);
+const HELD_MAX = 64;
 
 function siteOrNull(url) {
   try {
@@ -106,6 +109,7 @@ class NulavioRoutingClass {
   // D-UX19: the tabs a routed command line opened (each with its links), and the tabs showing one.
   #opened = new WeakMap(); // a tab's <browser> -> {urls, at}
   #arrived = new WeakMap(); // a tab's <browser> -> the rule that sent its site here
+  #held = new Map(); // id -> a link held back for a Nulavio page, with what that page shows and may do
 
   // -- rules (shared by every profile of the group) -------------------------
 
@@ -308,6 +312,47 @@ class NulavioRoutingClass {
       (target.registrable ? rules.find(r => r.match === "domain" && r.value === target.registrable) : null) ??
       null;
     return { ...target, rule };
+  }
+
+  // -- links held back for a Nulavio page --------------------------------------
+
+  /**
+   * Keep a held-back link for one of the pages that show one (ask, blocked, unlock) and return the
+   * id the page is opened with. The page reads the link, the rule, the profile and the reason back
+   * with held(); nothing that decides what it offers comes from its own address, which any
+   * installed extension can open with parameters of its choosing. Kept in memory for this run of
+   * the browser, the newest HELD_MAX.
+   */
+  hold(page, { u, r = null, p = null, why = null, by = null, src = null }) {
+    if (!HELD_PAGES.has(page)) {
+      fail("bad-request");
+    }
+    let link = null; // not a web address (a navigation that failed before it was decided): the page says so
+    try {
+      link = webUrl(u);
+    } catch {}
+    const id = Services.uuid.generateUUID().toString().slice(1, -1);
+    const text = value => (typeof value === "string" ? value : null);
+    this.#held.set(
+      id,
+      Object.freeze({ page, u: link, r: text(r), p: Number.isInteger(p) ? p : null, why: text(why), by: text(by), src: text(src) })
+    );
+    for (const old of this.#held.keys()) {
+      if (this.#held.size <= HELD_MAX) {
+        break;
+      }
+      this.#held.delete(old);
+    }
+    return id;
+  }
+
+  /** What hold() kept for this page; not-found for an unknown id or one held for another page. */
+  held(id, page) {
+    const record = this.#held.get(String(id));
+    if (!record || record.page !== page) {
+      fail("not-found");
+    }
+    return { ...record };
   }
 
   // -- explicit choices (from Nulavio pages) ----------------------------------
@@ -752,14 +797,14 @@ class NulavioRoutingClass {
     }
     if ((await lazy.profileLockState(profile.path)) === "locked") {
       // Never start an engine on a locked profile: offer to unlock it here, without loading the site.
-      await this.#openPage("vault/unlock.html", { p: String(profile.id), u: url, src: source });
+      await this.#openPage("vault/unlock.html", { p: profile.id, u: url, src: source });
       return;
     }
     try {
       this.#launchRouted(profile, url, by);
     } catch (e) {
       console.error("Nulavio routing: could not open the target profile", e);
-      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch", src: source, by, p: String(profile.id) });
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "launch", src: source, by, p: profile.id });
     }
   }
 
@@ -791,7 +836,9 @@ class NulavioRoutingClass {
     if (!policy) {
       throw new Error("the Nulavio Shell is not running");
     }
-    const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== null && v !== undefined));
+    // Only the id: the page reads the rest from this module (the unlock page also names its profile).
+    const id = this.hold(page, params);
+    const query = new URLSearchParams(page === "vault/unlock.html" ? { p: String(params.p), h: id } : { h: id });
     win.openTrustedLinkIn(`${policy.getURL(page)}?${query}`, "tab");
   }
 

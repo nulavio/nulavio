@@ -1,7 +1,12 @@
 /* Pages shown instead of a link that routing held back: "ask" (the user's
    rule says to ask first) and "blocked" (the target profile could not take
    it). Neither page loads the link: the address is shown as text, and opening
-   it anywhere is an explicit choice. */
+   it anywhere is an explicit choice.
+
+   The page's address carries only the id the routing module gave the held
+   link (`h`). The link, the rule, the profile and the reason are read back
+   from the module: another extension can open this page with parameters of
+   its own, and nothing in the address decides what the page offers. */
 
 import { localize, t } from "../lib/i18n.js";
 import { wireSettingsLinks } from "../lib/settings.js";
@@ -9,7 +14,7 @@ import { announce, chip, errorText, h, profileStates, stateBadge } from "../lib/
 
 const routing = browser.nulavioRouting;
 const mode = document.body.dataset.mode;
-const params = new URLSearchParams(location.search);
+const id = new URLSearchParams(location.search).get("h");
 
 function webUrl(raw) {
   try {
@@ -78,14 +83,20 @@ function routeEnd(profile, note) {
 }
 
 async function render() {
-  const url = webUrl(params.get("u"));
+  // Not held by this browser (any more: held links do not outlive a restart), or held for the other page.
+  const held = id ? await routing.held(id, `routing/${mode}.html`).catch(() => null) : null;
+  if (!held) {
+    document.getElementById("explain").textContent = t(id ? "routingLinkGone" : "routingBadLink");
+    return;
+  }
+  const url = webUrl(held.u);
   if (!url) {
     document.getElementById("explain").textContent = t("routingBadLink");
     return;
   }
   document.getElementById("url").textContent = url.href;
   const [state, people] = await Promise.all([routing.state(), browser.nulavioProfiles.list().catch(() => null)]);
-  const rule = state.rules.find(r => r.id === params.get("r")) ?? null;
+  const rule = (held.r && state.rules.find(r => r.id === held.r)) ?? null;
   const host = url.hostname;
   const record = rule ? people?.profiles.find(p => p.id === rule.profileId) : null;
   const target = record ?? (rule && rule.profileName ? { name: rule.profileName, color: rule.profileColor, avatar: null } : null);
@@ -112,7 +123,7 @@ async function render() {
     ? button(t("routingUnlockAndOpen", [target.name]), "button--primary", () => unlockThere(url, rule, mode === "ask" && remember()))
     : null;
   if (mode === "ask") {
-    const explain = { typed: "routingAskExplainTyped", page: "routingAskExplainPage" }[params.get("src")] ?? "routingAskExplain";
+    const explain = { typed: "routingAskExplainTyped", page: "routingAskExplainPage" }[held.src] ?? "routingAskExplain";
     document.getElementById("explain").textContent = target
       ? t(explain, [host, target.name])
       : t("routingRuleGone", [host]);
@@ -126,10 +137,10 @@ async function render() {
       document.getElementById("remember-field").hidden = false;
     }
     actions.push(button(here ?? t("routingOpenHere"), "button--secondary", () => openHere(url, rule, remember())));
-  } else if (params.get("by") === "default") {
+  } else if (held.by === "default") {
     // UX6: the default destination for links from other apps could not take the link.
-    const chosen = people?.profiles.find(p => String(p.id) === params.get("p")) ?? null;
-    const launch = params.get("why") === "launch" && chosen;
+    const chosen = people?.profiles.find(p => p.id === held.p) ?? null;
+    const launch = held.why === "launch" && chosen;
     document.getElementById("explain").textContent = launch
       ? t("routingBlockedLaunchDefault", [host, chosen.name])
       : t("routingBlockedMissingDefault", [host]);
@@ -145,7 +156,7 @@ async function render() {
     }
     actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
   } else {
-    const why = params.get("why");
+    const why = held.why;
     const name = rule?.profileName;
     document.getElementById("explain").textContent =
       why === "missing" || !name

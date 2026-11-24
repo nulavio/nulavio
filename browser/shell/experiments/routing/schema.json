@@ -28,6 +28,13 @@
       {
         "name": "openIn", "type": "function", "async": true,
         "parameters": [{ "name": "profileId", "type": "integer" }, { "name": "url", "type": "string", "maxLength": 8192 }]
+      },
+      {
+        "name": "held", "type": "function", "async": true,
+        "parameters": [
+          { "name": "id", "type": "string", "maxLength": 64 },
+          { "name": "page", "type": "string", "enum": ["routing/ask.html", "routing/blocked.html", "vault/unlock.html"] }
+        ]
       }
     ],
     "events": [

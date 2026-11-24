@@ -278,23 +278,32 @@ class Passwords {
     }
   }
 
-  /** Whether a password field on `url` belongs to a site that imitates one with a saved login. */
-  async checkLogin(url) {
+  /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null. */
+  async #lookalike(url) {
     let parsed;
     try {
       parsed = new URL(url);
     } catch {
-      return { suspicious: false };
+      return null;
     }
     if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname) {
-      return { suspicious: false };
+      return null;
     }
     const similar = lookalikeOf(parsed.hostname, await this.#sites());
     const pair = similar ? pairEntry(siteOf(parsed.hostname), similar) : null;
     if (!similar || this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair)) {
-      return { suspicious: false };
+      return null;
     }
-    return { suspicious: true, site: displayHost(siteOf(parsed.hostname)), similar };
+    return { site: siteOf(parsed.hostname), similar };
+  }
+
+  /**
+   * Whether a password field on `url` belongs to a site that imitates one with a saved login. Also what
+   * the warning page shows: it passes only the address it was opened for, and names what this returns.
+   */
+  async checkLogin(url) {
+    const found = await this.#lookalike(url);
+    return found ? { suspicious: true, site: displayHost(found.site), similar: found.similar } : { suspicious: false };
   }
 
   /** Nulavio's own pages take a protected profile's password (unlock, protection, phone). The engine's
@@ -331,7 +340,20 @@ class Passwords {
     });
   }
 
-  /** "Continue anyway": not asked again for this pair of sites (kept in this profile only). */
+  /**
+   * "Continue anyway" on the warning page: the pair is found again from the address and this profile's
+   * saved logins, never taken from the page. Nothing to remember when the address imitates no saved site.
+   */
+  async dismissFor(url) {
+    const found = await this.#lookalike(url);
+    if (!found) {
+      return { dismissed: false };
+    }
+    this.dismiss(found.site, found.similar);
+    return { dismissed: true };
+  }
+
+  /** Not asked again for this pair of sites (kept in this profile only). */
   dismiss(site, similar) {
     const entry = pairEntry(site, similar);
     const list = this.#dismissed().filter(e => e !== entry);
