@@ -50,7 +50,7 @@ nulavio ai resume
 nulavio ai audit --agent ag-1234                     # what it did (no page content, no typed text)
 ```
 
-Changes apply to the agent's next call. When a permission is set to "ask", your Nulavio window shows the request (never the agent's own workspace window); if Nulavio is closed, a KDE dialog asks; without a way to ask, the answer is no. Pause, revoke, permissions and the emergency stop are also in Settings → AI & Automation.
+Changes apply to the agent's next call, also in one of your profiles the agent already has open: a profile you take away from the agent, or whose signed-in sessions you block, is closed then. "Allow once" is for one call; "Allow until the agent disconnects" is for the site and the place the request names. When a permission is set to "ask", your Nulavio window shows the request (never the agent's own workspace window); if Nulavio is closed, a KDE dialog asks; without a way to ask, the answer is no. Pause, revoke, permissions and the emergency stop are also in Settings → AI & Automation.
 
 Files: downloads are saved only when the agent may use files, into `~/.local/share/nulavio/ai/workspaces/<agent>/downloads/`; for uploads, put the files the agent may send into `.../<agent>/uploads/`.
 
@@ -58,6 +58,6 @@ Files: downloads are saved only when the agent may use files, into `~/.local/sha
 
 - The agent works in its own profile. Your Personal, Work or Banking profiles are reachable only if you give them to that agent (Settings → Assistant and AI → Agents, permissions and activity → its permissions), only while they are closed in your windows, and never while they are locked.
 - Safe Browsing, HTTPS-Only, tracking protection and the pop-up blocker stay on in the AI Workspace.
-- The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`.
+- The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`. With a site list ("Only these sites"), `file:` addresses are not among them: such an agent opens none.
 - A CLI agent runs with your user's rights. Outside Nulavio's tools it can do whatever you can do in a terminal, including reading its key file. Use its own sandbox options if you want to limit that.
 - Within what you allowed, a misled or compromised agent can act without asking. Revoke or stop it at any time.
