@@ -1356,15 +1356,12 @@ class Bridge:
             bidi, owner = self._open_profile(agent, label, url, checked), label
         tab = bidi.command("browsingContext.create", {"type": "tab"}, cancel=cancel)["context"]
         self.owner[tab] = owner
+        data = {"tab": tab, "profile": owner or "AI Workspace"}
         if url:
             bidi.command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"}, timeout=60, cancel=cancel)
-            self._arrived(tab, checked, cancel)
-        data = {
-            "tab": tab,
-            "profile": owner or "AI Workspace",
-            "url": self._url_of(tab, cancel),
-            "title": self._title(tab, cancel),
-        }
+            data.update(self._landed(tab, self._arrived(tab, checked, cancel), cancel))
+        else:
+            data.update(url=self._url_of(tab, cancel), title=self._title(tab, cancel))
         return self._ok(data), url
 
     def _open_profile(self, agent: dict, label: str, url: str | None, checked: list[str]) -> Bidi:
@@ -1422,23 +1419,24 @@ class Bridge:
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
-        self._arrived(tab, checked, cancel)
-        return self._ok({"tab": tab, "url": self._url_of(tab, cancel), "title": self._title(tab, cancel)}), url
+        checked_at = self._arrived(tab, checked, cancel)
+        return self._ok({"tab": tab, **self._landed(tab, checked_at, cancel)}), url
 
-    def _arrived(self, tab: str, checked: list[str], cancel) -> None:
+    def _arrived(self, tab: str, checked: list[str], cancel) -> str:
         """After a navigation: where a redirect took the tab is checked as if it had been asked for,
         and a form the new page sent by itself as it loaded is settled like any other. Where that
         form lands is checked the same way, a few times over (a chain of posted forms: four are
-        sent, and where the fourth lands is checked like the others)."""
+        sent, and where the fourth lands is checked like the others). Returns the address checked
+        last, which is what the call may describe (_landed)."""
         try:
             for more in (True, True, True, True, False):
                 final = self._url_of(tab, cancel)
                 self._in_scope_now(final)
                 self.require_needs(final, checked=checked)
                 if not more or self._open_dialog(tab) is not None:
-                    return
+                    return final
                 if not self._forms_settle(tab, final, "The navigation", checked, cancel):
-                    return
+                    return final
         except Denied as denied:
             denied.detail = f"{denied.detail} The tab is {tab}.".strip()
             raise
@@ -1502,6 +1500,18 @@ class Bridge:
         if missing:
             return {"needs_permission": missing}
         return None
+
+    def _landed(self, tab: str, checked_at: str, cancel) -> dict:
+        """What navigate and tab_new say about where the tab ended: the address _arrived checked and the page's
+        title. The checks can wait for the user's answer while the page is already running, so a tab that has moved on
+        to another origin since is described only where `_hidden` would let it, and its title only with its address."""
+        url = self._url_of(tab, cancel)
+        title = self._title(tab, cancel)
+        after = self._url_of(tab, cancel)  # the title is of a page at one of these two addresses
+        for now in (url, after):
+            if policy.origin(now) != policy.origin(checked_at) and (hidden := self._hidden(now)):
+                return {"url": None, "title": None, **hidden}
+        return {"url": url, "title": title}
 
     def _where(self, tab: str, began: str, cancel) -> dict:
         """What a result says about where an action left the tab: its address and the dialog open

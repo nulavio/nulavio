@@ -1698,6 +1698,7 @@ class OpenProfileTest(Home):
         approver = Approve(answer)
         bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         commands, tabs = [], {"w1": url}
+        self.tabs = tabs  # where each tab is now (a test moves one while a question is open)
         self.redirects: dict[str, str] = {}  # where a navigation to an address ends
         self.click_goes: str | None = None  # where a click takes the tab
 
@@ -1910,6 +1911,42 @@ class OpenProfileTest(Home):
         self.assertEqual((where["url"], where.get("needs_permission")), (None, ["authenticated_sessions"]))
         self.assertNotIn("bank.example", json.dumps(result))
         self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])
+        # The page moves on while the question about where the navigation ended is open (a question can stay open
+        # for minutes): the call describes where the tab is now only if that needs no other answer, title included.
+        test = self
+        goes_on = {"https://other.example": "https://third.example/next",
+                   "https://third.example": "https://bank.example/account"}  # fmt: skip
+
+        class GoesOn(Approve):
+            def ask(self, agent, capability, target, place="", cancel=None):
+                for tab, at in list(test.tabs.items()):
+                    if target in goes_on and policy.origin(at) == target:
+                        test.tabs[tab] = goes_on[target]
+                return super().ask(agent, capability, target, place, cancel)
+
+        for tool, args in (
+            ("navigate", {"tab": "w1", "url": "https://mail.example/x"}),
+            ("tab_new", {"profile": "Trabalho", "url": "https://mail.example/x"}),
+        ):
+            with self.subTest(tool=tool, moves="while asked"):
+                _agent, bridge, _approver, _target, _commands = self.opened()
+                bridge.approver = approver = GoesOn("once")
+                self.redirects["https://mail.example/x"] = "https://other.example/land"
+                with (
+                    mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+                    mock.patch.object(tools.Bridge, "_forms_settle", return_value=False),
+                ):
+                    result = bridge.call(tool, args)
+                self.assertFalse(result["isError"], result)
+                where = result["structuredContent"]
+                self.assertEqual((where["url"], where["title"]), (None, None))
+                self.assertEqual(where.get("needs_permission"), ["authenticated_sessions"])
+                for unasked in ("third.example", "bank.example"):
+                    if ("authenticated_sessions", f"https://{unasked}") not in approver.asked:
+                        self.assertNotIn(unasked, json.dumps(result))
+                self.assertIn(("authenticated_sessions", "https://other.example"), approver.asked)  # it moved meanwhile
+                self.assertNotIn(("authenticated_sessions", "https://bank.example"), approver.asked)
+                self.assertNotIn("Inbox", json.dumps(result))
 
     def test_a_new_tab_in_a_profile_not_given_to_the_agent_asks_nothing(self):
         # The question would name a place that is not one of the agent's (any label the agent writes).
