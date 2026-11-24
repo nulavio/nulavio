@@ -53,6 +53,14 @@ FIRST_FRAME = f"""
       seals: [...row.querySelectorAll('.nv-band-seal')].filter(e => !e.hidden).map(e => e.getAttribute('aria-label')),
       fill: win.getComputedStyle(row).backgroundColor}};
   }};
+  // #605: where the band's row is laid out: in the navigation row (nv-neutral, window-band.css) or in a row of its own.
+  const layout = win => {{
+    const doc = win.document, bar = doc.getElementById('nulavio-band'), nav = doc.getElementById('nav-bar');
+    const box = e => {{ const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round); }};
+    return {{neutral: bar.hasAttribute('nv-neutral'), named: bar.hasAttribute('nv-named'), band: box(bar), nav: box(nav),
+      agentWindow: doc.documentElement.hasAttribute('nulavio-window-agent'),
+      wide: win.matchMedia('(min-width: 64rem)').matches, vertical: Services.prefs.getBoolPref('sidebar.verticalTabs')}};
+  }};
   await {WINDOW}.refresh();
   let watched = null, timer = null, win = null, paintListener = null, onStarted = null;
   const watch = (subject, topic) => {{
@@ -74,7 +82,7 @@ FIRST_FRAME = f"""
       if (!band) return; // a frame drawn before the band's row existed
       const init = watched.gBrowserInit;
       if (!init) return reject(new Error('the window has no gBrowserInit to say whether it had started'));
-      resolve({{...band, delayed: Boolean(init.delayedStartupFinished)}});
+      resolve({{...band, delayed: Boolean(init.delayedStartupFinished), layout: layout(watched)}});
     }};
     Services.ww.registerNotification(watch);
   }});
@@ -87,7 +95,7 @@ FIRST_FRAME = f"""
     const band = await first;
     await started;
     await new Promise(resolve => win.requestAnimationFrame(resolve));
-    return {{band, after: read(win), same: watched === win}};
+    return {{band, after: read(win), layout: layout(win), same: watched === win}};
   }} finally {{
     cleanup();
     if (close) win?.close();
@@ -95,17 +103,24 @@ FIRST_FRAME = f"""
 """
 
 
-def first_frame(test, m, features, close=True):
-    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same."""
+def first_frame_layout(test, m, features, close=True):
+    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same;
+    with where the row was laid out in each (#605), which the caller compares."""
     result = chrome_async(m, FIRST_FRAME, [features, close])
     test.assertNotIn("error", result, result)
     band, after = result["ok"]["band"], result["ok"]["after"]
     test.assertTrue(result["ok"]["same"], result)
     test.assertIs(band.pop("delayed"), False, band)  # read before the window's delayed start-up
+    first = band.pop("layout")
     test.assertTrue(band["name"], band)
     test.assertTrue(band["label"], band)
     test.assertEqual(band, after)
-    return band
+    return band, first, result["ok"]["layout"]
+
+
+def first_frame(test, m, features, close=True):
+    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same."""
+    return first_frame_layout(test, m, features, close)[0]
 
 
 def assert_band(test, state):
@@ -542,6 +557,27 @@ class WindowBandTest(unittest.TestCase):
             ),
         )
 
+    def test_03d_a_new_ordinary_windows_first_frame_lays_the_band_out_where_it_stays(self):
+        """#605: with no alert and tabs down the side, the band opens the navigation row (nv-neutral, UX3G A1). The
+        attribute was set only at the window's delayed start-up, after its first paint: the first frames may draw the
+        band in a row of its own, which then moves into the navigation row (UX3H: the first frame is the final one)."""
+        vertical = self.m.chrome("return Services.prefs.getBoolPref('sidebar.verticalTabs');")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.verticalTabs', true);")
+        self.addCleanup(self.m.chrome, "Services.prefs.setBoolPref('sidebar.verticalTabs', arguments[0]);", [vertical])
+        # Wider than window-band.css's 64rem, which the navigation row needs to take the band in.
+        band, first, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
+        out = harness.artifacts_dir() / "window-band"
+        out.mkdir(parents=True, exist_ok=True)
+        measured = {"band": band, "first": first, "after": after}
+        (out / "first-frame-ordinary.json").write_text(json.dumps(measured, indent=2) + "\n")
+        print(f"#605 first frame {first} after start-up {after}", file=sys.stderr)
+        self.assertEqual((band["private"], band["temporary"], band["agent"]), ("false", "false", "false"), band)
+        # The case the issue is about: a wide window with tabs down the side and no alert, whose band opens the
+        # navigation row once the window has started.
+        self.assertTrue(after["wide"] and after["vertical"] and after["neutral"] and not after["named"], after)
+        self.assertTrue(first["neutral"], f"the first frame drew the band in a row of its own: {first} then {after}")
+        self.assertEqual(first, after)
+
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
         shots.mkdir(parents=True, exist_ok=True)
@@ -935,6 +971,30 @@ class WindowBandTest(unittest.TestCase):
                     assert_band(self, state)
                     self.assertTrue(any("nv-band-stop" in c["kind"] for c in state["cues"]))
                     self.m.chrome("gBrowser.selectedBrowser.focus();")
+
+    def test_10b_an_agents_windows_first_frame_says_it_is_an_agents(self):
+        """#605 (from #599): a new window of an AI Workspace takes the same build-time paint (#paintRow). Its first frame
+        already names the agent and marks the window as an agent's, and the band keeps its own row from that frame on."""
+        name = "Agente do primeiro quadro"
+        setup = chrome_async(
+            self.m,
+            f"""
+          const A = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs').NulavioAI;
+          const {{agent}} = await A.add({{name: args[0], client: 'other', autonomy: 'restricted'}});
+          Services.prefs.setStringPref('nulavio.ai.workspace', agent.id);
+          await {WINDOW}.refresh();
+          return agent.id;
+        """,
+            [name],
+        )
+        self.assertNotIn("error", setup, setup)
+        self.addCleanup(chrome_async, self.m, f"Services.prefs.clearUserPref('nulavio.ai.workspace'); await {WINDOW}.refresh();")
+        band, first, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
+        self.assertEqual((band["agent"], band["name"]), ("true", name), band)
+        self.assertTrue(any(name in (seal or "") for seal in band["seals"]), band)
+        self.assertTrue(first["agentWindow"], first)
+        self.assertFalse(first["neutral"], first)  # an alert: the band's own row, from the first frame
+        self.assertEqual(first, after)
 
 
 @unittest.skipUnless(harness.nulavio_engine() and sodium.available() and storage.tools_available(), "needs Vault and Track B")
