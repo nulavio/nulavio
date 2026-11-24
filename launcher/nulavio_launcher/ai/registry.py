@@ -252,9 +252,17 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
     return entry
 
 
-def grant_session(agent_id: str, capability: str, session_id: str) -> None:
-    """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them."""
+SESSION_SCOPES_KEPT = 64  # sites and places one capability keeps a session answer for; the oldest goes first
+
+
+def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[str | None, str] = (None, "")) -> None:
+    """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them. It is for
+    what the request showed, `scope` = (target, place): that site (or none) in that place, not the capability
+    everywhere (policy.effective_mode)."""
     if capability not in CAPABILITIES or capability == INTERNAL_CAPABILITY or not session_id:
+        raise RegistryError("bad session grant")
+    target, place = scope
+    if not (target is None or isinstance(target, str)) or not isinstance(place, str):
         raise RegistryError("bad session grant")
 
     def apply(data):
@@ -262,7 +270,11 @@ def grant_session(agent_id: str, capability: str, session_id: str) -> None:
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
         held = agent.setdefault("session_grants", {})
-        held[capability] = {"session": session_id, "set": now().isoformat(timespec="seconds")}
+        entry = held.get(capability)
+        scopes = list(entry.get("scopes") or []) if entry and entry.get("session") == session_id else []
+        scopes = [s for s in scopes if s != [target, place]] + [[target, place]]
+        held[capability] = {"session": session_id, "set": now().isoformat(timespec="seconds"),
+                            "scopes": scopes[-SESSION_SCOPES_KEPT:]}  # fmt: skip
 
     _update(apply)
 
@@ -567,7 +579,8 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
     held = _held(agent, host)
     if held:
         return Decision(False, "block", capability, held)
-    mode, source = effective_mode(agent, capability, session_id)
+    scope = (target, place)  # what a request shows: a session answer is for that, not the capability everywhere
+    mode, source = effective_mode(agent, capability, session_id, scope=scope)
     if mode == "allow":
         return Decision(True, mode, capability, source)
     if mode == "block":
@@ -580,11 +593,11 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
         held = _held(agent, host)
         if held:
             return Decision(False, "block", capability, held)
-        now_mode, now_source = effective_mode(agent, capability, session_id)
+        now_mode, now_source = effective_mode(agent, capability, session_id, scope=scope)
         if now_mode == "block":
             return Decision(False, now_mode, capability, now_source)
     if answer == "session":
-        grant_session(agent_id, capability, session_id)
+        grant_session(agent_id, capability, session_id, scope)
         return Decision(True, mode, capability, "approved-session")
     if answer == "once":
         return Decision(True, mode, capability, "approved-once")

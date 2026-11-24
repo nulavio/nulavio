@@ -121,10 +121,16 @@ def grant_active(grant: dict, session_id: str, at: _dt.datetime | None = None) -
     return not bound or bound == session_id
 
 
-def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.datetime | None = None) -> tuple[str, str]:
+def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.datetime | None = None, *,
+                   scope: tuple[str | None, str] | None = None) -> tuple[str, str]:  # fmt: skip
     """(mode, source) for one capability: an "allow for this session" answer, then an active explicit
     grant, then the preset. A session answer is kept apart from the user's own grants (UX5-0), so when
-    the session ends the capability goes back to what the user set, never to the preset."""
+    the session ends the capability goes back to what the user set, never to the preset.
+
+    A session answer covers what its request showed and nothing more: `scope` is (target, place) of the call, the
+    site (policy.origin) and where it acts ("" for the AI Workspace, or a profile's label), and the answer counts only
+    for a scope it was given for. Without a scope (the capability as a whole: the tool list, what an engine is told
+    to hold or let through) no session answer counts."""
     if capability not in CAPABILITIES:
         return "block", "unknown-capability"
     if capability == INTERNAL_CAPABILITY:
@@ -132,7 +138,8 @@ def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.dateti
         # or the `raw_automation_accepted` an earlier version recorded.
         return "block", "internal-pages-off"
     held = agent.get("session_grants", {}).get(capability)
-    if held and session_id and held.get("session") == session_id:
+    given = held.get("scopes") or [] if held and session_id and held.get("session") == session_id else []
+    if scope is not None and [scope[0], scope[1]] in given:
         return "allow", "session-grant"
     grant = agent.get("grants", {}).get(capability)
     if grant and grant_active(grant, session_id, at):

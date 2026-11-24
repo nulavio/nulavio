@@ -397,6 +397,42 @@ class PolicyTest(Home):
         registry.set_autonomy(agent["id"], "restricted")
         self.assertEqual(self.decide(agent["id"], "interact", session="s-3").reason, "no-approver")
 
+    def test_an_answer_until_the_agent_disconnects_is_for_what_the_request_showed(self):
+        # A request names a site and a place; "Allow until the agent disconnects" is for that site in that place, not
+        # the capability on every site and in every profile.
+        agent, _ = registry.add("bound", "other", "autonomous")
+        registry.grant(agent["id"], "local_resources", "ask")
+
+        def decide(capability, target, place="", approver=None, session="s-1"):
+            return registry.decide(agent["id"], capability, host=None, target=target, session_id=session,
+                                   approver=approver or registry.Approver(), place=place)  # fmt: skip
+
+        self.assertTrue(decide("local_resources", "http://localhost:3000", approver=Approve("session")).allowed)
+        self.assertEqual(decide("local_resources", "http://localhost:3000").reason, "session-grant")
+        for target, place in (("http://192.168.1.1", ""), ("http://169.254.169.254", ""), ("file:", ""),
+                              ("http://localhost:3000", "Trabalho"), ("http://localhost:8080", "")):  # fmt: skip
+            with self.subTest(target=target, place=place):
+                later = Approve("deny")
+                self.assertEqual(decide("local_resources", target, place, later).reason, "denied")
+                self.assertEqual(later.asked, [("local_resources", target)])
+        registry.grant(agent["id"], "submit_forms", "ask")
+        self.assertTrue(decide("submit_forms", "https://shop.example", approver=Approve("session")).allowed)
+        self.assertEqual(decide("submit_forms", "https://shop.example").reason, "session-grant")
+        self.assertEqual(decide("submit_forms", "https://bank.example").reason, "no-approver")
+        registry.grant(agent["id"], "authenticated_sessions", "ask")
+        self.assertTrue(decide("authenticated_sessions", "https://mail.example", "Trabalho", Approve("session")).allowed)
+        self.assertEqual(decide("authenticated_sessions", "https://mail.example", "Trabalho").reason, "session-grant")
+        self.assertEqual(decide("authenticated_sessions", "https://mail.example", "Pessoal").reason, "no-approver")
+        self.assertEqual(decide("authenticated_sessions", "https://mail.example", "Trabalho", session="s-2").reason,
+                         "no-approver")  # fmt: skip
+        # The capability as a whole (the tool list, what an engine holds or lets through) is what the user set.
+        self.assertEqual(policy.effective_mode(registry.get(agent["id"]), "local_resources", "s-1"), ("ask", "grant"))
+        # An answer stored before it named what it was for counts for nothing.
+        registry._change(agent["id"], lambda a: a["session_grants"].__setitem__("interact", {"session": "s-1", "set": "x"}))
+        registry.grant(agent["id"], "interact", "ask")
+        registry._change(agent["id"], lambda a: a["session_grants"].__setitem__("interact", {"session": "s-1", "set": "x"}))
+        self.assertEqual(decide("interact", "https://shop.example").reason, "no-approver")
+
     def test_answers_after_a_stop_pause_or_revoke_do_nothing(self):
         """UX5-0: the prompt was open when the user stopped, paused, revoked or blocked: "allow" does nothing."""
         cases = (
@@ -1105,19 +1141,22 @@ class AuditTest(Home):
         self.assertEqual([m for m, _ in commands if m.startswith("script.")], ["script.addPreloadScript"])
 
     def test_an_answer_for_the_session_sends_the_form_it_was_given_for(self):
-        # "Allow until the agent disconnects" turns the permission on in the middle of the call: the
-        # form is still held, and went nowhere (and later, at an unrelated click).
+        # "Allow until the agent disconnects" in the middle of the call: the form is still held, and goes (it went
+        # nowhere before, and later at an unrelated click). The answer is for that site in that place, so the page's
+        # documents go on holding what they send, and a form of the same site goes later without a new question.
         approver = Approve("session")
-        bridge, steps = self.acting("assisted", approver, held=[0, 1], info={"connected": True, "submits": True})
+        bridge, steps = self.acting("assisted", approver, held=[0, 1, 0, 1], info={"connected": True, "submits": True})
         result = bridge.call(*self.CLICK)
         self.assertFalse(result["isError"], result)
         self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
-        self.assertEqual((result["structuredContent"]["navigated"], steps[-1]), (True, "open"))
+        self.assertEqual((result["structuredContent"]["navigated"], steps[-1]), (True, "send"))
+        self.assertFalse(bridge.call(*self.CLICK)["isError"])
+        self.assertEqual((len(approver.asked), steps[-1]), (1, "send"))
         # Asked after the click (a handler sent it): the same.
         approver = Approve("session")
         bridge, steps = self.acting("assisted", approver, held=[0, 1])
         self.assertTrue(bridge.call(*self.CLICK)["structuredContent"]["navigated"])
-        self.assertEqual((len(approver.asked), steps[-1]), (1, "open"))
+        self.assertEqual((len(approver.asked), steps[-1]), (1, "send"))
 
     def test_a_form_held_when_the_permission_came_is_sent_and_said_not_slipped_out(self):
         # The user allowed submitting (another tab's question, or in Settings) while this page held a
@@ -1830,19 +1869,36 @@ class LocalRequestsTest(Home):
         reasons = [e["reason"] for e in entries if e.get("tool") == "network"]
         self.assertEqual(reasons, ["local-request"] * tools.LOCAL_REFUSED_NOTED + ["local-requests-more"])
 
-    def test_an_answer_for_the_session_lets_everything_through_at_once(self):
-        # Codex review: "Allow until the agent disconnects" changed the permission but left the intercept
-        # until the next call, which went on failing the page's other local places.
+    def test_an_answer_for_the_session_lets_that_place_through_and_no_other(self):
+        # "Allow until the agent disconnects", asked for http://127.0.0.1:8080 in the AI Workspace, is for that host
+        # and port there, from the moment it is given (requests already held follow it), until the session ends. Not
+        # the rest of this computer and the local network, not file:, not another profile: those are asked about.
         agent, _ = registry.add("session-net", "other", "autonomous")
         registry.grant(agent["id"], "local_resources", "ask")
         bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("session"))
+        self.addCleanup(bridge.close)
         connection, commands, _ = self.engine()
         bridge.workspace = mock.Mock(bidi=connection)
+        shell = bridge._local_path()
         bridge._sync_network()
-        self.assertFalse(bridge._request_allowed("http://127.0.0.1:9090/other"))
-        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[])
-        self.assertEqual(commands[-1][0], "network.removeIntercept")
-        self.assertTrue(bridge._request_allowed("http://127.0.0.1:9090/other"))  # one still held follows it too
+        self.assertFalse(bridge._request_allowed("http://127.0.0.1:8080/other", label=""))
+        bridge.require("local_resources", "http://127.0.0.1:8080/app", checked=[], place="")
+        self.assertNotIn("network.removeIntercept", [m for m, _ in commands])  # the rest stays held
+        bridge._local_ok = set()  # the call ended
+        self.assertTrue(bridge._request_allowed("http://127.0.0.1:8080/other", label=""))
+        self.assertTrue(bridge._request_allowed("https://127.0.0.1:8080/other", label=""))
+        for url in ("http://127.0.0.1:9090/", "http://192.168.1.1/admin", "http://169.254.169.254/latest/meta-data/",
+                    "file:///home/u/.ssh/id_ed25519"):  # fmt: skip
+            self.assertFalse(bridge._request_allowed(url, label=""), url)
+        self.assertFalse(bridge._request_allowed("http://127.0.0.1:8080/other", label="Trabalho"))  # not where it was given
+        self.assertEqual(json.loads(shell.read_text()), {"v": 1, "all": False, "places": [["127.0.0.1", 8080]]})
+        later = Approve("deny")
+        bridge.approver = later
+        bridge.require("local_resources", "http://127.0.0.1:8080/", checked=[], place="")  # not asked again
+        for url in ("http://192.168.1.1/", "file:///home/u/.ssh/id_ed25519"):
+            with self.assertRaises(tools.Denied):
+                bridge.require("local_resources", url, checked=[], place="")
+        self.assertEqual(later.asked, [("local_resources", "http://192.168.1.1"), ("local_resources", "file:")])
 
     def test_what_the_user_allowed_for_a_call_ends_with_it(self):
         # "Ask": the user is asked for the address the agent opens; its requests go on during that call only.
