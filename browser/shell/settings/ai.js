@@ -78,10 +78,11 @@ function capabilityRow(agent, capability) {
   );
   // "Allow until the agent disconnects" is kept apart from the user's own choice (UX5-0): it is
   // in effect only while that session is connected, and the menu keeps showing the user's choice.
+  // It covers the sites and places it was given for, not the capability everywhere (aiGrantSessionWhere).
   const answered = agent.session_grants?.[capability];
   const live = Boolean(answered) && (agent.active_sessions ?? []).some(s => s.session === answered.session);
   const meta = live
-    ? t("aiGrantSession")
+    ? t("aiGrantSessionWhere")
     : grant
       ? grant.until
         ? t("aiGrantUntil", [when(grant.until)])

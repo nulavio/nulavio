@@ -557,6 +557,7 @@
   "aiDuration_8h": {"message": "Por 8 horas"},
   "aiGrantUntil": {"message": "Sua escolha, até $WHEN$", "placeholders": {"when": {"content": "$1"}}},
   "aiGrantSession": {"message": "Permitido na sessão atual"},
+  "aiGrantSessionWhere": {"message": "Permitido até o agente desconectar, nos sites e lugares em que você respondeu"},
   "aiGrantSet": {"message": "Sua escolha"},
   "aiGrantFromLevel": {"message": "Pelo nível de autonomia"},
   "aiGrantReset": {"message": "Usar o padrão do nível"},
