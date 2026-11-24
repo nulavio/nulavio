@@ -537,6 +537,98 @@ class AssistantTest(unittest.TestCase):
         self.assertEqual(len(result["steps"]), assistant.MAX_STEPS)
         self.assertEqual(len(self.provider.requests), assistant.MAX_STEPS)
 
+    # -- the key and its provider -------------------------------------------------------------
+
+    def other_provider(self):
+        other = FakeProvider()
+        self.addCleanup(other.close)
+        return other
+
+    def sent_keys(self, provider):
+        return [(h.get("authorization"), h.get("x-api-key")) for _path, h, _body in provider.requests]
+
+    def test_a_kept_key_is_never_sent_to_another_provider(self):
+        """Settings saved for another address with the key field empty: the stored key stays with its provider."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        other = self.other_provider()
+        state = assistant.configure("openai", other.base, "other-model", "", None)
+        self.assertFalse(state["hasKey"], "the key saved for the first address counts for the second")
+        self.assertEqual(json.loads(self.store.read_text()), [], "the key outlived its provider")
+        self.assertEqual(assistant.ask("Hello?", PROFILE)["answer"], "ok")
+        self.assertEqual(self.sent_keys(other), [(None, None)])
+        self.assertEqual(self.provider.requests, [])
+        # Anthropic's kind on the first address, no key given: none goes either.
+        self.configure()
+        self.assertFalse(assistant.configure("anthropic", self.provider.base, "test-model", "", None)["hasKey"])
+        assistant.ask("Hello?", PROFILE)
+        self.assertEqual(self.sent_keys(self.provider), [(None, None)])
+
+    def test_a_kept_key_stays_with_the_same_origin_and_kind(self):
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        # Another path or model on the same origin, with the same kind: the key stays.
+        self.assertTrue(assistant.configure("openai", self.provider.base + "/v2", "another-model", "", None)["hasKey"])
+        self.assertTrue(assistant.configure("openai", self.provider.base, "test-model", "", None)["hasKey"])
+        assistant.ask("Hello?", PROFILE)
+        self.assertEqual(self.sent_keys(self.provider), [(f"Bearer {KEY}", None)])
+
+    def test_a_configuration_from_before_keeps_its_key_for_its_own_provider_only(self):
+        """A configuration written before keys were bound to a provider: its key went to that provider and still does."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        path = self.home / "nv" / "state" / "ai" / "assistant.json"
+        data = json.loads(path.read_text())
+        data.pop("key_for", None)
+        path.write_text(json.dumps(data))
+        self.assertTrue(assistant.state()["hasKey"])
+        assistant.ask("Hello?", PROFILE)
+        self.assertEqual(self.sent_keys(self.provider), [(f"Bearer {KEY}", None)])
+        other = self.other_provider()
+        self.assertFalse(assistant.configure("openai", other.base, "test-model", "", None)["hasKey"])
+        assistant.ask("Hello?", PROFILE)
+        self.assertEqual(self.sent_keys(other), [(None, None)])
+
+    def test_a_key_that_could_not_be_stored_is_bound_to_nothing(self):
+        self.configure()
+        other = self.other_provider()
+        from nulavio_launcher.vault.core import VaultError
+        from nulavio_launcher.vault.providers import Keyring
+
+        with mock.patch.object(Keyring, "store", side_effect=VaultError("keyring-store-failed")), self.assertRaises(VaultError):
+            assistant.configure("openai", other.base, "test-model", "", "sk-new-artificial-key")
+        self.assertIsNone(assistant.load().get("key_for"))
+        self.assertFalse(assistant.state()["hasKey"])
+
+    def test_a_task_never_sends_a_key_saved_meanwhile_to_the_provider_it_started_with(self):
+        """Settings saved for another provider, with its key, while a task runs: the run stops before its next model
+        turn, and the new key never goes to the provider the run started with."""
+        state = self.configure(key="")  # a model on this computer that needs no key
+        assistant.allow_profile(PROFILE, True)
+        started_with = dict(assistant.load()["provider"])
+        other = self.other_provider()
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": "{}"}}
+        self.provider.replies[:] = [
+            {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+            {"choices": [{"message": {"content": "Done."}}]},
+        ]
+
+        class SettingsSavedDuringTheStep(FakeBridge):
+            def call(self, tool, arguments):
+                assistant.configure("openai", other.base, "other-model", "", "sk-new-artificial-key")
+                return super().call(tool, arguments)
+
+        bridge = SettingsSavedDuringTheStep(state["agent"]["id"])
+        result = assistant.run_task("Open something", PROFILE, bridge=bridge)
+        self.assertEqual(self.sent_keys(self.provider), [(None, None)], "a second model turn went, or with a key")
+        self.assertEqual(result.get("stopped"), "assistant-settings-changed")
+        self.assertEqual(other.requests, [])
+        self.assertTrue(bridge.closed)
+        # A request built for the earlier provider after the change, however late, is refused before it carries a key.
+        with self.assertRaises(assistant.AssistantError) as caught:
+            assistant._request(started_with, [{"role": "user", "content": "x"}], tools=True)
+        self.assertEqual(caught.exception.code, "assistant-settings-changed")
+
     def test_cli_api_never_returns_the_key(self):
         self.configure()
         from nulavio_launcher import cli

@@ -66,6 +66,7 @@ const STATE_CHANGED = new Set([
   "profile-not-allowed",
   "not-configured",
   "recipient-changed",
+  "assistant-settings-changed",
 ]);
 
 // The assistant's service is set in the settings page ("Assistente e IA"); the agents and the activity record
