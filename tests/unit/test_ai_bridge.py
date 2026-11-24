@@ -1698,6 +1698,8 @@ class OpenProfileTest(Home):
         approver = Approve(answer)
         bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
         commands, tabs = [], {"w1": url}
+        self.redirects: dict[str, str] = {}  # where a navigation to an address ends
+        self.click_goes: str | None = None  # where a click takes the tab
 
         def command(method, params=None, **_k):
             commands.append(method)
@@ -1707,7 +1709,9 @@ class OpenProfileTest(Home):
                 tabs["w2"] = "about:blank"
                 return {"context": "w2"}
             if method == "browsingContext.navigate":
-                tabs[params["context"]] = params["url"]
+                tabs[params["context"]] = self.redirects.get(params["url"], params["url"])
+            if method == "input.performActions" and self.click_goes:
+                tabs[params["context"]] = self.click_goes
             return {"script": "p-1", "intercept": "i-1"}
 
         engine = mock.Mock(events=[])
@@ -1827,6 +1831,7 @@ class OpenProfileTest(Home):
         workspace = mock.Mock(events=[])
         workspace.command.side_effect = lambda method, *_a, **_k: {"script": "p-2", "intercept": "i-2", "contexts": []}
         bridge.workspace = mock.Mock(bidi=workspace)
+        bridge.workspace.start.return_value = workspace
         self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
         self.assertEqual(approver.asked, [("multiple_profiles", None)])
         self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])  # the answer stands for this session
@@ -1836,7 +1841,7 @@ class OpenProfileTest(Home):
         result = bridge.call("page_read", {"tab": "w1"})
         self.assertTrue(result["isError"], result)
         self.read.assert_not_called()
-        self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], "grant")
+        self.assertNotIn("Trabalho", bridge.profiles)  # let go before the call (the next test)
 
     def test_a_tab_list_describes_a_profiles_tab_only_where_acting_would_not_ask(self):
         agent, bridge, approver, _target, _commands = self.opened(answer="deny")
@@ -1860,6 +1865,79 @@ class OpenProfileTest(Home):
         self.assertTrue(result["isError"], result)
         self.assertEqual(later.asked, [("authenticated_sessions", "https://bank.example")])  # mail.example's answer stands
         self.assertEqual(commands.count("browsingContext.navigate"), 1)
+
+    def test_where_a_call_ends_in_a_profile_is_asked_about_or_not_described(self):
+        # A redirect, or a page after a click, can take a profile's tab to another of the agent's sites: the user's
+        # signed-in session there is asked about for that site too (a navigation), or its address is not described.
+        class PerSite(Approve):
+            def ask(self, agent, capability, target, place="", cancel=None):
+                super().ask(agent, capability, target, place, cancel)
+                return "deny" if target == "https://bank.example" else "once"
+
+        for tool, args in (
+            ("navigate", {"tab": "w1", "url": "https://mail.example/x"}),
+            ("tab_new", {"profile": "Trabalho", "url": "https://mail.example/x"}),
+        ):
+            with self.subTest(tool=tool):
+                _agent, bridge, _approver, _target, _commands = self.opened()
+                bridge.approver = approver = PerSite("once")
+                self.redirects["https://mail.example/x"] = "https://bank.example/account"
+                with (
+                    mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+                    mock.patch.object(tools.Bridge, "_forms_settle", return_value=False),
+                ):
+                    result = bridge.call(tool, args)
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(approver.asked[-1], ("authenticated_sessions", "https://bank.example"))
+                self.assertEqual(approver.places[-1], "Trabalho")
+                self.assertNotIn("bank.example/account", json.dumps(result))
+                self.assertNotIn("Inbox", json.dumps(result))
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["reason"], entry["target"]), ("denied", "https://bank.example"))
+        # A click: the result does not say where the page took the tab, and asks nothing more.
+        _agent, bridge, approver, _target, _commands = self.opened()
+        self.click_goes = "https://bank.example/account"
+        with (
+            mock.patch.object(tools.Bridge, "_call_fn", return_value={"connected": True}),
+            mock.patch.object(tools.Bridge, "_settle", return_value=True),
+            mock.patch.object(tools.Bridge, "_forms_prepare"),
+            mock.patch.object(tools.Bridge, "_forms_settle", return_value=False),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            result = bridge.call("click", {"tab": "w1", "element": "e1"})
+        self.assertFalse(result["isError"], result)
+        where = result["structuredContent"]
+        self.assertEqual((where["url"], where.get("needs_permission")), (None, ["authenticated_sessions"]))
+        self.assertNotIn("bank.example", json.dumps(result))
+        self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])
+
+    def test_a_new_tab_in_a_profile_not_given_to_the_agent_asks_nothing(self):
+        # The question would name a place that is not one of the agent's (any label the agent writes).
+        agent, bridge, approver, _target, commands = self.opened()
+        registry.grant(agent["id"], "navigate", "ask")
+        result = bridge.call("tab_new", {"profile": "Nowhere", "url": "https://mail.example/"})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual((approver.asked, approver.places), ([], []))
+        self.assertFalse(self.ACTS & set(commands), commands)
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["reason"], "profile-not-authorized")
+
+    def test_a_second_place_refused_closes_the_users_profiles(self):
+        # Two places open, then multiple_profiles blocked: the user's profiles are closed before the call (as for
+        # their signed-in sessions blocked), not left running with tabs no call may use or close.
+        agent, bridge, approver, target, _commands = self.opened(level="autonomous", answer="session")
+        workspace = mock.Mock(events=[])
+        workspace.command.side_effect = lambda method, *_a, **_k: {"script": "p-2", "intercept": "i-2", "contexts": []}
+        bridge.workspace = mock.Mock(bidi=workspace)
+        bridge.workspace.start.return_value = workspace
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
+        registry.grant(agent["id"], "multiple_profiles", "block")
+        result = bridge.call("page_read", {"tab": "w1"})
+        self.assertTrue(result["isError"], result)
+        target.stop.assert_called_once()
+        self.assertNotIn("Trabalho", bridge.profiles)
+        self.assertNotIn("w1", bridge.owner)
+        self.assertEqual(approver.asked, [("multiple_profiles", None)])
 
 
 class LocalRequestsTest(Home):

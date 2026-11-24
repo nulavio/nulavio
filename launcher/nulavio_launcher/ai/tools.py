@@ -499,8 +499,9 @@ class Bridge:
         return target
 
     def require_needs(self, url: str, *, checked: list[str]) -> None:
-        """What the address a tab is at needs (local network, the Shell's pages), whatever
-        took it there: a redirect or the page's own navigation never passed require_url."""
+        """What the address a tab is at needs (local network, the Shell's pages, the user's signed-in session there in
+        one of the user's profiles), whatever took it there: a redirect or the page's own navigation never passed
+        require_url."""
         if not url:
             return
         try:
@@ -510,6 +511,10 @@ class Bridge:
         self._refuse_internal(target, url, checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
+        if (place := self._place()) and place in self.profiles:
+            # The same question, for the same site, as acting in that tab asks (_enter_profile): once in a call.
+            site = self._profile_site(self._agent() or {}, url)
+            self.require("authenticated_sessions", site, checked=checked, place=place)
 
     def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
         """A tool acting on the tab where it is. An address agents never act on (data:, blob:, an internal page) is
@@ -715,6 +720,11 @@ class Bridge:
         blocked = not agent or policy.effective_mode(agent, "authenticated_sessions", self.session_id)[0] == "block"
         for label, target in list(self.profiles.items()):
             if blocked or given.get(label) != str(target.profile_dir):
+                self._close_profile(label)
+        # More than one place open while a second place is now blocked: no call could act in any of them, so the
+        # user's profiles are let go (the AI Workspace is the agent's own and stays).
+        if len(self._engines()) > 1 and policy.effective_mode(agent, "multiple_profiles", self.session_id)[0] == "block":
+            for label in list(self.profiles):
                 self._close_profile(label)
 
     def _close_profile(self, label: str) -> None:
@@ -1323,12 +1333,18 @@ class Bridge:
 
     def _t_tab_new(self, args, cancel, checked):
         url = args.get("url")
+        agent = self._agent() or {}
+        label = args.get("profile")
+        if label not in (None, "", "AI Workspace") and all(p.get("label") != label for p in agent.get("profiles", [])):
+            # Before anything is asked: a question names the place it is for, and this one is not the agent's.
+            self._refuse_if_held("authenticated_sessions", checked)
+            checked.append("authenticated_sessions")
+            raise Denied(policy.Decision(False, "block", "authenticated_sessions", "profile-not-authorized"))
         if url:
             self.require_url(url, checked=checked)
         else:
             self.require("navigate", checked=checked)
         agent = self._agent() or {}
-        label = args.get("profile")
         if label is None and url:
             label = registry.route_for(agent, policy.host_of(url))
         if label in (None, "", "AI Workspace"):
@@ -1476,10 +1492,14 @@ class Bridge:
     def _hidden(self, url: str) -> dict | None:
         """Why a result does not say where a tab is: outside the agent's sites, or somewhere that
         needs a permission it does not have without asking. Like tabs_list (reading there asks)."""
-        agent = self._agent() or {}
+        agent, place = self._agent() or {}, self._place()
         if not policy.in_scope(agent, policy.host_of(url)):
             return {"outside_sites": True}
-        if missing := self._needs_not_allowed(agent, url, self._place()):
+        missing = self._needs_not_allowed(agent, url, place)
+        if place and place in self.profiles:
+            # A profile's tab now at a site the user's signed-in session there was not asked about (tabs_list).
+            missing += [c for c in self._profile_needs(agent, place, url) if c not in missing]
+        if missing:
             return {"needs_permission": missing}
         return None
 
