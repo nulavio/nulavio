@@ -32,6 +32,9 @@ Source3:        nulavio-update.service
 Source4:        automatic-updates
 Source5:        update-nulavio
 Source6:        net.nulavio.automatic-updates.policy
+# The repository's public key (site/keys/nulavio-packages.asc): the automatic updates take signing keys from this
+# file only, never from the repository file's gpgkey address.
+Source7:        nulavio-packages.asc
 ExclusiveArch:  x86_64
 
 # The Nulavio tools (Vault, AI Bridge, temporary profiles) run on the system Python.
@@ -93,6 +96,7 @@ ln -s ../nulavio-update.timer %{buildroot}/usr/lib/systemd/system/timers.target.
 install -Dm0755 %{SOURCE4} %{buildroot}/usr/libexec/nulavio/automatic-updates
 install -Dm0755 %{SOURCE5} %{buildroot}/usr/libexec/nulavio/update-nulavio
 install -Dm0644 %{SOURCE6} %{buildroot}%{_datadir}/polkit-1/actions/net.nulavio.automatic-updates.policy
+install -Dm0644 %{SOURCE7} %{buildroot}%{_datadir}/nulavio/nulavio-packages.asc
 
 %files
 %license nulavio/LICENSE*
@@ -106,6 +110,7 @@ install -Dm0644 %{SOURCE6} %{buildroot}%{_datadir}/polkit-1/actions/net.nulavio.
 /usr/lib/systemd/system/timers.target.wants/nulavio-update.timer
 /usr/libexec/nulavio
 %{_datadir}/polkit-1/actions/net.nulavio.automatic-updates.policy
+%{_datadir}/nulavio
 
 %changelog
 * Mon Oct 26 2026 Caio Barbieri <caio@lombello.com> - %{nulavio_version}-%{nulavio_release}

@@ -1,12 +1,18 @@
 #!/bin/sh
 # Update the nulavio package and nothing else, from Nulavio's signed repository (#241). Run as root by
-# nulavio-update.service. The package manager checks the repository's signatures, as for a manual update.
+# nulavio-update.service. The package manager checks the repository's signatures, as for a manual update, with dnf
+# against the key the package installed.
 set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 if command -v rpm >/dev/null 2>&1 && rpm -q nulavio >/dev/null 2>&1; then
+    # Signing keys only from the file this package installed, never from the repository file's gpgkey address: a
+    # different key is imported only by a person who checks its fingerprint, or by a package signed with the key
+    # already trusted that carries it.
+    key=/usr/share/nulavio/nulavio-packages.asc
+    [ -s "$key" ] || { echo "$key is missing: reinstall the nulavio package" >&2; exit 1; }
     # The package from Nulavio's repository only; what it needs still comes from the system's repositories.
-    exec dnf -y --refresh upgrade --from-repo=nulavio nulavio
+    exec dnf -y --refresh "--setopt=nulavio.gpgkey=file://$key" upgrade --from-repo=nulavio nulavio
 fi
 status=$(command -v dpkg-query >/dev/null 2>&1 && dpkg-query -W -f='${Status}' nulavio 2>/dev/null || true)
 if [ "$status" = "hold ok installed" ]; then

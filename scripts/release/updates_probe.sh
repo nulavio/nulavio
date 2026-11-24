@@ -11,6 +11,10 @@ helper=/usr/libexec/nulavio/automatic-updates
 link=$units/timers.target.wants/nulavio-update.timer
 shipped="$units/nulavio-update.timer $units/nulavio-update.service $helper /usr/libexec/nulavio/update-nulavio
 /usr/share/polkit-1/actions/net.nulavio.automatic-updates.policy"
+# The RPM also carries the key its automatic updates take signing keys from (APT has it in nulavio.sources).
+if command -v rpm >/dev/null 2>&1 && rpm -q nulavio >/dev/null 2>&1; then
+    shipped="$shipped /usr/share/nulavio/nulavio-packages.asc"
+fi
 fail() { echo "automatic updates: $*"; exit 1; }
 for f in $shipped; do
     [ -e "$f" ] || fail "$f is missing"
