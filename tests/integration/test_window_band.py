@@ -983,10 +983,14 @@ class WindowBandTest(unittest.TestCase):
             f"""
           const A = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs').NulavioAI;
           // An agent is added from the user's own window (an AI Workspace may only tighten: workspace-change); test_10
-          // leaves its agent's workspace set.
+          // leaves its agent's workspace set, and its window marked as that agent's.
           Services.prefs.clearUserPref('nulavio.ai.workspace');
           const {{agent}} = await A.add({{name: args[0], client: 'other', autonomy: 'restricted'}});
           Services.prefs.setStringPref('nulavio.ai.workspace', agent.id);
+          // As the AI Workspace marks its windows when it starts (test_10, test_ai_ui 06): this agent's from now on.
+          const t = (key, subs = []) => WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(key, subs);
+          await A.markWorkspace({{text: t('aiWorkspaceBar', [agent.name, t('aiLevel_restricted')]), stopLabel: t('aiStopAgent'),
+            pausedText: t('aiWorkspaceBarPaused', [agent.name])}});
           await {WINDOW}.refresh();
           return agent.id;
         """,
