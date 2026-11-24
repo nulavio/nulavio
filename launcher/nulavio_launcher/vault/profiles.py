@@ -8,6 +8,7 @@ locks again when the engine exits.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import os
 import signal
@@ -134,8 +135,44 @@ def lock(prof: profile.Profile, *, force: bool = False, wait: float = 30.0, afte
             time.sleep(0.3)
         if prof.running_pid():
             raise profile.ProfileInUse(f"profile '{prof.name}' did not close in {wait:.0f} s")
-    box.unmount(wait=60.0, lazy_after=True) if after_exit else box.unmount()
+    if after_exit:
+        outcome = _unmount_unless_taken(box, prof, wait=60.0)
+        if outcome == "taken":
+            raise profile.ProfileInUse(f"profile '{prof.name}' was opened again while it was being locked; it stays unlocked")
+        if outcome == "busy":
+            raise storage.StorageError("busy", "another change to this profile is in progress")
+    else:
+        box.unmount()
     log.event("vault.lock", profile=prof.name, forced=bool(pid))
+
+
+def _unmount_unless_taken(box: Container, prof: profile.Profile, *, wait: float) -> str:
+    """Lock a profile whose engine has gone, unless one takes it meanwhile: "locked", "taken" (an engine took the
+    profile before the volume could go: it stays mounted, and the caller follows that engine or says so), or
+    "busy" (the state lock could not be had: a change, or an agent's engine starting, holds it).
+
+    Under the profile's state lock, which an agent's engine start holds too (ai/workspace.py, ProfileTarget):
+    such a start either comes before this, and its engine is then seen here, or after it, and finds the profile
+    locked. Whether an engine runs is asked again before every unmount attempt and before the volume is
+    detached, so one that arrived while the last engine's helpers were closing files keeps the volume mounted
+    and the profile reads as unlocked, instead of a detached volume in use while everything says "locked"."""
+    with contextlib.ExitStack() as held:
+        try:
+            held.enter_context(box._state_lock())
+        except storage.StorageError as exc:
+            if exc.code == "busy":
+                return "busy"
+            # No lock can be had on this file system: locked without it, as before the lock was asked for.
+            log.event("vault.autolock-unlocked-state", code=exc.code)
+        if prof.running_pid():
+            return "taken"
+        try:
+            box.unmount(wait=wait, lazy_after=True, unless=prof.running_pid)
+        except storage.StorageError as exc:
+            if exc.code == "in-use":
+                return "taken"
+            raise
+    return "locked"
 
 
 def status(prof: profile.Profile) -> dict:
@@ -327,6 +364,7 @@ def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) 
     box = container(prof)
     deadline = time.monotonic() + grace
     seen = _LockSeen(prof.path)
+    reason = "closed"
     try:
         while not prof.running_pid():
             if not box.mounted():
@@ -334,16 +372,25 @@ def autolock(prof: profile.Profile, *, grace: float = 120.0, poll: float = 0.5) 
             if seen():
                 break  # an engine came and went between two looks: it is gone, so lock now
             if time.monotonic() > deadline:
-                box.unmount(lazy_after=True)  # nobody opened it: do not leave it unlocked, even with a file open
-                log.event("vault.autolock", profile=prof.name, reason="unused")
-                return "unused"
+                reason = "unused"  # nobody opened it: do not leave it unlocked, even with a file open
+                break
             time.sleep(poll)
     finally:
         seen.close()
-    while prof.running_pid():
+    while True:
+        while prof.running_pid():
+            if not box.mounted():
+                return "already-locked"
+            time.sleep(poll)
         if not box.mounted():
             return "already-locked"
-        time.sleep(poll)
-    box.unmount(wait=60.0, lazy_after=True)  # the engine is gone; its helpers may still be closing files
-    log.event("vault.autolock", profile=prof.name, reason="closed")
-    return "closed"
+        # The engine is gone; its helpers may still be closing files. An engine that takes the profile while it is
+        # being locked is followed like the first one, and the profile is locked once that one is gone too.
+        outcome = _unmount_unless_taken(box, prof, wait=60.0 if reason == "closed" else 15.0)
+        if outcome == "locked":
+            log.event("vault.autolock", profile=prof.name, reason=reason)
+            return reason
+        if outcome == "busy":
+            time.sleep(poll)  # a change or an agent's engine start holds the profile: look again
+        else:
+            reason = "closed"  # "taken": the profile is closed when that engine is gone

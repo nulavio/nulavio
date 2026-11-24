@@ -23,6 +23,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   isLink: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
+  NulavioVault: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
+  lockState: "resource://builtin-addons/nulavio-shell/chooser/chooser.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -45,6 +47,8 @@ export const PREF_START_CHOOSER = "nulavio.profiles.startChooserAdopted";
    profiles from that window). So a protected profile is never left as the start-up profile: the engine's own
    function is given the unprotected profile used last, which this shared pref names (its id in the group). */
 export const PREF_START_PROFILE = "nulavio.profiles.startProfile";
+// On SelectableProfileService.launchInstance once Nulavio's lock check stands in front of it: the engine's own method.
+const GUARDED = Symbol.for("nulavio.profiles.launchGuard");
 // The band's profile summary is rebuilt at least this often, even without a change notice.
 const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
@@ -888,6 +892,51 @@ class NulavioProfilesClass {
     }
     this.#service.launchInstance(profile, []);
     return { action: "launched" };
+  }
+
+  /**
+   * The engine's own ways of starting another profile of the group (the app menu's and the menu bar's Profiles
+   * lists, "Move tab to profile", a new profile, the profile chooser opened from a window) all go through
+   * SelectableProfileService.launchInstance, which starts the engine on the profile's folder. From the Shell's
+   * start, Nulavio's lock check stands in front of it in this instance: a locked protected profile, or one whose
+   * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
+   * starts as the engine meant. The state is read at each launch, as the chooser reads it (the mount table, not
+   * only the files). Of several addresses meant for a locked profile, the unlock page carries the first.
+   */
+  guardLaunches() {
+    const service = this.#service;
+    if (service.launchInstance?.[GUARDED]) {
+      return;
+    }
+    const engines = service.launchInstance;
+    const guarded = (profile, urls) => {
+      this.#launchChecked(engines, profile, urls).catch(e => console.error("Nulavio profiles: launch", e));
+    };
+    guarded[GUARDED] = engines;
+    service.launchInstance = guarded;
+  }
+
+  /** The engine's own launchInstance again (the Shell stopped without the application). */
+  unguardLaunches() {
+    const service = this.#service;
+    if (Object.hasOwn(service, "launchInstance") && service.launchInstance[GUARDED]) {
+      delete service.launchInstance;
+    }
+  }
+
+  async #launchChecked(engines, profile, urls) {
+    let state = null;
+    try {
+      state = await lazy.lockState(profile.path);
+    } catch (e) {
+      console.error("Nulavio profiles: lock state", e); // not started: it may be a locked one
+    }
+    if (state === "plain" || state === "unlocked") {
+      engines.call(this.#service, profile, urls);
+      return;
+    }
+    const url = (urls ?? []).find(u => /^https?:/i.test(u)) ?? null;
+    await lazy.NulavioVault.openUnlockPage(profile.id, url);
   }
 
   /**

@@ -1256,6 +1256,7 @@ class Bridge:
                 "profile-locked": f"the profile {label} is locked: only the user can unlock it; agents never get keys",
                 "profile-in-use": f"the profile {label} is open in a window; the user must close it before an agent can use it",
                 "profile-missing": f"the profile {label} no longer exists",
+                "profile-busy": f"the profile {label} is being locked or changed right now; try again in a minute",
             }
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
         except EngineError:

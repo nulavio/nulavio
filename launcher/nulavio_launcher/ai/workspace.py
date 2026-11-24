@@ -317,9 +317,30 @@ class ProfileTarget(Workspace):
             user_js.unlink()
 
     def start(self, timeout: float = 60.0) -> Bidi:
-        if self.bidi is None:
+        if self.bidi is not None:
+            return self.bidi
+        with self._held():
             self.check()
-        return super().start(timeout)
+            return super().start(timeout)
+
+    @contextlib.contextmanager
+    def _held(self):
+        """A protected profile's state lock, from the check until its engine runs. The auto-lock watcher locks the
+        profile under the same lock and looks for a running engine first (vault.profiles._unmount_unless_taken), so
+        an engine started here is either seen there and followed, or starts after the profile was locked and is
+        refused by check(). Never one that keeps a detached volume open while the profile reads as locked."""
+        from ..vault.storage import Container, StorageError
+
+        box = Container(self.profile_dir)
+        if not box.vault_path.exists():
+            yield
+            return
+        with contextlib.ExitStack() as held:
+            try:
+                held.enter_context(box._state_lock(wait=10.0))
+            except StorageError:
+                raise TargetError("profile-busy", self.label) from None
+            yield
 
     def stop(self) -> None:
         super().stop()

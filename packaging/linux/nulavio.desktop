@@ -14,7 +14,7 @@ StartupWMClass=nulavio
 Categories=Network;WebBrowser;
 Keywords=web;browser;internet;privacy;navegador;
 MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
-Actions=new-window;new-private-window;profile-manager;
+Actions=new-window;new-private-window;
 
 [Desktop Action new-window]
 Name=New Window
@@ -25,8 +25,3 @@ Exec=nulavio --new-window
 Name=New Private Window
 Name[pt_BR]=Nova janela privativa
 Exec=nulavio --private-window
-
-[Desktop Action profile-manager]
-Name=Profiles
-Name[pt_BR]=Perfis
-Exec=nulavio --ProfileManager
