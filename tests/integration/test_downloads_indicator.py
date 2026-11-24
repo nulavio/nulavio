@@ -148,10 +148,39 @@ class DownloadsIndicatorTest(unittest.TestCase):
         self.assertEqual(bool(state["description"]), value, state)
         return state
 
-    def capture(self, name):
-        self.m.set_context("chrome")
-        (self.out / f"{name}.png").write_bytes(self.m.screenshot_png())
-        self.m.set_context("content")
+    def paint(self):
+        # Two animation frames of the chrome window's refresh driver: they show that the parent process ticked
+        # after the theme switch. They say nothing about the content process of a remote browser.
+        self.run_js(
+            "await Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),"
+            " new Promise(r => setTimeout(r, 3000))]);"
+        )
+
+    def capture(self, name, attempts=5):
+        # WebDriver:TakeScreenshot in the chrome context is a cross-process paint of the window and of every
+        # content process it embeds. In the AddressSanitizer engine it failed once with "Unable to capture
+        # screenshot" and no reason (#602). The cause is not established: possibly a fragment of a slow content
+        # process after the theme switch, see #602. Wait for a chrome paint and retry; the image is still kept.
+        for attempt in range(attempts):
+            self.paint()
+            self.m.set_context("chrome")
+            try:
+                png = self.m.screenshot_png()
+            except MarionetteError as error:
+                if "Unable to capture screenshot" not in str(error) or attempt == attempts - 1:
+                    raise
+            else:
+                (self.out / f"{name}.png").write_bytes(png)
+                return
+            finally:
+                self.m.set_context("content")
+            # Before the next attempt, the selected tab's content process paints two frames of its own: the
+            # fragment the capture missed is that process's (a hypothesis, #602).
+            self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),"
+                " new Promise(r => setTimeout(r, 3000))]).then(() => done(true));"
+            )
 
     def test_01_completed_program_render_and_native_names(self):
         # The state that has an accessible name is the one kept: read again a moment later, the engine may be
