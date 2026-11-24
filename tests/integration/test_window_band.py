@@ -37,6 +37,75 @@ BAND_PROBE = """(() => {
 })()"""
 
 
+# #599: what the band says in a new window's first painted frame. The engine starts a window's delayed start-up from
+# its first MozAfterPaint (browser-init.js onLoad), and the band's #attach runs only after that. The listener is added
+# when the window opens, before its document loads, so it sees each frame first: the first one in which the band's row
+# exists is read, with whether the delayed start-up had already run (it must not have, or the frame proves nothing).
+# The same reading is taken again once the window has started; the first frame should already be the final one.
+FIRST_FRAME = f"""
+  const [features, close] = args;
+  const read = win => {{
+    const row = win.document.querySelector('#nulavio-band .nv-band-row');
+    if (!row) return null;
+    const identity = row.querySelector('.nv-band-identity');
+    return {{name: row.querySelector('.nv-band-name').textContent, label: identity.getAttribute('aria-label'),
+      private: row.dataset.private ?? null, temporary: row.dataset.temporary ?? null, agent: row.dataset.agent ?? null,
+      seals: [...row.querySelectorAll('.nv-band-seal')].filter(e => !e.hidden).map(e => e.getAttribute('aria-label')),
+      fill: win.getComputedStyle(row).backgroundColor}};
+  }};
+  await {WINDOW}.refresh();
+  let watched = null, frames = 0;
+  const first = new Promise((resolve, reject) => {{
+    const timer = window.setTimeout(() => reject(new Error('no frame with the band painted in 30 s')), 30000);
+    const watch = (subject, topic) => {{
+      if (topic !== 'domwindowopened') return;
+      Services.ww.unregisterNotification(watch);
+      watched = subject;
+      const paint = () => {{
+        frames++;
+        const band = read(subject);
+        if (!band) return; // a frame drawn before the band's row existed
+        subject.removeEventListener('MozAfterPaint', paint);
+        window.clearTimeout(timer);
+        resolve({{...band, delayed: Boolean(subject.gBrowserInit?.delayedStartupFinished), frames}});
+      }};
+      subject.addEventListener('MozAfterPaint', paint);
+    }};
+    Services.ww.registerNotification(watch);
+  }});
+  let win = null;
+  const started = new Promise(resolve => {{
+    const obs = subject => {{ if (subject === win) {{
+      Services.obs.removeObserver(obs, 'browser-delayed-startup-finished'); resolve();
+    }} }};
+    Services.obs.addObserver(obs, 'browser-delayed-startup-finished');
+  }});
+  win = OpenBrowserWindow(features);
+  try {{
+    const band = await first;
+    await started;
+    await new Promise(resolve => win.requestAnimationFrame(resolve));
+    return {{band, after: read(win), same: watched === win}};
+  }} finally {{
+    if (close) win.close();
+  }}
+"""
+
+
+def first_frame(test, m, features, close=True):
+    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same."""
+    result = chrome_async(m, FIRST_FRAME, [features, close])
+    test.assertNotIn("error", result, result)
+    band, after = result["ok"]["band"], result["ok"]["after"]
+    test.assertTrue(result["ok"]["same"], result)
+    test.assertFalse(band.pop("delayed"), band)  # read before the window's delayed start-up
+    band.pop("frames")
+    test.assertTrue(band["name"], band)
+    test.assertTrue(band["label"], band)
+    test.assertEqual(band, after)
+    return band
+
+
 def assert_band(test, state):
     test.assertIsNotNone(state)
     test.assertFalse(state["overflow"], state)
@@ -455,6 +524,20 @@ class WindowBandTest(unittest.TestCase):
                     "tabsSkipped": False,
                 }
             },
+        )
+
+    def test_03c_a_new_windows_first_frame_names_the_profile_and_the_private_window(self):
+        """#599: the row was built while the window loaded and filled in only at its delayed start-up, which the
+        engine runs after the window's first paint: that frame showed no name, no label and no private seal or fill."""
+        band = first_frame(self, self.m, {"private": True})
+        self.assertEqual(band["private"], "true", band)
+        self.assertIn(self.message("bandPrivate"), band["seals"], band)
+        self.assertEqual(
+            band["label"],
+            self.m.chrome(
+                "return WebExtensionPolicy.getByID('shell@nulavio.net').extension.localizeMessage(arguments[0], [arguments[1]]);",
+                ["profilesButtonNamed", band["name"]],
+            ),
         )
 
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):

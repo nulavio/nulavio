@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import settings_page
-from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix
+from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix, first_frame
 
 from nulavio_launcher import profile, temporary
 
@@ -250,13 +250,16 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
                     m.set_context("content")
 
             before = set(m.window_handles())
-            m.chrome("OpenBrowserWindow({private: true});")
+            # #599: the band names the temporary profile and the private window in the window's first painted frame.
+            band = first_frame(self, m, {"private": True}, close=False)
+            self.assertEqual((band["temporary"], band["private"]), ("true", "true"), band)
+            self.assertTrue(any("apagado ao fechar" in seal for seal in band["seals"]), band)
+            self.assertTrue(any("Janela privativa" in seal for seal in band["seals"]), band)
             self.assertTrue(harness.wait_until(lambda: set(m.window_handles()) - before, 15))
             private = (set(m.window_handles()) - before).pop()
             m.switch_to(private)
-            # The band's row is there from the window's load, and drawn (names, seals, the private fill) only once the
-            # window has started (#544: under the sanitiser it was read before, its identity without a name): wait for
-            # the drawn row.
+            # The window has started by now; the wait for the drawn row stays (#544: under the sanitiser the row was
+            # once read before it was drawn, its identity without a name).
             painted = "return !!document.querySelector('#nulavio-band .nv-band-row[data-private=\"true\"]');"
             self.assertTrue(harness.wait_until(lambda: m.chrome(painted), 30), m.chrome(f"return {BAND_PROBE};"))
             state = m.chrome(f"return {BAND_PROBE};")
