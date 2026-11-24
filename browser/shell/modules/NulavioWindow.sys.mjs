@@ -1442,9 +1442,47 @@ class WindowUI {
       const bar = win.document.getElementById(AREA);
       if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active) {
         bar.toggleAttribute("nv-neutral", this.#neutral(win));
+        if (this.#startsOnTrustPage(win)) {
+          bar.toggleAttribute("nv-named", true);
+        }
       }
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  /**
+   * #607: the window adopts a tab torn off from another window that has already committed a Shell page that asks for
+   * trust, read with #header's own conditions on that tab's browser. The engine swaps the browser in before the
+   * window's delayed start-up (browser-init.js onLoad, swapBrowsers), so #header names the page at #attach and sets
+   * [nv-named] itself. Setting it here too, with [nv-neutral] built as for any other window, gives the band its full row
+   * from the first frame, so the row does not change at #attach. In a calm window ([nv-neutral]) the row keeps the
+   * neutral row's border (none) from the first frame too; a private window or an active alert is not neutral and keeps
+   * its own border, as at #attach.
+   * [nv-named] only lays the row out (window-band.css); the page's name in the band still comes only from #header.
+   * Residual, not covered (each still moves once, from the navigation row to its own row, as on main since #605): a window
+   * opened on a trust page's address and a restored window. Both pages commit only after #attach, so the band cannot be
+   * named before it moves: the address is loaded in the delayed start-up (_handleURIToLoad), and SessionStore, which
+   * holds a restored window's state from when it opens (getWindowState), puts its tabs back at
+   * browser-window-before-show, before the first paint, but their pages load after that. Likewise a torn-off tab whose
+   * page had not committed (a lazy or loading tab) and a page that only becomes one after its first load.
+   */
+  #startsOnTrustPage(win) {
+    try {
+      // The engine moves the tab to adopt out of arguments[0] in onBeforeInitialXULLayout (getTabToAdopt), before
+      // DOMContentLoaded, when the band is built, and nulls arguments[0] there; the tab is in gBrowserInit._tabToAdopt.
+      // A tab group or split view in its place has no linkedBrowser, and a lazy tab no browsing context: false.
+      const browser = win.gBrowserInit?._tabToAdopt?.linkedBrowser;
+      const global = browser?.browsingContext?.currentWindowGlobal;
+      if (!global || browser.webProgress.isLoadingDocument || global.documentPrincipal?.addonPolicy?.id !== SHELL) {
+        return false;
+      }
+      const url = new URL(global.documentURI.spec);
+      const key = SURFACES[url.pathname];
+      return Boolean(key) && url.protocol === "moz-extension:" && url.host === new URL(policy().getURL("")).host
+        && browser.currentURI.spec === global.documentURI.spec && !PLAIN_SURFACES.has(key);
+    } catch {
+      return false;
     }
   }
 

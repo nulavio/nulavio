@@ -43,7 +43,7 @@ BAND_PROBE = """(() => {
 # exists is read, with whether the delayed start-up had already run (it must not have, or the frame proves nothing).
 # The same reading is taken again once the window has started; the first frame should already be the final one.
 FIRST_FRAME = f"""
-  const [features, close] = args;
+  const [features, close, tearUrl] = args;
   const read = win => {{
     const row = win.document.querySelector('#nulavio-band .nv-band-row');
     if (!row) return null;
@@ -91,7 +91,23 @@ FIRST_FRAME = f"""
     Services.obs.addObserver(onStarted, 'browser-delayed-startup-finished');
   }});
   try {{
-    win = OpenBrowserWindow(features);
+    if (tearUrl) {{
+      // #607: a window that starts on a Shell page: a tab torn off into its own window, its page moved with it.
+      const tab = gBrowser.addTrustedTab(tearUrl, {{inBackground: true}});
+      // Torn off once its page has committed and loaded (what NulavioWindow #startsOnTrustPage reads), within 15 s.
+      const loaded = () => {{
+        const browser = tab.linkedBrowser, global = browser.browsingContext?.currentWindowGlobal;
+        return Boolean(global) && !browser.webProgress.isLoadingDocument && browser.currentURI.spec === tearUrl
+          && global.documentURI?.spec === tearUrl && global.documentPrincipal?.addonPolicy?.id === 'shell@nulavio.net';
+      }};
+      for (let i = 0; i < 150 && !loaded(); i++) {{
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }}
+      if (!loaded()) throw new Error(`the tab to tear off did not load ${{tearUrl}} in 15 s`);
+      win = gBrowser.replaceTabWithWindow(tab);
+    }} else {{
+      win = OpenBrowserWindow(features);
+    }}
     const band = await first;
     await started;
     await new Promise(resolve => win.requestAnimationFrame(resolve));
@@ -103,10 +119,10 @@ FIRST_FRAME = f"""
 """
 
 
-def first_frame_layout(test, m, features, close=True):
+def first_frame_layout(test, m, features, close=True, tear_url=None):
     """The band in a new window's first painted frame and once it has started (FIRST_FRAME), with where the row was
     laid out in each (#605). Returns (first band, first layout, band after, layout after); the caller compares them."""
-    result = chrome_async(m, FIRST_FRAME, [features, close])
+    result = chrome_async(m, FIRST_FRAME, [features, close, tear_url])
     test.assertNotIn("error", result, result)
     band, after = result["ok"]["band"], result["ok"]["after"]
     test.assertTrue(result["ok"]["same"], result)
@@ -591,6 +607,25 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(first["neutral"], f"the first frame drew the band in a row of its own: {first} then {after}")
         self.assertEqual(first, after)
         self.assertEqual(band, band_after)  # and the row's own fill: the navigation row's surface, from the first frame
+
+    def test_03e_a_window_that_starts_on_a_trust_page_keeps_its_row_from_the_first_frame(self):
+        """#607: a tab torn off into its own window, whose page is a Shell page that asks for trust (nv-named), gets
+        the band's full row at #attach. The first frame must already be that row, not the neutral one in the navigation
+        row that then moves."""
+        vertical = self.m.chrome("return Services.prefs.getBoolPref('sidebar.verticalTabs');")
+        self.m.chrome("Services.prefs.setBoolPref('sidebar.verticalTabs', true);")
+        self.addCleanup(self.m.chrome, "Services.prefs.setBoolPref('sidebar.verticalTabs', arguments[0]);", [vertical])
+        base = self.m.chrome("return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('');")
+        _band, first, _band_after, after = first_frame_layout(self, self.m, {}, tear_url=base + "vault/unlock.html?p=0")
+        out = harness.artifacts_dir() / "window-band"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "first-frame-trust-page.json").write_text(json.dumps({"first": first, "after": after}, indent=2) + "\n")
+        print(f"#607 first frame {first} after start-up {after}", file=sys.stderr)
+        # Read once the window has started, as 03d: #attach names the page (#header) in the same task as it paints.
+        self.assertTrue(after["wide"] and after["vertical"] and after["neutral"] and after["named"], after)
+        # The same row and the same flags from the first frame: nv-neutral built as in any window (the neutral row's
+        # border, window-band.css) and nv-named set at build (its own row), so neither the row nor its border changes.
+        self.assertEqual(first, after, f"the band changed after the first frame: {first} then {after}")
 
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
