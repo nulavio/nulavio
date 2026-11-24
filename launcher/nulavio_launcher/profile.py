@@ -108,6 +108,8 @@ class Profile:
     # -- settings ---------------------------------------------------------
     def load_settings(self) -> dict[str, Any]:
         try:
+            # The folder too: the browser can write the profile, and a link there could lead to another profile's.
+            paths.check_private(self.meta_dir, paths.PRIVATE_DIR_MODE)
             data = json.loads(paths.read_private_file(self.settings_path).decode("utf-8"))
         except FileNotFoundError:
             raise ProfileError(f"profile '{self.name}' has no Nulavio settings; run `nulavio setup`") from None
@@ -407,7 +409,8 @@ PREVIEW_THEME_MARKER = "Nulavio Preview chrome theme (Track A, userChrome.css)"
 def _remove_preview_theme(profile: Profile) -> None:
     """Delete the launcher's own userChrome.css; never a file the user wrote."""
     css = profile.path / "chrome" / "userChrome.css"
-    if css.is_file() and not css.is_symlink() and PREVIEW_THEME_MARKER in css.read_text(encoding="utf-8", errors="replace")[:400]:
+    own = css.is_file() and not css.is_symlink() and not css.parent.is_symlink()  # never another profile's
+    if own and PREVIEW_THEME_MARKER in css.read_text(encoding="utf-8", errors="replace")[:400]:
         css.unlink()
         log.event("theme.preview_removed", profile=profile.name)
 

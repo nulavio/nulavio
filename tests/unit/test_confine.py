@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import shutil
 import socket
@@ -148,6 +149,27 @@ class WrapTest(unittest.TestCase):
         if Path("/dev/shm").is_dir():
             self.assertIn("/dev/shm", hidden)  # its own, not the host's
 
+    def test_dev_is_bubblewraps_own_with_only_the_gpu_and_cameras_put_back(self):
+        args = self.wrap()
+        self.assertEqual(self.pairs(args, "--dev"), ["/dev"])
+        self.assertNotIn("/dev", self.pairs(args, "--dev-bind"), "never the host's whole /dev")
+        self.assertEqual(self.pairs(args, "--dev-bind"), [str(p) for p in confine.device_nodes()])
+        self.assertIn("--unshare-ipc", args)  # System V IPC is its own
+
+    def test_device_nodes_are_the_gpu_and_cameras_only_and_never_a_link(self):
+        dev = self.tmp / "dev"
+        for name in ("dri", "input", "pts", "bus/usb"):
+            (dev / name).mkdir(parents=True)
+        for name in ("video0", "uinput", "hidraw0", "nvidiactl"):
+            (dev / name).write_text("")  # regular files: not device nodes
+        (dev / "nvidia-caps").symlink_to(dev / "input")
+        (dev / "video9").symlink_to("/dev/null")
+        self.assertEqual(confine.device_nodes(dev), [dev / "dri"])
+        found = confine.device_nodes()
+        for node in found:
+            self.assertRegex(node.name, r"^(dri|nvidia.*|video[0-9]+)$")
+            self.assertFalse(node.is_symlink())
+
     def test_engine_sandboxes_are_left_alone(self):
         args = self.wrap(supervised=True)
         for option in ("--unshare-pid", "--unshare-user", "--disable-userns", "--unshare-all", "--cap-add"):
@@ -280,6 +302,37 @@ class RealBubblewrapTest(unittest.TestCase):
         out = subprocess.run(args, capture_output=True, text=True, timeout=30, check=True).stdout.split()
         self.assertNotIn("host-shm-visible", out)
         self.assertFalse(written.exists(), "a write in /dev/shm reached the host")
+
+    def test_a_confined_program_sees_no_host_terminal_input_device_or_ipc_segment(self):
+        home = Path(tempfile.mkdtemp(prefix="nv-confine-home-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "p").mkdir()
+        primary, secondary = os.openpty()  # another terminal of the session
+        self.addCleanup(os.close, primary)
+        self.addCleanup(os.close, secondary)
+        terminal = os.ttyname(secondary)
+        libc = ctypes.CDLL(None, use_errno=True)
+        segment = libc.shmget(0, 4096, 0o600)  # IPC_PRIVATE: a System V segment made outside
+        self.assertGreaterEqual(segment, 0, os.strerror(ctypes.get_errno()))
+        self.addCleanup(libc.shmctl, segment, 0, None)  # IPC_RMID, this segment only
+        script = (
+            f"test -e {terminal} && echo host-terminal-visible;"
+            "for n in /dev/input /dev/uinput /dev/hidraw0 /dev/kvm /dev/fuse; do test -e $n && echo visible-$n; done;"
+            f"awk '$2 == {segment} {{ print \"segment-visible\" }}' /proc/sysvipc/shm; echo listing; ls -A /dev; true"
+        )
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=home / "p", engine_dir=Path("/usr/bin"), home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        out = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+                             check=True).stdout.split()  # fmt: skip
+        self.assertNotIn("host-terminal-visible", out)
+        self.assertFalse([line for line in out if line.startswith("visible-")], out)
+        self.assertNotIn("segment-visible", out)
+        put_back = {p.name for p in confine.device_nodes()}
+        # bubblewrap's own /dev; "console" is the launcher's own terminal, when it has one.
+        own = {"console", "core", "fd", "full", "null", "ptmx", "pts", "random", "shm", "stderr", "stdin", "stdout",
+               "tty", "urandom", "zero"}  # fmt: skip
+        listed = set(out[out.index("listing") + 1 :])
+        self.assertLessEqual(listed, own | put_back)
 
     def test_the_probe_fails_where_nested_namespaces_are_denied(self):
         # Ubuntu's AppArmor denies them by capability (measured: unpriv_bwrap inside bubblewrap, unprivileged_userns

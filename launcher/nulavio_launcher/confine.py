@@ -7,7 +7,10 @@ read-only settings a desktop browser needs (fonts, themes, the desktop's
 folder names, registered native-messaging hosts). The rest of the system is
 visible read-only, as for any program; /tmp, /var/tmp, /dev/shm and removable
 media are empty, and so are the user's runtime folder and Nulavio's own
-folders wherever they are, except for what is put back.
+folders wherever they are, except for what is put back. /dev is bubblewrap's
+own minimal one (null, zero, random, its own terminals) with only the GPU and
+the cameras put back: no input devices, terminals of the session, HID or other
+hardware nodes. System V IPC is its own too.
 
 From the runtime folder only the display and sound sockets are put back
 (Wayland, PipeWire, PulseAudio) and KeePassXC's browser socket when it is
@@ -63,6 +66,11 @@ EMPTY_DIRS = ("/tmp", "/var/tmp", "/dev/shm", "/mnt", "/media", "/run/media")  #
 RUNTIME_SOCKETS = ("pipewire-0", "pulse/native", "app/org.keepassxc.KeePassXC")
 # Not passed inside: the session bus is not there, and no X server is offered.
 UNSET_ENV = ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "XAUTHORITY")
+# Device nodes put back from the host's /dev, when present, as they are at the start: the GPU (rendering, video
+# decoding) and the cameras (which PipeWire offers too). Nothing else: not input devices, the session's terminals, HID
+# devices (security keys among them) or other hardware. A node that appears later (a camera plugged in) is not there.
+DEVICE_DIRS = ("dri", "nvidia-caps")
+DEVICE_GLOBS = ("nvidia*", "video[0-9]*")
 
 
 # Run inside bubblewrap: new user, PID, network, IPC and UTS namespaces in one call, as the engine's content
@@ -146,6 +154,14 @@ def wayland_socket(runtime: Path | None) -> Path | None:
     return path if path is not None and path.is_socket() else None
 
 
+def device_nodes(dev: Path = Path("/dev")) -> list[Path]:
+    """The host's device nodes put back inside (DEVICE_DIRS, DEVICE_GLOBS); never a symlink."""
+    found = [dev / name for name in DEVICE_DIRS if (dev / name).is_dir() and not (dev / name).is_symlink()]
+    for pattern in DEVICE_GLOBS:
+        found += [p for p in sorted(dev.glob(pattern)) if p.is_char_device() and not p.is_symlink()]
+    return found
+
+
 def nulavio_dirs() -> list[Path]:
     """Nulavio's own folders (profiles, Vault, AI Bridge settings, temporary profiles), wherever they are."""
     found: list[Path] = []
@@ -175,8 +191,11 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     binary = binary or check()
     downloads = download_dir(home)
     downloads.mkdir(parents=True, exist_ok=True)
-    # Writable /proc: the engine maps user ids for its own content sandboxes there.
-    args = [binary, "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev", "--bind", "/proc", "/proc"]
+    # Writable /proc: the engine maps user ids for its own content sandboxes there. bubblewrap's own /dev, with
+    # only the GPU and cameras put back (--dev-bind: device nodes work only on such a mount); its own System V IPC.
+    args = [binary, "--ro-bind", "/", "/", "--dev", "/dev", "--bind", "/proc", "/proc", "--unshare-ipc"]
+    for node in device_nodes():
+        args += ["--dev-bind", str(node), str(node)]
     # Hidden: empty in-memory folders. A socket under a read-only mount still accepts connections, so the runtime
     # folder is hidden whole rather than left read-only.
     hidden = [Path("/home"), home, *(Path(f) for f in EMPTY_DIRS), *runtime, *nulavio_dirs()]

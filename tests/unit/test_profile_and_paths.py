@@ -147,6 +147,25 @@ class ProfileTest(TempHome):
         with self.assertRaises(paths.UnsafePathError):
             prof.load_settings()
 
+    def test_the_settings_folder_is_never_another_profiles_through_a_link(self):
+        # A link in place of the profile's own nulavio/ folder: its settings are neither read nor rewritten (I9).
+        prof, other = self.make(), self.make("other")
+        other_settings = other.settings_path.read_bytes()
+        shutil.rmtree(prof.meta_dir)
+        prof.meta_dir.symlink_to(other.meta_dir)
+        with self.assertRaises(paths.UnsafePathError):
+            prof.load_settings()
+        with self.assertRaises(paths.UnsafePathError):
+            profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})
+        self.assertEqual(other.settings_path.read_bytes(), other_settings)
+        # The launcher's own preview theme is removed only from the profile's own chrome folder.
+        css = other.path / "chrome" / "userChrome.css"
+        css.parent.mkdir()
+        css.write_text(f"/* {profile.PREVIEW_THEME_MARKER} */\n")
+        (prof.path / "chrome").symlink_to(css.parent)
+        profile._remove_preview_theme(prof)
+        self.assertTrue(css.exists())
+
     def test_seeds_apply_once_and_user_js_holds_only_enforced(self):
         prof = self.make()
         first = profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})
