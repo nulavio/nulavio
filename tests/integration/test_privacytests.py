@@ -73,7 +73,7 @@ PROBES = {
         "AudioContext base latency",
     ),
     "Settings": (
-        "Time zone",
+        "Time zone region",
         "Reduced motion preference",
         "Reduced transparency preference",
         "Display contrast preference",
@@ -259,7 +259,7 @@ class PrivacyTestsProbes(unittest.TestCase):
 
     def test_00_the_settings_really_changed_between_the_runs(self):
         plain = functools.partial(self.values, mode="plain")
-        self.assertEqual(plain("Settings", "Time zone"), ["Europe/Paris", "Europe/Berlin"])
+        self.assertEqual(plain("Settings", "Time zone region"), ["Europe/Paris", "Europe/Berlin"])
         self.assertEqual(plain("Settings", "Reduced motion preference"), ["reduce", "no-preference"])
         self.assertEqual(plain("Settings", "Display contrast preference"), ["more", "no-preference"])
         self.assertEqual(plain("Settings", "User-installed font (DOM)"), ["not-detected", "detected"])

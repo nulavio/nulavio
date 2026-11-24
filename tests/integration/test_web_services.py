@@ -18,6 +18,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import harness
+from marionette import MarionetteError
 
 SV = 'const SV = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioServices.sys.mjs");'
 # The services' hosts and the linked page's: what a click could send to. The engine's own background traffic
@@ -152,6 +153,32 @@ class WebServicesTest(unittest.TestCase):
     def error(self, body: str, *args):
         return self.sv(body, *args).get("error")
 
+    def show(self, path: str) -> None:
+        """The fixture page in this window's tab, with its text there. A new window's own first page can replace one
+        navigated to while it still loads (as in test_routing): under the sanitiser a private window's tab showed its
+        first page, with no `#text`, after the navigation to the fixture (#544). So the page is navigated to again
+        until it is the one shown and nothing loads in the tab, and a failure says what the tab holds."""
+        url = self.server.url(path)
+        self.m.navigate(url)
+        idle = "return !gBrowser.selectedBrowser.webProgress?.isLoadingDocument;"
+
+        def shown() -> bool:
+            try:
+                if self.m.current_url() != url:
+                    self.m.navigate(url)
+                    return False
+                return bool(self.m.chrome(idle)) and bool(self.m.execute("return !!document.getElementById('text');"))
+            except MarionetteError:
+                return False  # a script run while the tab changes page
+
+        def holds() -> object:
+            try:
+                return self.m.execute("return [location.href, document.readyState, document.body?.textContent ?? null];")
+            except MarionetteError as error:
+                return str(error)
+
+        self.assertTrue(harness.wait_until(shown, 30), holds())
+
     def open_menu_on_text(
         self, path: str = "/service-links", expect: str | None = None, services: list[str] | None = None
     ) -> list[dict]:
@@ -167,7 +194,7 @@ class WebServicesTest(unittest.TestCase):
                 return sorted(labels) == sorted(services)
             return expect is None or expect in labels
 
-        self.m.navigate(self.server.url(path))
+        self.show(path)
         self.m.execute(
             "const p = document.getElementById('text'); const r = document.createRange(); r.selectNodeContents(p);"
             "getSelection().removeAllRanges(); getSelection().addRange(r);"
@@ -185,7 +212,7 @@ class WebServicesTest(unittest.TestCase):
     def open_menu_on_page(self, path: str = "/service-links") -> list[dict]:
         """The page's own menu: nothing selected, the pointer on the page's text (the engine's "page" context
         excludes a selection)."""
-        self.m.navigate(self.server.url(path))
+        self.show(path)
         self.m.execute("getSelection().removeAllRanges();")
         self.m.context_click("#text")
         self.assertTrue(harness.wait_until(self.m.menu_open, 10))
@@ -436,6 +463,8 @@ class WebServicesTest(unittest.TestCase):
         self.m.chrome("OpenBrowserWindow({private: true});")
         self.assertTrue(harness.wait_until(lambda: len(self.m.window_handles()) > len(handles), 10))
         self.m.switch_to(next(h for h in self.m.window_handles() if h not in handles))
+        started = "return window.gBrowserInit?.delayedStartupFinished === true;"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(started), 30), "the private window has not started")
         return handles
 
     def test_04c_the_menus_arrangement_with_zero_one_and_two_services(self):

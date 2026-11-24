@@ -74,6 +74,10 @@ PAGE_OVER_RULE = {
         "their page shows it passed: three of the five runs were randomized and the other two read 8 and 4",
     ),
 }
+# Probes PrivacyTests.org renamed after the run or the release the fixtures were read from: their old name in their
+# page, their data file or a Nulavio run's log reads as the name the integration test has now (ec9ad19f, 2026-11-17,
+# "better name: time zone region", #587). A name here that no longer turns up anywhere can go.
+RENAMED = {"Time zone": "Time zone region"}
 # Probes the integration test runs that their page has no row for, and why. Their columns show "·" there. A probe
 # that leaves their page, or comes back to it, stops `refresh` until this list says so.
 NOT_ON_THEIR_PAGE = {
@@ -141,7 +145,7 @@ def parse_page(text: str) -> dict:
             name = re.search(r"<div>(.*?)</div>", cells[0], re.S)
             if not name:
                 raise ComparisonError(f"{title}: a row without a probe name")
-            probe = html.unescape(name.group(1).strip())
+            probe = current_name(html.unescape(name.group(1).strip()))
             if len(cells) - 1 != len(columns):
                 raise ComparisonError(f"{probe}: {len(cells) - 1} cells for {len(columns)} browsers")
             verdicts = {}
@@ -160,6 +164,10 @@ def parse_page(text: str) -> dict:
     return {"issue": int(banner.group(1)), "updated": banner.group(2), "columns": columns, "rows": rows}
 
 
+def current_name(probe: str) -> str:
+    return RENAMED.get(probe, probe)
+
+
 def value_digest(value) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
 
@@ -176,7 +184,8 @@ def parse_data(data: dict) -> dict:
         entry["versions"].add(test["reportedVersion"])
         entry["runners"].append(test["runner"])
         for group in ("device_fingerprinting", "settings_fingerprinting"):
-            for probe, result in test["testResults"].get(group, {}).items():
+            for name, result in test["testResults"].get(group, {}).items():
+                probe = current_name(name)
                 if group == "device_fingerprinting":
                     run = {"randomized": result.get("randomized", False), "value": value_digest(result.get("value"))}
                     if result.get("prompted"):
@@ -261,10 +270,10 @@ def parse_log(lines: list[str]) -> tuple[dict[str, str], str | None]:
     for line in lines:
         match = LOG_LINE.match(line)
         if match:
-            outcome = match.group(3).split()[0]
-            if match.group(2) in results:
-                raise ComparisonError(f"{match.group(2)}: two results in the log")
-            results[match.group(2)] = outcome
+            outcome, probe = match.group(3).split()[0], current_name(match.group(2))
+            if probe in results:
+                raise ComparisonError(f"{probe}: two results in the log")
+            results[probe] = outcome
         elif UNSUPPORTED_LINE.match(line):
             unsupported = UNSUPPORTED_LINE.match(line).group(1).split()[0]
     return results, unsupported
@@ -386,7 +395,7 @@ GLOSS = {
     ),
     "userAgentData.platformVersion": ("A versão do sistema operacional", "The operating system's version"),
     "AudioContext base latency": ("O atraso do dispositivo de som", "The sound device's delay"),
-    "Time zone": ("O seu fuso horário", "Your time zone"),
+    "Time zone region": ("O seu fuso horário", "Your time zone"),
     "Reduced motion preference": ("Se você pediu ao sistema menos animação", "Whether you asked the system for less animation"),
     "Reduced transparency preference": ("Se você pediu menos transparência", "Whether you asked for less transparency"),
     "Display contrast preference": ("Se você pediu mais contraste", "Whether you asked for more contrast"),
