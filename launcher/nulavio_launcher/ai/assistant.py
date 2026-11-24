@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import contextlib
 import email.utils
+import fcntl
+import os
 import http.client
 import json
 import re
@@ -147,6 +149,21 @@ def _save(data: dict) -> None:
     paths.write_private_file(_config_path(), json.dumps(data, indent=2) + "\n")
 
 
+@contextlib.contextmanager
+def _writing():
+    """One change of the settings at a time: each read-change-write of assistant.json (and, in configure, the key
+    stored with it) finishes before the next one reads, so a late write never puts back the provider or the binding
+    another one replaced. Requests do not take it: they check the provider before and after the keyring read."""
+    paths.ensure_private_dir(_config_path().parent)
+    fd = os.open(_config_path().parent / "assistant.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
+
 def _keyring():
     from ..vault.cli import keyring  # the same Secret Service access as the Vault (NULAVIO_SECRET_TOOL in tests)
 
@@ -235,54 +252,57 @@ def configure(kind: str, base_url: str, model: str, label: str = "", key: str | 
     model = str(model or "").strip()
     if not model or len(model) > 200 or any(c.isspace() for c in model):
         raise AssistantError("bad-model")
-    data = load()
-    bound = _key_bound(data)
-    data["provider"] = {"kind": kind, "base_url": check_endpoint(base_url), "model": model, "label": str(label)[:60]}
-    target = _key_target(data["provider"])
-    dropped = key is None and bound is not None and bound != target
-    if key is None and not dropped:
-        data["key_for"] = target if bound is not None else None
-    else:
-        # Unbound first, so no moment on disk pairs a new key with the old target or the old key with the new one.
-        data["key_for"] = None
-        from ..vault.core import VaultError  # imported here, as in ai/cli.py
+    with _writing():
+        data = load()
+        bound = _key_bound(data)
+        data["provider"] = {"kind": kind, "base_url": check_endpoint(base_url), "model": model, "label": str(label)[:60]}
+        target = _key_target(data["provider"])
+        dropped = key is None and bound is not None and bound != target
+        if key is None and not dropped:
+            data["key_for"] = target if bound is not None else None
+        else:
+            # Unbound first, so no moment on disk pairs a new key with the old target or the old key with the new one.
+            data["key_for"] = None
+            from ..vault.core import VaultError  # imported here, as in ai/cli.py
 
-        try:
-            _keyring().clear(KEY_ATTRIBUTES)
-        except VaultError:
-            if not dropped:
-                raise
-            # No keyring to clear: no key is ever read for this target, since nothing is bound to it.
-    current = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
-    if not current or current.get("revoked"):
-        # Restricted until the user grants more, as for any new agent. A revoked agent stays revoked
-        # (its record is kept for the audit): saving the settings again is how the user starts over.
-        agent, _token = registry.add(AGENT_NAME, "nulavio-assistant", "restricted", disposable=True)
-        data["agent"] = agent["id"]
-    _save(data)
-    if key:
-        _keyring().store("Nulavio Assistant API key", KEY_ATTRIBUTES, key.encode())
-        data["key_for"] = target
+            try:
+                _keyring().clear(KEY_ATTRIBUTES)
+            except VaultError:
+                if not dropped:
+                    raise
+                # No keyring to clear: no key is ever read for this target, since nothing is bound to it.
+        current = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
+        if not current or current.get("revoked"):
+            # Restricted until the user grants more, as for any new agent. A revoked agent stays revoked
+            # (its record is kept for the audit): saving the settings again is how the user starts over.
+            agent, _token = registry.add(AGENT_NAME, "nulavio-assistant", "restricted", disposable=True)
+            data["agent"] = agent["id"]
         _save(data)
+        if key:
+            _keyring().store("Nulavio Assistant API key", KEY_ATTRIBUTES, key.encode())
+            data["key_for"] = target
+            _save(data)
     return state()
 
 
 def allow_profile(profile: str, allowed: bool) -> dict:
     if not isinstance(profile, str) or not profile.startswith("/"):
         raise AssistantError("bad-profile")
-    data = load()
-    data["profiles"] = sorted({p for p in data["profiles"] if p != profile} | ({profile} if allowed else set()))
-    _save(data)
+    with _writing():
+        data = load()
+        data["profiles"] = sorted({p for p in data["profiles"] if p != profile} | ({profile} if allowed else set()))
+        _save(data)
     return state(profile)
 
 
 def forget() -> None:
     """Remove the provider and its key; the assistant's agent is revoked (its record stays for the audit)."""
-    data = load()
-    _keyring().clear(KEY_ATTRIBUTES)
-    if data["agent"] and data["agent"] in registry.load()["agents"]:
-        registry.revoke(data["agent"])
-    _save({"schema": SCHEMA, "provider": None, "agent": None, "profiles": [], "key_for": None})
+    with _writing():
+        data = load()
+        _keyring().clear(KEY_ATTRIBUTES)
+        if data["agent"] and data["agent"] in registry.load()["agents"]:
+            registry.revoke(data["agent"])
+        _save({"schema": SCHEMA, "provider": None, "agent": None, "profiles": [], "key_for": None})
 
 
 # -- talking to the provider ------------------------------------------------------------------
@@ -859,7 +879,14 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
             if reason:  # stopped, paused, revoked or the provider changed during the run: no further model turn
                 return {"answer": "", "steps": steps, "stopped": reason}
             on_send = (lambda turn=turn: out.sending(turn)) if out is not None else None
-            text, calls, truncated = _complete(provider, messages, tools=True, on_send=on_send)
+            try:
+                text, calls, truncated = _complete(provider, messages, tools=True, on_send=on_send)
+            except AssistantError as exc:
+                # The provider changed between the check above and the request (refused before anything was sent): the
+                # task stops as it does above, with the steps it already took.
+                if turn and exc.code == "assistant-settings-changed":
+                    return {"answer": "", "steps": steps, "stopped": exc.code}
+                raise
             if out is not None:
                 out.answered += 1
             if not calls:

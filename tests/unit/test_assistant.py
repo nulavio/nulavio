@@ -661,6 +661,57 @@ class AssistantTest(unittest.TestCase):
         self.assertTrue(ring.saved)
         self.assertEqual(caught.exception.code, "assistant-settings-changed")
 
+    def test_a_change_just_before_a_later_turn_stops_the_task_with_its_steps(self):
+        """Settings changed after the task's check and before its next request: the request is refused before anything is
+        sent, and the task stops the way the check would have stopped it, with the step it took."""
+        state = self.configure(key="")
+        assistant.allow_profile(PROFILE, True)
+        other = self.other_provider()
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": "{}"}}
+        self.provider.replies[:] = [{"choices": [{"message": {"content": None, "tool_calls": [call]}}]}]
+
+        class SettingsSavedDuringTheStep(FakeBridge):
+            def call(self, tool, arguments):
+                assistant.configure("openai", other.base, "other-model", "", "sk-new-artificial-key")
+                return super().call(tool, arguments)
+
+        bridge = SettingsSavedDuringTheStep(state["agent"]["id"])
+        with mock.patch.object(assistant, "_settings_changed", lambda provider: None):  # the check saw no change yet
+            result = assistant.run_task("Open something", PROFILE, bridge=bridge)
+        self.assertEqual(result.get("stopped"), "assistant-settings-changed")
+        self.assertEqual([step["tool"] for step in result["steps"]], ["tab_new"])
+        self.assertEqual(len(self.provider.requests), 1)
+        self.assertEqual(other.requests, [])
+
+    def test_settings_are_changed_one_at_a_time(self):
+        """A second change of the settings waits for the first, key included, so it never writes back what it read
+        before the first one finished."""
+        import threading
+
+        from nulavio_launcher.vault.providers import Keyring
+
+        self.configure(key="")
+        other = self.other_provider()
+        real_store = Keyring.store
+        other_change = threading.Thread(target=assistant.allow_profile, args=(PROFILE, True))
+        waited = []
+
+        def store(ring, *args):
+            other_change.start()
+            other_change.join(0.5)
+            waited.append(other_change.is_alive())
+            return real_store(ring, *args)
+
+        with mock.patch.object(Keyring, "store", store):
+            assistant.configure("openai", other.base, "other-model", "", "sk-new-artificial-key")
+        other_change.join(10)
+        self.assertEqual(waited, [True], "the second change ran while the first was storing its key")
+        data = assistant.load()
+        self.assertEqual(data["provider"]["base_url"], other.base)
+        self.assertEqual(data["key_for"], assistant._key_target(data["provider"]))
+        self.assertEqual(data["profiles"], [PROFILE])
+        self.assertTrue(assistant.state()["hasKey"])
+
     def test_cli_api_never_returns_the_key(self):
         self.configure()
         from nulavio_launcher import cli
