@@ -36,6 +36,11 @@ from .core import (
 )
 
 CONTEXT = b"nulavio/nv1/"
+# Pairing version 2 (2026-11-24): the QR carries a commitment to a nonce the desktop reveals only in its accept,
+# and the 6 digits cover that nonce. Version 1 had neither, and is refused on both sides (ADR 0005, amendment
+# of 2026-11-24). The unlock request keeps its own "v": 1.
+PAIRING_VERSION = 2
+NONCE_BYTES = 32
 PAIRING_TTL = 300
 REQUEST_TTL = 60
 CLOCK_SKEW = 120
@@ -99,8 +104,23 @@ def desktop_id_for(dsig_pk: bytes) -> str:
     return b64e(sodium.hash32(dsig_pk)[:16])
 
 
-def sas_digits(shared: bytes | bytearray, t: bytes) -> str:
-    raw = nkdf(shared, "pair/sas", t)
+def pairing_commitment(invite_id: str, nonce: bytes | bytearray) -> bytes:
+    """What the QR carries in place of the desktop's pairing nonce, which the accept reveals."""
+    return transcript("nv1/pair/commit", invite_id, nonce)
+
+
+def pairing_transcript(
+    invite_id: str, de_pk: bytes, pe_pk: bytes, dsig_pk: bytes, psig_pk: bytes, pkx_pk: bytes, name: str, commitment: bytes
+) -> bytes:
+    """T of pairing version 2: both signatures and the keys k2/k3 cover it, the commitment included."""
+    return transcript("nv1/pair/v2", invite_id, de_pk, pe_pk, dsig_pk, psig_pk, pkx_pk, name, commitment)
+
+
+def sas_digits(shared: bytes | bytearray, t: bytes, nonce: bytes | bytearray) -> str:
+    """The 6 digits. They cover the desktop's nonce, which only the desktop knows until the hello is in, and the
+    phone's fresh exchange key, which comes after the desktop committed to that nonce: neither side can pick its
+    part once it knows what the other screen will show (ADR 0005, amendment of 2026-11-24)."""
+    raw = nkdf(shared, "pair/sas", t, nonce)
     try:
         return f"{int.from_bytes(raw[:4], 'big') % 1_000_000:06d}"
     finally:
@@ -199,7 +219,7 @@ class PairedPhone:
 
 
 class Pairing:
-    """One pairing attempt: QR invite → hello → accept (+ 6 digits) → confirm."""
+    """One pairing attempt: QR invite (with a commitment) → hello → accept (opens it; + 6 digits) → confirm."""
 
     def __init__(self, identity: DesktopIdentity, desktop_name: str, address: str = "", clock: Clock = time.time):
         self.identity = identity
@@ -208,6 +228,9 @@ class Pairing:
         self.invite_id = b64e(secrets.token_bytes(16))
         self.secret = sodium.random_bytes(32)
         self.de_sk, self.de_pk = sodium.x25519_keypair()
+        # Leaves this process only inside the accept to the one hello this invite takes.
+        self.nonce = sodium.random_bytes(NONCE_BYTES)
+        self.commitment = pairing_commitment(self.invite_id, self.nonce)
         self.expiry = int(clock()) + PAIRING_TTL
         self.address = address
         self.state = "invited"
@@ -219,11 +242,12 @@ class Pairing:
     def invite(self) -> dict:
         """The QR payload. It carries the pairing secret: show it only on this screen."""
         return {
-            "v": 1,
+            "v": PAIRING_VERSION,
             "i": self.invite_id,
             "k": b64e(self.de_pk),
             "s": b64e(self.secret),
             "d": b64e(self.identity.sig_pk),
+            "c": b64e(self.commitment),
             "a": self.address,
             "e": self.expiry,
         }
@@ -239,6 +263,9 @@ class Pairing:
 
     def on_hello(self, msg: dict) -> dict:
         self._check(msg, "invited")
+        if msg.get("v") != PAIRING_VERSION:
+            self.cancel()  # a phone that speaks another version: no fallback, and this invite is spent
+            raise ProtocolError("unsupported-version")
         try:
             pe_pk = b64d(msg["pe"])
             shared = sodium.x25519(self.de_sk, pe_pk)
@@ -261,18 +288,17 @@ class Pairing:
             sodium.memzero(shared)
             self.cancel()
             raise ProtocolError("bad-message") from None
-        t = transcript(self.invite_id, self.de_pk, pe_pk, self.identity.sig_pk, psig_pk, pkx_pk, name)
+        t = pairing_transcript(self.invite_id, self.de_pk, pe_pk, self.identity.sig_pk, psig_pk, pkx_pk, name, self.commitment)
         sig_d = sodium.sign(self.identity.sig_sk, b"nv1/pair/desktop" + t)
         k2 = nkdf(self.secret, "pair/k2", shared, t)
+        body = {"dkx": b64e(self.identity.kx_pk), "name": self.desktop_name, "sig": b64e(sig_d), "n": b64e(self.nonce)}
         try:
-            box = seal_json(
-                k2, {"dkx": b64e(self.identity.kx_pk), "name": self.desktop_name, "sig": b64e(sig_d)}, self.invite_id.encode()
-            )
+            box = seal_json(k2, body, self.invite_id.encode())
         finally:
             sodium.memzero(k2)
         self._shared, self._t = shared, t
         self._phone = PairedPhone(phone_id_for(psig_pk), psig_pk, pkx_pk, name, self.identity.sig_pk)
-        self.sas = sas_digits(shared, t)
+        self.sas = sas_digits(shared, t, self.nonce)
         self.state = "compare"
         return {"i": self.invite_id, "box": box}
 
@@ -300,7 +326,7 @@ class Pairing:
         return phone
 
     def cancel(self) -> None:
-        for buf in (self.secret, self.de_sk, self._shared):
+        for buf in (self.secret, self.de_sk, self.nonce, self._shared):
             sodium.memzero(buf)
         self._shared = None
         self.state = "cancelled"

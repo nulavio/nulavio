@@ -1,5 +1,6 @@
 # The recipe as submitted to fdroiddata (metadata/net.nulavio.companion.yml) on 2026-11-11, for tag
-# companion-v0.1.0 (ADR 0005, decision D4: F-Droid first). fdroiddata keeps the summary out of the recipe,
+# companion-v0.1.0 (ADR 0005, decision D4: F-Droid first); 0.2.0 (pairing version 2) added for the tag
+# companion-v0.2.0, not made yet (it is made with the release that ships 0.2.0). fdroiddata keeps the summary out of the recipe,
 # in net.nulavio.companion/<locale>/summary.txt (mirrored next to this file). Checked by tests/unit/test_companion_build.py.
 Categories:
   - Security
@@ -30,7 +31,14 @@ Builds:
     gradle:
       - yes
 
+  - versionName: 0.2.0
+    versionCode: 2
+    commit: companion-v0.2.0
+    subdir: android/app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^companion-v.*$
-CurrentVersion: 0.1.0
-CurrentVersionCode: 1
+CurrentVersion: 0.2.0
+CurrentVersionCode: 2

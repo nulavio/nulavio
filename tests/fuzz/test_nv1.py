@@ -80,7 +80,7 @@ class Nv1FuzzTest(unittest.TestCase):
         return pairing, ReferencePhone("Fuzz phone", self.clock).scan(pairing.invite())
 
     @settings(max_examples=EXAMPLES, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-    @given(path=st.sampled_from([["i"], ["pe"], ["box"], ["box", "n"], ["box", "c"]]), value=JSON | B64ISH | st.just(...))
+    @given(path=st.sampled_from([["v"], ["i"], ["pe"], ["box"], ["box", "n"], ["box", "c"]]), value=JSON | B64ISH | st.just(...))
     def test_a_changed_hello_is_a_protocol_error(self, path, value):
         pairing, hello = self.hello()
         expected(lambda: pairing.on_hello(mutate(hello, path, value)))
@@ -108,7 +108,7 @@ class Nv1FuzzTest(unittest.TestCase):
             return  # not something JSON can carry
         # Not the phone's two 32-byte keys, so it must be refused, not taken (a 3-byte key once went through).
         with self.assertRaises(VaultError):
-            pairing.on_hello({"i": invite["i"], "pe": b64e(pe_pk), "box": box})
+            pairing.on_hello({"v": 2, "i": invite["i"], "pe": b64e(pe_pk), "box": box})
 
     @settings(max_examples=EXAMPLES, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     @given(path=st.sampled_from([["i"], ["box"], ["box", "n"], ["box", "c"]]), value=JSON | B64ISH | st.just(...))

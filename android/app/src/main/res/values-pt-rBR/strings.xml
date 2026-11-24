@@ -39,6 +39,8 @@
     <string name="error_bad_expiry">Este pedido diz que vale por tempo demais, então foi recusado. Nada foi enviado. Peça um novo no computador.</string>
     <string name="error_not_for_this_phone">Este pedido é para outro celular.</string>
     <string name="error_unreachable">O computador não se conectou. Confira se os dois estão na mesma rede e tente de novo.</string>
+    <string name="error_version">Este código é de outra versão do Nulavio. Atualize o Nulavio no computador e o Nulavio Companion neste celular e tente de novo. Nada foi pareado.</string>
+    <string name="error_bad_commitment">A resposta do computador não corresponde ao código lido, então os dígitos não foram mostrados. Nada foi pareado. Comece de novo no computador.</string>
     <string name="error_keys_invalidated">As chaves deste celular não podem mais ser usadas (as digitais ou o bloqueio de tela mudaram). Configure-o de novo e pareie de novo com seus computadores.</string>
     <string name="error_generic">Algo deu errado (%1$s). Nada foi desbloqueado.</string>
     <string name="remove_title">Remover %1$s?</string>
