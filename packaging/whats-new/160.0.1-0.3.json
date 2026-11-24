@@ -4,7 +4,12 @@
   "channel": "alpha",
   "firefox": "160.0.1",
   "pt-BR": {
-    "summary": "O painel lateral pode abrir do outro lado das abas, o motor que um agente de IA usa recusa mais páginas locais, o ruído do áudio chega a mais leituras e a faixa de uma janela nova diz o perfil e o tipo já no primeiro quadro.",
+    "summary": "O painel lateral pode abrir do outro lado das abas, o motor que um agente de IA usa recusa mais páginas locais, o ruído do áudio chega a mais leituras e a faixa de uma janela nova diz o perfil e o tipo já no primeiro quadro, com correções de segurança.",
+    "breaking": [
+      "Parear o celular agora exige o Nulavio Companion 0.2.0, que vem com esta versão. O 0.1.0 não lê o código de pareamento novo; os aparelhos já pareados continuam funcionando.",
+      "Agentes de IA: \"Permitir uma vez\" vale para uma chamada, e \"até o agente desconectar\" vale para o site e o lugar que o pedido mostrou. Um motor guiado por um agente não abre nem chama outro perfil.",
+      "Modo confinado (--confined): o navegador confinado tem o próprio /dev, com a GPU e as câmeras presentes na hora do início, e nenhum barramento de sessão; chaves de segurança por USB e gamepads não chegam a ele. Sessões só X11 são recusadas."
+    ],
     "new": [
       "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição. No Imersivo ele sai pela própria borda e volta por ela, como a lista de abas. Vem desligado.",
       "Num motor aberto para um agente de IA, uma página do seu computador ou da rede local que o agente abre, ou cujo endereço você digita na janela desse motor, é recusada antes de o pedido sair (em https na rede local, depois do aperto de mão TLS), a menos que o agente possa alcançar o lugar.",
@@ -18,7 +23,12 @@
     ]
   },
   "en-US": {
-    "summary": "The side panel can open on the other side of the tabs, the engine an AI agent uses refuses more local pages, the audio noise reaches more reads, and a new window's band names its profile and kind in its first frame.",
+    "summary": "The side panel can open on the other side of the tabs, the engine an AI agent uses refuses more local pages, the audio noise reaches more reads, and a new window's band names its profile and kind in its first frame, with security fixes.",
+    "breaking": [
+      "Pairing a phone now needs Nulavio Companion 0.2.0, which ships with this version. Version 0.1.0 does not read the new pairing code; phones already paired keep working.",
+      "AI agents: \"Allow once\" covers one call, and \"until the agent disconnects\" covers the site and place the request showed. An engine an agent drives does not open or contact another profile.",
+      "Confined mode (--confined): the confined browser has its own /dev, with the GPU and the cameras present at start, and no session bus; USB security keys and gamepads do not reach it. X11-only sessions are refused."
+    ],
     "new": [
       "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout. In Immersive it leaves by its own edge and comes back from it, as the tab list does. It starts off.",
       "In an engine opened for an AI agent, a page at your computer or the local network that the agent opens, or whose address you type in that engine's window, is refused before the request is sent (for https on the local network, after the TLS handshake), unless the agent may reach the place.",
