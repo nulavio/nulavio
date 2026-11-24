@@ -67,13 +67,13 @@ const { NulavioLookalikeParent } = await import(pathToFileURL(process.argv[3]).h
 const password = { localName: "input", type: "password" };
 const text = { localName: "input", type: "text" };
 
-/** Events in order: [type, target, the document's transient activation, isTrusted]. */
+/** Events in order: [type, target, the document's transient activation, isTrusted, a held key's repeat]. */
 async function child(events, reply = async () => true) {
   const doc = { hasValidTransientUserGestureActivation: false };
   const actor = new NulavioLookalikeChild(doc, reply);
-  for (const [type, target, activated, trusted = true] of events) {
+  for (const [type, target, activated, trusted = true, repeat = false] of events) {
     doc.hasValidTransientUserGestureActivation = activated;
-    actor.handleEvent({ type, target, isTrusted: trusted });
+    actor.handleEvent({ type, target, isTrusted: trusted, repeat });
     await flush();
   }
   return { asked: actor.sent.length };
@@ -119,7 +119,7 @@ async function parent({ address = "https://paypa1.example/login", suspicious = t
 }
 
 const cases = {
-  // C1: a focus the page gives itself asks nothing; the person's click or key does.
+  // A focus the page gives itself asks nothing; the person's click or key does.
   child_script_focus: () => child([["focusin", password, false]]),
   child_focus_after_input: () => child([["focusin", password, true]]),
   child_script_focus_then_key: () => child([["focusin", password, false], ["keydown", password, true]]),
@@ -127,6 +127,8 @@ const cases = {
   // A click or a key is the person's input even when the page has used up the activation.
   child_key_without_activation: () => child([["focusin", password, false], ["keydown", password, false]]),
   child_click_without_activation: () => child([["mousedown", password, false]]),
+  // A held key's repeats are not a new press, in this document or the next.
+  child_held_key_repeats: () => child([["focusin", password, false], ["keydown", password, true, true, true], ["keydown", password, false, true, true]]),
   child_untrusted: () => child([["focusin", password, true, false], ["keydown", password, true, false]]),
   child_not_a_password_field: () => child([["focusin", text, true], ["keydown", text, true]]),
   child_other_event: () => child([["input", password, true], ["focus", password, true]]),
@@ -143,10 +145,10 @@ const cases = {
   // The parent.
   parent_warns: () => parent(),
   parent_nothing_to_warn: () => parent({ suspicious: false }),
-  // C8: the page changes its address inside the document while the check waits.
+  // The page changes its address inside the document while the check waits.
   parent_replace_state: () =>
     parent({ during: ({ actor }) => (actor.globalState.documentURI = new URI("https://paypa1.example/elsewhere#x")) }),
-  // C4: the tab moved to another page; this one is kept in the back-forward cache.
+  // The tab moved to another page; this one is kept in the back-forward cache.
   parent_tab_moved_on_cached: () =>
     parent({
       during: ({ actor, browser }) => {

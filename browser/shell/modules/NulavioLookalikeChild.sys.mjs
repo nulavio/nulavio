@@ -9,7 +9,8 @@
    Only the person's own input counts: a click or a key in the field, or the field getting the focus
    while the document has the engine's transient user activation (a click, a tap or a key the person
    pressed in it, a few seconds at most). A focus the page gives itself (script, autofocus) asks
-   nothing; the first click or key in that field then does. A click or a key needs no activation:
+   nothing; the first click or key in that field then does (a held key's repeats do not count). A
+   click or a key needs no activation:
    a trusted one is the person's input, and the page can use up the activation before it arrives.
    The engine sends these actors trusted events only; isTrusted is checked as well. */
 
@@ -28,6 +29,9 @@ export class NulavioLookalikeChild extends JSWindowActorChild {
     }
     if (event.type === "focusin" && !this.document.hasValidTransientUserGestureActivation) {
       return;
+    }
+    if (event.type === "keydown" && event.repeat) {
+      return; // a held key is one press: only its first keydown counts
     }
     this.#asked = true;
     // The parent answers false when it could not decide for this document (the tab no longer showed

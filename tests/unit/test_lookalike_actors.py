@@ -48,6 +48,9 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertEqual(self.asked("child_not_a_password_field"), 0)
         self.assertEqual(self.asked("child_other_event"), 0)
 
+    def test_a_held_keys_repeats_do_not_ask(self):
+        self.assertEqual(self.asked("child_held_key_repeats"), 0)
+
     def test_once_per_document_unless_the_parent_did_not_decide(self):
         self.assertEqual(self.asked("child_once_per_document"), 1)
         self.assertEqual(self.asked("child_asks_again_when_not_decided"), 2)
