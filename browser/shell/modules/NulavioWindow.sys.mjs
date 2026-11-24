@@ -1419,8 +1419,13 @@ class WindowUI {
    * #599: the band's row says what it is in the window's first frame. The row is built while the window loads (onBuild)
    * and #attach paints it only at the window's delayed start-up, which the engine runs after the first paint. So the
    * row is painted here as soon as it is built, from the state the last refresh read, and again at #attach. Only what
-   * the row itself says: the window's header, Immersive and the neutral row need the window's tabs (gBrowser) and its
-   * #attach state. A failure here leaves the row as built and never costs the window its band.
+   * the row itself says: the window's header and Immersive need the window's tabs (gBrowser) and its #attach state.
+   * A failure here leaves the row as built and never costs the window its band.
+   *
+   * #605: the neutral row (nv-neutral) too, where it needs neither: with Immersive not wanted, #neutral never reaches
+   * #immersiveBlock (gBrowser) and reads only the state the last refresh read. Otherwise the band was drawn in a row of
+   * its own in the window's first frames and moved into the navigation row at #attach. Not during the first run, whose
+   * stage (#header, at #attach) may turn Immersive on for the window: there the row is left as built, as before.
    */
   #paintBuilt(win, row) {
     if (!this.#read || !win || win.closed) {
@@ -1430,6 +1435,14 @@ class WindowUI {
       const said = this.#said(win);
       win.document.documentElement.toggleAttribute("nulavio-window-agent", Boolean(said.agent));
       this.#paintRow(win, row, said);
+    } catch (e) {
+      console.error(e);
+    }
+    try {
+      const bar = win.document.getElementById(AREA);
+      if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active) {
+        bar.toggleAttribute("nv-neutral", this.#neutral(win));
+      }
     } catch (e) {
       console.error(e);
     }

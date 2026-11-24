@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import settings_page
-from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix, first_frame
+from test_window_band import BAND_PROBE, assert_band, assert_layout_matrix, first_frame_own_row
 
 from nulavio_launcher import profile, temporary
 
@@ -250,8 +250,9 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
                     m.set_context("content")
 
             before = set(m.window_handles())
-            # #599: the band names the temporary profile and the private window in the window's first painted frame.
-            band = first_frame(self, m, {"private": True}, close=False)
+            # #599: the band names the temporary profile and the private window in the window's first painted frame,
+            # #605: in its own row from that frame on.
+            band = first_frame_own_row(self, m, {"private": True}, close=False)
             self.assertEqual((band["temporary"], band["private"]), ("true", "true"), band)
             self.assertTrue(any("apagado ao fechar" in seal for seal in band["seals"]), band)
             self.assertTrue(any("Janela privativa" in seal for seal in band["seals"]), band)
