@@ -92,9 +92,8 @@ async function mounted(path) {
  * when a volume is really mounted there (a record lying in the bare folder is not one), and "plain" only
  * when nothing of a container is beside it (a container without its key file is a protected profile that
  * cannot be read, and this throws). Whatever cannot be established throws: the caller does not start it.
- * Also what NulavioProfiles asks before the engine's own menus start a profile.
  */
-export async function lockState(path) {
+async function lockState(path) {
   const state = await profileLockState(path);
   if (state === PLAIN) {
     if (await IOUtils.exists(PathUtils.join(PathUtils.parent(path), `${PathUtils.filename(path)}.vault`))) {

@@ -24,7 +24,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   NulavioVault: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
-  lockState: "resource://builtin-addons/nulavio-shell/chooser/chooser.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -900,8 +899,8 @@ class NulavioProfilesClass {
    * SelectableProfileService.launchInstance, which starts the engine on the profile's folder. From the Shell's
    * start, Nulavio's lock check stands in front of it in this instance: a locked protected profile, or one whose
    * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
-   * starts as the engine meant. The state is read at each launch, as the chooser reads it (the mount table, not
-   * only the files). Of several addresses meant for a locked profile, the unlock page carries the first.
+   * starts as the engine meant. The state is read at each launch, from the profile's files, as switchTo() and
+   * routing read it. Of several addresses meant for a locked profile, the unlock page carries the first.
    */
   guardLaunches() {
     const service = this.#service;
@@ -927,7 +926,7 @@ class NulavioProfilesClass {
   async #launchChecked(engines, profile, urls) {
     let state = null;
     try {
-      state = await lazy.lockState(profile.path);
+      state = await lazy.profileLockState(profile.path);
     } catch (e) {
       console.error("Nulavio profiles: lock state", e); // not started: it may be a locked one
     }
