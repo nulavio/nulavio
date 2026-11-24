@@ -1,6 +1,7 @@
 # ADR 0019 — What a page renders as audio differs per site
 
 - **Status:** Accepted (2026-11-14) for the direction. The maintainer decided on [issue #79](https://github.com/nulavio/nulavio/issues/79) that day (decision 4 there) that the audio fingerprint is answered with an engine patch, with its cost measured. This ADR writes down how the patch works, what it leaves out and what it costs. **Proposed** for those details, until the pull request that carries this ADR is merged.
+- **Changed** (2026-11-20): the noise also reaches what a node inside an offline rendering hands to script (engine patch 0016, [#406](https://github.com/nulavio/nulavio/issues/406), decision 3), and decision 2 says what that means for a context that plays. **Accepted** (2026-11-23) for those two parts: the maintainer chose to leave a context that plays alone, the first of the three choices below ([#593](https://github.com/nulavio/nulavio/pull/593)).
 - **Related:** [ADR 0016](0016-one-screen-size-and-processor-count-for-pages.md) (the screen, in the same patch), [fingerprinting, measured](../research/fingerprinting.md), [hardening](../security/hardening.md).
 
 ## Context
@@ -27,22 +28,56 @@ Patch 0012 adds a target to the engine's fingerprinting protection, `AudioRandom
 
 ### 2. Sound that is played is not touched
 
-The patch changes only the buffer an offline rendering returns. What the person hears, and what a call sends, does not pass through it.
+Patch 0012 changes only the buffer an offline rendering returns, and patch 0016 only what a node hands to script inside an offline rendering. What the person hears, and what a call sends, does not pass through either.
+
+**A context that plays is left as it is, its readers included.** The same nodes hand samples to script there, and the choice is not the same for all of them:
+
+- **A script processor's input and a worklet's inputs** are what the page's script makes its own sound from. Noise on them would go on, through the script, to the speakers, a recording or a call. It would be about 80 dB below the sound and not heard, but it would be in what is sent, and a script that needs exact samples (an effect, an echo canceller) would not get them. That is what this decision rules out.
+- **An analyser's data and a compressor's reduction** are only read: nothing a script reads there goes back into the sound, so noise there could not be heard. It is left out all the same, because it would not close the reading: a probe would read the same sound through a worklet, which stays plain.
+
+So in a context that plays these readers give the plain values, the same on every site. Two things limit that reading, and neither is Nulavio's doing. With the engine's default settings, an ordinary web page's context starts to play only after the person has clicked or typed in the page, or on a site the person allowed to play sound by itself, or one that may use (or is using) the camera, the microphone or screen sharing. Settings change that: a global choice to let sites play sound, another blocking policy (`media.autoplay.blocking_policy`), and the engine's other exceptions (an extension's page, a video opened as the page). And what an analyser reads there depends on the moment the script asks. (Read in the engine's source, `dom/media/autoplay/AutoplayPolicy.cpp`. Not run. Tried on 2026-11-20 in the test session: after a real click, which the page saw, the context stayed suspended. The likely cause is that the session has no sound output, without which the engine does not start a context that plays.)
+
+The other choices, for whoever takes this up again:
+
+| Choice | What a person hears or sends | What it closes |
+|---|---|---|
+| Leave a playing context alone (this decision) | Unchanged | Nothing there: a probe that plays a sound and reads it gets the plain values |
+| Noise on the analyser and the reduction of a playing context too | Unchanged: they are only read | Those two readings. The same sound read through a worklet or a script processor stays plain, so a probe moves there |
+| Noise on every reader of a playing context | Changed wherever a script passes on what it read: 80 dB below the sound, in the speakers, in a recording, in a call | The reading, at the price of this decision |
+
+### 3. What a node inside an offline rendering hands to script gets the same noise
+
+Patch 0016 ([#406](https://github.com/nulavio/nulavio/issues/406)). While an offline rendering runs, a node inside the graph hands values to the page's script before the noise of decision 1. They are as steady as the returned buffer: the same on every site. The patch puts decision 1's noise (a factor between 0.9999 and 1.0001 for each value, from the site's key and the values themselves) in the five places where they leave the graph:
+
+| What the page reads | Where the noise goes |
+|---|---|
+| An `AnalyserNode`'s data: `getFloatTimeDomainData`, `getByteTimeDomainData`, `getFloatFrequencyData`, `getByteFrequencyData` | On the copy of the last `fftSize` samples that all four are made from. A read of fewer samples gets the start of that noisy copy, so what one sample reads does not depend on how many the page asked for |
+| A `ScriptProcessorNode`'s `inputBuffer`, in its `audioprocess` event | On that buffer, as the event is made |
+| An `AudioWorklet`'s `inputs`, in `process()` | On the arrays `process()` reads, as each block of 128 samples is copied into them, on the rendering thread |
+| An `AudioWorklet`'s `parameters`, for a parameter a node is connected to (its values carry that node's samples) | The same way, in the blocks where that node gave samples, on the whole value there, the schedule's part with it. The stored schedule is not changed, and a block in which no connected node gave samples (the schedule alone) reads as written |
+| A `DynamicsCompressorNode`'s `reduction`, a number the compressor makes of the samples | On the number, as it is read |
+
+- **A probe in use reads two of them.** CreepJS's audio module reads an analyser's float data and the compressor's `reduction` when an offline rendering completes, beside the returned buffer (its `src/audio/index.ts`, read on 2026-11-20; its page was not run against the build).
+- **On the copy script reads.** What the graph holds and passes to the next node is not changed, so the buffer the rendering returns gets decision 1's noise once, as before. A script that writes what it read into its own output passes that noise on.
+- **Keyed the same way.** Two sites read different values; one site reads the same values again for the same sound, in one page and in the next.
+- **The noise follows the values handed over.** The factors come from the values of that reading and from nothing else of it. The same values in the same extent get the same factors: a worklet's input and a parameter that carries the same samples read alike, block by block. The same samples in another extent get other factors: a worklet's block of 128, a script processor's buffer, an analyser's window of `fftSize` samples (a window of another `fftSize` is another extent; a shorter read of one window is not).
+- **Only in an offline context** (decision 2). The context takes the site's key once, when it is made, and only an offline one gets it; the readers ask the context, never the document.
+- **No new target and no new preference.** The readers follow `AudioRandomization`, which the build's set already has: on in the Strict category, off for a site the person exempts, off for the browser's own pages and for extensions.
+- **The two byte getters round to 256 steps**, which hides most of the noise, and most of what differs between two computers with it. They are made from the same samples as the other two.
 
 ## Consequences
 
-- **The change cannot be heard.** One part in ten thousand is about 80 dB below the sound itself. `test_fingerprinting` 11 holds the loudest sample within one part in a thousand of the plain one.
-- **A page that needs exact samples does not get them.** An audio editor that renders offline and compares with a reference bit for bit, or a test suite for audio code, sees the difference. The shield's switch for that site turns it off.
-- **Other ways to read audio are not covered.** The noise is put on the buffer an offline rendering returns, and only there:
-  - a node inside the offline graph hands its samples to script while the rendering runs (an `AnalyserNode`, a `ScriptProcessorNode`, an `AudioWorklet`), before the noise. Those values are as steady as the returned buffer's, so a probe built on them reads the same on every site. The probes this was measured against (PrivacyTests', FingerprintJS's) read the returned buffer;
-  - what a page reads from a context that plays is not changed (harder to make steady, since it depends on timing);
+- **The change cannot be heard.** One part in ten thousand is about 80 dB below the sound itself. `test_fingerprinting` 11 holds the loudest sample within one part in a thousand of the plain one. 11b does the same for the samples an analyser, a script processor and a worklet hand over (its inputs and its connected parameter) and for the compressor's reduction; it does not check the analyser's spectrum or its two byte getters that way.
+- **A page that needs exact samples does not get them.** An audio editor that renders offline and compares with a reference bit for bit, a page that analyses a sound offline through an analyser or a worklet, or a test suite for audio code, sees the difference. The shield's switch for that site turns it off.
+- **Other ways to read audio are not covered.** The noise is on what an offline rendering returns and on what its nodes hand to script, and only there:
+  - what a page reads from a context that plays is not changed (decision 2);
   - nor are the samples `decodeAudioData` returns for a file.
 
-  They are a known gap, written in [fingerprinting](../research/fingerprinting.md) and tracked in [#406](https://github.com/nulavio/nulavio/issues/406).
-- **A script written against this noise can get around it.** The noise for a buffer comes from the buffer's own samples, so a script that renders the same sound many times at slightly different lengths gets different noise on the same samples each time, and the average comes close to the plain value. The engine's canvas noise has the same limit. The noise is aimed at the probes in use, which render once and read once; it does not stop a tracker that targets Nulavio.
+  They are a known gap, written in [fingerprinting](../research/fingerprinting.md) and in R56 of the [residual risks](../security/residual-risks.md).
+- **A script written against this noise can get around it.** The noise for a buffer comes from the buffer's own samples, so a script that renders the same sound many times at slightly different lengths gets different noise on the same samples each time, and the average comes close to the plain value. Reading the same samples through readers of different extent does the same (a worklet's blocks, a script processor's buffers, an analyser's window), since each extent has its own noise. The engine's canvas noise has the same limit. The noise is aimed at the probes in use, which render once and read once; it does not stop a tracker that targets Nulavio.
 - **A pause at the end of a long rendering.** The key is made from every sample (so that one known sound does not give away the noise of another), and that pass runs on the page's main thread when the rendering is handed over. See Cost.
-- **A patch to carry.** It touches five engine files (`RFPTargets.inc`, `nsRFPService`, `AudioDestinationNode`, `nsScreen`, `nsMediaFeatures`) and has to be carried across engine updates. Mozilla tracks its own audio protection in its bug 1358149; if the engine gets one, this target goes.
-- **Distribution Firefox (Track A)** does not have the patch. The launcher seeds the same set, and that engine skips the names it does not know.
+- **Two patches to carry.** Patch 0012 touches five engine files (`RFPTargets.inc`, `nsRFPService`, `AudioDestinationNode`, `nsScreen`, `nsMediaFeatures`). Patch 0016 touches `nsRFPService` again and five classes of `dom/media/webaudio` (`AudioContext`, `AnalyserNode`, `ScriptProcessorNode`, `AudioWorkletNode`, `DynamicsCompressorNode`), nine files in all. Both have to be carried across engine updates. Mozilla tracks its own audio protection in its bug 1358149; if the engine gets one, this target goes.
+- **Distribution Firefox (Track A)** does not have either patch. The launcher seeds the same set, and that engine skips the names it does not know.
 
 ## Cost
 
@@ -54,8 +89,9 @@ The screen's part of the patch is one more comparison where the engine answers `
 
 - `test_privacytests`: PrivacyTests' own audio probe reads three different values on three sites.
 - `test_fingerprinting` 11, on the real engine: two sites read different sums and different digests of the whole buffer; one site reads the same again in the same page and in a later one; with the protections off both sites read the same; the loudest sample stays within one part in a thousand. Measured on 2026-11-16: the probe's sum was `35.749972093850374` plain, `35.74992819688123` on one site and `35.750030019269616` on another; the loudest sample was 0.113791 plain and 0.113782 with the noise.
+- `test_fingerprinting` 11b, on the engine built with patches 0001 to 0016 (2026-11-24): each of the five readings differs between two sites and from the plain values and reads the same again on one site (the analyser's byte getters only the last); the plain values come from the shield's exemption of each site; a short read (300 values) of each of the analyser's four getters is the start of a full read of the same window, on every site.
 
-Not checked: a second session (the key is the canvas noise's, whose change per session the engine's own tests hold); live contexts, which the patch does not touch.
+Not checked: a second session (the key is the canvas noise's, whose change per session the engine's own tests hold); a context that plays, which neither patch touches and which did not start in the test session (decision 2). That a playing context gets no key is held by the patch's shape (`test_fingerprinting_shell`, `AudioReadersTest`).
 
 ## Alternatives
 
