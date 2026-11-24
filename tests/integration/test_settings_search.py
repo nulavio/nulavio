@@ -75,6 +75,23 @@ return true;
 )
 
 
+OFF = "Desligado: nada é enviado até você pesquisar. Ligado, o que você digita vai para {host} enquanto você digita."
+TAKEN = (
+    "Outro mecanismo deste perfil tem este nome, então este provedor não pode ser adicionado."
+    " Remova aquele mecanismo da lista para adicioná-lo."
+)
+PROVIDER_ROWS = (
+    DOC
+    + """
+const rows = sel => [...d.querySelectorAll(sel)].map(row => ({
+  key: row.dataset.provider ?? row.dataset.choice, says: row.description,
+  buttons: [...row.querySelectorAll("moz-button")].map(b => b.dataset.action) }));
+return { add: rows("#nulavio-search-providers moz-box-item.nulavio-search-provider"),
+         choose: rows("#nulavio-search-choose moz-box-item.nulavio-search-choice") };
+"""
+)
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "the settings page needs the built-in Shell on the engine")
 class SettingsSearchTest(unittest.TestCase):
     def setUp(self):
@@ -100,13 +117,16 @@ class SettingsSearchTest(unittest.TestCase):
         now = self.open()
         before = self.state()
         can = [engine for engine in before["engines"] if engine["can"]]
-        # Every engine that offers suggestions has its switch, as the module says it is: off in a new profile.
+        # Every engine that offers suggestions has its switch, as the module says it is: off in a new profile. Off, it
+        # already names the host that would receive what is typed once it is switched on.
         self.assertEqual([row["id"] for row in now["engines"]], [engine["id"] for engine in can])
         self.assertEqual(before["optIn"], [])
         self.assertFalse(before["master"])
-        self.assertTrue(
-            all(not row["on"] and row["says"] == "Desligado: nada é enviado até você pesquisar." for row in now["engines"])
-        )
+        hosts = {engine["id"]: engine["host"] for engine in can}
+        self.assertTrue(all(hosts.values()), can)
+        for row in now["engines"]:
+            self.assertFalse(row["on"], row)
+            self.assertEqual(row["says"], OFF.format(host=hosts[row["id"]]))
         engine = can[0]
         row = next(r for r in now["engines"] if r["id"] == engine["id"])
         self.assertEqual(row["named"], f"Sugestões enquanto você digita: {engine['name']}")
@@ -136,6 +156,39 @@ class SettingsSearchTest(unittest.TestCase):
         refused = self.seen(lambda n: n["error"])
         self.assertEqual(refused["error"], "Este mecanismo não oferece sugestões.")
         self.assertFalse(next(r for r in refused["engines"] if r["id"] == other["id"])["on"])
+
+    def test_01b_an_engine_with_a_providers_name_is_named_by_its_own_host(self):
+        """An engine of the person's with a curated provider's name and other addresses: its switch names its own
+        suggestion host before it is switched on, and is allowed for that host; the provider's rows say that the name
+        is taken and offer neither "Adicionar" nor "Usar"."""
+        own = self.m.chrome(
+            S
+            + "return S.addCustom({name: 'Ecosia', url: 'https://other.example/?q=%s', suggestUrl: 'https://other.example/s?q=%s'});"
+        )
+        self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [own])
+        now = self.open()
+        row = self.seen(lambda n: any(r["id"] == own for r in n["engines"]))["engines"]
+        row = next(r for r in row if r["id"] == own)
+        self.assertEqual((row["name"], row["on"]), ("Ecosia", False))
+        self.assertEqual(row["says"], OFF.format(host="other.example"))
+        self.assertNotIn("ac.ecosia.org", " ".join(r["says"] for r in now["engines"]))
+        provider = self.m.chrome(PROVIDER_ROWS)
+        added = next(r for r in provider["add"] if r["key"] == "ecosia")
+        self.assertEqual((added["says"], added["buttons"]), (TAKEN, []))
+        chosen = next(r for r in provider["choose"] if r["key"] == "provider-ecosia")
+        self.assertTrue(chosen["says"].startswith(TAKEN), chosen)
+        self.assertNotIn("choose", chosen["buttons"])
+        # Switched on here: allowed for the host the row named.
+        self.assertTrue(self.m.chrome(TOGGLE, [own]))
+        on = self.seen(lambda n: next(r for r in n["engines"] if r["id"] == own)["on"] and n["said"])
+        self.assertEqual(self.state()["optIn"], [own])
+        self.assertEqual(
+            next(r for r in on["engines"] if r["id"] == own)["says"],
+            "Ligado: o que você digita é enviado a other.example enquanto você digita.",
+        )
+        self.m.chrome(TOGGLE, [own])
+        self.seen(lambda n: not next(r for r in n["engines"] if r["id"] == own)["on"])
+        self.assertEqual(self.state()["optIn"], [])
 
     def test_02_engines_nulavio_knows_how_to_add(self):
         now = self.open()
@@ -227,7 +280,12 @@ class SettingsSearchTest(unittest.TestCase):
         # With the suggestions box ticked: the message names the host that now receives what is typed, and the box is
         # clear again for the next choice (consent is for one provider at a time).
         self.m.chrome(CLICK, ["#nulavio-search-choose-suggest"])
-        self.seen(lambda n: n["suggest"] is True)
+        # Ticked, each row that can receive typed text names its suggestion host before anything is chosen.
+        named = "Sugestões marcadas: o que você digita vai para search.brave.com enquanto você digita."
+        ticked = self.seen(
+            lambda n: n["suggest"] is True and any(row["name"] == "Brave Search" and named in row["says"] for row in n["choices"])
+        )
+        self.assertNotIn("Sugestões marcadas", next(row for row in ticked["choices"] if row["name"] == "Mojeek")["says"])
         brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
         self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
         told = self.seen(lambda n: (n["chose"] or "").startswith("Brave Search") and n["suggest"] is False)

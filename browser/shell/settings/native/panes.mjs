@@ -1483,7 +1483,10 @@
           setup: searchSetup,
           get: () => Boolean(enginesNow().find(each => each.id === engine.id)?.suggestOptIn),
           set(value) {
-            searchBench.act(() => shell.NulavioSearch.setSuggestOptIn(engine.id, Boolean(value)), msg("doneSaved"));
+            // Allowed for the host the row names (read now: the setting is registered once, the list changes); the
+            // module refuses when that is no longer the engine's.
+            const shown = enginesNow().find(each => each.id === engine.id)?.suggestHost ?? "";
+            searchBench.act(() => shell.NulavioSearch.setSuggestOptIn(engine.id, Boolean(value), value ? shown : undefined), msg("doneSaved"));
           },
           disabled: () => searchBench.state.busy,
         });
@@ -1512,10 +1515,11 @@
             control: "moz-box-item",
             controlAttrs: {
               label: engine.name,
-              // What happens to what is typed, in words: where it goes when on, that nothing goes when off.
-              // Allowed here and off in the engine's own "Show search suggestions": nothing goes (#142).
+              // What happens to what is typed, in words: where it goes when on, that nothing goes when off and where it
+              // would go once switched on (the engine's own host, whatever its name). Allowed here and off in the
+              // engine's own "Show search suggestions": nothing goes (#142).
               description: !engine.suggestOptIn
-                ? msg("engineSuggestOff")
+                ? msg("engineSuggestOff", engine.suggestHost)
                 : search.state.value?.suggestions
                   ? msg("engineSuggestOn", engine.suggestHost)
                   : msg("engineSuggestPaused"),
@@ -1534,6 +1538,8 @@
           })),
       }),
     });
+    // A curated provider that is not in the profile while another engine has its name: it cannot be added.
+    const nameTaken = provider => enginesNow().some(engine => engine.name === provider.name && engine.provider !== provider.key);
     // The providers Nulavio offers by name and the person does not have yet: one click each.
     const missingProviders = () => {
       const have = new Set(enginesNow().map(engine => engine.provider).filter(Boolean));
@@ -1549,26 +1555,32 @@
           control: "moz-box-item",
           controlAttrs: {
             label: provider.name,
-            ...(provider.key === "kagi" ? { description: msg("addProviderKagiNote") } : {}),
+            ...(nameTaken(provider)
+              ? { description: msg("chooseNameTaken") }
+              : provider.key === "kagi"
+                ? { description: msg("addProviderKagiNote") }
+                : {}),
             class: "nulavio-search-provider",
             "data-provider": provider.key,
           },
-          options: [
-            {
-              key: `add-${provider.key}`,
-              control: "moz-button",
-              slot: "actions",
-              disabled: searchBench.state.busy,
-              // The name is in the button's accessible name only: beside the row's name at 200 % text, "Adicionar
-              // Startpage" left the name too little room and broke it inside the word (#486).
-              controlAttrs: {
-                label: msg("addProviderShort"),
-                "aria-label": msg("addProviderButton", provider.name),
-                "data-action": "add",
-                "data-provider": provider.key,
-              },
-            },
-          ],
+          options: nameTaken(provider)
+            ? []
+            : [
+                {
+                  key: `add-${provider.key}`,
+                  control: "moz-button",
+                  slot: "actions",
+                  disabled: searchBench.state.busy,
+                  // The name is in the button's accessible name only: beside the row's name at 200 % text, "Adicionar
+                  // Startpage" left the name too little room and broke it inside the word (#486).
+                  controlAttrs: {
+                    label: msg("addProviderShort"),
+                    "aria-label": msg("addProviderButton", provider.name),
+                    "data-action": "add",
+                    "data-provider": provider.key,
+                  },
+                },
+              ],
         }));
         const none = { key: "none", control: "moz-box-item", controlAttrs: { label: msg("addProvidersNone"), class: "nulavio-search-provider-none" } };
         return { ...config, options: rows.length ? rows : [none] };
@@ -1593,18 +1605,33 @@
       const engines = enginesNow();
       const curated = search.state.value?.providers ?? [];
       const ofProvider = new Map(engines.filter(engine => engine.provider && engine.provider !== "searxng").map(engine => [engine.provider, engine]));
-      const rows = curated.map(provider => ({
-        key: `provider-${provider.key}`,
-        name: provider.name,
-        provider: provider.key,
-        engine: ofProvider.get(provider.key) ?? null,
-        account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
-        suggests: provider.suggests,
-      }));
+      const rows = curated.map(provider => {
+        const engine = ofProvider.get(provider.key) ?? null;
+        return {
+          key: `provider-${provider.key}`,
+          name: provider.name,
+          provider: provider.key,
+          engine,
+          // Another engine holds the provider's name: the module refuses to add it until that engine is removed.
+          taken: !engine && nameTaken(provider),
+          account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
+          suggests: engine ? engine.canSuggest : provider.suggests,
+          // Where typed text would go: the engine's own host once the profile has it, the provider's until then.
+          suggestHost: engine ? engine.suggestHost : provider.suggestHost,
+        };
+      });
       const curatedKeys = new Set(curated.map(provider => provider.key));
       for (const engine of engines) {
         if (!curatedKeys.has(engine.provider)) {
-          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest });
+          rows.push({
+            key: `engine-${engine.id}`,
+            name: engine.name,
+            provider: null,
+            engine,
+            account: null,
+            suggests: engine.canSuggest,
+            suggestHost: engine.suggestHost,
+          });
         }
       }
       return rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -1615,8 +1642,18 @@
         words.push(msg(row.engine.isDefaultPrivate ? "chooseInUseBoth" : "chooseInUse"));
       } else if (row.engine?.isDefaultPrivate) {
         words.push(msg("chooseInUsePrivate"));
+      } else if (row.taken) {
+        words.push(msg("chooseNameTaken"));
       } else if (!row.engine) {
         words.push(msg("chooseNotAdded"));
+      }
+      // An engine that is not one of Nulavio's providers is named with its own host (it may share a provider's name).
+      if (!row.provider && row.engine?.host) {
+        words.push(msg("chooseEngineHost", row.engine.host));
+      }
+      // With the box ticked, the host that would receive what is typed, before anything is chosen.
+      if (chooseBench.state.suggest && row.suggests && row.suggestHost) {
+        words.push(msg("chooseSuggestTo", row.suggestHost));
       }
       if (row.account) {
         // #152: said before the provider is chosen, with the providers that need no account, by name.
@@ -1656,18 +1693,22 @@
                   },
                 ]
               : []),
-            {
-              key: `use-${row.key}`,
-              control: "moz-button",
-              slot: "actions",
-              disabled: chooseBench.state.busy,
-              controlAttrs: {
-                label: msg("chooseUse"),
-                "aria-label": msg("chooseUseNamed", row.name),
-                "data-action": "choose",
-                "data-choice": row.key,
-              },
-            },
+            ...(row.taken
+              ? []
+              : [
+                  {
+                    key: `use-${row.key}`,
+                    control: "moz-button",
+                    slot: "actions",
+                    disabled: chooseBench.state.busy,
+                    controlAttrs: {
+                      label: msg("chooseUse"),
+                      "aria-label": msg("chooseUseNamed", row.name),
+                      "data-action": "choose",
+                      "data-choice": row.key,
+                    },
+                  },
+                ]),
           ],
         })),
       }),
@@ -1685,17 +1726,19 @@
           return;
         }
         const target = row.provider ? { provider: row.provider } : { id: row.engine.id };
-        // The box speaks for this provider only when it can receive typed text at all.
+        // The box speaks for this provider only when it can receive typed text at all, and for the host the row named:
+        // the module refuses the choice when that is no longer the engine's.
         const suggest = row.suggests ? Boolean(chooseBench.state.suggest) : undefined;
+        const shown = suggest ? { suggestHost: row.suggestHost ?? "" } : {};
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
-        // chosen engine's own (an engine of the person's with a curated provider's name may send elsewhere).
+        // chosen engine's own, which the module checked against the one the row named.
         const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
         const said = id => {
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
         };
         chooseBench.act(
-          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
+          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest, ...shown }),
           said
         );
         // Consent is given for one provider at a time: the box is clear again for the next choice.

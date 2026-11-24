@@ -8,7 +8,9 @@ policies as external agents (no hidden privileges).
   OpenRouter, Mistral, and local servers such as Ollama, llama.cpp or LM
   Studio) or Anthropic's Messages API. Nulavio runs no model and no proxy.
 * The API key lives in the system keyring (Secret Service). It is read here,
-  in the Nulavio tools, and never enters the browser.
+  in the Nulavio tools, and never enters the browser. It belongs to the API kind
+  and the origin (scheme, host, port) it was saved with: a request to any other
+  carries no key, and saving another kind or origin without a key removes it.
 * Asking: the question goes to the provider; the page's text only when the
   user included that page in this message, and the result says so. Only
   profiles the user allowed may ask at all, and nothing is sent while the
@@ -26,6 +28,8 @@ from __future__ import annotations
 
 import contextlib
 import email.utils
+import fcntl
+import os
 import http.client
 import json
 import re
@@ -145,6 +149,21 @@ def _save(data: dict) -> None:
     paths.write_private_file(_config_path(), json.dumps(data, indent=2) + "\n")
 
 
+@contextlib.contextmanager
+def _writing():
+    """One change of the settings at a time: each read-change-write of assistant.json (and, in configure, the key
+    stored with it) finishes before the next one reads, so a late write never puts back the provider or the binding
+    another one replaced. Requests do not take it: they check the provider before and after the keyring read."""
+    paths.ensure_private_dir(_config_path().parent)
+    fd = os.open(_config_path().parent / "assistant.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
+
 def _keyring():
     from ..vault.cli import keyring  # the same Secret Service access as the Vault (NULAVIO_SECRET_TOOL in tests)
 
@@ -156,11 +175,33 @@ def recipient(provider: dict | None) -> str | None:
     return urllib.parse.urlsplit(provider["base_url"]).netloc if provider else None
 
 
+def _key_target(provider: dict | None) -> list | None:
+    """What a stored key is for: the API kind and the origin (scheme, host, port) the key goes to."""
+    if not provider:
+        return None
+    url = urllib.parse.urlsplit(provider["base_url"])
+    try:
+        port = url.port or (443 if url.scheme == "https" else 80)
+    except ValueError:  # an address saved before ports were checked: bound to its text, so no other matches it
+        port = url.netloc
+    return [provider["kind"], url.scheme, (url.hostname or "").lower(), port]
+
+
+def _key_bound(data: dict) -> list | None:
+    """The target the stored key was saved for. A configuration written before keys were bound has no record of it:
+    its key went to its provider until now, so it stays bound to that provider."""
+    return data["key_for"] if "key_for" in data else _key_target(data["provider"])
+
+
 def check_endpoint(raw: str) -> str:
     """An https:// base address, or http:// on this computer only (local models)."""
     url = urllib.parse.urlsplit(str(raw or "").strip())
     if url.scheme not in ("https", "http") or not url.hostname or url.username or url.password or url.query or url.fragment:
         raise AssistantError("bad-endpoint")
+    try:
+        url.port  # noqa: B018 - raises ValueError for a port that is not a number in range
+    except ValueError:
+        raise AssistantError("bad-endpoint") from None
     if url.scheme == "http" and url.hostname not in ("127.0.0.1", "localhost", "::1"):
         raise AssistantError("endpoint-needs-https")
     return urllib.parse.urlunsplit((url.scheme, url.netloc, url.path.rstrip("/"), "", ""))
@@ -173,7 +214,7 @@ def state(profile: str | None = None) -> dict:
     data = load()
     provider = data["provider"]
     has_key = False
-    if provider:
+    if provider and _key_bound(data) == _key_target(provider):
         try:
             found = _keyring().lookup(KEY_ATTRIBUTES)
             has_key = found is not None
@@ -202,52 +243,89 @@ def state(profile: str | None = None) -> dict:
 
 
 def configure(kind: str, base_url: str, model: str, label: str = "", key: str | None = None) -> dict:
-    """Set the provider; `key` replaces the stored key ("" removes it, None keeps it)."""
+    """Set the provider; `key` replaces the stored key ("" removes it, None keeps it).
+
+    A kept key stays only while the API kind and the origin stay the same: a key is never carried to another
+    recipient, so saving another kind or origin without a key removes the stored one."""
     if kind not in KINDS:
         raise AssistantError("bad-kind")
     model = str(model or "").strip()
     if not model or len(model) > 200 or any(c.isspace() for c in model):
         raise AssistantError("bad-model")
-    data = load()
-    data["provider"] = {"kind": kind, "base_url": check_endpoint(base_url), "model": model, "label": str(label)[:60]}
-    if key is not None:
-        ring = _keyring()
-        ring.clear(KEY_ATTRIBUTES)
+    with _writing():
+        data = load()
+        bound = _key_bound(data)
+        data["provider"] = {"kind": kind, "base_url": check_endpoint(base_url), "model": model, "label": str(label)[:60]}
+        target = _key_target(data["provider"])
+        dropped = key is None and bound is not None and bound != target
+        if key is None and not dropped:
+            data["key_for"] = target if bound is not None else None
+        else:
+            # Unbound first, so no moment on disk pairs a new key with the old target or the old key with the new one.
+            data["key_for"] = None
+            from ..vault.core import VaultError  # imported here, as in ai/cli.py
+
+            try:
+                _keyring().clear(KEY_ATTRIBUTES)
+            except VaultError:
+                if not dropped:
+                    raise
+                # No keyring to clear: no key is ever read for this target, since nothing is bound to it.
+        current = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
+        if not current or current.get("revoked"):
+            # Restricted until the user grants more, as for any new agent. A revoked agent stays revoked
+            # (its record is kept for the audit): saving the settings again is how the user starts over.
+            agent, _token = registry.add(AGENT_NAME, "nulavio-assistant", "restricted", disposable=True)
+            data["agent"] = agent["id"]
+        _save(data)
         if key:
-            ring.store("Nulavio Assistant API key", KEY_ATTRIBUTES, key.encode())
-    current = registry.load()["agents"].get(data["agent"]) if data["agent"] else None
-    if not current or current.get("revoked"):
-        # Restricted until the user grants more, as for any new agent. A revoked agent stays revoked
-        # (its record is kept for the audit): saving the settings again is how the user starts over.
-        agent, _token = registry.add(AGENT_NAME, "nulavio-assistant", "restricted", disposable=True)
-        data["agent"] = agent["id"]
-    _save(data)
+            _keyring().store("Nulavio Assistant API key", KEY_ATTRIBUTES, key.encode())
+            data["key_for"] = target
+            _save(data)
     return state()
 
 
 def allow_profile(profile: str, allowed: bool) -> dict:
     if not isinstance(profile, str) or not profile.startswith("/"):
         raise AssistantError("bad-profile")
-    data = load()
-    data["profiles"] = sorted({p for p in data["profiles"] if p != profile} | ({profile} if allowed else set()))
-    _save(data)
+    with _writing():
+        data = load()
+        data["profiles"] = sorted({p for p in data["profiles"] if p != profile} | ({profile} if allowed else set()))
+        _save(data)
     return state(profile)
 
 
 def forget() -> None:
     """Remove the provider and its key; the assistant's agent is revoked (its record stays for the audit)."""
-    data = load()
-    _keyring().clear(KEY_ATTRIBUTES)
-    if data["agent"] and data["agent"] in registry.load()["agents"]:
-        registry.revoke(data["agent"])
-    _save({"schema": SCHEMA, "provider": None, "agent": None, "profiles": []})
+    with _writing():
+        data = load()
+        _keyring().clear(KEY_ATTRIBUTES)
+        if data["agent"] and data["agent"] in registry.load()["agents"]:
+            registry.revoke(data["agent"])
+        _save({"schema": SCHEMA, "provider": None, "agent": None, "profiles": [], "key_for": None})
 
 
 # -- talking to the provider ------------------------------------------------------------------
 
 
-def _key() -> str | None:
+def _key_for(provider: dict) -> str | None:
+    """The stored key for a request to `provider`, read when the request is built.
+
+    Refused when Settings no longer name that provider (a run that started before a change stops here, so a key saved
+    for the new provider never reaches the old one). None when the key was saved for another kind or origin."""
+
+    def usable(data: dict) -> bool:
+        if not _same_provider(data["provider"], provider):
+            raise AssistantError("assistant-settings-changed")
+        return _key_bound(data) == _key_target(provider)
+
+    if not usable(load()):
+        return None
     found = _keyring().lookup(KEY_ATTRIBUTES)
+    # Checked again after the read: a save that came in between may have stored another provider's key. configure()
+    # saves the new provider before it stores a new key, so a key read here is still this provider's if this holds.
+    if not usable(load()):
+        return None
     return bytes(found).decode() if found else None
 
 
@@ -347,7 +425,7 @@ def _tool_specs(kind: str) -> list[dict]:
 
 def _request(provider: dict, messages: list[dict], tools: bool, stream: bool = False) -> tuple[str, dict, dict]:
     """(url, body, headers) of one model turn."""
-    key = _key()
+    key = _key_for(provider)
     if provider["kind"] == "anthropic":
         headers = {"anthropic-version": "2023-06-01", **({"x-api-key": key} if key else {})}
         body = {"model": provider["model"], "max_tokens": ANTHROPIC_MAX_TOKENS, "system": SYSTEM, "messages": messages}
@@ -574,6 +652,16 @@ def _blocked(data: dict) -> str | None:
     return None
 
 
+def _same_provider(current: dict | None, provider: dict) -> bool:
+    """Whether Settings still name the provider a request or a run was started for (its kind, address and model)."""
+    return bool(current) and all(current.get(field) == provider.get(field) for field in ("kind", "base_url", "model"))
+
+
+def _settings_changed(provider: dict) -> str | None:
+    """Why a running task may not send its next model turn to `provider`: Settings now name another one."""
+    return None if _same_provider(load()["provider"], provider) else "assistant-settings-changed"
+
+
 def _require_ready(profile: str) -> dict:
     data = load()
     if not data["provider"]:
@@ -787,11 +875,18 @@ def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge 
         out.event("start", recipient=recipient(provider), model=provider["model"], chars=None)  # known afterwards
     try:
         for turn in range(MAX_STEPS):
-            reason = _blocked(data) if turn else None
-            if reason:  # stopped, paused or revoked during the run: no further model turn
+            reason = (_blocked(data) or _settings_changed(provider)) if turn else None
+            if reason:  # stopped, paused, revoked or the provider changed during the run: no further model turn
                 return {"answer": "", "steps": steps, "stopped": reason}
             on_send = (lambda turn=turn: out.sending(turn)) if out is not None else None
-            text, calls, truncated = _complete(provider, messages, tools=True, on_send=on_send)
+            try:
+                text, calls, truncated = _complete(provider, messages, tools=True, on_send=on_send)
+            except AssistantError as exc:
+                # The provider changed between the check above and the request (refused before anything was sent): the
+                # task stops as it does above, with the steps it already took.
+                if turn and exc.code == "assistant-settings-changed":
+                    return {"answer": "", "steps": steps, "stopped": exc.code}
+                raise
             if out is not None:
                 out.answered += 1
             if not calls:

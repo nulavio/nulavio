@@ -573,7 +573,9 @@ class SearchPrivacyTest(unittest.TestCase):
             self.assertFalse(listed["suggestOptIn"], "choosing a provider is not consent to send it typed text")
             # One the profile has, for normal windows only, with its suggestions: private windows keep theirs.
             mojeek = self.search("return (await S.list()).find(e => e.alias === '@mojeek').id;")
-            brave = self.search("return S.choose({provider: 'brave', privateToo: false, suggest: true});")
+            brave = self.search(
+                "return S.choose({provider: 'brave', privateToo: false, suggest: true, suggestHost: 'search.brave.com'});"
+            )
             now = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate, e.suggestOptIn]);")
             self.assertIn([brave, True, False, True], now)
             self.assertIn([qwant, False, True, False], now)
@@ -602,9 +604,10 @@ class SearchPrivacyTest(unittest.TestCase):
             seen = self.m.chrome(NET_STOP)
         self.assert_nothing_about(seen, "\u0000", hosts=(*SEARCH_HOSTS, "searx.example.org"))
 
-    def test_14b_the_host_that_gets_typed_text_is_the_chosen_engines_own(self):
-        """#151: an engine of the person's that has a curated provider's name is the one chosen, and the host named for
-        its suggestions is that engine's, not the curated provider's."""
+    def test_14b_a_curated_provider_is_known_by_its_addresses_not_its_name(self):
+        """An engine of the person's that has a curated provider's name but other addresses is its own engine: never
+        listed, added or chosen as that provider. Consent to suggestions is given for the host that was shown, and a
+        choice that names another host changes nothing."""
         self.require_nulavio()
         before = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
         normal = next(e[0] for e in before if e[1])
@@ -614,10 +617,37 @@ class SearchPrivacyTest(unittest.TestCase):
         own = self.search(
             "return S.addCustom({name: 'Ecosia', url: 'https://other.example/?q=%s', suggestUrl: 'https://other.example/s?q=%s'});"
         )
-        self.addCleanup(self.search, "await S.remove(args[0]);", own)
-        chosen = self.search("return S.choose({provider: 'ecosia', privateToo: false});")
-        self.assertEqual(chosen, own, "the profile's own engine of that name was the one chosen")
-        self.assertEqual(self.search("return S.suggestHostOf(args[0]);", chosen), "other.example")
+        removed = []
+        self.addCleanup(lambda: removed or self.search("await S.remove(args[0]);", own))
+        listed = self.search("return (await S.list()).find(e => e.id === args[0]);", own)
+        self.assertIsNone(listed["provider"], "an engine with a curated provider's name and other addresses is that provider")
+        self.assertEqual(listed["suggestHost"], "other.example")
+        for body in ("return S.choose({provider: 'ecosia', privateToo: false});", "return S.addProvider('ecosia');"):
+            with self.subTest(body=body):
+                self.assertEqual(self.search_error(body), "provider-name-taken")
+        # Suggestions are allowed only for the host the person was shown, and only when one was shown.
+        for body, code in (
+            ("return S.choose({id: args[0], suggest: true, suggestHost: 'ac.ecosia.org'});", "suggest-host-changed"),
+            ("return S.choose({id: args[0], suggest: true});", "invalid-search-choice"),
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(self.search_error(body, own), code)
+        now = self.search("return (await S.list()).map(e => [e.id, e.isDefault, e.isDefaultPrivate]);")
+        self.assertEqual([e[0] for e in now if e[1]], [normal], "a refused choice changed the default")
+        self.assertEqual([e[0] for e in now if e[2]], [private], "a refused choice changed the private default")
+        self.assertNotIn(own, self.pref("nulavio.search.suggest.optin", ""))
+        chosen = self.search("return S.choose({id: args[0], suggest: true, suggestHost: 'other.example'});", own)
+        self.assertEqual(chosen, own)
+        self.assertIn(own, self.pref("nulavio.search.suggest.optin", ""))
+        self.search("await S.setSuggestOptIn(args[0], false);", own)
+        self.search(restore, normal, private)
+        # Once that engine is gone, the provider is added with its own addresses and listed as that provider.
+        self.search("await S.remove(args[0]);", own)
+        removed.append(own)
+        ecosia = self.search("return S.addProvider('ecosia');")
+        self.addCleanup(self.search, "await S.remove(args[0]);", ecosia)
+        listed = self.search("return (await S.list()).find(e => e.id === args[0]);", ecosia)
+        self.assertEqual((listed["provider"], listed["suggestHost"]), ("ecosia", "ac.ecosia.org"))
 
     def test_15_signed_in_is_read_from_the_session_cookies_name_and_survives_a_restart(self):
         """#151: whether the profile is signed in to a provider with accounts is the presence of its session cookie
@@ -759,6 +789,27 @@ class SearchPrivacyTest(unittest.TestCase):
         engine = self.search("return S.addOpenSearch({url: args[0]});", url)
         self.addCleanup(self.search, "await S.remove(args[0]);", engine)
         self.assertIn("Fixture OS limpo", self.search(names))
+
+    def test_19b_an_opensearch_description_with_a_curated_providers_name_is_its_own_engine(self):
+        """A description that declares a curated provider's name: the engine is listed as its own, with its own
+        suggestion host; the provider is not added under that name; and suggestions are allowed only for the host shown."""
+        self.require_nulavio()
+        url = self.server.url("/opensearch.xml?name=Ecosia")
+        engine = self.search("return S.addOpenSearch({url: args[0]});", url)
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        listed = self.search("return (await S.list()).find(e => e.id === args[0]);", engine)
+        self.assertEqual((listed["name"], listed["provider"], listed["suggestHost"]), ("Ecosia", None, "127.0.0.1"))
+        for body in ("return S.addProvider('ecosia');", "return S.choose({provider: 'ecosia', privateToo: false});"):
+            with self.subTest(body=body):
+                self.assertEqual(self.search_error(body), "provider-name-taken")
+        self.assertEqual(self.search("return (await S.list()).filter(e => e.name === 'Ecosia').length;"), 1)
+        # The switch in Settings passes the host it named: the provider's host is refused, and nothing changes.
+        refused = self.search_error("return S.setSuggestOptIn(args[0], true, 'ac.ecosia.org');", engine)
+        self.assertEqual(refused, "suggest-host-changed")
+        self.assertNotIn(engine, self.pref("nulavio.search.suggest.optin", ""))
+        self.search("await S.setSuggestOptIn(args[0], true, '127.0.0.1');", engine)
+        self.addCleanup(self.search, "await S.setSuggestOptIn(args[0], false);", engine)
+        self.assertIn(engine, self.pref("nulavio.search.suggest.optin", ""))
 
 
 VAULT = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs')"
