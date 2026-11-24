@@ -790,9 +790,14 @@ class PasswordsTest(unittest.TestCase):
 
     def test_lookalike_check_reads_nothing_from_pages(self):
         child = module_text("NulavioLookalikeChild.sys.mjs")
-        for forbidden in (".value", "innerText", "textContent", "location", "document.", "form", "fetch(", "keydown"):
-            self.assertNotIn(forbidden, child.rsplit("*/", 1)[1])  # code, after the comments
-        self.assertEqual(child.count("sendAsyncMessage("), 1)
+        code = re.sub(r"//.*", "", child.rsplit("*/", 1)[1])  # without the comments
+        page_reads = (".value", "innerText", "textContent", "location", "form", "fetch(", ".key", ".code", ".which", ".data")
+        for forbidden in (*page_reads, "clipboard"):
+            self.assertNotIn(forbidden, code)
+        # Of the document, only whether the person has just interacted with it (the engine's transient user activation).
+        self.assertEqual(re.findall(r"document\b\.?\w*", code), ["document.hasValidTransientUserGestureActivation"])
+        self.assertEqual(code.count("sendQuery("), 1)
+        self.assertNotIn("sendAsyncMessage(", code)
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
         self.assertNotIn("message.data", parent)

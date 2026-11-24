@@ -112,6 +112,71 @@ class PasswordsTest(unittest.TestCase):
         )
         self.assertEqual(got, cases)
 
+    def on_warning(self) -> bool:
+        return self.m.current_url().startswith(self.base + "passwords/lookalike.html")
+
+    def script_focus(self, origin: str) -> None:
+        """The look-alike page focuses its own password field, with no input from the person."""
+        self.m.navigate(origin + "/login")
+        focused = self.m.execute("document.getElementById('password').focus(); return document.activeElement.id;")
+        self.assertEqual(focused, "password")
+        time.sleep(1.5)  # as long as focus_password gives the check; nothing may happen in it
+        self.assertFalse(self.on_warning(), "checked on a focus the page gave itself")
+
+    def slow_check(self, ms: int) -> None:
+        """Until the test ends, each check waits `ms` first, as the first read of the saved logins can."""
+        chrome_async(
+            self.m,
+            f"const p = {PASSWORDS}.NulavioPasswords; const real = Object.getPrototypeOf(p).checkLogin;"
+            "const { setTimeout } = ChromeUtils.importESModule('resource://gre/modules/Timer.sys.mjs');"
+            "p.checkLogin = async function (url) {"
+            " await new Promise(r => setTimeout(r, args[0])); return real.call(this, url); };"
+            "return true;",
+            [ms],
+        )
+        self.addCleanup(chrome_async, self.m, f"delete {PASSWORDS}.NulavioPasswords.checkLogin; return true;")
+
+    def test_01b_a_focus_the_page_gives_itself_is_not_checked_the_persons_key_is(self):
+        self.script_focus(self.fake)
+        self.m.send("WebDriver:ElementSendKeys", {"id": self.m.find_element("#password"), "text": "a"})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+
+    def test_01c_a_click_in_a_field_the_page_focused_is_checked(self):
+        self.script_focus(self.fake)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+
+    def test_01d_a_change_of_address_inside_the_page_does_not_cancel_the_warning(self):
+        self.slow_check(1500)
+        self.m.navigate(self.fake + "/login")
+        self.m.execute(
+            "document.getElementById('password').addEventListener('focus', () =>"
+            " setTimeout(() => history.replaceState(null, '', '/login?moved#elsewhere'), 100));"
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        self.assertIn(self.fake + "/login", self.m.execute("return document.getElementById('address').textContent;"))
+
+    def test_01e_a_page_the_tab_left_during_the_check_is_not_replaced_and_is_checked_on_return(self):
+        self.slow_check(2000)
+        self.m.navigate(self.fake + "/login")
+        self.m.execute(
+            "window.addEventListener('pageshow', e => { document.documentElement.dataset.restored = String(e.persisted); });"
+        )
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.m.navigate(self.real + "/login")  # while the check of the look-alike waits
+        time.sleep(3)  # past the end of that check
+        self.assertTrue(self.m.current_url().startswith(self.real), f"the warning replaced another page: {self.m.current_url()}")
+        chrome_async(self.m, f"delete {PASSWORDS}.NulavioPasswords.checkLogin; return true;")
+        self.m.send("WebDriver:Back")
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10), self.m.current_url())
+        # Whether the page came back from the back-forward cache (the same document, told it was not decided)
+        # or was loaded again: either way it is checked. Printed for the record of the run.
+        restored = self.m.execute("return document.documentElement.dataset.restored ?? 'loaded again';")
+        print(f"test_01e: back-forward cache restored the page: {restored}", file=sys.stderr)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"not checked after coming back: {self.m.current_url()}")
+
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)
         self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), url)
