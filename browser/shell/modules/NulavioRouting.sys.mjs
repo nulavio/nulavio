@@ -319,7 +319,7 @@ class NulavioRoutingClass {
   /**
    * Keep a held-back link for one of the pages that show one (ask, blocked, unlock) and return the
    * id the page is opened with. The page reads the link, the rule, the profile and the reason back
-   * with held(); nothing that decides what it offers comes from its own address, which any
+   * with held(); no link, rule or profile it offers comes from its own address, which any
    * installed extension can open with parameters of its choosing. Kept in memory for this run of
    * the browser, the newest HELD_MAX.
    */

@@ -52,8 +52,8 @@ if (url && HOST.test(similar) && site) {
 } else {
   // Opened without a site to compare (a hand-made or damaged address, or one the module finds nothing
   // for): say so, and leave only a way out. No warning, no empty address and no button that would do
-  // nothing (audit 2026-11 S-01).
-  document.title = t("lookalikeInvalidHeadline");
+  // nothing (audit 2026-11 S-01). The tab keeps the page's one title: another extension can read a tab's
+  // title, and a different one here would tell it whether this profile keeps a login the address imitates.
   document.getElementById("headline").textContent = t("lookalikeInvalidHeadline");
   const callout = document.querySelector(".callout");
   callout.classList.replace("callout--warning", "callout--info");

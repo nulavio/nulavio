@@ -305,9 +305,6 @@ class Vault {
       // The page gets only an id for the link: it reads the link and the profile from the routing module.
       params.set("h", lazy.NulavioRouting.hold("vault/unlock.html", { u: url, p: Number(profileId), src: source }));
     }
-    if (source) {
-      params.set("src", source);
-    }
     win.openTrustedLinkIn(`${policy.getURL("vault/unlock.html")}?${params}`, "tab");
   }
 }

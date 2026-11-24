@@ -628,6 +628,7 @@ class RoutingTest(unittest.TestCase):
         opener = vault[vault.index("async openUnlockPage(") :]
         self.assertIn('params.set("h", lazy.NulavioRouting.hold("vault/unlock.html"', opener)
         self.assertNotIn('params.set("u"', opener)
+        self.assertNotIn('params.set("src"', opener)  # the source is in the held link; the page reads no `src`
 
     def test_rules_are_never_inferred(self):
         # Only the settings page, the toolbar selector and the ask page create or change rules.
@@ -826,6 +827,8 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url"])
         self.assertIn("browser.nulavioPasswords.check(url.href)", page)
         self.assertIn("browser.nulavioPasswords.dismiss(url.href)", page)
+        # One title whether or not the module finds a pair: another extension reads a tab's title.
+        self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
         self.assertEqual((params["check"], params["dismiss"]), (["url"], ["url"]))

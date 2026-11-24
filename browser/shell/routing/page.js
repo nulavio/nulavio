@@ -6,7 +6,7 @@
    The page's address carries only the id the routing module gave the held
    link (`h`). The link, the rule, the profile and the reason are read back
    from the module: another extension can open this page with parameters of
-   its own, and nothing in the address decides what the page offers. */
+   its own, and no link, rule or profile the page offers comes from it. */
 
 import { localize, t } from "../lib/i18n.js";
 import { wireSettingsLinks } from "../lib/settings.js";
