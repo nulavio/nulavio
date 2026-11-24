@@ -171,7 +171,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
         self.assertEqual(apis["nulavioGuard"]["parent"]["events"], ["startup"])  # independent of the event page
         self.assertEqual(apis["nulavioPrivacy"]["parent"]["events"], ["startup"])  # defaults before the first page
-        self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
+        self.assertEqual(apis["nulavioProfiles"]["parent"]["events"], ["startup"])  # the engine's profile menus (U-T23)
         self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
