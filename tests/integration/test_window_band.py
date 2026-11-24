@@ -617,8 +617,14 @@ class WindowBandTest(unittest.TestCase):
         out.mkdir(parents=True, exist_ok=True)
         (out / "first-frame-trust-page.json").write_text(json.dumps({"first": first, "after": after}, indent=2) + "\n")
         print(f"#607 first frame {first} after start-up {after}", file=sys.stderr)
-        self.assertTrue(after["wide"] and after["vertical"] and after["named"] and not after["neutral"], after)
-        self.assertEqual(first, after, "the band's row moved after the first frame")
+        self.assertTrue(after["wide"] and after["vertical"] and after["named"], after)
+        # nv-named gives the row back its own place whether or not nv-neutral is set; the flags may differ in the first
+        # frame (the header is read at #attach), where the row is laid out is what must not change.
+        self.assertEqual(
+            (first["band"], first["nav"]),
+            (after["band"], after["nav"]),
+            f"the band's row moved after the first frame: {first} then {after}",
+        )
 
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
