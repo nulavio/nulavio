@@ -1440,11 +1440,40 @@ class WindowUI {
     }
     try {
       const bar = win.document.getElementById(AREA);
-      if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active) {
+      if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active && !this.#startsOnTrustPage(win)) {
         bar.toggleAttribute("nv-neutral", this.#neutral(win));
       }
     } catch (e) {
       console.error(e);
+    }
+  }
+
+  /**
+   * #607: the window's first tab is known, at build time, to be a Shell page that asks for trust: a tab torn off
+   * into its own window (arguments[0] is the adopted tab) or a window opened on that page's address (a string). Then
+   * #header gives the band its full row ([nv-named]) at #attach, so the row is not built neutral only to move.
+   * Residual, not covered: a restored window (SessionStore puts its tabs back after the first paint, with no signal at
+   * build time) and a page that only becomes one after its first load; those still move once, as before #605.
+   */
+  #startsOnTrustPage(win) {
+    try {
+      // The engine reads the tab to adopt out of arguments[0] early in its start-up and nulls it there, keeping it in
+      // gBrowserInit._tabToAdopt (browser-init.js getTabToAdopt); a window opened on an address gets that address as
+      // arguments[0] (a string or an nsISupportsString), an nsIArray when a tab is handed over.
+      let first = win.gBrowserInit?._tabToAdopt || win.arguments?.[0];
+      if (first && typeof first === "object" && !first.localName && !first.data) {
+        first = first.QueryInterface(Ci.nsIArray).queryElementAt(0, Ci.nsISupports);
+      }
+      const spec = typeof first === "string" ? first : first?.data ?? first?.linkedBrowser?.currentURI?.spec;
+      if (!spec) {
+        return false;
+      }
+      const url = new URL(spec);
+      const key = SURFACES[url.pathname];
+      return Boolean(key) && url.protocol === "moz-extension:" && url.host === new URL(policy().getURL("")).host
+        && !PLAIN_SURFACES.has(key);
+    } catch {
+      return false;
     }
   }
 
