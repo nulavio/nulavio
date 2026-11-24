@@ -671,9 +671,11 @@ class Bridge:
     def _profile_site(agent: dict, url: str | None) -> str | None:
         """The site a question about acting in a profile names: the tab's web address when it is one of the agent's
         sites, otherwise none (the tool's own checks refuse what is outside them)."""
-        if not url or urllib.parse.urlsplit(url).scheme not in ("http", "https"):
-            return None
-        return url if policy.in_scope(agent, policy.host_of(url)) else None
+        try:
+            web = bool(url) and urllib.parse.urlsplit(url).scheme in ("http", "https")
+        except ValueError:
+            web = False
+        return url if web and policy.in_scope(agent, policy.host_of(url)) else None
 
     def _enter_profile(self, label: str, tab: str) -> None:
         """A call acts in one of the user's profiles, with the user's signed-in sessions there. What lets it is asked of
