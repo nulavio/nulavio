@@ -227,7 +227,12 @@ class SettingsSearchTest(unittest.TestCase):
         # With the suggestions box ticked: the message names the host that now receives what is typed, and the box is
         # clear again for the next choice (consent is for one provider at a time).
         self.m.chrome(CLICK, ["#nulavio-search-choose-suggest"])
-        self.seen(lambda n: n["suggest"] is True)
+        # Ticked, each row that can receive typed text names its suggestion host before anything is chosen.
+        named = "Sugestões marcadas: o que você digita vai para search.brave.com enquanto você digita."
+        ticked = self.seen(
+            lambda n: n["suggest"] is True and any(row["name"] == "Brave Search" and named in row["says"] for row in n["choices"])
+        )
+        self.assertNotIn("Sugestões marcadas", next(row for row in ticked["choices"] if row["name"] == "Mojeek")["says"])
         brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
         self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
         told = self.seen(lambda n: (n["chose"] or "").startswith("Brave Search") and n["suggest"] is False)
