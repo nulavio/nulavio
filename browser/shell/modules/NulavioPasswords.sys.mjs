@@ -312,7 +312,8 @@ class Passwords {
     }
   }
 
-  /** Watch password fields in web pages (top documents only), through the engine's window actors. */
+  /** Watch password fields in web pages (top documents only), through the engine's window actors. The
+     child asks only after the person's own input (NulavioLookalikeChild.sys.mjs says which). */
   registerLookalikeCheck() {
     if (this.registered) {
       return;
@@ -321,7 +322,10 @@ class Passwords {
     const base = "resource://builtin-addons/nulavio-shell/modules/";
     ChromeUtils.registerWindowActor("NulavioLookalike", {
       parent: { esModuleURI: `${base}NulavioLookalikeParent.sys.mjs` },
-      child: { esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`, events: { focusin: { capture: true } } },
+      child: {
+        esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`,
+        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true } },
+      },
       matches: ["http://*/*", "https://*/*"],
       allFrames: false,
       messageManagerGroups: ["browsers"],
