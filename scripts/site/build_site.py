@@ -30,6 +30,9 @@ are generated from packaging/whats-new/ for the versions up to the published one
 (scripts/site/whats_new_pages.py); the download pages link to the published version's page
 when it has one (the release refuses a version without its record).
 
+The fingerprinting comparison (engenharia/impressao-digital/, en/engineering/fingerprinting/) is
+generated from tests/fixtures/privacytests/ by scripts/site/privacytests_pages.py (#437).
+
 The download pages (baixar/, en/download/) describe a published release:
 {{release_version}}, {{key_fpr}}, {{repo_file}} and {{key_url}} come from
 packaging/release.json. Until it names a version and a key fingerprint and
@@ -71,6 +74,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import privacytests_pages
 import whats_new_pages
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -537,8 +541,14 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
             path.write_text(text, encoding="utf-8")
+        # The fingerprinting probes side by side (#437), from tests/fixtures/privacytests/.
+        try:
+            comparison = privacytests_pages.pages(src, {"pt-BR": values["date_pt"], "en-US": values["date_en"]})
+        except (privacytests_pages.ComparisonError, KeyError, ValueError) as error:
+            raise BuildError(f"fingerprinting comparison: {error}") from None
+        generated.update(comparison)
         for page, text in generated.items():
-            locale = "pt-BR" if page.startswith(whats_new_pages.BASE["pt-BR"]) else "en-US"
+            locale = "pt-BR" if page.startswith((whats_new_pages.BASE["pt-BR"], privacytests_pages.BASE["pt-BR"])) else "en-US"
             (out / page).parent.mkdir(parents=True, exist_ok=True)
             (out / page).write_text(stamp_page(text, values, manifest, locale, page), encoding="utf-8")
             pages[page] = locale
