@@ -35,13 +35,14 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Nulavio fixes**:
 
-- AI Bridge, local network, continued (#243, #560):
+- AI Bridge, local network, continued (#243, #560, #584, #589, #614):
   - In your own profiles opened for an agent, the engine's Local Network Access now refuses a public page's requests to local addresses with no prompt, a pop-up's included. This holds for the agent's run only, and none of these settings stays in the profile.
   - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
   - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
   - A page loaded through a proxy is not checked this way; R29 lists what else is not.
   - In your profiles opened for an agent, a site you allowed yourself to reach this computer or the local network no longer keeps that permission for the agent's run: engine patch 0014 refuses its pages' requests to local addresses there too, before they are sent. The permission stays in the profile, for the windows you browse (#570).
   - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address (for https on the local network it refuses only after the TLS handshake), and the tab shows a blocked page; what the browser itself opens there is checked the same way, and a captive-portal login tab is not (R29). A page loaded through a proxy is not checked this way either (R29).
+  - What is left of #243 is accepted as residual risk for 1.0 (R29, #614): pages loaded through a proxy; requests with no tab (shared workers, beacons, keepalive fetches) and WebRTC; the pages you browse; and, in an engine an agent drives, a captive-portal tab, which keeps the engine's own grant. The first three have After 1.0 issues (#609, #610, #611).
   - Nothing to do: it comes with the update.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19

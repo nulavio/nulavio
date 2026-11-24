@@ -1,18 +1,34 @@
 {
   "version": "160.0.1-0.3",
-  "date": "2026-11-19",
+  "date": "2026-11-25",
   "channel": "alpha",
   "firefox": "160.0.1",
   "pt-BR": {
-    "summary": "O painel lateral pode abrir do outro lado das abas, em Aparência.",
+    "summary": "O painel lateral pode abrir do outro lado das abas, o motor que um agente de IA usa recusa mais páginas locais, o ruído do áudio chega a mais leituras e a faixa de uma janela nova diz o perfil e o tipo já no primeiro quadro.",
     "new": [
-      "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição. No Imersivo ele sai pela própria borda e volta por ela, como a lista de abas. Vem desligado."
+      "Painel lateral do outro lado das abas, em Configurações, na seção Aparência: o assistente, os favoritos e o histórico abrem do lado da página oposto à barra lateral, em qualquer disposição. No Imersivo ele sai pela própria borda e volta por ela, como a lista de abas. Vem desligado.",
+      "Num motor aberto para um agente de IA, uma página do seu computador ou da rede local que o agente abre, ou cujo endereço você digita na janela desse motor, é recusada antes de o pedido sair (em https na rede local, depois do aperto de mão TLS), a menos que o agente possa alcançar o lugar.",
+      "Num perfil seu aberto para um agente de IA, um site que você liberou para a rede local perde essa permissão durante a execução. Ela continua salva, e as janelas em que você navega não mudam.",
+      "O ruído por site no áudio gerado também chega ao que um nó lê dentro de uma renderização offline (analisador, processador de script, worklet e compressor). O som que toca não muda.",
+      "O comando nulavio-doctor avisa quando o motor não é o do Nulavio e diz que o Bridge o recusará."
+    ],
+    "fixed": [
+      "A faixa de uma janela nova diz o perfil e o tipo da janela já no primeiro quadro e, numa janela comum larga com as abas na lateral, já está na linha de navegação nesse quadro.",
+      "Com o painel lateral aberto ao lado da página numa janela sem a barra de abas e a lateral, o painel tem a margem da moldura na borda da janela e um só espaço até a página."
     ]
   },
   "en-US": {
-    "summary": "The side panel can open on the other side of the tabs, in Appearance.",
+    "summary": "The side panel can open on the other side of the tabs, the engine an AI agent uses refuses more local pages, the audio noise reaches more reads, and a new window's band names its profile and kind in its first frame.",
     "new": [
-      "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout. In Immersive it leaves by its own edge and comes back from it, as the tab list does. It starts off."
+      "Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout. In Immersive it leaves by its own edge and comes back from it, as the tab list does. It starts off.",
+      "In an engine opened for an AI agent, a page at your computer or the local network that the agent opens, or whose address you type in that engine's window, is refused before the request is sent (for https on the local network, after the TLS handshake), unless the agent may reach the place.",
+      "In your own profile opened for an AI agent, a site you allowed to reach the local network loses that permission during the run. It stays saved, and the windows you browse do not change.",
+      "The per-site noise on generated audio also reaches what a node reads inside an offline rendering (analyser, script processor, worklet and compressor). Sound that plays does not change.",
+      "The nulavio-doctor command warns when the engine is not the Nulavio build and says the Bridge will refuse it."
+    ],
+    "fixed": [
+      "A new window's band says its profile and kind of window in its first frame and, in an ordinary wide window with tabs down the side, is already in the navigation row in that frame.",
+      "With the side panel open beside the page in a window without the tab bar and sidebar, the panel has the frame margin at the window's edge and a single gap to the page."
     ]
   }
 }
