@@ -293,7 +293,11 @@ class AddressTest(unittest.TestCase):
                     policy.classify_url(url)
         for url in ("about:blank", None, ""):  # no address: nothing for a site list to bound
             self.assertIsNone(policy.host_of(url), url)
-        for url in ("about:config", "about:reader", "file:///etc/hostname"):  # an address with no site: not on any list
+        # An address with no site: not on any list. The engine opens a file: address's path whatever host it is
+        # written with (nsNoAuthURLParser), so that host is no site either, nor is one of any scheme but http(s).
+        for url in ("about:config", "about:reader", "file:///etc/hostname", "file://example.org/etc/passwd",
+                    "FILE://example.org/etc/passwd", "view-source:file://example.org/etc/passwd",
+                    "resource://example.org/", "moz-extension://example.org/x.html"):  # fmt: skip
             self.assertEqual(policy.host_of(url), "", url)
         self.assertEqual(policy.host_of("https://docs.example.org/a"), "docs.example.org")
         with self.assertRaises(policy.UrlRefused):
@@ -327,6 +331,7 @@ class AddressTest(unittest.TestCase):
         self.assertEqual(policy.origin("https://example.org:443/"), "https://example.org")  # the engine drops it too
         self.assertEqual(policy.origin("http://example.org:80/"), "http://example.org")
         self.assertEqual(policy.origin("http://example.org:443/"), "http://example.org:443")
+        self.assertEqual(policy.origin("http://example.org:0/"), "http://example.org:0")  # not a default port
 
 
 class Approve(registry.Approver):
@@ -821,18 +826,21 @@ class AuditTest(Home):
         # open it for such an agent. Without a site list it stays what local_resources allows.
         agent, _ = registry.add("files", "other", "full_control", domains=["example.org"], accept_full_control=True)
         bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("session"))
-        for url in ("file:///etc/passwd", "file:///home/u/", "about:srcdoc"):
+        for url in ("file:///etc/passwd", "file:///home/u/", "about:srcdoc", "file://example.org/etc/passwd",
+                    "file://docs.example.org/etc/passwd"):  # fmt: skip
             with self.subTest(url=url):
                 decision = registry.decide(agent["id"], "navigate", host=policy.host_of(url), target=policy.origin(url),
                                            session_id="s-1", approver=registry.Approver())  # fmt: skip
                 self.assertEqual((decision.allowed, decision.reason), (False, "out-of-scope"))
-        with (
-            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
-            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
-        ):
-            result = bridge.call("navigate", {"tab": "t1", "url": "file:///etc/passwd"})
-        self.assertTrue(result["isError"], result)
-        self.assertIn("outside the sites", result["content"][0]["text"])
+        for url in ("file:///etc/passwd", "file://example.org/etc/passwd"):  # refused before the engine is asked
+            with (
+                self.subTest(url=url),
+                mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+                mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+            ):
+                result = bridge.call("navigate", {"tab": "t1", "url": url})
+                self.assertTrue(result["isError"], result)
+                self.assertIn("outside the sites", result["content"][0]["text"])
         with self.assertRaises(tools.Denied) as denied:
             bridge.require_url("file:///etc/passwd", checked=[])
         self.assertEqual(denied.exception.decision.reason, "out-of-scope")

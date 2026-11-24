@@ -58,6 +58,6 @@ Files: downloads are saved only when the agent may use files, into `~/.local/sha
 
 - The agent works in its own profile. Your Personal, Work or Banking profiles are reachable only if you give them to that agent (Settings → Assistant and AI → Agents, permissions and activity → its permissions), only while they are closed in your windows, and never while they are locked.
 - Safe Browsing, HTTPS-Only, tracking protection and the pop-up blocker stay on in the AI Workspace.
-- The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`. With a site list ("Only these sites"), `file:` addresses are not among them: such an agent opens none.
+- The local network and this computer (`localhost`, router pages, `file:`) are off unless you allow `local_resources`. With a site list ("Only these sites"), `file:` addresses are not among them, whatever host one is written with: such an agent opens none.
 - A CLI agent runs with your user's rights. Outside Nulavio's tools it can do whatever you can do in a terminal, including reading its key file. Use its own sandbox options if you want to limit that.
 - Within what you allowed, a misled or compromised agent can act without asking. Revoke or stop it at any time.

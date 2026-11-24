@@ -216,14 +216,17 @@ def subject(url: str | None) -> str | None:
 
 def host_of(url: str | None) -> str | None:
     """The host the site list and the routes are checked against, for any address a tab can be at: None when there is
-    no address (nothing, about:blank), "" when the address has no host (file:///…, about:…), which no site list holds."""
+    no address (nothing, about:blank), "" when the address has no site, which no site list holds. Only a web address
+    (http, https) has one: the engine opens a file: address's path whatever host it is written with, and the other
+    schemes name no site either (file://example.org/… is no more example.org than file:///…)."""
     url = subject(url)
     if not url or url == "about:blank":
         return None
     try:
-        return urllib.parse.urlsplit(url).hostname or ""
+        parsed = urllib.parse.urlsplit(url)
     except ValueError:
         return ""
+    return (parsed.hostname or "") if parsed.scheme.lower() in ("http", "https") else ""
 
 
 NAT64 = ipaddress.IPv6Network("64:ff9b::/96")  # carries an IPv4 address a NAT64 gateway reaches
@@ -403,7 +406,7 @@ def origin(url: str | None) -> str | None:
     try:
         parsed = urllib.parse.urlsplit(subject(url))
         scheme = parsed.scheme.lower()
-        port = f":{parsed.port}" if parsed.port and parsed.port != {"http": 80, "https": 443}.get(scheme) else ""
+        port = f":{parsed.port}" if parsed.port is not None and parsed.port != {"http": 80, "https": 443}.get(scheme) else ""
     except ValueError:
         return None
     if scheme in ("http", "https") and parsed.hostname:
