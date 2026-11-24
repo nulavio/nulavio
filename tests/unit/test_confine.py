@@ -45,10 +45,10 @@ class WrapTest(unittest.TestCase):
         self.engine = self.tmp / "engine"
         for folder in (self.profile, self.engine, self.home / ".config/fontconfig"):
             folder.mkdir(parents=True)
-        self.run = self.tmp / "run"
-        self.run.mkdir(mode=0o700)
+        self.runtime = self.tmp / "run"
+        self.runtime.mkdir(mode=0o700)
         # The host's session must not decide what these tests see.
-        env = {"XDG_RUNTIME_DIR": str(self.run), "NULAVIO_HOME": str(self.tmp / "nulavio-home"), "DISPLAY": ""}
+        env = {"XDG_RUNTIME_DIR": str(self.runtime), "NULAVIO_HOME": str(self.tmp / "nulavio-home"), "DISPLAY": ""}
         patcher = mock.patch.dict(os.environ, env)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -87,25 +87,25 @@ class WrapTest(unittest.TestCase):
             self.assertFalse(path.endswith((".ssh", ".gnupg", ".aws")), path)
 
     def test_runtime_folder_is_hidden_and_only_display_and_sound_come_back(self):
-        wayland = self.socket(self.run / "wayland-7")
-        kept = [wayland, self.socket(self.run / "pipewire-0"), self.socket(self.run / "pulse/native")]
+        wayland = self.socket(self.runtime / "wayland-7")
+        kept = [wayland, self.socket(self.runtime / "pipewire-0"), self.socket(self.runtime / "pulse/native")]
         for name in ("bus", "systemd/private", "pipewire-0-manager", "ssh-agent.socket", "gnupg/S.gpg-agent"):
-            self.socket(self.run / name)
-        (self.run / "nulavio/temporary/tmp-0123456789ab").mkdir(parents=True)
+            self.socket(self.runtime / name)
+        (self.runtime / "nulavio/temporary/tmp-0123456789ab").mkdir(parents=True)
         os.environ["WAYLAND_DISPLAY"] = "wayland-7"
         args = self.wrap()
-        self.assertIn(str(self.run.resolve()), self.pairs(args, "--tmpfs"))
-        at = args.index(str(self.run.resolve()))
+        self.assertIn(str(self.runtime.resolve()), self.pairs(args, "--tmpfs"))
+        at = args.index(str(self.runtime.resolve()))
         self.assertEqual(args[at - 3 : at], ["--perms", "0700", "--tmpfs"], "still private inside")
-        from_run = [p for o in ("--bind", "--ro-bind") for p in self.pairs(args, o) if p.startswith(str(self.run))]
+        from_run = [p for o in ("--bind", "--ro-bind") for p in self.pairs(args, o) if p.startswith(str(self.runtime))]
         self.assertEqual(sorted(from_run), sorted(str(p) for p in kept), "only the display and sound sockets")
-        self.assertNotIn(str(self.run / "pulse/native"), self.pairs(args, "--bind"), "put back read-only")
+        self.assertNotIn(str(self.runtime / "pulse/native"), self.pairs(args, "--bind"), "put back read-only")
         for variable in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "XAUTHORITY"):
             self.assertIn(variable, self.pairs(args, "--unsetenv"))
 
     def test_everything_is_hidden_before_anything_is_put_back(self):
         # A temporary profile lives in the runtime folder: an empty folder mounted after it would hide it.
-        profile = self.run / "nulavio/temporary/tmp-0123456789ab"
+        profile = self.runtime / "nulavio/temporary/tmp-0123456789ab"
         profile.mkdir(parents=True)
         args = confine.wrap(["/engine/nulavio"], profile_dir=profile, engine_dir=self.engine, home=self.home,
                             binary="/usr/bin/bwrap")  # fmt: skip
@@ -123,7 +123,7 @@ class WrapTest(unittest.TestCase):
             self.wrap()
         self.assertIn("X11", str(refused.exception))
         self.assertIn("without --confined", str(refused.exception))
-        self.socket(self.run / "wayland-0")
+        self.socket(self.runtime / "wayland-0")
         os.environ["WAYLAND_DISPLAY"] = "wayland-0"
         args = self.wrap()  # a Wayland session: started, with no X server inside
         bound = [p for o in ("--bind", "--ro-bind") for p in self.pairs(args, o)]
