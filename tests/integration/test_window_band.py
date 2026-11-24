@@ -54,40 +54,43 @@ FIRST_FRAME = f"""
       fill: win.getComputedStyle(row).backgroundColor}};
   }};
   await {WINDOW}.refresh();
-  let watched = null, frames = 0;
+  let watched = null, timer = null, win = null, paintListener = null, onStarted = null;
+  const watch = (subject, topic) => {{
+    if (topic !== 'domwindowopened') return;
+    Services.ww.unregisterNotification(watch);
+    watched = subject;
+    subject.addEventListener('MozAfterPaint', paintListener);
+  }};
+  const cleanup = () => {{
+    window.clearTimeout(timer);
+    try {{ Services.ww.unregisterNotification(watch); }} catch (e) {{}}
+    if (onStarted) Services.obs.removeObserver(onStarted, 'browser-delayed-startup-finished');
+    if (watched && paintListener) watched.removeEventListener('MozAfterPaint', paintListener);
+  }};
   const first = new Promise((resolve, reject) => {{
-    const timer = window.setTimeout(() => reject(new Error('no frame with the band painted in 30 s')), 30000);
-    const watch = (subject, topic) => {{
-      if (topic !== 'domwindowopened') return;
-      Services.ww.unregisterNotification(watch);
-      watched = subject;
-      const paint = () => {{
-        frames++;
-        const band = read(subject);
-        if (!band) return; // a frame drawn before the band's row existed
-        subject.removeEventListener('MozAfterPaint', paint);
-        window.clearTimeout(timer);
-        resolve({{...band, delayed: Boolean(subject.gBrowserInit?.delayedStartupFinished), frames}});
-      }};
-      subject.addEventListener('MozAfterPaint', paint);
+    timer = window.setTimeout(() => reject(new Error('no frame with the band painted in 30 s')), 30000);
+    paintListener = () => {{
+      const band = read(watched);
+      if (!band) return; // a frame drawn before the band's row existed
+      const init = watched.gBrowserInit;
+      if (!init) return reject(new Error('the window has no gBrowserInit to say whether it had started'));
+      resolve({{...band, delayed: Boolean(init.delayedStartupFinished)}});
     }};
     Services.ww.registerNotification(watch);
   }});
-  let win = null;
   const started = new Promise(resolve => {{
-    const obs = subject => {{ if (subject === win) {{
-      Services.obs.removeObserver(obs, 'browser-delayed-startup-finished'); resolve();
-    }} }};
-    Services.obs.addObserver(obs, 'browser-delayed-startup-finished');
+    onStarted = subject => {{ if (subject === win) resolve(); }};
+    Services.obs.addObserver(onStarted, 'browser-delayed-startup-finished');
   }});
-  win = OpenBrowserWindow(features);
   try {{
+    win = OpenBrowserWindow(features);
     const band = await first;
     await started;
     await new Promise(resolve => win.requestAnimationFrame(resolve));
     return {{band, after: read(win), same: watched === win}};
   }} finally {{
-    if (close) win.close();
+    cleanup();
+    if (close) win?.close();
   }}
 """
 
@@ -98,8 +101,7 @@ def first_frame(test, m, features, close=True):
     test.assertNotIn("error", result, result)
     band, after = result["ok"]["band"], result["ok"]["after"]
     test.assertTrue(result["ok"]["same"], result)
-    test.assertFalse(band.pop("delayed"), band)  # read before the window's delayed start-up
-    band.pop("frames")
+    test.assertIs(band.pop("delayed"), False, band)  # read before the window's delayed start-up
     test.assertTrue(band["name"], band)
     test.assertTrue(band["label"], band)
     test.assertEqual(band, after)

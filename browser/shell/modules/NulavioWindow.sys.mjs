@@ -1823,6 +1823,7 @@ class WindowUI {
     this.#started = false;
     this.#generation++;
     this.#refreshing = null;
+    this.#read = false;
     this.#timer?.cancel();
     this.#timer = null;
     this.#unsubscribe?.();
