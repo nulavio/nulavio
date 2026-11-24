@@ -1440,8 +1440,11 @@ class WindowUI {
     }
     try {
       const bar = win.document.getElementById(AREA);
-      if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active && !this.#startsOnTrustPage(win)) {
+      if (bar && !this.#immersiveWanted(win) && !lazy.NulavioPrivacy.firstRun().active) {
         bar.toggleAttribute("nv-neutral", this.#neutral(win));
+        if (this.#startsOnTrustPage(win)) {
+          bar.toggleAttribute("nv-named", true);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -1449,29 +1452,33 @@ class WindowUI {
   }
 
   /**
-   * #607: the window's first tab is known, at build time, to be a Shell page that asks for trust: a tab torn off
-   * into its own window (arguments[0] is the adopted tab) or a window opened on that page's address (a string). Then
-   * #header gives the band its full row ([nv-named]) at #attach, so the row is not built neutral only to move.
-   * Residual, not covered: a restored window (SessionStore puts its tabs back after the first paint, with no signal at
-   * build time) and a page that only becomes one after its first load; those still move once, as before #605.
+   * #607: the window adopts a tab torn off from another window that has already committed a Shell page that asks for
+   * trust, read with #header's own conditions on that tab's browser. The engine swaps the browser in before the
+   * window's delayed start-up (browser-init.js onLoad, swapBrowsers), so #header names the page at #attach and sets
+   * [nv-named] itself. Setting it here too, with [nv-neutral] built as for any other window, gives the band its full row
+   * from the first frame, with the neutral row's border (none), so neither the row nor its border changes at #attach.
+   * [nv-named] only lays the row out (window-band.css); the page's name in the band still comes only from #header.
+   * Residual, not covered (each still moves once, from the navigation row to its own row, as before #605): a window
+   * opened on a trust page's address and a restored window. Both pages commit only after #attach, so the band cannot be
+   * named before it moves: the address is loaded in the delayed start-up (_handleURIToLoad), and SessionStore, which
+   * holds a restored window's state from when it opens (getWindowState), puts its tabs back at
+   * browser-window-before-show, before the first paint, but their pages load after that. Likewise a torn-off tab whose
+   * page had not committed (a lazy or loading tab) and a page that only becomes one after its first load.
    */
   #startsOnTrustPage(win) {
     try {
-      // The engine reads the tab to adopt out of arguments[0] early in its start-up and nulls it there, keeping it in
-      // gBrowserInit._tabToAdopt (browser-init.js getTabToAdopt); a window opened on an address gets that address as
-      // arguments[0] (a string or an nsISupportsString), an nsIArray when a tab is handed over.
-      let first = win.gBrowserInit?._tabToAdopt || win.arguments?.[0];
-      if (first && typeof first === "object" && !first.localName && !first.data) {
-        first = first.QueryInterface(Ci.nsIArray).queryElementAt(0, Ci.nsISupports);
-      }
-      const spec = typeof first === "string" ? first : first?.data ?? first?.linkedBrowser?.currentURI?.spec;
-      if (!spec) {
+      // The engine moves the tab to adopt out of arguments[0] in onBeforeInitialXULLayout (getTabToAdopt), before
+      // DOMContentLoaded, when the band is built, and nulls arguments[0] there; the tab is in gBrowserInit._tabToAdopt.
+      // A tab group or split view in its place has no linkedBrowser, and a lazy tab no browsing context: false.
+      const browser = win.gBrowserInit?._tabToAdopt?.linkedBrowser;
+      const global = browser?.browsingContext?.currentWindowGlobal;
+      if (!global || browser.webProgress.isLoadingDocument || global.documentPrincipal?.addonPolicy?.id !== SHELL) {
         return false;
       }
-      const url = new URL(spec);
+      const url = new URL(global.documentURI.spec);
       const key = SURFACES[url.pathname];
       return Boolean(key) && url.protocol === "moz-extension:" && url.host === new URL(policy().getURL("")).host
-        && !PLAIN_SURFACES.has(key);
+        && browser.currentURI.spec === global.documentURI.spec && !PLAIN_SURFACES.has(key);
     } catch {
       return false;
     }

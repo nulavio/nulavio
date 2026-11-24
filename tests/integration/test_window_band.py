@@ -94,18 +94,22 @@ FIRST_FRAME = f"""
     if (tearUrl) {{
       // #607: a window that starts on a Shell page: a tab torn off into its own window, its page moved with it.
       const tab = gBrowser.addTrustedTab(tearUrl, {{inBackground: true}});
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Torn off once its page has committed and loaded (what NulavioWindow #startsOnTrustPage reads), within 15 s.
+      const loaded = () => {{
+        const browser = tab.linkedBrowser, global = browser.browsingContext?.currentWindowGlobal;
+        return Boolean(global) && !browser.webProgress.isLoadingDocument && browser.currentURI.spec === tearUrl
+          && global.documentURI?.spec === tearUrl && global.documentPrincipal?.addonPolicy?.id === 'shell@nulavio.net';
+      }};
+      for (let i = 0; i < 150 && !loaded(); i++) {{
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }}
+      if (!loaded()) throw new Error(`the tab to tear off did not load ${{tearUrl}} in 15 s`);
       win = gBrowser.replaceTabWithWindow(tab);
     }} else {{
       win = OpenBrowserWindow(features);
     }}
     const band = await first;
     await started;
-    if (tearUrl) {{
-      for (let i = 0; i < 100 && !win.document.getElementById('nulavio-band').hasAttribute('nv-named'); i++) {{
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }}
-    }}
     await new Promise(resolve => win.requestAnimationFrame(resolve));
     return {{band, after: read(win), layout: layout(win), same: watched === win}};
   }} finally {{
@@ -617,14 +621,11 @@ class WindowBandTest(unittest.TestCase):
         out.mkdir(parents=True, exist_ok=True)
         (out / "first-frame-trust-page.json").write_text(json.dumps({"first": first, "after": after}, indent=2) + "\n")
         print(f"#607 first frame {first} after start-up {after}", file=sys.stderr)
-        self.assertTrue(after["wide"] and after["vertical"] and after["named"], after)
-        # nv-named gives the row back its own place whether or not nv-neutral is set; the flags may differ in the first
-        # frame (the header is read at #attach), where the row is laid out is what must not change.
-        self.assertEqual(
-            (first["band"], first["nav"]),
-            (after["band"], after["nav"]),
-            f"the band's row moved after the first frame: {first} then {after}",
-        )
+        # Read once the window has started, as 03d: #attach names the page (#header) in the same task as it paints.
+        self.assertTrue(after["wide"] and after["vertical"] and after["neutral"] and after["named"], after)
+        # The same row and the same flags from the first frame: nv-neutral built as in any window (the neutral row's
+        # border, window-band.css) and nv-named set at build (its own row), so neither the row nor its border changes.
+        self.assertEqual(first, after, f"the band changed after the first frame: {first} then {after}")
 
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
