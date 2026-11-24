@@ -12,8 +12,12 @@ This compares what their repository has now with tests/fixtures/privacytests/pin
 - the two functions that score the Device group, cut out of larger files that change for other reasons;
 - every line of their harness that says "fingerprint", which is where a new group of probes would be wired in.
 
-It reads raw.githubusercontent.com only, sends nothing, and runs nothing it downloads.
-Exit: 0 nothing changed; 1 something changed (the list says what); 2 their repository could not be read.
+It also says when PrivacyTests.org's published results moved (#437): nulavio.net's comparison is built from
+tests/fixtures/privacytests/published.json, which keeps the SHA-256 of their page and of their data file. When
+either differs, `python3 -I scripts/site/privacytests_pages.py refresh` brings the comparison up to date.
+
+It reads raw.githubusercontent.com and privacytests.org only, sends nothing, and runs nothing it downloads.
+Exit: 0 nothing changed; 1 something changed (the list says what); 2 their repository or site could not be read.
 """
 
 from __future__ import annotations
@@ -29,8 +33,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PINNED = ROOT / "tests" / "fixtures" / "privacytests" / "pinned.json"
+PUBLISHED = ROOT / "tests" / "fixtures" / "privacytests" / "published.json"
 RAW = "https://raw.githubusercontent.com/privacytests/privacytests"
-LIMIT = 2 * 1024 * 1024  # no file of theirs that is read here comes near it
+LIMIT = 2 * 1024 * 1024  # no file of their repository that is read here comes near it
+PUBLISHED_LIMIT = 64 * 1024 * 1024  # their published data file was 5.5 MB on 2026-11-20
 
 
 class WatchError(RuntimeError):
@@ -54,15 +60,30 @@ def mentions(source: str) -> str:
 
 
 def fetch(ref: str, path: str) -> bytes:
-    request = urllib.request.Request(f"{RAW}/{ref}/{path}", headers={"User-Agent": "nulavio-watch-privacytests"})
+    return fetch_url(f"{RAW}/{ref}/{path}", LIMIT, path)
+
+
+def fetch_url(url: str, limit: int, name: str) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "nulavio-watch-privacytests"})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:  # a fixed https address
-            data = response.read(LIMIT + 1)
+        with urllib.request.urlopen(request, timeout=60) as response:  # a fixed https address
+            data = response.read(limit + 1)
     except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise WatchError(f"{path}: {error}") from None
-    if len(data) > LIMIT:
-        raise WatchError(f"{path}: larger than {LIMIT} bytes")
+        raise WatchError(f"{name}: {error}") from None
+    if len(data) > limit:
+        raise WatchError(f"{name}: larger than {limit} bytes")
     return data
+
+
+def published_moved(published: dict, read) -> list[str]:
+    """Which of PrivacyTests.org's published files differ from the ones the comparison was built from.
+    `read(url)` returns the file's bytes now."""
+    moved = []
+    for kind in ("page", "data"):
+        source = published["sources"][kind]
+        if digest(read(source["url"])) != source["sha256"]:
+            moved.append(f"{source['url']} changed (it was {source['last_modified']}, SHA-256 {source['sha256'][:12]}…)")
+    return moved
 
 
 def compare(pinned: dict, read) -> list[str]:
@@ -126,11 +147,32 @@ def main(argv: list[str]) -> int:
             code = 1
         else:
             lines, code = [f"PrivacyTests' fingerprinting probes are the ones pinned at `{pinned['commit'][:12]}`."], 0
-    text = "\n".join(lines)
+    # Their published results, apart: a change there is not a change of the probes, and the other way round.
+    published = json.loads(PUBLISHED.read_text(encoding="utf-8"))
+    try:
+        moved = published_moved(published, lambda url: fetch_url(url, PUBLISHED_LIMIT, url))
+    except WatchError as error:
+        results, code = [f"PrivacyTests.org's published results could not be read: {error}. No verdict."], max(code, 2)
+    else:
+        if moved:
+            results = [
+                f"PrivacyTests.org's published results moved since No. {published['issue']} ({published['updated']}), "
+                "the one nulavio.net's comparison shows:",
+                "",
+                *[f"- {item}" for item in moved],
+                "",
+                "Run `python3 -I scripts/site/privacytests_pages.py refresh`, read the diff and open a pull request.",
+            ]
+            code = max(code, 1)
+        else:
+            results = [f"PrivacyTests.org's published results are No. {published['issue']}, the ones nulavio.net shows."]
+    text, published_text = "\n".join(lines), "\n".join(results)
     print(text)
+    print(published_text)
     if args.summary:
         with args.summary.open("a", encoding="utf-8") as out:
             out.write(f"## PrivacyTests' probes against the pinned copy\n\n{text}\n")
+            out.write(f"\n## PrivacyTests.org's published results\n\n{published_text}\n")
     return code
 
 
