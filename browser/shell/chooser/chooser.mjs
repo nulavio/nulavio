@@ -12,7 +12,10 @@
      has a password, for the chooser to show in place of its checkbox's own.
    - beforeLaunch(document, profile): true when the profile may be launched now; for a locked protected
      profile, after it was unlocked here with one of its methods (password, this computer's login,
-     recovery code). false when the person went back, and the chooser stays as it was.
+     recovery code). false when the person went back, and the chooser stays as it was. In an engine an
+   agent drives, always false, before anything is read or unlocked: the chooser opened from such a
+   window starts no profile and unlocks none (an engine started from there would inherit the agent's
+   environment; NulavioProfiles refuses the same launches, agent-window).
 
    Whether a profile is protected, and locked, is read from its files and the mount table (lockState
    below), not asked of the Vault's tools: they are optional (gocryptfs, FUSE, libsodium), and a profile
@@ -26,6 +29,10 @@
 const { helper } = ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs");
 const { profileLockState, PLAIN, LOCKED, UNLOCKED } = ChromeUtils.importESModule(
   "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs"
+);
+
+const { NulavioAgentNetwork } = ChromeUtils.importESModule(
+  "resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs"
 );
 
 const BASE = "resource://builtin-addons/nulavio-shell/";
@@ -44,7 +51,7 @@ const IDS = [
   "unlocking", "no-master-key", "wrong-password", "wrong-recovery", "recovery-malformed", "recovery-required",
   "keyring-unavailable", "unavailable-headline", "storage-missing", "gone-headline", "gone", "unread-headline", "unexpected",
   "recovery-finished", "recovery-undone", "recovery-unsettled", "recovery-unknown", "not-recorded", "locked-again",
-  "must-choose",
+  "must-choose", "agent-headline", "agent-window",
 ];
 let l10n = null;
 const words = new Map();
@@ -413,6 +420,12 @@ export async function beforeLaunch(document, profile) {
   }
   asking.add(document);
   try {
+    if (NulavioAgentNetwork.driven()) {
+      // An agent drives this engine: no profile is started or unlocked from here, whatever its lock state.
+      console.error("Nulavio chooser: launch agent-window");
+      await loadWords();
+      return await noticeDialog(document, t("agent-headline"), t("agent-window"));
+    }
     let state;
     try {
       state = await lockState(profile.path); // now, not as it was when the window opened

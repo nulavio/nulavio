@@ -37,3 +37,5 @@ nulavio-chooser-recovery-unknown = Não dá para saber se a troca do código de 
 nulavio-chooser-not-recorded = A alteração foi salva, mas não pôde ser registrada dentro do perfil. Bloqueie o perfil, se estiver aberto, e desbloqueie uma vez para registrá-la.
 nulavio-chooser-locked-again = O perfil bloqueou de novo enquanto esta tela esperava. Desbloqueie outra vez.
 nulavio-chooser-must-choose = Todos os perfis têm senha: o Nulavio mostra esta janela toda vez que inicia.
+nulavio-chooser-agent-headline = Um agente usa esta janela
+nulavio-chooser-agent-window = Abra outros perfis em uma das suas próprias janelas. Nada foi alterado.

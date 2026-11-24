@@ -1154,5 +1154,68 @@ class RoutingTest(unittest.TestCase):
         self.routed_only("m5-link-after")
 
 
+@unittest.skipUnless(harness.nulavio_engine(), "needs the Nulavio build (NULAVIO_ENGINE)")
+class AgentEngineStartTest(unittest.TestCase):
+    """An engine started with the agent's variable, as the Bridge starts one: what the Shell sets at its start, before it
+    tells the Bridge the engine is ready (GUARD_READY). about:profiles' "Launch profile in new browser" and restoring a
+    backup start another profile through Services.startup.createInstanceWithProfile, which no check of the Shell's
+    stands in front of; in such an engine the page is blocked and restoring is off. NULAVIO_AI_LOCAL is not set, so
+    the engine refuses every local page: this test loads none."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.session = harness.GeckoProfileSession(name="Agente")
+        cls.session.env["NULAVIO_AI_WORKSPACE"] = "ag-start-test"
+        cls.m = cls.session.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.session.cleanup()
+
+    def document_of_new_tab(self, url: str, typed: bool) -> str:
+        """The document a new tab shows once a load of `url` has ended: typed into the address bar, or opened as a
+        trusted link (as the engine's own menus open pages)."""
+        if typed:
+            self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab('about:blank');")
+            self.m.chrome(TYPE_JS, [url])
+            time.sleep(0.3)
+            self.m.chrome(TYPE_JS.replace("gURLBar.select();", ""), ["\n"])
+        else:
+            self.m.chrome("openTrustedLinkIn(arguments[0], 'tab');", [url])
+        spec = "return gBrowser.selectedBrowser.documentURI?.spec ?? '';"
+        ended = harness.wait_until(
+            lambda: self.m.chrome(spec).lower().startswith(("about:neterror", "about:profiles", "chrome://global")),
+            timeout=20,
+        )
+        self.assertTrue(ended, self.m.chrome(spec))
+        return self.m.chrome(spec)
+
+    def test_about_profiles_is_blocked_and_restoring_a_backup_is_off(self):
+        ready = self.session.profile_dir / "nulavio-ai-guard"  # workspace.py GUARD_READY
+        self.assertTrue(harness.wait_until(ready.exists, timeout=60), "the Shell did not arm the agent's engine")
+        for url, typed in (
+            ("about:profiles", True),
+            ("about:pRofiles", False),
+            ("chrome://global/content/aboutProfiles.xhtml", False),
+        ):
+            with self.subTest(url=url, typed=typed):
+                shown = self.document_of_new_tab(url, typed)
+                self.assertTrue(shown.startswith("about:neterror?e=blockedByPolicy"), shown)
+        status = chrome_async(
+            self.m,
+            'const { BackupService } = ChromeUtils.importESModule("resource:///modules/backup/BackupService.sys.mjs");'
+            "const status = BackupService.init().restoreEnabledStatus;"
+            "let refused = null;"
+            "try { await BackupService.get().recoverFromBackupArchive('/nonexistent/backup.html', null, true); }"
+            " catch (e) { refused = String(e?.message ?? e); }"
+            "return {enabled: status.enabled, reason: status.internalReason ?? null, refused,"
+            " locked: Services.prefs.prefIsLocked('browser.backup.restore.enabled')};",
+        )
+        self.assertEqual(
+            status,
+            {"ok": {"enabled": False, "reason": "policy", "refused": "Restoring a profile disabled by policy.", "locked": True}},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
