@@ -124,6 +124,9 @@ const cases = {
   child_focus_after_input: () => child([["focusin", password, true]]),
   child_script_focus_then_key: () => child([["focusin", password, false], ["keydown", password, true]]),
   child_script_focus_then_click: () => child([["focusin", password, false], ["mousedown", password, true]]),
+  // A click or a key is the person's input even when the page has used up the activation.
+  child_key_without_activation: () => child([["focusin", password, false], ["keydown", password, false]]),
+  child_click_without_activation: () => child([["mousedown", password, false]]),
   child_untrusted: () => child([["focusin", password, true, false], ["keydown", password, true, false]]),
   child_not_a_password_field: () => child([["focusin", text, true], ["keydown", text, true]]),
   child_other_event: () => child([["input", password, true], ["focus", password, true]]),

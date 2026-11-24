@@ -39,6 +39,9 @@ class LookalikeActorsTest(unittest.TestCase):
     def test_the_first_click_or_key_in_a_field_the_page_focused_asks(self):
         self.assertEqual(self.asked("child_script_focus_then_key"), 1)
         self.assertEqual(self.asked("child_script_focus_then_click"), 1)
+        # with or without the engine's activation: a trusted click or key is the person's (the page can use it up)
+        self.assertEqual(self.asked("child_key_without_activation"), 1)
+        self.assertEqual(self.asked("child_click_without_activation"), 1)
 
     def test_only_trusted_events_on_a_password_field(self):
         self.assertEqual(self.asked("child_untrusted"), 0)

@@ -160,6 +160,9 @@ class PasswordsTest(unittest.TestCase):
     def test_01e_a_page_the_tab_left_during_the_check_is_not_replaced_and_is_checked_on_return(self):
         self.slow_check(2000)
         self.m.navigate(self.fake + "/login")
+        self.m.execute(
+            "window.addEventListener('pageshow', e => { document.documentElement.dataset.restored = String(e.persisted); });"
+        )
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
         self.m.navigate(self.real + "/login")  # while the check of the look-alike waits
         time.sleep(3)  # past the end of that check
@@ -167,6 +170,10 @@ class PasswordsTest(unittest.TestCase):
         chrome_async(self.m, f"delete {PASSWORDS}.NulavioPasswords.checkLogin; return true;")
         self.m.send("WebDriver:Back")
         self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10), self.m.current_url())
+        # Whether the page came back from the back-forward cache (the same document, told it was not decided)
+        # or was loaded again: either way it is checked. Printed for the record of the run.
+        restored = self.m.execute("return document.documentElement.dataset.restored ?? 'loaded again';")
+        print(f"test_01e: back-forward cache restored the page: {restored}", file=sys.stderr)
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
         self.assertTrue(harness.wait_until(self.on_warning, 10), f"not checked after coming back: {self.m.current_url()}")
 
