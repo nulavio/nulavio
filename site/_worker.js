@@ -18,6 +18,8 @@
 // POST (the page's own form, which has no action and so posts to its own address): deletes
 //                       the entry that key belongs to, if any, and answers the same either way.
 //
+// An entry is removed by hand only with scripts/site/waitlist_remove.py (CONTRIBUTING, "Website").
+//
 // It keeps the address, the language, the platform and the time in the D1 database bound as
 // WAITLIST, plus the hash of the key, and nothing else about anyone: no IP address, no user
 // agent (waitlist_pulse holds one random number, see PULSE). Every
@@ -28,7 +30,11 @@ const PAGES = { "pt-BR": "/lista/", en: "/en/waitlist/" };
 const LINKS = { "pt-BR": "/lista/link/", en: "/en/waitlist/link/" };
 const PLATFORMS = new Set(["", "fedora", "ubuntu", "arch", "linux-other", "windows", "macos"]);
 const MAX_BODY = 2048; // bytes; the form sends well under 400
-const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+// Letters, digits and . _ % + - before the @, and letters, digits and hyphens in each label of the
+// domain. Narrower than what mail allows, on purpose: the list is read, removed from by hand and
+// mailed to outside this worker, and no character that means something to a shell or to SQL
+// (quotes, $, `, ;, |, &, parentheses, braces, backslash) ever gets into it.
+const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
 const KEY = /^[A-Za-z0-9_-]{43}$/; // 32 random bytes, base64url
 
 // NOCASE: the address is kept as typed, and A@b.example and a@b.example are one sign-up.
