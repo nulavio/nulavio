@@ -34,7 +34,23 @@
    engines, keyed on the same variable, engine patch 0014 gives a saved allow no
    effect and refuses what Local Network Access would ask about (#570). Both
    are on before the Shell writes READY_FILE in the profile, and the Bridge uses
-   the engine only once it is there (workspace.py, GUARD_READY). */
+   the engine only once it is there (workspace.py, GUARD_READY).
+
+   Also before READY_FILE, the same engines lose the engine's two ways of starting
+   another profile that do not go through SelectableProfileService.launchInstance
+   (which NulavioProfiles.guardLaunches refuses there): about:profiles ("Launch
+   profile in new browser") and restoring a backup, both through
+   Services.startup.createInstanceWithProfile. An engine started that way would
+   inherit the agent's environment. about:profiles is blocked as the engine's own
+   BlockAboutProfiles policy blocks it (its address and its chrome document, in
+   this engine only), and a tab already at it is loaded again, so it is blocked
+   too; restoring a backup is switched off on the default branch and locked, as
+   above (a value of the person's that already has it off stays, unlocked). */
+
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  blockAboutPage: "resource://gre/modules/PoliciesHelpers.sys.mjs",
+});
 
 const WORKSPACE_ENV = "NULAVIO_AI_WORKSPACE"; // launcher/nulavio_launcher/ai/workspace.py WORKSPACE_ENV
 const LOCAL_ENV = "NULAVIO_AI_LOCAL"; // workspace.py LOCAL_ENV
@@ -51,6 +67,11 @@ export const LOCAL_NETWORK_PREFS = Object.freeze([
   ["permissions.default.local-network", 2],
   ["permissions.default.loopback-network", 2],
 ]);
+// Switched off in the same engines, the same way (restoring a backup starts the restored profile's engine).
+export const AGENT_ENGINE_PREFS = Object.freeze([["browser.backup.restore.enabled", false]]);
+// The engine's page that starts another profile with no check of the Shell's in front of it.
+export const AGENT_BLOCKED_PAGES = Object.freeze(["about:profiles"]);
+const AGENT_BLOCKED_DOCUMENTS = Object.freeze(["about:profiles", "chrome://global/content/aboutprofiles."]);
 const MAX_FILE_BYTES = 65536;
 const MAX_PLACES = 1024;
 
@@ -146,6 +167,22 @@ export function localAddress(text, port = -1) {
   return Services.io.hostnameIsLocalIPAddress(uri) || Services.io.hostnameIsSharedIPAddress(uri);
 }
 
+/** about:profiles blocked in this engine (the engine's BlockAboutProfiles way), and a tab already at it loaded again
+    so that it is blocked as well. Not caught: an engine where this fails never writes READY_FILE. */
+function closeProfilePages() {
+  for (const page of AGENT_BLOCKED_PAGES) {
+    lazy.blockAboutPage(null, page);
+  }
+  for (const window of Services.wm.getEnumerator("navigator:browser")) {
+    for (const tab of window.gBrowser?.tabs ?? []) {
+      const spec = String(tab.linkedBrowser?.currentURI?.spec ?? "").toLowerCase();
+      if (AGENT_BLOCKED_DOCUMENTS.some(document => spec.startsWith(document))) {
+        tab.linkedBrowser.reload();
+      }
+    }
+  }
+}
+
 class AgentNetwork {
   #armed = false;
   #file = "";
@@ -163,11 +200,12 @@ class AgentNetwork {
     this.#armed = true;
     this.#file = Services.env.get(LOCAL_ENV) || "";
     const defaults = Services.prefs.getDefaultBranch("");
-    for (const [name, value] of LOCAL_NETWORK_PREFS) {
+    for (const [name, value] of [...LOCAL_NETWORK_PREFS, ...AGENT_ENGINE_PREFS]) {
       const current = typeof value === "boolean" ? Services.prefs.getBoolPref(name) : Services.prefs.getIntPref(name);
       if (Services.prefs.prefIsLocked(name)) {
-        // An enterprise policy decided it: not this module's to change. One that weakens it means this engine is not
-        // used for an agent at all: READY_FILE is never written, and the Bridge does not start.
+        // An enterprise policy decided it: not this module's to change. One that weakens it (BrowserDataBackup locks
+        // restoring on) means this engine is not used for an agent at all: READY_FILE is never written, and the Bridge
+        // does not start.
         if (current !== value) {
           throw new Error(`${name} is locked to another value`);
         }
@@ -185,6 +223,7 @@ class AgentNetwork {
       }
       Services.prefs.lockPref(name); // the default wins over a value of the user's, and the lock is never saved
     }
+    closeProfilePages();
     for (const topic of TOPICS) {
       Services.obs.addObserver(this, topic);
     }

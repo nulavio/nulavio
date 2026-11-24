@@ -470,6 +470,39 @@ class ProfileChooserTest(unittest.TestCase):
         self.stop_instance(path)
         self.assert_locks_again(path)
 
+    def test_02e_in_an_engine_an_agent_drives_the_chooser_unlocks_and_starts_nothing(self):
+        """The chooser opened from a window asks chooser.mjs before the engine's own launch, which the Shell refuses in
+        an engine an agent drives. It refuses first: no secret is asked for, the volume stays locked, nothing starts,
+        and it says why. The variable is set in this running engine, as the Bridge sets it at start (test_routing
+        test_30 does the same)."""
+        profile_id = self.create_protected("Agente")
+        path = self.profile_path(profile_id)
+        self.call("Services.env.set('NULAVIO_AI_WORKSPACE', 'ag-chooser-test'); return true;")
+        try:
+            self.open_chooser()
+            self.call("card(args[0]).click(); return true;", profile_id)
+            self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20), "nothing was said")
+            step = self.dialog()
+            self.assertEqual((step["headline"], step["status"]), (self.word("agent-headline"), self.word("agent-window")))
+            self.assertFalse(step["password"])
+            self.assertFalse(step["recovery"])
+            self.shoot("08-agent")
+            self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+            self.assertTrue(harness.wait_until(lambda: self.dialog() is None, timeout=5))
+            # The profile without a password is refused the same way.
+            here = self.call("return SPS.currentProfile.id;")
+            self.call("card(args[0]).click(); return true;", here)
+            self.assertTrue(harness.wait_until(lambda: (self.dialog() or {}).get("open"), timeout=20))
+            self.assertEqual(self.dialog()["headline"], self.word("agent-headline"))
+            self.call("D().getElementById('nulavio-unlock-cancel').click(); return true;")
+            time.sleep(2)
+            self.assertFalse(storage.Container(path).mounted(), "unlocked in an agent's engine")
+            self.assertEqual(self.instances(path), [])
+            self.assertTrue(self.call("return Boolean(W());"))
+        finally:
+            self.call("Services.env.set('NULAVIO_AI_WORKSPACE', ''); return true;")
+            self.close_chooser()
+
     def test_03_at_start_up_the_unlocked_profile_is_the_one_handed_to_the_engine(self):
         """The start-up chooser is the same page with the engine's parameter block (window.arguments): on launch it
         writes the chosen profile's folders there and closes, and the engine then starts that profile. Marionette

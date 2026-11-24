@@ -145,6 +145,22 @@ class RoutingTest(unittest.TestCase):
                 urls.append("")
         return urls
 
+    def held_page(self, client, page: str, needle: str) -> bool:
+        """Switch `client` to its tab showing `page` (ask or blocked) for an address containing `needle`. The
+        page's own address carries only the id of the held link, so the address is read from the page."""
+        ready = "return document.documentElement?.dataset.ready === 'true';"
+        for handle in client.window_handles():
+            client.switch_to(handle)
+            try:
+                if f"/routing/{page}.html" not in client.current_url():
+                    continue
+                harness.wait_until(lambda: client.execute(ready), timeout=10)
+                if needle in client.execute("return document.getElementById('url').textContent;"):
+                    return True
+            except MarionetteError:
+                continue
+        return False
+
     def own_tabs(self) -> list[str]:
         return self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);")
 
@@ -832,7 +848,8 @@ class RoutingTest(unittest.TestCase):
             self.click("#link")
             ask = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/ask.html" in u], timeout=20)
             self.assertTrue(ask, "no question was shown")
-            self.assertIn("src=page", ask[0])
+            held = ask[0].split("h=", 1)[1]  # the page's address names only the held link; the module says the rest
+            self.assertEqual(self.call("return R.held(args[0], 'routing/ask.html').src;", held), "page")
             time.sleep(1)
             self.assertEqual(self.hits("/page/m5-link"), before, "the site was loaded before the user chose")
             self.assertTrue(self.selected_url().endswith("/m5") or "/routing/ask.html" in self.selected_url())
@@ -980,17 +997,11 @@ class RoutingTest(unittest.TestCase):
         self.wait_shared(work, 99999)
         try:
             self.deliver("Trabalho", [self.ip("/page/fallback-gone")])
-            blocked = harness.wait_until(
-                lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "by=default" in u], 20
-            )
+            blocked = harness.wait_until(lambda: self.held_page(work, "blocked", "/page/fallback-gone"), 20)
             self.assertTrue(blocked, self.tabs(work))
             time.sleep(1)
             self.assertEqual(self.hits("/page/fallback-gone"), 0, "the link opened in the wrong profile")
-            for handle in work.window_handles():
-                work.switch_to(handle)
-                if "by=default" in work.current_url():
-                    break
-            harness.wait_until(lambda: work.execute("return document.documentElement?.dataset.ready === 'true';"), timeout=10)
+            self.assertTrue(self.held_page(work, "blocked", "/page/fallback-gone"))  # self.tabs() moved to another tab
             self.assertIn(
                 "perfil escolhido para esses links", work.execute("return document.getElementById('explain').textContent;")
             )
@@ -1059,9 +1070,7 @@ class RoutingTest(unittest.TestCase):
         work = self.receiver()
         self.wait_shared(work, gone)
         self.deliver("Trabalho", [self.ip("/page/to-the-heir")])
-        blocked = harness.wait_until(
-            lambda: [u for u in self.tabs(work) if "/routing/blocked.html" in u and "to-the-heir" in u], 20
-        )
+        blocked = harness.wait_until(lambda: self.held_page(work, "blocked", "/page/to-the-heir"), 20)
         self.assertTrue(blocked, self.tabs(work))
         time.sleep(1)
         self.assertEqual(self.hits("/page/to-the-heir"), 0)
@@ -1082,6 +1091,130 @@ class RoutingTest(unittest.TestCase):
         state = lambda: self.call("return (await R.state()).fallback;")  # noqa: E731
         self.assertTrue(harness.wait_until(lambda: state()["missing"] is False and state()["profileId"] == reused, timeout=10))
         self.call("await R.setFallback(0);")
+
+    # -- an engine the AI Bridge started (its environment names the agent) ------------------------------
+
+    def test_30_an_engine_an_agent_drives_routes_no_page_and_starts_no_other_profile(self):
+        """In an engine an agent drives, a page's navigation loads in that engine, under the Bridge's checks, and the Shell
+        starts no other profile's engine: that one would inherit the agent's environment. The variables are set in this
+        running engine, as the Bridge sets them at start, and the in-page switch is turned on again so its check runs.
+        The Bridge's file lets the agent reach the fixture's two places, so the engine's own checks of an agent's local
+        pages (patch 0015, the Shell's) leave this test's pages alone."""
+        self.m5_setup()
+        if "Bancos" in self.others:
+            self.stop("Bancos")
+        self.call("await R.setInPage(true);")
+        allowed = self.session.tmp / "agent-local.json"
+        port = self.server.port
+        allowed.write_text(json.dumps({"v": 1, "all": False, "places": [["localhost", port], ["127.0.0.1", port]]}))
+        self.m.chrome("Services.env.set('NULAVIO_AI_LOCAL', arguments[0]);", [str(allowed)])
+        self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', 'ag-routing-test');")
+        try:
+            self.call("await R.setInPage(false); await R.setInPage(true);")
+            self.open_m5()
+            self.m.execute("document.getElementById('link').href += '-agent';")
+            self.click("#link")
+            self.stayed_here("m5-link-agent")
+            self.assertTrue(any(u.endswith("/page/m5-link-agent") for u in self.own_tabs()), "not loaded in this engine")
+            # A typed address: the rule's profile is not started from here; a local page says why, and nothing loads.
+            self.m.navigate("about:blank")
+            self.type_address(self.ip("/page/typed-agent"))
+            blocked = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/blocked.html" in u], timeout=20)
+            self.assertTrue(blocked, self.own_tabs())
+            held = blocked[0].split("h=", 1)[1]  # the page's address names only the held link; the module says the rest
+            self.assertEqual(self.call("return R.held(args[0], 'routing/blocked.html').why;", held), "agent")
+            time.sleep(1)
+            self.assertEqual(self.hits("/page/typed-agent"), 0)
+            # The explicit ways to open another profile from this window are refused the same way.
+            opened = self.error_of("await R.openIn(args[0], args[1]);", self.ids["Bancos"], self.ip("/page/x"))
+            self.assertEqual(opened, "agent-route")
+            self.assertEqual(self.error_of("await P.switchTo(args[0]);", self.ids["Bancos"]), "agent-window")
+            self.assertEqual(self.error_of("await P.openTemporary();"), "agent-window")
+            # So are the engine's own profile menus (app menu, menu bar) and "Move tab to profile": their launches go
+            # through the Shell's check in front of SelectableProfileService.launchInstance.
+            self.m.chrome("gProfiles.launchProfile({target: {getAttribute: () => String(arguments[0])}});", [self.ids["Bancos"]])
+            self.m.chrome(
+                "gProfiles.openTabsInProfile({target: {getAttribute: () => String(arguments[0])}},"
+                " [{linkedBrowser: {currentURI: {spec: arguments[1]}}}]);",
+                [self.ids["Bancos"], self.ip("/page/moved-agent")],
+            )
+            # Watched for a while: an engine started anyway shows as a process or as the moved tab's request.
+            started = harness.wait_until(
+                lambda: self.session.processes_for(self.paths["Bancos"]) or self.hits("/page/moved-agent"), timeout=8
+            )
+            self.assertFalse(started, "another profile was started")
+            self.assertFalse(self.session.processes_for(self.paths["Bancos"]), "another profile was started")
+        finally:
+            self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', ''); Services.env.set('NULAVIO_AI_LOCAL', '');")
+            self.call("await R.setInPage(false); await R.setInPage(true);")
+        # The same engine, no longer an agent's: the same click is routed again.
+        self.open_m5()
+        self.m.execute("document.getElementById('link').href += '-after';")
+        self.click("#link")
+        self.routed_only("m5-link-after")
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "needs the Nulavio build (NULAVIO_ENGINE)")
+class AgentEngineStartTest(unittest.TestCase):
+    """An engine started with the agent's variable, as the Bridge starts one: what the Shell sets at its start, before it
+    tells the Bridge the engine is ready (GUARD_READY). about:profiles' "Launch profile in new browser" and restoring a
+    backup start another profile through Services.startup.createInstanceWithProfile, which no check of the Shell's
+    stands in front of; in such an engine the page is blocked and restoring is off. NULAVIO_AI_LOCAL is not set, so
+    the engine refuses every local page: this test loads none."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.session = harness.GeckoProfileSession(name="Agente")
+        cls.session.env["NULAVIO_AI_WORKSPACE"] = "ag-start-test"
+        cls.m = cls.session.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.session.cleanup()
+
+    def document_of_new_tab(self, url: str, typed: bool) -> str:
+        """The document a new tab shows once a load of `url` has ended: typed into the address bar, or opened as a
+        trusted link (as the engine's own menus open pages)."""
+        if typed:
+            self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab('about:blank');")
+            self.m.chrome(TYPE_JS, [url])
+            time.sleep(0.3)
+            self.m.chrome(TYPE_JS.replace("gURLBar.select();", ""), ["\n"])
+        else:
+            self.m.chrome("openTrustedLinkIn(arguments[0], 'tab');", [url])
+        spec = "return gBrowser.selectedBrowser.documentURI?.spec ?? '';"
+        ended = harness.wait_until(
+            lambda: self.m.chrome(spec).lower().startswith(("about:neterror", "about:profiles", "chrome://global")),
+            timeout=20,
+        )
+        self.assertTrue(ended, self.m.chrome(spec))
+        return self.m.chrome(spec)
+
+    def test_about_profiles_is_blocked_and_restoring_a_backup_is_off(self):
+        ready = self.session.profile_dir / "nulavio-ai-guard"  # workspace.py GUARD_READY
+        self.assertTrue(harness.wait_until(ready.exists, timeout=60), "the Shell did not arm the agent's engine")
+        for url, typed in (
+            ("about:profiles", True),
+            ("about:pRofiles", False),
+            ("chrome://global/content/aboutProfiles.xhtml", False),
+        ):
+            with self.subTest(url=url, typed=typed):
+                shown = self.document_of_new_tab(url, typed)
+                self.assertTrue(shown.startswith("about:neterror?e=blockedByPolicy"), shown)
+        status = chrome_async(
+            self.m,
+            'const { BackupService } = ChromeUtils.importESModule("moz-src:///browser/components/backup/BackupService.sys.mjs");'
+            "const status = BackupService.init().restoreEnabledStatus;"
+            "let refused = null;"
+            "try { await BackupService.get().recoverFromBackupArchive('/nonexistent/backup.html', null, true); }"
+            " catch (e) { refused = String(e?.message ?? e); }"
+            "return {enabled: status.enabled, reason: status.internalReason ?? null, refused,"
+            " locked: Services.prefs.prefIsLocked('browser.backup.restore.enabled')};",
+        )
+        self.assertEqual(
+            status,
+            {"ok": {"enabled": False, "reason": "policy", "refused": "Restoring a profile disabled by policy.", "locked": True}},
+        )
 
 
 if __name__ == "__main__":

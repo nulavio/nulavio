@@ -400,8 +400,8 @@ def check_seeds(prof: profile.Profile) -> list[Check]:
     try:
         settings = prof.load_settings()
         states = profile.seed_states(prof, settings)
-    except (profile.ProfileError, OSError, ValueError):
-        return []  # no settings to read (a locked protected profile, or one not set up): nothing to say
+    except (profile.ProfileError, paths.UnsafePathError, OSError, ValueError):
+        return []  # no settings to read (a locked protected profile, one not set up, or one refused: check_profiles)
     checks = []
     for name, (state, want) in sorted(states.items()):
         if state == "follows":

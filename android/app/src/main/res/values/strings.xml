@@ -39,6 +39,8 @@
     <string name="error_bad_expiry">This request says it stays valid for too long, so it was refused. Nothing was sent. Ask the computer for a new one.</string>
     <string name="error_not_for_this_phone">This request is for another phone.</string>
     <string name="error_unreachable">The computer did not connect. Check that both are on the same network, then try again.</string>
+    <string name="error_version">This code is from a different version of Nulavio. Update Nulavio on the computer and Nulavio Companion on this phone, then try again. Nothing was paired.</string>
+    <string name="error_bad_commitment">The computer\'s answer does not match the code you scanned, so the digits were not shown. Nothing was paired. Start again on the computer.</string>
     <string name="error_keys_invalidated">This phone\'s keys can no longer be used (its fingerprints or screen lock changed). Set it up again and pair it again with your computers.</string>
     <string name="error_generic">Something went wrong (%1$s). Nothing was unlocked.</string>
     <string name="remove_title">Remove %1$s?</string>

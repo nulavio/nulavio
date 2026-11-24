@@ -50,9 +50,10 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   addCustom({name, url, alias?, suggestUrl?}) -> id
   addOpenSearch({url}) -> id                 // downloads the description once, at the user's request
   remove(id) ; setDefault(id, {private?}) ; setAlias(id, alias)
-  setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
+  setSuggestOptIn(id, enabled, shown?) ; setSuggestPrivate(enabled)   // shown: the suggestion host the person was shown
 NulavioSearch.sys.mjs, called by the settings page (privileged), not part of the experiment API (#151):
-  choose({provider | id, privateToo?, suggest?}) -> id   // #151: add if missing, make default (and private), consent only if asked
+  choose({provider | id, privateToo?, suggest?, suggestHost?}) -> id   // #151: add if missing, make default (and private), consent only if asked;
+                                                                      // suggest: true needs the suggestion host that was shown
   accounts() -> {kagi: {signedIn, signIn, host}}          // #151: the session cookie's presence, never its value
   applyPending()                                          // #151: a new profile's first start only, then deleted
 NulavioProfiles.sys.mjs, called by the settings page (not in the browser.nulavioProfiles experiment's schema):
@@ -83,6 +84,27 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
 - A profile can be created with its provider (Settings › Perfis, "Pesquisa"), applied at the new profile's first start
   from a file the creating profile writes into its folder; a profile that has run before never applies such a file.
   Taking one profile's provider to the others was built and left out by the maintainer's decision of 2026-11-17 (#453).
+
+## Amendment, 2026-11-24: a curated provider is known by its addresses
+
+- An engine is one of the curated providers when the engine's own search configuration defines it (by `configId`
+  where the provider has one, else by name), or when it is a user engine with the provider's name and exactly its
+  search and suggestion addresses, as `addProvider` makes it. An added engine that only shares a provider's name (an
+  OpenSearch description declares its own name; so does an engine added by hand) is listed as its own engine, named
+  with its search host in "Escolher o provedor de pesquisa", and never folded into the provider's row or its account
+  line.
+- While another engine holds a provider's name, "Usar" and "Adicionar" for that provider are refused
+  (`provider-name-taken`): names are unique in the engine's list, and the provider is never added in that engine's
+  place. Removing that engine makes room for it. The provider's rows say so and offer neither button meanwhile.
+- Suggestions are allowed for the host the person was shown:
+  - in the chooser, with "Mostrar sugestões dele enquanto digito" ticked, each row names its suggestion host before
+    anything is chosen, `choose` takes that host (`suggestHost`), and refuses with `suggest-host-changed` when the
+    engine's own host is another, before the default or the consent changes (a provider named by its key may already
+    have been added to the list by then);
+  - in "Sugestões enquanto você digita", each switch names its engine's suggestion host while it is off, too, and
+    `setSuggestOptIn` takes that host and refuses the same way.
+- This replaces the behaviour of the #151 amendment where an engine of the person's with a provider's name was the one
+  chosen for that provider.
 
 ## Amendment, 2026-11-16 (#152): a provider that needs an account, outside a signed-in profile
 

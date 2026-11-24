@@ -80,8 +80,9 @@ ALLOWED_BY_KIND = {"routing": {"nulavio.routing.fallbackProfile", "nulavio.routi
 # until it is reviewed: an option could otherwise reach a protection through another module.
 PREF_WRITERS = {
     "NulavioAccountRules.sys.mjs": {"setStringPref(OFFERED_PREF)": 1},  # which services were offered here (#220)
-    # in an engine an agent drives only: the engine's Local Network Access, on the default branch and locked, never
-    # saved to the profile (#243, LOCAL_NETWORK_PREFS; test_the_agent_network_module_pins_only_local_network_access)
+    # in an engine an agent drives only: the engine's Local Network Access and restoring a backup, on the default branch
+    # and locked, never saved to the profile (#243, LOCAL_NETWORK_PREFS and AGENT_ENGINE_PREFS;
+    # test_the_agent_network_module_pins_only_local_network_access)
     "NulavioAgentNetwork.sys.mjs": {"setBoolPref(name)": 1, "setIntPref(name)": 1, "lockPref(name)": 1},
     "NulavioConnect.sys.mjs": {"clearUserPref(PREF_PREVIOUS)": 1, "setStringPref(PREF_PREVIOUS)": 1},
     # the engine's per-site fingerprinting list, from the sites' time zone permissions (#79, ADR 0017); and the
@@ -476,7 +477,8 @@ class PrefWriterInventoryTest(unittest.TestCase):
 
     def test_the_agent_network_module_pins_only_local_network_access(self):
         """#243: in an engine an agent drives, the default branch of the engine's Local Network Access prefs, then a
-        lock; only there (its environment), only stricter values, and never a pref an enterprise policy locked."""
+        lock; only there (its environment), only stricter values, and never a pref an enterprise policy locked. The
+        same for one more pref there: restoring a backup, off (it starts the restored profile's engine)."""
         source = (SHELL / "modules" / "NulavioAgentNetwork.sys.mjs").read_text(encoding="utf-8")
         listed = source[
             source.index("export const LOCAL_NETWORK_PREFS") : source.index("]);", source.index("LOCAL_NETWORK_PREFS"))
@@ -487,16 +489,19 @@ class PrefWriterInventoryTest(unittest.TestCase):
              ("network.lna.allow_top_level_navigation", "false"), ("permissions.default.local-network", "2"),
              ("permissions.default.loopback-network", "2")],
         )  # fmt: skip
+        others = source[source.index("export const AGENT_ENGINE_PREFS") : source.index("]);", source.index("AGENT_ENGINE_PREFS"))]
+        self.assertEqual(re.findall(r'\["([\w.\-]+)", (true|false|\d+)\]', others), [("browser.backup.restore.enabled", "false")])
+        loop = "for (const [name, value] of [...LOCAL_NETWORK_PREFS, ...AGENT_ENGINE_PREFS]) {"
         body = source[source.index("  async arm() {") : source.index("  observe(subject, topic) {")]
         self.assertIn("if (this.#armed || !this.driven()) {", body)
         self.assertIn('const defaults = Services.prefs.getDefaultBranch("");', body)
-        self.assertIn("for (const [name, value] of LOCAL_NETWORK_PREFS) {", body)
+        self.assertIn(loop, body)
         self.assertIn("if (Services.prefs.prefIsLocked(name)) {", body)
         # a lock to another value (an enterprise policy) stops the start: READY_FILE is written only after the loop
         locked = body[body.index("if (Services.prefs.prefIsLocked(name)) {") : body.index("if (Services.prefs.prefHasUserValue")]
         self.assertIn("if (current !== value) {", locked)
         self.assertIn("throw new Error(", locked)
-        self.assertLess(body.index("for (const [name, value] of LOCAL_NETWORK_PREFS)"), body.index("READY_FILE"))
+        self.assertLess(body.index(loop), body.index("READY_FILE"))
         # a value of the person's equal to the forced one is left alone: a default equal to it would drop it from prefs.js
         self.assertIn("if (Services.prefs.prefHasUserValue(name) && current === value) {", body)
         self.assertLess(body.index("current === value"), body.index("defaults.setBoolPref"))

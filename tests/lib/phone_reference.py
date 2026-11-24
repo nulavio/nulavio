@@ -15,10 +15,14 @@ from nulavio_launcher.vault.core import b64d, b64e, canonical
 from nulavio_launcher.vault.phone import (
     CLOCK_SKEW,
     MAX_REQUEST_AHEAD,
+    NONCE_BYTES,
+    PAIRING_VERSION,
     PairedPhone,
     ProtocolError,
     desktop_id_for,
     nkdf,
+    pairing_commitment,
+    pairing_transcript,
     phone_id_for,
     phone_kek,
     request_signing_input,
@@ -27,7 +31,6 @@ from nulavio_launcher.vault.phone import (
     sas_digits,
     seal,
     seal_json,
-    transcript,
     unseal_json,
 )
 
@@ -78,23 +81,32 @@ class ReferencePhone:
     # -- pairing -------------------------------------------------------------------
 
     def scan(self, qr: dict) -> dict:
-        if qr.get("v") != 1 or self.clock() > qr["e"]:
+        if qr.get("v") != PAIRING_VERSION:
+            raise PhoneRejected("unsupported-version")  # no fallback to an older pairing
+        if self.clock() > qr["e"]:
             raise PhoneRejected("expired")
+        try:
+            commitment = b64d(qr["c"])
+        except (KeyError, TypeError, ValueError):
+            raise PhoneRejected("bad-message") from None
+        if len(commitment) != 32:
+            raise PhoneRejected("bad-message")
         pe_sk, pe_pk = sodium.x25519_keypair()
         de_pk, secret, invite = b64d(qr["k"]), b64d(qr["s"]), qr["i"]
         shared = sodium.x25519(pe_sk, de_pk)
         sodium.memzero(pe_sk)
         k1 = nkdf(secret, "pair/k1", shared, invite, de_pk, pe_pk)
         box = seal_json(k1, {"psig": b64e(self.sig_pk), "pkx": b64e(self.kx_pk), "name": self.name}, invite.encode())
-        self._pairing = {"qr": qr, "pe_pk": pe_pk, "shared": shared, "secret": secret}
-        return {"i": invite, "pe": b64e(pe_pk), "box": box}
+        self._pairing = {"qr": qr, "pe_pk": pe_pk, "shared": shared, "secret": secret, "commitment": commitment}
+        return {"v": PAIRING_VERSION, "i": invite, "pe": b64e(pe_pk), "box": box}
 
     def on_accept(self, msg: dict) -> str:
-        """Check the desktop's signature against the key in the QR; return the 6 digits to show."""
+        """Check the desktop's signature against the key in the QR, and its nonce against the commitment in the QR;
+        return the 6 digits to show."""
         p = self._pairing
         qr = p["qr"]
         dsig_pk = b64d(qr["d"])
-        t = transcript(qr["i"], b64d(qr["k"]), p["pe_pk"], dsig_pk, self.sig_pk, self.kx_pk, self.name)
+        t = pairing_transcript(qr["i"], b64d(qr["k"]), p["pe_pk"], dsig_pk, self.sig_pk, self.kx_pk, self.name, p["commitment"])
         try:
             body = unseal_json(nkdf(p["secret"], "pair/k2", p["shared"], t), msg["box"], qr["i"].encode())
         except ProtocolError:
@@ -103,8 +115,15 @@ class ReferencePhone:
         if not sodium.verify(dsig_pk, b"nv1/pair/desktop" + t, b64d(body["sig"])):
             self._pairing = None
             raise PhoneRejected("bad-signature")
+        try:
+            nonce = b64d(body["n"])
+        except (KeyError, TypeError, ValueError):
+            nonce = b""
+        if len(nonce) != NONCE_BYTES or not sodium.equal(pairing_commitment(qr["i"], nonce), p["commitment"]):
+            self._pairing = None
+            raise PhoneRejected("bad-commitment")  # not the nonce the QR committed to: the digits would mean nothing
         p.update(t=t, dkx=b64d(body["dkx"]), desktop_name=body["name"], dsig_pk=dsig_pk)
-        return sas_digits(p["shared"], t)
+        return sas_digits(p["shared"], t, nonce)
 
     def confirm(self) -> dict:
         """The user said the digits match: remember the desktop and send the confirmation."""

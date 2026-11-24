@@ -8,6 +8,7 @@ which the test-suite uses for throwaway environments.
 
 from __future__ import annotations
 
+import errno
 import os
 import stat
 from pathlib import Path
@@ -121,6 +122,30 @@ def check_private(path: Path, mode: int, fix: bool = False) -> list[str]:
         if fix:
             os.chmod(path, mode)
     return problems
+
+
+def read_private_file(path: Path) -> bytes:
+    """Read a file the launcher trusts, such as one in a profile the browser can write.
+
+    The last component is opened without following a symlink and without blocking on a FIFO, and the open file
+    must be a regular file owned by the current user; otherwise ``UnsafePathError``. A missing file raises
+    ``FileNotFoundError`` as ``open`` does.
+    """
+    path = Path(path)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise UnsafePathError(f"refusing to use symlink: {path}") from None
+        raise
+    with os.fdopen(fd, "rb") as handle:
+        st = os.fstat(handle.fileno())
+        if not stat.S_ISREG(st.st_mode):
+            raise UnsafePathError(f"not a regular file: {path}")
+        if st.st_uid != os.getuid():
+            raise UnsafePathError(f"not owned by the current user: {path}")
+        return handle.read()
 
 
 def write_private_file(path: Path, data: str | bytes) -> None:

@@ -2,7 +2,8 @@
 
 Layout, for a profile directory P (what the engine opens with --profile):
 
-    P            mount point: empty and read-only (0500) while locked
+    P            mount point: empty and read-only (0500) while locked, and read-only
+                 underneath the volume while unlocked
     P.vault/     vault.json (envelopes) and cipher/ (gocryptfs, XChaCha20-Poly1305)
 
 The volume password is derived from the profile DEK (`storage/gocryptfs`), so
@@ -188,15 +189,29 @@ class Container:
                 # A change to the unlock methods finished while this waited for the lock: what was
                 # read is no longer the key file (checking it would look like a rollback).
                 raise StorageError("changed", "the profile's key file changed since it was read; try again")
-            os.chmod(self.mountpoint, 0o700)  # fusermount needs write access to the mount point
-            args = ["-q", "-nosyslog"]
-            if idle_minutes:
-                args += ["-idle", f"{int(idle_minutes)}m"]
+            # The mount point's mode is changed through a handle on the bare directory, taken before
+            # anything is mounted there: never through the path, which would reach the root of a volume
+            # mounted on it. fusermount needs it writable while it mounts; right after, it is read-only
+            # again underneath the open volume, so a volume that goes away without a lock (a crash, a
+            # reboot, a killed gocryptfs, its -idle timer) leaves an empty folder no engine can write to,
+            # not a writable one (U-T23).
             try:
-                self._gocryptfs([*args, str(self.cipher), str(self.mountpoint)], storage_password(vault))
-            except StorageError:
-                os.chmod(self.mountpoint, LOCKED_MODE)
-                raise
+                bare = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            except OSError as exc:
+                raise StorageError("storage-failed", type(exc).__name__) from None
+            try:
+                if os.fstat(bare).st_dev != os.stat(self.mountpoint.parent).st_dev:
+                    raise StorageError("storage-failed", "something is already mounted at the profile's folder")
+                os.fchmod(bare, 0o700)
+                args = ["-q", "-nosyslog"]
+                if idle_minutes:
+                    args += ["-idle", f"{int(idle_minutes)}m"]
+                try:
+                    self._gocryptfs([*args, str(self.cipher), str(self.mountpoint)], storage_password(vault))
+                finally:
+                    os.fchmod(bare, LOCKED_MODE)
+            finally:
+                os.close(bare)
             try:
                 self._check_state(vault, new_volume=self.new_volume)
                 self.new_volume = False
@@ -492,21 +507,33 @@ class Container:
                 break
             time.sleep(0.3)
 
-    def unmount(self, wait: float = 15.0, lazy_after: bool = False) -> None:
+    def unmount(self, wait: float = 15.0, lazy_after: bool = False, unless=None) -> None:
         """Unmount; while files are still open, retry for `wait` seconds.
 
         `lazy_after`: then detach anyway (the volume disappears from the file
         system at once; files already open stay usable until closed). Used when
         the engine has exited and only its helpers are still closing files.
+
+        `unless`: asked before every attempt and before the detach; when it answers
+        true (an engine took the profile meanwhile), nothing more is tried and this
+        raises "in-use", with the volume still mounted: the profile is then in
+        use, and reads as unlocked.
         """
         tool = shutil.which("fusermount3") or shutil.which("fusermount") or "fusermount3"
         deadline = time.monotonic() + wait
+
+        def check() -> None:
+            if unless is not None and unless():
+                raise StorageError("in-use", "an engine took the profile while it was being locked")
+
         while self.mounted():
+            check()
             result = subprocess.run([tool, "-u", str(self.mountpoint)], capture_output=True, timeout=30, check=False)
             if result.returncode == 0:
                 break
             if time.monotonic() > deadline:
                 if lazy_after:
+                    check()
                     subprocess.run([tool, "-u", "-z", str(self.mountpoint)], capture_output=True, timeout=30, check=False)
                     if not self.mounted():
                         break

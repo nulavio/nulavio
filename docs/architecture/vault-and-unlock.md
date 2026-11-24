@@ -8,7 +8,7 @@ Decisions: [ADR 0005](../adr/0005-phone-profile-unlock.md) (phone), [ADR 0006](.
 |---|---|---|
 | Nulavio Vault | Profile DEK, envelopes, metadata, lock/unlock, recovery, rotation | `launcher/nulavio_launcher/vault/` (`core.py`; storage in `storage.py`, profiles in `profiles.py`, CLI `nulavio vault` in `cli.py`) |
 | Unlock Coordinator | Which methods exist and are required, capability checks, state machine, timeouts, cancellation, no silent downgrade | same package (`coordinator.py`); UI in the Shell (S6) |
-| Encrypted storage | One gocryptfs volume per profile, keyed from the DEK; read-only mount point while locked; generation mirror | `vault/storage.py`; the Shell reads the lock state (`browser/shell/modules/NulavioVaultState.sys.mjs`) |
+| Encrypted storage | One gocryptfs volume per profile, keyed from the DEK; read-only mount point while locked, and underneath the open volume; generation mirror | `vault/storage.py`; the Shell reads the lock state (`browser/shell/modules/NulavioVaultState.sys.mjs`) |
 | Platform Key Provider | Password (Argon2id), recovery code, OS keyring (Secret Service), TPM (optional), later Windows DPAPI/Hello | `vault/providers.py` |
 | Phone Unlock | Pairing, devices, protocol `nv1`, revocation | `vault/phone.py`; Android app (S11) |
 | Hardware Key Provider | FIDO2 `hmac-secret` | S10 |
@@ -52,13 +52,15 @@ Implemented in `launcher/nulavio_launcher/vault/phone.py` (desktop) and `tests/l
 
 ### Pairing (requires the profile unlocked: adding a method needs the DEK)
 
-1. Desktop shows a QR: `{v:1, i: invite_id(16), k: de_pk, s: pair_secret(32), d: Dsig_pk, a: "host:port", e: expiry(+300 s)}`.
-2. Phone → desktop `hello`: `{i, pe_pk, box: AEAD(k1, {Psig_pk, Pkx_pk, name})}`, with `shared = X25519(pe, de_pk)`, `k1 = KDF(pair_secret, "pair/k1", shared, i, de_pk, pe_pk)`. Only a device that read the QR can produce it.
-3. Desktop → phone `accept`: `AEAD(k2, {Dkx_pk, desktop_name, sig_D})`, `T = BLAKE2b(i ‖ de_pk ‖ pe_pk ‖ Dsig_pk ‖ Psig_pk ‖ Pkx_pk ‖ name)` (each part length-prefixed), `k2 = KDF(pair_secret, "pair/k2", shared, T)`, `sig_D = Ed25519(Dsig, "nv1/pair/desktop" ‖ T)`. Because `T` includes the desktop key the phone read in the QR, a substituted key already makes `accept` fail to decrypt. All boxes use the invite id as associated data.
-4. Both show `SAS = first 4 bytes of KDF(shared, "pair/sas", T) mod 10^6`, as 6 digits; the user confirms they match.
+Pairing version 2 (2026-11-24, [ADR 0005, pairing amendment](../adr/0005-phone-profile-unlock.md#pairing-amendment-2026-11-24)). Version 1 is refused on both sides: a desktop that receives a `hello` of another version answers `{"t":"error","code":"unsupported-version"}` and ends the attempt, and the Companion refuses a QR of another version before it sends anything (`unsupported-version`, "update Nulavio and Nulavio Companion"). Neither side falls back to version 1. Companion 0.1.0 speaks only version 1 and reads a version-2 QR as "not a Nulavio code".
+
+1. Desktop picks a fresh 32-byte nonce `N` and shows a QR: `{v:2, i: invite_id(16), k: de_pk, s: pair_secret(32), d: Dsig_pk, c: C, a: "host:port", e: expiry(+300 s)}`, where `C = BLAKE2b("nv1/pair/commit" ‖ i ‖ N)` (each part length-prefixed, as for `T` below) commits to `N` without revealing it. `N` leaves the desktop only inside the `accept` to the one `hello` the invite takes.
+2. Phone → desktop `hello`: `{v:2, i, pe_pk, box: AEAD(k1, {Psig_pk, Pkx_pk, name})}`, with `shared = X25519(pe, de_pk)`, `k1 = KDF(pair_secret, "pair/k1", shared, i, de_pk, pe_pk)`. Only a device that read the QR can produce it.
+3. Desktop → phone `accept`: `AEAD(k2, {Dkx_pk, desktop_name, sig_D, n: N})`, `T = BLAKE2b("nv1/pair/v2" ‖ i ‖ de_pk ‖ pe_pk ‖ Dsig_pk ‖ Psig_pk ‖ Pkx_pk ‖ name ‖ C)` (each part length-prefixed), `k2 = KDF(pair_secret, "pair/k2", shared, T)`, `sig_D = Ed25519(Dsig, "nv1/pair/desktop" ‖ T)`. Because `T` includes the desktop key the phone read in the QR, a substituted key already makes `accept` fail to decrypt. All boxes use the invite id as associated data. The phone checks `sig_D` against `Dsig_pk` from its QR, then that `N` opens `C` from its QR (32 bytes, constant-time comparison); otherwise it shows no digits (`bad-commitment`).
+4. Both show `SAS = first 4 bytes of KDF(shared, "pair/sas", T, N) mod 10^6`, as 6 digits; the user confirms they match. The desktop is bound to `N` by `C` before it sees the phone's fresh `pe_pk`, and whoever sends the `hello` fixes all of its own inputs before it learns `N`: neither side can choose its part once it can compute what the other screen will show, so an attempt to make two different exchanges show the same digits succeeds with a chance of about one in a million ([R85](../security/residual-risks.md)).
 5. Phone → desktop `confirm`: `AEAD(k3, {sig_P = Ed25519(Psig, "nv1/pair/phone" ‖ T)})` with `k3 = KDF(pair_secret, "pair/k3", shared, T)`. The desktop accepts it only if the user also confirmed the digits on the desktop; it then creates the phone envelope, which holds `{phone_id, Psig_pk, Pkx_pk, name}`.
 
-An invite takes one `hello`: a second one, or one that fails to decrypt (no QR secret), ends the attempt. Pairing needs a new QR after a failure.
+An invite takes one `hello`: a second one, one of another version, or one that fails to decrypt (no QR secret), ends the attempt. Pairing needs a new QR after a failure.
 
 ### Phone envelope
 
@@ -89,7 +91,7 @@ Tests: `tests/unit/test_phone_link.py` runs pairing and unlock over real TCP wit
 
 `android/nv1` is the phone's side of `nv1` in plain Java, so it runs on Android and on the desktop JVM: X25519, Ed25519 and XChaCha20-Poly1305 from Tink (`tink-android`), keyed BLAKE2b from Bouncy Castle, no cryptography of Nulavio's own. Canonical JSON is written byte for byte as the desktop's `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)`, since signatures and hashes cover it. The phone object holds public state only (its public keys, paired desktops, answered request ids); its private keys come in as `Secrets` for the two steps that need them (confirming a pairing, answering a request) and are wiped after.
 
-Checks: fixed vectors from the desktop's libsodium (`tests/fixtures/nv1-vectors.json`, written by `tests/lib/nv1_vectors.py`) for every primitive, the KDF, transcripts, the 6 digits, ids, mDNS names and canonical JSON; `tests/unit/test_companion_protocol.py` runs the Java phone (`PhoneCli`, test sources) against the Python desktop's own session code over a socket: pairing, an unlock that mounts a real encrypted profile, and the phone's refusals (replay, tampered request, unknown desktop, expired). Gradle and every dependency are pinned by checksum (`gradle/wrapper/gradle-wrapper.properties`, `gradle/verification-metadata.xml`); CI builds and tests it on every push.
+Checks: fixed vectors from the desktop's libsodium (`tests/fixtures/nv1-vectors.json`, written by `tests/lib/nv1_vectors.py`) for every primitive, the KDF, transcripts, the pairing commitment and transcript, the 6 digits, ids, mDNS names and canonical JSON; `tests/unit/test_companion_protocol.py` runs the Java phone (`PhoneCli`, test sources) against the Python desktop's own session code over a socket: pairing, an unlock that mounts a real encrypted profile, and the phone's refusals (replay, tampered request, unknown desktop, expired). Gradle and every dependency are pinned by checksum (`gradle/wrapper/gradle-wrapper.properties`, `gradle/verification-metadata.xml`); CI builds and tests it on every push.
 
 ## Unlock Coordinator states
 

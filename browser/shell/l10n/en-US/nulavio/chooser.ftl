@@ -37,3 +37,5 @@ nulavio-chooser-recovery-unknown = A recovery code replacement left unfinished e
 nulavio-chooser-not-recorded = The change was saved, but could not be recorded inside the profile. Lock the profile if it is open, then unlock it once to record it.
 nulavio-chooser-locked-again = The profile locked again while this was waiting. Unlock it again.
 nulavio-chooser-must-choose = Every profile has a password: Nulavio shows this window every time it starts.
+nulavio-chooser-agent-headline = An agent uses this window
+nulavio-chooser-agent-window = Open other profiles from one of your own windows. Nothing was changed.

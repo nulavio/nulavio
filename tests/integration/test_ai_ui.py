@@ -584,7 +584,7 @@ class AiUiTest(unittest.TestCase):
                 f"const s = document.querySelector(\"[data-focus-key='mode-{agent['id']}-interact']\");"
                 "return {mode: s.value, note: s.closest('li').querySelector('.row__note').textContent};"
             )
-            self.assertEqual(shown, {"mode": "ask", "note": self.msg("aiGrantSession")})
+            self.assertEqual(shown, {"mode": "ask", "note": self.msg("aiGrantSessionWhere")})
         finally:
             audit.record(agent=agent["id"], client="other", session="s-live", event="disconnected")
             registry.end_session(agent["id"], "s-live")

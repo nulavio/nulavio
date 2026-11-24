@@ -132,6 +132,9 @@
           "addon_parent"
         ],
         "script": "experiments/profiles/parent.js",
+        "events": [
+          "startup"
+        ],
         "paths": [
           [
             "nulavioProfiles"

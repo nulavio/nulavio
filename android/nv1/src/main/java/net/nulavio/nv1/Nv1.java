@@ -12,6 +12,13 @@ public final class Nv1 {
     public static final long CLOCK_SKEW = 120;
     /** A request may not claim to stay valid longer than one request lifetime (60 s) plus clock skew. */
     public static final long MAX_REQUEST_AHEAD = 60 + CLOCK_SKEW;
+    /**
+     * Pairing version 2: the QR commits to a nonce the desktop reveals in its accept, and the 6 digits cover it
+     * (ADR 0005, amendment of 2026-11-24). The phone refuses a QR of any other version, and the desktop a hello of
+     * any other version: neither falls back.
+     */
+    public static final long PAIRING_VERSION = 2;
+    public static final int NONCE_BYTES = 32;
 
     private Nv1() {}
 
@@ -94,8 +101,20 @@ public final class Nv1 {
         return B64.encode(first);
     }
 
-    public static String sasDigits(byte[] shared, byte[] t) {
-        byte[] raw = kdf(shared, "pair/sas", t);
+    /** What the QR carries in place of the desktop's pairing nonce, which the accept reveals. */
+    public static byte[] pairingCommitment(String invite, byte[] nonce) {
+        return transcript("nv1/pair/commit", invite, nonce);
+    }
+
+    /** T of pairing version 2: both signatures and the keys k2/k3 cover it, the commitment included. */
+    public static byte[] pairingTranscript(String invite, byte[] dePk, byte[] pePk, byte[] dsigPk, byte[] psigPk,
+                                           byte[] pkxPk, String name, byte[] commitment) {
+        return transcript("nv1/pair/v2", invite, dePk, pePk, dsigPk, psigPk, pkxPk, name, commitment);
+    }
+
+    /** The 6 digits, over the transcript and the desktop's nonce (checked against its commitment first). */
+    public static String sasDigits(byte[] shared, byte[] t, byte[] nonce) {
+        byte[] raw = kdf(shared, "pair/sas", t, nonce);
         long n = ((raw[0] & 0xffL) << 24) | ((raw[1] & 0xffL) << 16) | ((raw[2] & 0xffL) << 8) | (raw[3] & 0xffL);
         Crypto.wipe(raw);
         return String.format(Locale.ROOT, "%06d", n % 1_000_000L); // ASCII digits in every locale

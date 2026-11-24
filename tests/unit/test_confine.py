@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ctypes
+import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -14,6 +17,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
 from nulavio_launcher import confine  # noqa: E402
+
+
+def listen(path: Path) -> socket.socket:
+    """A listening Unix socket at `path`, closed when the test ends."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(str(path))
+    server.listen(4)
+    return server
 
 
 def bwrap_runs() -> bool:
@@ -34,6 +46,21 @@ class WrapTest(unittest.TestCase):
         self.engine = self.tmp / "engine"
         for folder in (self.profile, self.engine, self.home / ".config/fontconfig"):
             folder.mkdir(parents=True)
+        self.runtime = self.tmp / "run"
+        self.runtime.mkdir(mode=0o700)
+        # The host's session must not decide what these tests see.
+        env = {"XDG_RUNTIME_DIR": str(self.runtime), "NULAVIO_HOME": str(self.tmp / "nulavio-home"), "DISPLAY": ""}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for variable in ("WAYLAND_DISPLAY", "DISPLAY"):
+            os.environ.pop(variable, None)
+        self.addCleanup(lambda: [s.close() for s in self.sockets])
+        self.sockets: list[socket.socket] = []
+
+    def socket(self, path: Path) -> Path:
+        self.sockets.append(listen(path))
+        return path
 
     def wrap(self, **kwargs):
         return confine.wrap(["/engine/nulavio", "--profile", str(self.profile)], profile_dir=self.profile,
@@ -47,7 +74,7 @@ class WrapTest(unittest.TestCase):
         self.assertEqual(args[:4], ["/usr/bin/bwrap", "--ro-bind", "/", "/"])
         self.assertIn(str(self.home.resolve()), self.pairs(args, "--tmpfs"))
         self.assertEqual(self.pairs(args, "--bind")[0], "/proc")
-        writable = [p for p in self.pairs(args, "--bind") if p != "/proc" and not p.startswith("/run/user")]
+        writable = [p for p in self.pairs(args, "--bind") if p != "/proc"]
         self.assertEqual(writable, [str(self.profile.resolve()), str((self.home / "Downloads").resolve())])
         self.assertTrue((self.home / "Downloads").is_dir())
         self.assertEqual(args[args.index("--") + 1 :], ["/engine/nulavio", "--profile", str(self.profile)])
@@ -59,6 +86,89 @@ class WrapTest(unittest.TestCase):
         self.assertIn(str(self.engine.resolve()), read_only)
         for path in read_only:
             self.assertFalse(path.endswith((".ssh", ".gnupg", ".aws")), path)
+
+    def test_runtime_folder_is_hidden_and_only_display_and_sound_come_back(self):
+        wayland = self.socket(self.runtime / "wayland-7")
+        kept = [wayland, self.socket(self.runtime / "pipewire-0"), self.socket(self.runtime / "pulse/native")]
+        for name in ("bus", "systemd/private", "pipewire-0-manager", "ssh-agent.socket", "gnupg/S.gpg-agent"):
+            self.socket(self.runtime / name)
+        (self.runtime / "nulavio/temporary/tmp-0123456789ab").mkdir(parents=True)
+        os.environ["WAYLAND_DISPLAY"] = "wayland-7"
+        args = self.wrap()
+        self.assertIn(str(self.runtime.resolve()), self.pairs(args, "--tmpfs"))
+        at = args.index(str(self.runtime.resolve()))
+        self.assertEqual(args[at - 3 : at], ["--perms", "0700", "--tmpfs"], "still private inside")
+        from_run = [p for o in ("--bind", "--ro-bind") for p in self.pairs(args, o) if p.startswith(str(self.runtime))]
+        self.assertEqual(sorted(from_run), sorted(str(p) for p in kept), "only the display and sound sockets")
+        self.assertNotIn(str(self.runtime / "pulse/native"), self.pairs(args, "--bind"), "put back read-only")
+        for variable in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "XAUTHORITY"):
+            self.assertIn(variable, self.pairs(args, "--unsetenv"))
+
+    def test_everything_is_hidden_before_anything_is_put_back(self):
+        # A temporary profile lives in the runtime folder: an empty folder mounted after it would hide it.
+        profile = self.runtime / "nulavio/temporary/tmp-0123456789ab"
+        profile.mkdir(parents=True)
+        args = confine.wrap(["/engine/nulavio"], profile_dir=profile, engine_dir=self.engine, home=self.home,
+                            binary="/usr/bin/bwrap")  # fmt: skip
+        options = args[: args.index("--")]
+        hides = [i for i, a in enumerate(options) if a == "--tmpfs"]
+        put_back = [i for i, a in enumerate(options) if a in ("--bind", "--ro-bind") and options[i + 1] not in ("/", "/proc")]
+        self.assertTrue(hides and put_back)
+        self.assertLess(max(hides), min(put_back))
+        self.assertIn(str(profile.resolve()), self.pairs(args, "--bind"))
+
+    def test_no_x_server_and_an_x11_only_session_is_refused(self):
+        (self.home / ".Xauthority").write_text("artificial\n")
+        os.environ["DISPLAY"] = ":0"
+        with self.assertRaises(confine.ConfineError) as refused:
+            self.wrap()
+        self.assertIn("X11", str(refused.exception))
+        self.assertIn("without --confined", str(refused.exception))
+        self.socket(self.runtime / "wayland-0")
+        os.environ["WAYLAND_DISPLAY"] = "wayland-0"
+        args = self.wrap()  # a Wayland session: started, with no X server inside
+        bound = [p for o in ("--bind", "--ro-bind") for p in self.pairs(args, o)]
+        self.assertFalse([p for p in bound if p.endswith((".Xauthority", ".X11-unix"))], bound)
+        self.assertIn("DISPLAY", self.pairs(args, "--unsetenv"))
+
+    def test_nulavio_folders_are_hidden_wherever_they_are(self):
+        # A data folder outside the home folder holds the other profiles too: only this one comes back.
+        elsewhere = self.tmp / "srv/nulavio"
+        profile = elsewhere / "data/profiles/p"
+        (elsewhere / "data/profiles/other").mkdir(parents=True)
+        profile.mkdir(parents=True)
+        (elsewhere / "state").mkdir()
+        os.environ["NULAVIO_HOME"] = str(elsewhere)
+        args = confine.wrap(["/engine/nulavio"], profile_dir=profile, engine_dir=self.engine, home=self.home,
+                            binary="/usr/bin/bwrap")  # fmt: skip
+        hidden = self.pairs(args, "--tmpfs")
+        self.assertIn(str((elsewhere / "data").resolve()), hidden)
+        self.assertIn(str((elsewhere / "state").resolve()), hidden)
+        self.assertIn(str(profile.resolve()), self.pairs(args, "--bind"))
+        self.assertFalse([p for p in self.pairs(args, "--ro-bind") if "other" in p])
+        if Path("/dev/shm").is_dir():
+            self.assertIn("/dev/shm", hidden)  # its own, not the host's
+
+    def test_dev_is_bubblewraps_own_with_only_the_gpu_and_cameras_put_back(self):
+        args = self.wrap()
+        self.assertEqual(self.pairs(args, "--dev"), ["/dev"])
+        self.assertNotIn("/dev", self.pairs(args, "--dev-bind"), "never the host's whole /dev")
+        self.assertEqual(self.pairs(args, "--dev-bind"), [str(p) for p in confine.device_nodes()])
+        self.assertIn("--unshare-ipc", args)  # System V IPC is its own
+
+    def test_device_nodes_are_the_gpu_and_cameras_only_and_never_a_link(self):
+        dev = self.tmp / "dev"
+        for name in ("dri", "input", "pts", "bus/usb"):
+            (dev / name).mkdir(parents=True)
+        for name in ("video0", "uinput", "hidraw0", "nvidiactl"):
+            (dev / name).write_text("")  # regular files: not device nodes
+        (dev / "nvidia-caps").symlink_to(dev / "input")
+        (dev / "video9").symlink_to("/dev/null")
+        self.assertEqual(confine.device_nodes(dev), [dev / "dri"])
+        found = confine.device_nodes()
+        for node in found:
+            self.assertRegex(node.name, r"^(dri|nvidia.*|video[0-9]+)$")
+            self.assertFalse(node.is_symlink())
 
     def test_engine_sandboxes_are_left_alone(self):
         args = self.wrap(supervised=True)
@@ -119,8 +229,111 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("not starting", str(error))
 
 
+# Run inside bubblewrap: connect to each Unix socket named in argv and print which ones answered.
+CONNECT = (
+    "import socket, sys\n"
+    "for path in sys.argv[1:]:\n"
+    "    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)\n"
+    "    try:\n"
+    "        s.connect(path)\n"
+    "        print('connected', path)\n"
+    "    except OSError:\n"
+    "        pass\n"
+    "    finally:\n"
+    "        s.close()\n"
+)
+
+
 @unittest.skipUnless(bwrap_runs(), "bubblewrap is not installed or cannot run here")
 class RealBubblewrapTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for variable in ("WAYLAND_DISPLAY", "DISPLAY", "NULAVIO_HOME"):
+            os.environ.pop(variable, None)
+
+    def test_a_confined_program_reaches_no_session_socket_and_no_other_profile(self):
+        # The fixture stands in for the session's runtime folder. It is made inside the real one where there is
+        # one, so nothing but the confinement hides it; otherwise in /dev/shm, which is the host's without it.
+        runtime = [os.environ.get("XDG_RUNTIME_DIR", ""), f"/run/user/{os.getuid()}"]
+        base = next((Path(p) for p in runtime if p.startswith("/") and os.access(p, os.W_OK)), Path("/dev/shm"))
+        if not base.is_dir():
+            self.skipTest("no runtime folder and no /dev/shm here")
+        run = Path(tempfile.mkdtemp(prefix="nv-confine-", dir=base))
+        self.addCleanup(shutil.rmtree, run, True)
+        sockets = {name: listen(run / name) for name in ("wayland-7", "pipewire-0", "bus", "systemd/private",
+                                                         "ssh-agent.socket")}  # fmt: skip
+        for server in sockets.values():
+            self.addCleanup(server.close)
+        nulavio = run / "nulavio-home"
+        profile, other = nulavio / "data/profiles/p", nulavio / "data/profiles/other"
+        for folder in (profile, other):
+            folder.mkdir(parents=True)
+        (other / "cookies.sqlite").write_text("artificial\n")
+        os.environ.update(XDG_RUNTIME_DIR=str(run), WAYLAND_DISPLAY="wayland-7", NULAVIO_HOME=str(nulavio))
+        home = Path(tempfile.mkdtemp(prefix="nv-confine-home-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        args = confine.wrap([sys.executable, "-I", "-c", CONNECT, *(str(run / n) for n in sockets)],
+                            profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent, home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        script = f"test -e {other}/cookies.sqlite && echo other-profile-visible; echo runtime-mode-$(stat -c %a {run}); true"
+        seen = subprocess.run(args, capture_output=True, text=True, timeout=30, check=True).stdout.split("\n")
+        shell = [*args[: args.index("--") + 1], "/bin/sh", "-c", script]
+        seen += subprocess.run(shell, capture_output=True, text=True, timeout=30, check=True).stdout.split("\n")
+        connected = sorted(Path(line.split(" ", 1)[1]).name for line in seen if line.startswith("connected "))
+        self.assertEqual(connected, ["pipewire-0", "wayland-7"], "only the display and sound sockets answer")
+        self.assertNotIn("other-profile-visible", seen)
+        self.assertIn("runtime-mode-700", seen)
+
+    def test_the_host_shared_memory_folder_is_not_shared(self):
+        if not Path("/dev/shm").is_dir():
+            self.skipTest("no /dev/shm here")
+        marker = Path(tempfile.mkdtemp(prefix="nv-confine-", dir="/dev/shm"))
+        self.addCleanup(shutil.rmtree, marker, True)
+        home = Path(tempfile.mkdtemp(prefix="nv-confine-home-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "p").mkdir()
+        written = Path(f"{marker}.inside")
+        self.addCleanup(written.unlink, missing_ok=True)
+        script = f"test -e {marker} && echo host-shm-visible; touch {written}; true"
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=home / "p", engine_dir=Path("/usr/bin"), home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        out = subprocess.run(args, capture_output=True, text=True, timeout=30, check=True).stdout.split()
+        self.assertNotIn("host-shm-visible", out)
+        self.assertFalse(written.exists(), "a write in /dev/shm reached the host")
+
+    def test_a_confined_program_sees_no_host_terminal_input_device_or_ipc_segment(self):
+        home = Path(tempfile.mkdtemp(prefix="nv-confine-home-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "p").mkdir()
+        primary, secondary = os.openpty()  # another terminal of the session
+        self.addCleanup(os.close, primary)
+        self.addCleanup(os.close, secondary)
+        terminal = os.ttyname(secondary)
+        libc = ctypes.CDLL(None, use_errno=True)
+        segment = libc.shmget(0, 4096, 0o600)  # IPC_PRIVATE: a System V segment made outside
+        self.assertGreaterEqual(segment, 0, os.strerror(ctypes.get_errno()))
+        self.addCleanup(libc.shmctl, segment, 0, None)  # IPC_RMID, this segment only
+        script = (
+            f"test -e {terminal} && echo host-terminal-visible;"
+            "for n in /dev/input /dev/uinput /dev/hidraw0 /dev/kvm /dev/fuse; do test -e $n && echo visible-$n; done;"
+            f"awk '$2 == {segment} {{ print \"segment-visible\" }}' /proc/sysvipc/shm; echo listing; ls -A /dev; true"
+        )
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=home / "p", engine_dir=Path("/usr/bin"), home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        out = subprocess.run(args, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30,
+                             check=True).stdout.split()  # fmt: skip
+        self.assertNotIn("host-terminal-visible", out)
+        self.assertFalse([line for line in out if line.startswith("visible-")], out)
+        self.assertNotIn("segment-visible", out)
+        put_back = {p.name for p in confine.device_nodes()}
+        # bubblewrap's own /dev; "console" is the launcher's own terminal, when it has one.
+        own = {"console", "core", "fd", "full", "null", "ptmx", "pts", "random", "shm", "stderr", "stdin", "stdout",
+               "tty", "urandom", "zero"}  # fmt: skip
+        listed = set(out[out.index("listing") + 1 :])
+        self.assertLessEqual(listed, own | put_back)
+
     def test_the_probe_fails_where_nested_namespaces_are_denied(self):
         # Ubuntu's AppArmor denies them by capability (measured: unpriv_bwrap inside bubblewrap, unprivileged_userns
         # outside); --disable-userns denies them by count: the probe refuses all of them.

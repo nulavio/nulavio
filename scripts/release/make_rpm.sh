@@ -31,6 +31,7 @@ find "$work/tree" -name __pycache__ -prune -exec rm -rf {} +
 tar -C "$work/tree" --owner=0 --group=0 --sort=name -cf "$work/nulavio-tree.tar" nulavio
 cp "$repo/packaging/rpm/nulavio.spec" "$repo/packaging/linux/nulavio.desktop" "$work/"
 cp "$repo"/packaging/linux/updates/* "$work/"  # automatic updates, off until the person turns them on (#241)
+cp "$repo/site/keys/nulavio-packages.asc" "$work/"  # the only key the automatic updates take keys from
 
 podman run --rm --security-opt label=disable -v "$work:/work:ro" -v "$out:/out" "$image" bash -euc '
     dnf -y -q install rpm-build >/dev/null 2>&1 || { echo "make_rpm: dnf failed" >&2; exit 1; }

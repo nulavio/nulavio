@@ -117,6 +117,58 @@ class ProfileTest(TempHome):
         with self.assertRaises(profile.ProfileError):
             self.make()
 
+    def test_files_the_browser_writes_are_never_read_through_a_link_or_a_fifo(self):
+        # The launcher prepares a profile before the engine starts, outside any confinement of the browser, so
+        # what it reads there must be the profile's own regular files (I9).
+        prof = self.make()
+        outside = self.home / "outside.txt"
+        outside.write_text("not the profile's\n")
+        settings = prof.load_settings()
+        settings["pending_prefs"] = {"x.y": 1}
+        prof.save_settings(settings)
+        prefs_js = prof.path / "prefs.js"
+        prefs_js.unlink(missing_ok=True)
+        prefs_js.symlink_to(outside)
+        with self.assertRaises(paths.UnsafePathError):
+            profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})
+        self.assertTrue(prefs_js.is_symlink(), "left as it was")
+        self.assertEqual(outside.read_text(), "not the profile's\n")
+        with self.assertRaises(paths.UnsafePathError):
+            prefs.read_user_prefs(prefs_js)
+        prefs_js.unlink()
+        os.mkfifo(prefs_js)  # a FIFO would block the start
+        with self.assertRaises(paths.UnsafePathError):
+            prefs.read_user_prefs(prefs_js)
+        prefs_js.unlink()
+        settings_link = prof.settings_path
+        real = settings_link.with_name("real.json")
+        settings_link.rename(real)
+        settings_link.symlink_to(real)
+        with self.assertRaises(paths.UnsafePathError):
+            prof.load_settings()
+
+    def test_the_settings_folder_is_never_another_profiles_through_a_link(self):
+        # A link in place of the profile's own nulavio/ folder: its settings are neither read nor rewritten (I9).
+        prof, other = self.make(), self.make("other")
+        other_settings = other.settings_path.read_bytes()
+        shutil.rmtree(prof.meta_dir)
+        prof.meta_dir.symlink_to(other.meta_dir)
+        with self.assertRaises(paths.UnsafePathError):
+            prof.load_settings()
+        with self.assertRaises(paths.UnsafePathError):
+            profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})
+        self.assertEqual(other.settings_path.read_bytes(), other_settings)
+        self.assertEqual(doctor.check_seeds(prof), [], "doctor goes on; its profile check reports the profile")
+
+    def test_the_preview_theme_is_removed_only_from_the_profiles_own_chrome_folder(self):
+        prof, other = self.make(), self.make("other")
+        css = other.path / "chrome" / "userChrome.css"
+        css.parent.mkdir()
+        css.write_text(f"/* {profile.PREVIEW_THEME_MARKER} */\n")
+        (prof.path / "chrome").symlink_to(css.parent)
+        profile._remove_preview_theme(prof)
+        self.assertTrue(css.exists())
+
     def test_seeds_apply_once_and_user_js_holds_only_enforced(self):
         prof = self.make()
         first = profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})

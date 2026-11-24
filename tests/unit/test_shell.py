@@ -171,7 +171,7 @@ class PrivilegedApiTest(unittest.TestCase):
         self.assertEqual(apis["nulavioSearch"]["parent"]["events"], ["startup"])
         self.assertEqual(apis["nulavioGuard"]["parent"]["events"], ["startup"])  # independent of the event page
         self.assertEqual(apis["nulavioPrivacy"]["parent"]["events"], ["startup"])  # defaults before the first page
-        self.assertNotIn("events", apis["nulavioProfiles"]["parent"])
+        self.assertEqual(apis["nulavioProfiles"]["parent"]["events"], ["startup"])  # the engine's profile menus (U-T23)
         self.assertEqual(apis["nulavioRouting"]["parent"]["events"], ["startup"])  # links clicked in pages (M5)
         self.assertNotIn("events", apis["nulavioConnect"]["parent"])
         self.assertNotIn("events", apis["nulavioPersonalise"]["parent"])  # lazy: nothing to do at startup
@@ -610,6 +610,26 @@ class RoutingTest(unittest.TestCase):
         self.assertIn('const ROUTABLE_SCHEMES = new Set(["http", "https"]);', router)
         self.assertIn('return stay("private");', router)
 
+    def test_pages_for_a_held_link_read_it_from_the_module(self):
+        """Another installed extension can open any Shell page as a tab with a query of its own. The ask, blocked
+        and unlock pages take only the id of a held link from their address (the unlock page also a profile to
+        unlock, with no link): the link, the rule, the profile and the reason come from the routing module."""
+        page = (SHELL / "routing" / "page.js").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'\.get\("(\w+)"\)', page), ["h"])
+        self.assertIn("routing.held(id, `routing/${mode}.html`)", page)
+        unlock = (SHELL / "vault" / "unlock.js").read_text(encoding="utf-8")
+        self.assertEqual(sorted(set(re.findall(r'params\.get\("(\w+)"\)', unlock))), ["h", "p"])
+        self.assertIn('browser.nulavioRouting.held(id, "vault/unlock.html")', unlock)
+        routing = module_text("NulavioRouting.sys.mjs")
+        opener = routing[routing.index("async #openPage(") :]
+        self.assertIn("const id = this.hold(page, params);", opener)
+        self.assertIn("{ h: id }", opener)
+        vault = module_text("NulavioVault.sys.mjs")
+        opener = vault[vault.index("async openUnlockPage(") :]
+        self.assertIn('params.set("h", lazy.NulavioRouting.hold("vault/unlock.html"', opener)
+        self.assertNotIn('params.set("u"', opener)
+        self.assertNotIn('params.set("src"', opener)  # the source is in the held link; the page reads no `src`
+
     def test_rules_are_never_inferred(self):
         # Only the settings page, the toolbar selector and the ask page create or change rules.
         for path in SHELL.rglob("*.js"):
@@ -790,13 +810,33 @@ class PasswordsTest(unittest.TestCase):
 
     def test_lookalike_check_reads_nothing_from_pages(self):
         child = module_text("NulavioLookalikeChild.sys.mjs")
-        for forbidden in (".value", "innerText", "textContent", "location", "document.", "form", "fetch(", "keydown"):
-            self.assertNotIn(forbidden, child.rsplit("*/", 1)[1])  # code, after the comments
-        self.assertEqual(child.count("sendAsyncMessage("), 1)
+        code = re.sub(r"//.*", "", child.rsplit("*/", 1)[1])  # without the comments
+        page_reads = (".value", "innerText", "textContent", "location", "form", "fetch(", ".key", ".code", ".which", ".data")
+        for forbidden in (*page_reads, "clipboard"):
+            self.assertNotIn(forbidden, code)
+        # Of the document, only whether the person has just interacted with it (the engine's transient user activation).
+        self.assertEqual(re.findall(r"document\b\.?\w*", code), ["document.hasValidTransientUserGestureActivation"])
+        self.assertEqual(code.count("sendQuery("), 1)
+        self.assertNotIn("sendAsyncMessage(", code)
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
         self.assertNotIn("message.data", parent)
         self.assertNotIn("content_scripts", make_shell.manifest())
+
+    def test_the_warning_page_names_only_what_the_module_finds(self):
+        """The look-alike warning is opened with the site's address only; the passwords module finds the saved site
+        it imitates again, and "continue" remembers the pair the module finds, not one the page names."""
+        parent = module_text("NulavioLookalikeParent.sys.mjs")
+        self.assertIn("new URLSearchParams({ url })", parent)
+        page = (SHELL / "passwords" / "lookalike.js").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url"])
+        self.assertIn("browser.nulavioPasswords.check(url.href)", page)
+        self.assertIn("browser.nulavioPasswords.dismiss(url.href)", page)
+        # One title whether or not the module finds a pair: another extension reads a tab's title.
+        self.assertNotIn("document.title", page)
+        schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
+        params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
+        self.assertEqual((params["check"], params["dismiss"]), (["url"], ["url"]))
 
 
 class LayoutModuleTest(unittest.TestCase):

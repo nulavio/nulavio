@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import itertools
 import html as html_module
+import io
 import json
 import re
 import shutil
@@ -22,6 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "brand"))
 
 import build_site  # noqa: E402
 import verify_live  # noqa: E402
+import waitlist_remove  # noqa: E402
 from contrast import ratio  # noqa: E402
 
 # The landing (what Nulavio is at launch, the comparison, the waitlist form), the waitlist pages, the
@@ -781,6 +784,22 @@ class WaitlistWorkerTest(unittest.TestCase):
         self.assertEqual(self.cases["leave_put"]["headers"].get("allow"), "GET, HEAD, POST")
         self.assertRegex(self.cases["no_fetch_metadata"]["location"], self.LINK_RE, "an older browser still gets in")
 
+    def test_addresses_keep_to_a_plain_character_set(self):
+        """Letters, digits and . _ % + - before the @; letters, digits and hyphens in each label after it.
+
+        An address is later handled outside the worker (read, removed by hand, mailed to), so the
+        worker keeps out every character that means something to a shell or to SQL, not only those
+        its own bound parameters would have survived."""
+        refused = {name: case for name, case in self.cases.items() if name.startswith("refused_")}
+        self.assertGreater(len(refused), 50)
+        for name, case in refused.items():
+            with self.subTest(case=name):
+                self.assertEqual((case["status"], case["location"], case["statements"]), (303, "/en/waitlist/#invalid", []))
+        plain = self.cases["plain_characters"]
+        self.assertRegex(plain["location"], self.LINK_RE)
+        db = self.database("plain_characters")
+        self.assertEqual([email for email, *_ in self.entries(db)], ["ana.maria+lista_1%x-y@sub-domain.example.com.br"])
+
     def test_answers_carry_their_own_headers(self):
         for name in ("join", "leave", "invalid_email", "cross_site", "get", "link_page_short_key"):
             headers = self.cases[name]["headers"]
@@ -792,6 +811,177 @@ class WaitlistWorkerTest(unittest.TestCase):
 
     def test_other_paths_fall_through_to_the_static_files(self):
         self.assertEqual((self.cases["other_api_path"]["status"], self.cases["other_api_path"]["body"]), (404, "the 404 page"))
+
+
+class WaitlistRemovalTest(unittest.TestCase):
+    """scripts/site/waitlist_remove.py, how the maintainer removes an entry by hand (CONTRIBUTING, "Website")."""
+
+    # Addresses that may be on the list: today's plain ones, and ones from before the worker narrowed what it
+    # takes (any character but whitespace and @), with every printable ASCII character that is not a letter or
+    # a digit, and control characters: ESC, DEL, NUL, U+001F and U+0085 (whitespace to Python, not to the worker).
+    OTHERS = ("ana@example.org", "Bruno@Example.org", "carla.souza+lista@exemplo.com.br")
+    CONTROL = (
+        "a\x1b[2Jb@example.org",
+        "a\x7fb@example.org",
+        "a\x00b@example.org",
+        "a\x7f\x00\x1bc@example.org",
+        "\x1fa@example.org\x1f",
+        "\x85a@example.org",
+        "a@exa\x9bmple.org",
+    )
+    ODD = (
+        *(f"a{c}b@example.org" for c in "!\"#$%&'()*+,-./:;<=>?[\\]^_`{|}~"),
+        "o'brien@example.org",
+        "'@example.org",
+        "é@exemplo.br",
+        *CONTROL,
+        "a\x00bb@example.org",  # differs from a\x00b@… only after the NUL
+    )
+
+    SQL = (
+        r"^DELETE FROM waitlist WHERE email = CAST\(X'([0-9a-f]+)' AS TEXT\)( AND hex\(email\) = '[0-9A-F]+'|); "
+        r"DELETE FROM waitlist_links WHERE email = CAST\(X'\1' AS TEXT\)\2$"
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.schema = re.findall(r'"(CREATE TABLE IF NOT EXISTS waitlist(?:_links)? \(.*?\))"', WORKER.read_text(encoding="utf-8"))
+        assert len(cls.schema) == 2, cls.schema
+
+    def listed(self, addresses: list[str]) -> sqlite3.Connection:
+        """SQLite with the worker's tables and these addresses, each with a link."""
+        db = sqlite3.connect(":memory:")
+        self.addCleanup(db.close)
+        for sql in self.schema:
+            db.execute(sql)
+        for n, email in enumerate(addresses):
+            db.execute("INSERT INTO waitlist VALUES (?, 'en', '', ?)", (email, f"2026-11-{n % 28 + 1:02d}T00:00:00Z"))
+            db.execute("INSERT INTO waitlist_links VALUES (?, ?)", (email, f"{n:064x}"))
+        return db
+
+    def removing(self, address: str, *, answers=("y",), args=()):
+        """What main() printed and sent to the runner, with this address typed at the prompt."""
+        typed = iter([address, *answers])
+        sent = []
+
+        def read(prompt):
+            return next(typed)
+
+        def run(argv):
+            sent.append(argv)
+            return 0
+
+        out = io.StringIO()
+        status = waitlist_remove.main(list(args), read=read, run=run, out=out)
+        return status, sent, out.getvalue()
+
+    def test_exactly_the_entry_and_its_link_go_whatever_the_address_holds(self):
+        for address in [*self.ODD, *self.OTHERS]:
+            with self.subTest(address=address):
+                db = self.listed([*self.ODD, *self.OTHERS])
+                status, sent, _ = self.removing(address.upper() if address == "ana@example.org" else address)
+                self.assertEqual(status, 0)
+                (argv,) = sent
+                self.assertIsInstance(argv, list, "an argument list, never a shell")
+                self.assertEqual(argv[:6], ["wrangler", "d1", "execute", "nulavio-waitlist", "--remote", "--command"])
+                self.assertEqual(len(argv), 7, "the SQL is one argument")
+                self.assertRegex(argv[6], self.SQL, "the SQL holds none of the address's characters")
+                db.executescript(argv[6])
+                left = {email for (email,) in db.execute("SELECT email FROM waitlist")}
+                linked = {email for (email,) in db.execute("SELECT email FROM waitlist_links")}
+                self.assertEqual(left, {*self.ODD, *self.OTHERS} - {address})
+                self.assertEqual(linked, left)
+
+    def test_an_address_not_on_the_list_removes_nothing(self):
+        db = self.listed(self.OTHERS)
+        _, (argv,), _ = self.removing("d'ora@example.org")
+        db.executescript(argv[6])
+        self.assertEqual(len(db.execute("SELECT * FROM waitlist").fetchall()), len(self.OTHERS))
+
+    def test_the_address_never_comes_from_the_command_line(self):
+        with self.assertRaises(SystemExit) as raised, contextlib.redirect_stderr(io.StringIO()):
+            waitlist_remove.main(["ana@example.org"], read=lambda prompt: "", run=lambda argv: 0, out=io.StringIO())
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_it_asks_first_and_can_only_show(self):
+        status, sent, out = self.removing("ana@example.org", answers=("n",))
+        self.assertEqual((status, sent), (2, []))
+        self.assertIn("Nothing removed.", out)
+        status, sent, out = self.removing("ana@example.org", answers=(), args=("--dry-run",))
+        self.assertEqual((status, sent), (0, []))
+        self.assertIn("Address: 'ana@example.org'", out)
+        status, sent, _ = self.removing("ana@example.org", answers=(), args=("--yes", "--database", "other"))
+        self.assertEqual((status, sent[0][3]), (0, "other"))
+
+    def test_only_what_the_worker_never_stored_is_refused(self):
+        """Whitespace inside, no @, too long: the older pattern refused these too. Control characters are shown, not refused."""
+        spaces = ["a b@example.org", "a\tb@example.org", "a\u00a0b@example.org", "a\u2028b@example.org"]
+        for address in ["", *spaces, "no-at", "a" * 250 + "@x.org"]:
+            with self.subTest(address=address):
+                status, sent, out = self.removing(address)
+                self.assertEqual((status, sent), (2, []))
+                self.assertIn("Refused", out)
+        status, sent, out = self.removing("a\x1b[2Jb@example.org", answers=(), args=("--dry-run",))
+        self.assertEqual(status, 0)
+        self.assertIn("Address: 'a\\x1b[2Jb@example.org'", out, "spelled out")
+        self.assertNotIn("\x1b", out, "nothing reaches the terminal as is")
+
+    def test_it_trims_what_the_worker_trims_and_nothing_more(self):
+        trimmed = (
+            ("\ufeffana@example.org\r", "ana@example.org"),
+            (" \t\x1fa@example.org\x1f ", "\x1fa@example.org\x1f"),
+            ("\x85a@example.org", "\x85a@example.org"),
+        )
+        for typed, meant in trimmed:
+            with self.subTest(typed=typed):
+                _, (argv,), _ = self.removing(typed)
+                self.assertIn(meant.encode("utf-8").hex(), argv[6])
+                self.assertEqual(argv[6].count("X'"), 2)
+
+    def test_a_file_on_standard_input_reaches_the_sql_byte_for_byte(self):
+        """The real input(): a file holding ESC, DEL and NUL, with a byte order mark, as CONTRIBUTING says to give it."""
+        address = "a\x1b[2J\x7f\x00b@example.org"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "address.txt"
+            path.write_bytes(b"\xef\xbb\xbf" + address.encode("utf-8") + b"\n")
+            with path.open("rb") as stdin:
+                done = subprocess.run(
+                    [sys.executable, "-I", str(ROOT / "scripts" / "site" / "waitlist_remove.py"), "--dry-run"],
+                    stdin=stdin,
+                    capture_output=True,
+                    timeout=30,
+                    env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"},
+                )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        out = done.stdout.decode("ascii")  # ascii(): nothing else reaches the terminal
+        self.assertIn(f"CAST(X'{address.encode('utf-8').hex()}' AS TEXT)", out)
+        self.assertIn(f"hex(email) = '{address.encode('utf-8').hex().upper()}'", out)
+
+    def test_a_missing_wrangler_is_said_plainly(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(waitlist_remove.run_wrangler([str(ROOT / "no-such-wrangler")]), 2)
+        self.assertIn("was not found", out.getvalue())
+
+    def test_the_documented_read_shows_every_address_as_printable_ascii(self):
+        contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        read = r'To read the list: `wrangler d1 execute nulavio-waitlist --remote --command "([^"]+)"`'
+        (query,) = re.findall(read, contributing)
+        self.assertNotIn("SELECT *", query)
+        db = self.listed([*self.ODD, *self.OTHERS])
+        rows = db.execute(query).fetchall()
+        self.assertEqual(len(rows), len(self.ODD) + len(self.OTHERS))
+        shown = {email for email, *_ in rows}
+        for email, *rest in rows:
+            with self.subTest(email=email):
+                self.assertRegex("".join(map(str, [email, *rest])), r"^[ -~]*$")
+        for address in [*self.ODD, *self.OTHERS]:
+            plain = all(" " <= c <= "~" for c in address)
+            self.assertIn(address if plain else "hex:" + address.encode("utf-8").hex().upper(), shown)
+
+    def test_contributing_points_to_the_script_and_holds_no_sql_to_fill_in(self):
+        contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+        self.assertIn("scripts/site/waitlist_remove.py", contributing)
+        self.assertNotRegex(contributing, r"(?i)DELETE FROM waitlist", "the address is never pasted into SQL by hand")
 
 
 class SiteWorkflowTest(unittest.TestCase):

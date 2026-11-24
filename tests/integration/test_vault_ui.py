@@ -33,6 +33,7 @@ SHELL = "resource://builtin-addons/nulavio-shell/modules"
 PRELUDE = (
     f'const V = ChromeUtils.importESModule("{SHELL}/NulavioVault.sys.mjs").NulavioVault;'
     f'const P = ChromeUtils.importESModule("{SHELL}/NulavioProfiles.sys.mjs").NulavioProfiles;'
+    f'const R = ChromeUtils.importESModule("{SHELL}/NulavioRouting.sys.mjs").NulavioRouting;'
     'const SPS = ChromeUtils.importESModule("resource:///modules/profiles/SelectableProfileService.sys.mjs")'
     ".SelectableProfileService;"
 )
@@ -113,6 +114,12 @@ class VaultUiTest(unittest.TestCase):
         if "error" in result:
             raise AssertionError(result["error"])
         return result["ok"]
+
+    def unlock_with_link(self, profile_id: int, url: str) -> str:
+        """The unlock page for a link held back for this profile, as routing opens it: the page's address
+        names the profile and the id of the held link; the link itself is read from the routing module."""
+        held = self.call("return R.hold('vault/unlock.html', {u: args[0], p: args[1]});", url, profile_id)
+        return f"vault/unlock.html?p={profile_id}&h={held}"
 
     def open_page(self, page: str) -> None:
         # A new tab, as the browser opens these pages (the unlock page closes its tab after success).
@@ -352,7 +359,7 @@ class VaultUiTest(unittest.TestCase):
         profile_id = self.created_id
         path = self.profile_path(profile_id)
         url = self.server.url("/page/vault-opened")
-        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
+        self.open_page(self.unlock_with_link(profile_id, url))
         self.wait_state("idle")
         self.assertEqual(self.m.execute("return document.activeElement.id;"), "password")  # keyboard first
         self.assertEqual(self.m.execute("return document.getElementById('url').textContent;"), url)
@@ -430,7 +437,7 @@ class VaultUiTest(unittest.TestCase):
         profile_id, code = self.create_via_api("SoLogin", password=None, keyring=True)
         self.keyring_store.write_text("[]")
         url = self.server.url("/page/recovery-opened")
-        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
+        self.open_page(self.unlock_with_link(profile_id, url))
         self.wait_state("idle")  # computer login is still offered first
         self.click("#use-keyring")
         self.wait_state("device-unavailable")
@@ -606,7 +613,7 @@ class VaultUiTest(unittest.TestCase):
         profile_id = self.phone_profile
         path = self.profile_path(profile_id)
         url = self.server.url("/page/phone-opened")
-        self.open_page(f"vault/unlock.html?p={profile_id}&u={url}")
+        self.open_page(self.unlock_with_link(profile_id, url))
         self.wait_state("idle")
         self.click("#use-phone")
         self.wait_state("waiting")

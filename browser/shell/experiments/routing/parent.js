@@ -73,6 +73,7 @@ this.nulavioRouting = class extends ExtensionAPI {
         setRuleAction: call((id, action) => routing.setRuleAction(id, action)),
         ruleFor: call(url => routing.ruleFor(url)),
         openIn: call((profileId, url) => routing.openIn(profileId, url)),
+        held: call((id, page) => routing.held(id, page)),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioRouting.onChanged",

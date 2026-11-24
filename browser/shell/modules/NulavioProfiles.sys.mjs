@@ -16,6 +16,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
+  NulavioAgentNetwork: "resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   PENDING_FILE: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
@@ -23,6 +24,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   isLink: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
   setTimeout: "resource://gre/modules/Timer.sys.mjs",
   vaultHelper: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
+  NulavioVault: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -45,6 +47,8 @@ export const PREF_START_CHOOSER = "nulavio.profiles.startChooserAdopted";
    profiles from that window). So a protected profile is never left as the start-up profile: the engine's own
    function is given the unprotected profile used last, which this shared pref names (its id in the group). */
 export const PREF_START_PROFILE = "nulavio.profiles.startProfile";
+// On SelectableProfileService.launchInstance once Nulavio's lock check stands in front of it: the engine's own method.
+const GUARDED = Symbol.for("nulavio.profiles.launchGuard");
 // The band's profile summary is rebuilt at least this often, even without a change notice.
 const BAND_CACHE_MS = 30000;
 const PREF_COLOR_MIGRATION = "nulavio.profiles.colors.farol";
@@ -125,6 +129,17 @@ export class ProfilesError extends Error {
 
 function fail(code, message) {
   throw new ProfilesError(code, message);
+}
+
+/**
+ * An engine the AI Bridge started (its environment names the agent) starts no other profile's engine: the new one
+ * would inherit that environment and count as an agent's for its whole run. The person opens other profiles from
+ * one of their own windows.
+ */
+function refuseInAgentEngine() {
+  if (lazy.NulavioAgentNetwork.driven()) {
+    fail("agent-window");
+  }
 }
 
 /**
@@ -581,6 +596,7 @@ class NulavioProfilesClass {
    * when that instance exits; the engine is started with an argument list.
    */
   async openTemporary() {
+    refuseInAgentEngine();
     const answer = await lazy.callTool(["temporary", "api"], { op: "create" });
     if (typeof answer?.path !== "string" || !answer.path.startsWith("/") || answer.path.includes("\0")) {
       fail("helper-failed");
@@ -883,11 +899,61 @@ class NulavioProfilesClass {
     if (profile.id === this.#service.currentProfile?.id) {
       return { action: "current" };
     }
+    refuseInAgentEngine();
     if ((await lazy.profileLockState(profile.path)) === "locked") {
       fail("locked"); // its files are encrypted until the user unlocks it
     }
     this.#service.launchInstance(profile, []);
     return { action: "launched" };
+  }
+
+  /**
+   * The engine's own ways of starting another profile of the group (the app menu's and the menu bar's Profiles
+   * lists, "Move tab to profile", a new profile, the profile chooser opened from a window) all go through
+   * SelectableProfileService.launchInstance, which starts the engine on the profile's folder. From the Shell's
+   * start, Nulavio's lock check stands in front of it in this instance: a locked protected profile, or one whose
+   * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
+   * starts as the engine meant. The state is read at each launch, from the profile's files, as switchTo() and
+   * routing read it. Of several addresses meant for a locked profile, the unlock page carries the first. In an
+   * engine an agent drives, they start nothing (agent-window, as switchTo()).
+   */
+  guardLaunches() {
+    const service = this.#service;
+    if (service.launchInstance?.[GUARDED]) {
+      return;
+    }
+    const engines = service.launchInstance;
+    const guarded = (profile, urls) => {
+      this.#launchChecked(engines, profile, urls).catch(e => console.error("Nulavio profiles: launch", e));
+    };
+    guarded[GUARDED] = engines;
+    service.launchInstance = guarded;
+  }
+
+  /** The engine's own launchInstance again (the Shell stopped without the application). */
+  unguardLaunches() {
+    const service = this.#service;
+    if (Object.hasOwn(service, "launchInstance") && service.launchInstance[GUARDED]) {
+      delete service.launchInstance;
+    }
+  }
+
+  async #launchChecked(engines, profile, urls) {
+    // In an engine an agent drives, these menus start no other profile and open no unlock page for one, as
+    // switchTo() and openTemporary() refuse: the engine started would inherit the agent's environment.
+    refuseInAgentEngine();
+    let state = null;
+    try {
+      state = await lazy.profileLockState(profile.path);
+    } catch (e) {
+      console.error("Nulavio profiles: lock state", e); // not started: it may be a locked one
+    }
+    if (state === "plain" || state === "unlocked") {
+      engines.call(this.#service, profile, urls);
+      return;
+    }
+    const url = (urls ?? []).find(u => /^https?:/i.test(u)) ?? null;
+    await lazy.NulavioVault.openUnlockPage(profile.id, url);
   }
 
   /**

@@ -2,19 +2,48 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Flow D, in the page's process: tell the parent once per document that a password field got
-   focus. Nothing of the page is read: not the field's value, not the form, not the address (the
-   parent knows the document's address from the engine). */
+/* Flow D, in the page's process: tell the parent once per document that the person is about to use
+   a password field. Nothing of the page is read: not the field's value, not the key, not the form,
+   not the address (the parent knows the document's address from the engine).
+
+   Only the person's own input counts: a click or a key in the field, or the field getting the focus
+   while the document has the engine's transient user activation (a click, a tap or a key the person
+   pressed in it, a few seconds at most). A focus the page gives itself (script, autofocus) asks
+   nothing; the first click or key in that field then does (a held key's repeated keydowns in it do
+   not). A click or a key needs no activation: a trusted one is the person's input, and the page can
+   use up the activation before it arrives.
+   The engine sends these actors trusted events only; isTrusted is checked as well. */
+
+const EVENTS = new Set(["focusin", "mousedown", "keydown"]);
 
 export class NulavioLookalikeChild extends JSWindowActorChild {
   #asked = false;
 
   handleEvent(event) {
     const field = event.target;
-    if (this.#asked || event.type !== "focusin" || field?.localName !== "input" || field.type !== "password") {
+    if (this.#asked || !event.isTrusted || !EVENTS.has(event.type)) {
       return;
     }
+    if (field?.localName !== "input" || field.type !== "password") {
+      return;
+    }
+    if (event.type === "focusin" && !this.document.hasValidTransientUserGestureActivation) {
+      return;
+    }
+    if (event.type === "keydown" && event.repeat) {
+      return; // a held key is one press: only its first keydown counts
+    }
     this.#asked = true;
-    this.sendAsyncMessage("PasswordFieldFocused");
+    // The parent answers false when it could not decide for this document (the tab no longer showed
+    // it when the check ended): the next use of a password field asks again. A failed query (the
+    // warning replaced the page, or the check itself failed) is not asked again for this document.
+    this.sendQuery("PasswordFieldFocused").then(
+      decided => {
+        if (decided === false) {
+          this.#asked = false;
+        }
+      },
+      () => {}
+    );
   }
 }

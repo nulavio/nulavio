@@ -1,6 +1,6 @@
 # ADR 0005 — Phone profile unlock (the brief's `phone-profile-unlock`)
 
-- **Status:** Accepted (2026-10-26). Desktop side and protocol: prototype with a simulated phone (S3). Android app: last slice (S11). Transport amended 2026-10-27 (S11): the phone listens, the desktop resolves it over mDNS and connects out.
+- **Status:** Accepted (2026-10-26). Desktop side and protocol: prototype with a simulated phone (S3). Android app: last slice (S11). Transport amended 2026-10-27 (S11): the phone listens, the desktop resolves it over mDNS and connects out. Pairing amended 2026-11-24: version 2, the desktop commits to a nonce in the QR and the 6 digits cover it.
 - **Scope:** unlocking **Nulavio profiles** only. Not a passkey manager for websites; WebAuthn for pages is unchanged; no remote login.
 - **Related:** [compatibility report](../research/phone-unlock-compatibility.md), [ADR 0006 Vault](0006-nulavio-vault.md), [architecture](../architecture/vault-and-unlock.md), [threat model](../security/threat-model-unlock.md), [brief](../product/briefs/2026-10-26-profile-unlock.md).
 
@@ -28,7 +28,7 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 2. **WebAuthn hybrid + PRF is not used** now. Re-evaluate when all of these hold: a Linux system passkey service ships in Fedora (Credentials for Linux or equivalent), PRF over hybrid is specified (W3C) and returned by both Android and iOS providers, and Nulavio's own tests release a key with it.
 3. **Approval-only is rejected** as an unlock method. It may exist later only as an extra confirmation on top of a real method, shown as `phone_approved`.
 4. **Protocol v1 (`nv1`)**, standard primitives through libsodium on the desktop (decision D1): X25519, Ed25519, XChaCha20-Poly1305, BLAKE2b-based key derivation. Pairing and unlock are specified in [architecture](../architecture/vault-and-unlock.md#phone-protocol-nv1):
-   - **Pairing:** one-time QR invitation (desktop key, pairing secret, expiry), an authenticated key exchange over the local network, and a 6-digit code the user compares on both screens (defeats QR substitution and relays). The QR alone never pairs.
+   - **Pairing:** one-time QR invitation (desktop key, pairing secret, a commitment to a desktop nonce, expiry), an authenticated key exchange over the local network, and a 6-digit code the user compares on both screens (against QR substitution and relays: an attempt succeeds with a chance of about one in a million, [R85](../security/residual-risks.md)). The QR alone never pairs. Since 2026-11-24 this is pairing version 2 ([Pairing amendment](#pairing-amendment-2026-11-24)).
    - **Envelope:** the desktop wraps the profile key for the phone with an ephemeral X25519 key against the phone's long-term key and keeps only the result. The desktop cannot open it without the phone.
    - **Unlock:** a request signed by the desktop, bound to profile, device, operation and a 60-second expiry; the phone shows it, the user authenticates locally, the phone computes the wrapping key and returns it encrypted to a fresh desktop session key and signed. Replayed, expired, unpaired or substituted responses fail.
    - **Phone key storage (v1):** the phone's Curve25519 keys are kept encrypted under a **non-exportable hardware key that requires biometrics or the device PIN for each use** (Android Keystore, StrongBox when present; iOS Keychain with access control). This is *hardware-protected*, not *hardware-bound*: during an unlock the private key is briefly in the app's memory.
@@ -50,6 +50,25 @@ Evidence and per-platform states: [compatibility report](../research/phone-unloc
 **Why it is safe.** The transport adds no trust: everything the desktop accepts is authenticated by the protocol (`nv1`). Someone on the network who announces the same name, or connects to the phone first, learns nothing usable (the pairing box needs the QR secret; the unlock box needs the desktop's session key) and can only delay the operation; the desktop ignores a response not signed by the paired phone and keeps resolving until the request expires. The mDNS name reveals to the local network that a Nulavio phone operation is under way, not which profile or desktop.
 
 **Limits.** Networks that isolate Wi-Fi clients or drop multicast (some guest and corporate networks) block both directions alike; then the UI says the phone could not be reached and offers the profile's other methods. Without Avahi on the desktop, "Unlock with phone" is unavailable (shown as such).
+
+## Pairing amendment (2026-11-24)
+
+**Decision.** Pairing moves to version 2 ([architecture](../architecture/vault-and-unlock.md#pairing-requires-the-profile-unlocked-adding-a-method-needs-the-dek)). The desktop draws a fresh 32-byte nonce for each invitation and puts only a commitment to it in the QR (`c`, BLAKE2b of the nonce with the invite id). It reveals the nonce inside its `accept`, after the one `hello` the invitation takes. The phone checks the nonce against the commitment in the QR it scanned before it shows any digits. The 6 digits are derived from the transcript, which now also covers the commitment and a version tag, and from the nonce.
+
+**Why.** The comparison only proves that both screens saw the same exchange if neither participant could choose its contribution after it knew what the other screen would show. That is the commit-then-reveal order of SAS-based pairing, as in Bluetooth's numeric comparison and ZRTP's short authentication string. In version 1 the desktop's whole contribution was in the QR, and the `hello` came after it. Now the desktop is bound to its nonce before it sees the phone's fresh exchange key. Whoever sends the `hello` fixes every input of its own before it learns the nonce. An attempt to make two different exchanges show the same digits therefore succeeds with a chance of about one in a million ([R85](../security/residual-risks.md)). The desktop takes one `hello` per invitation, so each attempt costs a pairing the user started and compared. Same primitives as before, through libsodium, Tink and Bouncy Castle; nothing new is built.
+
+**Versions.** The QR and the `hello` carry `v: 2`, and the transcript starts with the tag `nv1/pair/v2`.
+- The desktop refuses a `hello` of any other version with `unsupported-version` and ends the attempt.
+- The Companion refuses a QR of any other version with a message to update Nulavio and the Companion.
+- Neither side falls back to version 1.
+- Unlock requests, envelopes and phones already paired are unchanged: a phone paired under version 1 keeps unlocking.
+- Nulavio Companion 0.1.0 speaks only version 1 and reads a version-2 QR as "not a Nulavio code", which no change on the desktop can alter. Pairing a new phone needs Companion 0.2.0 or later.
+
+**Tests.**
+- `test_vault.SubstitutedPairingTest`: the desktop's digits cannot be worked out from what the sender of the `hello` holds (fails on version 1); a nonce that does not open the commitment is refused by the phone; other versions are refused on each side.
+- `test_phone_link` 02a: the refusal over the network.
+- The `pairing_commitment` and `pairing_transcript` vectors (`nv1-vectors.json`), with `VectorsTest` and `PhoneTest` on the Java side.
+- `test_companion_protocol`: the Java phone pairs with the Python desktop.
 
 ## Implementation (S11, 2026-10-27)
 
