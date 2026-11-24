@@ -236,7 +236,7 @@ class HeldLinksTest(unittest.TestCase):
             self.m.switch_to(self.home)
             self.call(
                 "W.removeConfirmed('paypa1.example', 'paypal.example');"
-                "for (const login of await Services.logins.getAllLogins()) { Services.logins.removeLogin(login); }"
+                "for (const login of await Services.logins.getAllLogins()) { await Services.logins.removeLoginAsync(login); }"
             )
 
     def test_07_the_default_destination_page_tries_again_only_the_profile_it_held(self):
