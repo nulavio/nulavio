@@ -31,10 +31,12 @@ const LINKS = { "pt-BR": "/lista/link/", en: "/en/waitlist/link/" };
 const PLATFORMS = new Set(["", "fedora", "ubuntu", "arch", "linux-other", "windows", "macos"]);
 const MAX_BODY = 2048; // bytes; the form sends well under 400
 // Unaccented letters, digits and . _ % + - before the @, and unaccented letters, digits and hyphens
-// in each label of the domain. Narrower than what mail allows, on purpose: the list is read, removed
-// from by hand and mailed to outside this worker, so a new sign-up brings no quote, $, `, ;, |, &,
-// parenthesis, brace, backslash or space into it. Entries from before this rule can still hold them.
-const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+// in each label of the domain; the address and each label start with a letter or a digit. Narrower
+// than what mail allows, on purpose: the list is read, removed from by hand and mailed to outside
+// this worker, so a new sign-up brings no quote, $, `, ;, |, &, parenthesis, brace, backslash,
+// space or control character into it, and does not start like an option (-). Entries from before
+// this rule can hold any character but whitespace and @.
+const EMAIL = /^[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9-]*)+$/;
 const KEY = /^[A-Za-z0-9_-]{43}$/; // 32 random bytes, base64url
 
 // NOCASE: the address is kept as typed, and A@b.example and a@b.example are one sign-up.

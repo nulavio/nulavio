@@ -89,8 +89,8 @@ const cases = {
 };
 // An address keeps to letters, digits and . _ % + - before the @, and to letters, digits and
 // hyphens in each label after it: any other character is refused like an invalid address,
-// before the address reaches anything.
-const OTHER = [..."'\"`$;|&!={}()<>\\*#?^~/,:[]", "é", "\u00a0"];
+// before the address reaches anything. Control characters too (ESC, NUL, DEL, a C1 one).
+const OTHER = [..."'\"`$;|&!={}()<>\\*#?^~/,:[]", "é", "\u00a0", "\u001b", "\u0000", "\u007f", "\u009b"];
 OTHER.forEach((character, index) => {
   cases[`refused_local_${index}`] = [send({ email: `ana${character}b@example.org`, lang: "en" })];
   cases[`refused_domain_${index}`] = [send({ email: `ana@exa${character}mple.org`, lang: "en" })];
@@ -98,6 +98,10 @@ OTHER.forEach((character, index) => {
 // Accepted before the @ only.
 [..."_%+"].forEach((character, index) => {
   cases[`refused_domain_local_only_${index}`] = [send({ email: `ana@exa${character}mple.org`, lang: "en" })];
+});
+// The address and each label of the domain start with a letter or a digit.
+["-rf@example.org", ".ana@example.org", "_ana@example.org", "%ana@example.org", "+ana@example.org", "ana@-x.org", "ana@x.-org", ".@-.-"].forEach((email, index) => {
+  cases[`refused_start_${index}`] = [send({ email, lang: "en" })];
 });
 
 const database = recorder();
