@@ -46,6 +46,7 @@ import {
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  NulavioAgentNetwork: "resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
@@ -59,6 +60,17 @@ const GESTURE_PREF = "dom.user_activation.transient.timeout";
 
 function fail(code, message) {
   throw new RoutingError(code, message);
+}
+
+/**
+ * An engine the AI Bridge started (its environment names the agent) starts no other profile's engine and sends no
+ * link to one. A started engine would inherit that environment and count as an agent's for its whole run, and a link
+ * would reach a profile the agent was not given. The person opens other profiles from one of their own windows.
+ */
+function refuseInAgentEngine() {
+  if (lazy.NulavioAgentNetwork.driven()) {
+    fail("agent-route");
+  }
 }
 
 function sleep(ms) {
@@ -360,6 +372,7 @@ class NulavioRoutingClass {
   /** Open a web URL in a profile because the user chose it. Never routed again there. */
   async openIn(profileId, url) {
     const spec = webUrl(url);
+    refuseInAgentEngine();
     const service = lazy.SelectableProfileService;
     await service.init();
     if (profileId === service.currentProfile?.id) {
@@ -376,6 +389,7 @@ class NulavioRoutingClass {
   }
 
   #launchRouted(profile, url, by = null) {
+    refuseInAgentEngine();
     const service = lazy.SelectableProfileService;
     const args = [`--${ROUTED_FLAG}`, ...(by === "default" ? [`--${ROUTE_BY_FLAG}`, "default"] : []), "-new-tab", url];
     try {
@@ -619,8 +633,14 @@ class NulavioRoutingClass {
   };
 
   #syncPageObserver() {
+    // In an engine an agent drives, a page's navigation always loads in that engine, where the Bridge checks it: a
+    // click there is the agent's, and it must not move a navigation to a profile the agent was not given.
     const wanted =
-      this.#pageWatch && this.inPage() && this.enabled() && Services.prefs.getBoolPref(GROUPED_PREF, false);
+      this.#pageWatch &&
+      this.inPage() &&
+      this.enabled() &&
+      Services.prefs.getBoolPref(GROUPED_PREF, false) &&
+      !lazy.NulavioAgentNetwork.driven();
     if (wanted && !this.#pageObserving) {
       Services.obs.addObserver(this.#requestObserver, "http-on-opening-request");
     } else if (!wanted && this.#pageObserving) {
@@ -636,6 +656,9 @@ class NulavioRoutingClass {
    * page started are considered; everything else returns at once.
    */
   #onOpeningRequest(subject) {
+    if (lazy.NulavioAgentNetwork.driven()) {
+      return; // #syncPageObserver does not watch in an engine an agent drives; nothing is routed from one either
+    }
     const channel = subject.QueryInterface(Ci.nsIHttpChannel);
     const loadInfo = channel.loadInfo;
     if (loadInfo.externalContentPolicyType !== Ci.nsIContentPolicy.TYPE_DOCUMENT) {
@@ -781,6 +804,11 @@ class NulavioRoutingClass {
 
   /** Send a navigation where a rule says: ask first, or the target profile; never here by default. */
   async #handOff(url, decision, source) {
+    if (lazy.NulavioAgentNetwork.driven()) {
+      // No other profile is started or answered from an engine an agent drives (refuseInAgentEngine): say so here.
+      await this.#openPage("routing/blocked.html", { u: url, r: decision.ruleId, why: "agent", src: source });
+      return;
+    }
     if (decision.action === "ask") {
       await this.#openPage("routing/ask.html", { u: url, r: decision.ruleId, src: source });
       return;

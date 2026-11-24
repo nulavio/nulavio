@@ -155,6 +155,11 @@ async function render() {
       }));
     }
     actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
+  } else if (held.why === "agent") {
+    // An engine an agent drives starts no other profile (NulavioRouting refuseInAgentEngine): "try again" would only
+    // fail again, so the page offers what can be done here.
+    document.getElementById("explain").textContent = t("routingBlockedAgent", [host]);
+    actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
   } else {
     const why = held.why;
     const name = rule?.profileName;

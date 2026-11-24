@@ -16,6 +16,7 @@
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   AsyncShutdown: "resource://gre/modules/AsyncShutdown.sys.mjs",
+  NulavioAgentNetwork: "resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs",
   callTool: "resource://builtin-addons/nulavio-shell/modules/NulavioTools.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   PENDING_FILE: "resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs",
@@ -128,6 +129,17 @@ export class ProfilesError extends Error {
 
 function fail(code, message) {
   throw new ProfilesError(code, message);
+}
+
+/**
+ * An engine the AI Bridge started (its environment names the agent) starts no other profile's engine: the new one
+ * would inherit that environment and count as an agent's for its whole run. The person opens other profiles from
+ * one of their own windows.
+ */
+function refuseInAgentEngine() {
+  if (lazy.NulavioAgentNetwork.driven()) {
+    fail("agent-window");
+  }
 }
 
 /**
@@ -584,6 +596,7 @@ class NulavioProfilesClass {
    * when that instance exits; the engine is started with an argument list.
    */
   async openTemporary() {
+    refuseInAgentEngine();
     const answer = await lazy.callTool(["temporary", "api"], { op: "create" });
     if (typeof answer?.path !== "string" || !answer.path.startsWith("/") || answer.path.includes("\0")) {
       fail("helper-failed");
@@ -886,6 +899,7 @@ class NulavioProfilesClass {
     if (profile.id === this.#service.currentProfile?.id) {
       return { action: "current" };
     }
+    refuseInAgentEngine();
     if ((await lazy.profileLockState(profile.path)) === "locked") {
       fail("locked"); // its files are encrypted until the user unlocks it
     }
