@@ -1,0 +1,6485 @@
+{
+ "comment": "Written by scripts/site/privacytests_pages.py refresh from the two files under sources. Do not edit.",
+ "sources": {
+  "read": "2026-11-20",
+  "page": {
+   "url": "https://privacytests.org/",
+   "sha256": "8961229cde15ba37cd807635ab259af74914efb55654d71b75a4e748444f985c",
+   "bytes": 2193492,
+   "last_modified": "Wed, 11 Nov 2026 19:07:00 GMT"
+  },
+  "data": {
+   "url": "https://privacytests.org/index.json",
+   "sha256": "e36d7110899074835a129ea339e0a543a340a7a81379854bb9a441799e4b90d7",
+   "bytes": 5518301,
+   "last_modified": "Wed, 11 Nov 2026 19:07:00 GMT"
+  }
+ },
+ "issue": 106,
+ "updated": "2026-11-09",
+ "time_started": "2026-11-09T04:50:07.941Z",
+ "harness": "63508f7869d5e7da902e356a8b664405a900eab8",
+ "browsers": [
+  {
+   "id": "brave",
+   "version": "157.1.99.55",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "chrome",
+   "version": "157.0.8103.39",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "duckduckgo",
+   "version": "1.214.0",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "edge",
+   "version": "157.0.4341.42",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "firefox",
+   "version": "159.0.1",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "librewolf",
+   "version": "159.0.1",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "mullvad",
+   "version": "16.0",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "opera",
+   "version": "139.0",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "safari",
+   "version": "27.2",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "tor",
+   "version": "16.0",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "ungoogled",
+   "version": "156.0.8078.47",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  },
+  {
+   "id": "vivaldi",
+   "version": "8.3.4191.30",
+   "runners": [
+    "macos-26",
+    "macos-15",
+    "macos-26-intel",
+    "macos-15-intel",
+    "macos-26"
+   ]
+  }
+ ],
+ "rows": {
+  "AudioContext base latency": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     },
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     },
+     {
+      "randomized": false,
+      "value": "ea89120aefafa4c5"
+     },
+     {
+      "randomized": false,
+      "value": "ea89120aefafa4c5"
+     },
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     },
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     },
+     {
+      "randomized": false,
+      "value": "ea89120aefafa4c5"
+     },
+     {
+      "randomized": false,
+      "value": "ea89120aefafa4c5"
+     },
+     {
+      "randomized": false,
+      "value": "edafbc2e130f6c1f"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     },
+     {
+      "randomized": false,
+      "value": "98089e6d36f78e97"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "085944594242868c"
+     },
+     {
+      "randomized": false,
+      "value": "20b233563706ebed"
+     }
+    ]
+   }
+  },
+  "AudioContext fingerprint": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "895102c87c470610"
+     },
+     {
+      "randomized": true,
+      "value": "b88cd25b7f1ee4b4"
+     },
+     {
+      "randomized": true,
+      "value": "14cb5f1771731839"
+     },
+     {
+      "randomized": true,
+      "value": "3c7365329bc622ee"
+     },
+     {
+      "randomized": true,
+      "value": "3ae45ef88e56a408"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "1fcf7afca261cbee"
+     },
+     {
+      "randomized": false,
+      "value": "36665308f8f037f1"
+     },
+     {
+      "randomized": false,
+      "value": "f23b78fb612f59ce"
+     },
+     {
+      "randomized": false,
+      "value": "f23b78fb612f59ce"
+     },
+     {
+      "randomized": false,
+      "value": "1fcf7afca261cbee"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "1fcf7afca261cbee"
+     },
+     {
+      "randomized": false,
+      "value": "36665308f8f037f1"
+     },
+     {
+      "randomized": false,
+      "value": "f23b78fb612f59ce"
+     },
+     {
+      "randomized": false,
+      "value": "f23b78fb612f59ce"
+     },
+     {
+      "randomized": false,
+      "value": "1fcf7afca261cbee"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "d5c5865665b2a6c2"
+     },
+     {
+      "randomized": false,
+      "value": "5db1f9093c6b0e17"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "82f13aa82e5f7ccd"
+     },
+     {
+      "randomized": false,
+      "value": "82f13aa82e5f7ccd"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "01153fee04727bf2"
+     },
+     {
+      "randomized": false,
+      "value": "86b228a4e6c88332"
+     }
+    ]
+   }
+  },
+  "Canvas2D geometry": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "09a80d17a90d9bb8"
+     },
+     {
+      "randomized": true,
+      "value": "34d53ad871122323"
+     },
+     {
+      "randomized": true,
+      "value": "cbd024430d971baa"
+     },
+     {
+      "randomized": true,
+      "value": "ddd1821d1243f22e"
+     },
+     {
+      "randomized": true,
+      "value": "28f473cd10363fb2"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "18d12f4d20c53f68"
+     },
+     {
+      "randomized": false,
+      "value": "18d12f4d20c53f68"
+     },
+     {
+      "randomized": false,
+      "value": "447c7f930a95e9c9"
+     },
+     {
+      "randomized": false,
+      "value": "447c7f930a95e9c9"
+     },
+     {
+      "randomized": false,
+      "value": "18d12f4d20c53f68"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "f38b50d9122f9abc"
+     },
+     {
+      "randomized": true,
+      "value": "dbf931341c95fb90"
+     },
+     {
+      "randomized": true,
+      "value": "79717960c0bf0070"
+     },
+     {
+      "randomized": true,
+      "value": "04975aa89c94a258"
+     },
+     {
+      "randomized": true,
+      "value": "c6388860c7b6866d"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "ffdfb470bd5a4dad"
+     },
+     {
+      "randomized": true,
+      "value": "b2705a70c6683b66"
+     },
+     {
+      "randomized": true,
+      "value": "89ffdc33bb9df82c"
+     },
+     {
+      "randomized": true,
+      "value": "ae4b9d5a8c5211e8"
+     },
+     {
+      "randomized": true,
+      "value": "95b77b515f5fd6e5"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "db06d780c49f5e0f"
+     },
+     {
+      "randomized": true,
+      "value": "92045141b56934bb"
+     },
+     {
+      "randomized": true,
+      "value": "b61eaf68807a56b3"
+     },
+     {
+      "randomized": true,
+      "value": "2279a50c3894dc0d"
+     },
+     {
+      "randomized": true,
+      "value": "f241fe7e35dd43fb"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "8063dc4a1f03dcec"
+     },
+     {
+      "randomized": false,
+      "value": "8063dc4a1f03dcec"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "8063dc4a1f03dcec"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "08d188e968eb28ef"
+     },
+     {
+      "randomized": false,
+      "value": "08d188e968eb28ef"
+     },
+     {
+      "randomized": false,
+      "value": "447c7f930a95e9c9"
+     },
+     {
+      "randomized": false,
+      "value": "447c7f930a95e9c9"
+     },
+     {
+      "randomized": false,
+      "value": "08d188e968eb28ef"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": true,
+      "value": "7c1dcb82c385a090"
+     },
+     {
+      "randomized": true,
+      "value": "5bf5e38438c82f34"
+     },
+     {
+      "randomized": true,
+      "value": "b74afe3bc587cfb6"
+     },
+     {
+      "randomized": true,
+      "value": "6c7385eef22b022a"
+     },
+     {
+      "randomized": true,
+      "value": "ae7a97339adc10f3"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "409254728c1226a6"
+     },
+     {
+      "randomized": false,
+      "value": "8d1f87ed506f9287"
+     }
+    ]
+   }
+  },
+  "Device memory": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": true,
+      "value": "e582fcb1224b30b6"
+     },
+     {
+      "randomized": true,
+      "value": "93b0ddec5b92a93a"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": true,
+      "value": "a4791b3c6b7ed069"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "17eed2c0e7c9788d"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   }
+  },
+  "JavaScript heap size limit": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "e6bed542fe2c88eb"
+     },
+     {
+      "randomized": false,
+      "value": "63d4c7a9d727173e"
+     }
+    ]
+   }
+  },
+  "Logical CPU cores": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     },
+     {
+      "randomized": false,
+      "value": "ade1a1c2a61af0f2"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "2bf175f9655e7bb7"
+     },
+     {
+      "randomized": false,
+      "value": "a4aab3f1f08004e9"
+     }
+    ]
+   }
+  },
+  "Math: Infinity - Infinity": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "eda39d188fe44f15"
+     },
+     {
+      "randomized": false,
+      "value": "592e71f19e777e38"
+     }
+    ]
+   }
+  },
+  "Math.sin(-1e300)": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "ce636c293e800b76"
+     },
+     {
+      "randomized": false,
+      "value": "ce636c293e800b76"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "ce636c293e800b76"
+     },
+     {
+      "randomized": false,
+      "value": "ce636c293e800b76"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     },
+     {
+      "randomized": false,
+      "value": "a56a62838310f07b"
+     }
+    ]
+   }
+  },
+  "Math.tan(-1e300)": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     },
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     },
+     {
+      "randomized": false,
+      "value": "b6070a0f8f4d9b13"
+     },
+     {
+      "randomized": false,
+      "value": "b6070a0f8f4d9b13"
+     },
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     },
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     },
+     {
+      "randomized": false,
+      "value": "b6070a0f8f4d9b13"
+     },
+     {
+      "randomized": false,
+      "value": "b6070a0f8f4d9b13"
+     },
+     {
+      "randomized": false,
+      "value": "de41924d6f95fb89"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     },
+     {
+      "randomized": false,
+      "value": "6ec1c13bf3bebbe6"
+     }
+    ]
+   }
+  },
+  "userAgentData.architecture": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "e0684496661893ff"
+     },
+     {
+      "randomized": false,
+      "value": "24e7ce1718326ac0"
+     }
+    ]
+   }
+  },
+  "userAgentData.platformVersion": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     },
+     {
+      "randomized": false,
+      "value": "cf939b398b75f0a6"
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     },
+     {
+      "randomized": false,
+      "value": "7acda86f1bc0c91a"
+     },
+     {
+      "randomized": false,
+      "value": "9739e09deacc8811"
+     },
+     {
+      "randomized": false,
+      "value": "521a322440a4f4a6"
+     },
+     {
+      "randomized": false,
+      "value": "7e75d29d644cfd81"
+     }
+    ]
+   }
+  },
+  "Available screen height": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Available screen left": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Available screen top": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Available screen width": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Display contrast preference": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Keyboard layout": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   }
+  },
+  "Reduced motion preference": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Reduced transparency preference": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Time zone region": {
+   "brave": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "User-installed font (canvas)": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "User-installed font (DOM)": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Screen height": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  },
+  "Screen width": {
+   "brave": {
+    "verdict": "passed",
+    "runs": [
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     },
+     {
+      "passed": true
+     }
+    ]
+   },
+   "chrome": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "duckduckgo": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "edge": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "firefox": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "librewolf": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "mullvad": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "opera": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "safari": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "tor": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "ungoogled": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   },
+   "vivaldi": {
+    "verdict": "failed",
+    "runs": [
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     },
+     {
+      "passed": false
+     }
+    ]
+   }
+  }
+ },
+ "not_on_page": [
+  "Math.tanh(0.123)"
+ ]
+}

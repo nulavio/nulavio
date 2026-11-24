@@ -2002,6 +2002,46 @@ class WorkspaceTest(Home):
             with mock.patch.dict(os.environ, {"NULAVIO_TEST_DISTRIBUTION_FIREFOX": "1"}):
                 self.assertIs(ws.start(timeout=5), bidi.return_value)
 
+    def test_the_engine_refuses_a_local_page_its_driver_opens_before_sending_it(self):
+        # #561: patch 0015 keys on the variable the Bridge sets and reads the file the Shell reads, with the Shell's
+        # limits. It checks only the top-level loads of the engine's driver (the system principal), and ends a refusal
+        # as the Shell's own does. Of the engine's code it changes two lines, and loosens no check. What it does is
+        # tests/integration/test_ai_bridge.py test_33, against a build of this tree.
+        from nulavio_launcher.ai import workspace
+
+        root = Path(__file__).resolve().parents[2]
+        name = "0015-lna-an-agents-engine-refuses-a-local-page-before-sending.patch"
+        self.assertIn(name, (root / "browser" / "patches" / "series").read_text(encoding="utf-8").split())
+        patch = (root / "browser" / "patches" / name).read_text(encoding="utf-8")
+        http = "netwerk/protocol/http/"
+        self.assertEqual(
+            set(re.findall(r"(?m)^\+\+\+ b/(\S+)", patch)),
+            {http + "NulavioAgentLocalAccess.cpp", http + "NulavioAgentLocalAccess.h", http + "moz.build",
+             http + "nsHttpChannel.cpp"},
+        )  # fmt: skip
+        self.assertIn(f'kWorkspaceEnv[] = "{workspace.WORKSPACE_ENV}";', patch)
+        self.assertIn(f'kLocalEnv[] = "{workspace.LOCAL_ENV}";', patch)
+        shell = (root / "browser" / "shell" / "modules" / "NulavioAgentNetwork.sys.mjs").read_text(encoding="utf-8")
+        for ours, theirs in (("kMaxFileBytes", "MAX_FILE_BYTES"), ("kMaxPlaces", "MAX_PLACES")):
+            value = re.search(rf"(?m)^const {theirs} = (\d+);", shell)[1]
+            self.assertIn(f"+constexpr uint32_t {ours} = {value};", patch)
+        self.assertIn("ExtContentPolicy::TYPE_DOCUMENT", patch)
+        self.assertIn("triggering->IsSystemPrincipal() && InAgentEngine()", patch)
+        removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(
+            removed,
+            ["  if (mLoadInfo && StaticPrefs::network_lna_allow_top_level_navigation()) {",
+             "      UpdateLocalNetworkAccessPermissions(permissionKey);"],
+        )  # fmt: skip
+        # The driver's load is checked as a public page's request, and never granted by the top-level pref.
+        self.assertIn("+    parentAddressSpace = nsILoadInfo::IPAddressSpace::Public;", patch)
+        self.assertIn("StaticPrefs::network_lna_allow_top_level_navigation() &&\n+      !nulavioAgentDriverLoad) {", patch)
+        # The refusal comes first in ProcessLNAActions, right after its transaction check, and ends as a blocked page;
+        # the load goes on only when the Bridge's file allows its place.
+        process = patch.split("return NS_ERROR_LOCAL_NETWORK_ACCESS_DENIED;\n   }\n", 1)[1].split("// Suspend to block", 1)[0]
+        self.assertIn("+  if (nulavioAgentDriverLoad && !nulavio::AgentMayReach(mURI)) {", process)
+        self.assertEqual(process.count("ContinueOnStartRequest1(NS_ERROR_BLOCKED_BY_POLICY)"), 2)
+
     def test_the_shell_reads_what_the_bridge_writes(self):
         # #243: the Shell's check (NulavioAgentNetwork.sys.mjs) and the Bridge name the same environment variables and
         # file, and the Shell pins the same Local Network Access values in an agent's engine as the AI Workspace has.
@@ -2016,6 +2056,36 @@ class WorkspaceTest(Home):
         pinned = dict(re.findall(r'\["([\w.\-]+)", (true|false|\d+)\]', listed))
         lna = {k: json.dumps(v) for k, v in WORKSPACE_PREFS.items() if k.startswith(("network.lna.", "permissions.default."))}
         self.assertEqual(pinned, lna)
+
+    def test_the_engine_ignores_a_sites_saved_local_network_permission_where_the_bridge_started_it(self):
+        # #570: patch 0014 keys on the variable the Bridge sets and the Shell reads, and in such an engine it skips the
+        # site's saved allow (its saved deny still applies) and refuses before anything the prompt code would grant.
+        # What it does is tests/integration/test_ai_bridge.py test_32, against a build of this tree.
+        from nulavio_launcher.ai import workspace
+
+        root = Path(__file__).resolve().parents[2]
+        name = "0014-lna-an-agents-engine-ignores-a-sites-saved-local-network-permission.patch"
+        series = (root / "browser" / "patches" / "series").read_text(encoding="utf-8").split()
+        self.assertIn(name, series)
+        patch = (root / "browser" / "patches" / name).read_text(encoding="utf-8")
+        self.assertEqual(
+            set(re.findall(r"(?m)^\+\+\+ b/(\S+)", patch)),
+            {"netwerk/base/LNAPermissionRequest.h", "netwerk/base/LNAPermissionRequest.cpp",
+             "netwerk/protocol/http/nsHttpChannel.cpp"},
+        )  # fmt: skip
+        self.assertIn(f'PR_GetEnv("{workspace.WORKSPACE_ENV}")', patch)
+        removed = [line[1:] for line in patch.splitlines() if line.startswith("-") and not line.startswith("---")]
+        self.assertEqual(removed, ["  if (nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),"])
+        # The driver's own loads carry the system principal, which the permission manager allows everything: they
+        # are granted at this step as before (test_27 shows they are still sent, and the Shell checks their pages).
+        self.assertIn(
+            "+  if ((!InNulavioAgentEngine() ||\n+       mLoadInfo->TriggeringPrincipal()->IsSystemPrincipal()) &&\n"
+            "+      nsContentUtils::IsExactSitePermAllow(mLoadInfo->TriggeringPrincipal(),",
+            patch,
+        )
+        self.assertNotIn("IsExactSitePermDeny", "".join(removed))  # a saved deny keeps refusing
+        request = patch.split("LNAPermissionRequest::RequestPermission() {", 1)[1].split("// Enforce Permissions Policy", 1)[0]
+        self.assertIn("+  if (InNulavioAgentEngine()) {\n+    return Cancel();\n+  }", request)
 
     def test_a_raw_marker_left_by_an_earlier_version_is_deleted(self):
         """#463: the marker the window read while raw automation was on is not written any more; one left in a

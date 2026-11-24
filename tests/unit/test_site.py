@@ -31,11 +31,45 @@ LANDING = {"index.html": "pt-BR", "en/index.html": "en-US"}
 WAITLIST = {"lista/index.html": "pt-BR", "en/waitlist/index.html": "en-US"}
 LINK = {"lista/link/index.html": "pt-BR", "en/waitlist/link/index.html": "en-US"}
 DOCUMENT = {"engenharia/index.html": "pt-BR", "en/engineering/index.html": "en-US"}
-PAGES = [*LANDING, *WAITLIST, *LINK, *DOCUMENT, "404.html"]
+# PrivacyTests.org's fingerprinting probes side by side, generated from tests/fixtures/privacytests/ (#437).
+COMPARISON = {"engenharia/impressao-digital/index.html": "pt-BR", "en/engineering/fingerprinting/index.html": "en-US"}
+PAGES = [*LANDING, *WAITLIST, *LINK, *DOCUMENT, *COMPARISON, "404.html"]
 FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's "lang" field
 WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
 SHOTS = ROOT / "site" / "assets" / "shots"
+# The latest real-site regression run (tests/regression/run_sites.py), behind the landing's compatibility figure.
+SITE_RUN = ROOT / "docs" / "research" / "evidence" / "site-regression-2026-11-20.json"
+MONTHS = {
+    "pt": [
+        "janeiro",
+        "fevereiro",
+        "março",
+        "abril",
+        "maio",
+        "junho",
+        "julho",
+        "agosto",
+        "setembro",
+        "outubro",
+        "novembro",
+        "dezembro",
+    ],
+    "en": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ],
+}
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -203,11 +237,29 @@ class SiteTest(unittest.TestCase):
                 self.assertEqual(len(fine), 1, feature.attrs)
                 self.assertIn(label, fine[0].text())
         # Selling the launch stops where the download starts: what the published alpha does not
-        # have yet is marked as coming, and the compatibility figure says when it was measured
-        # (frontend audit N-01, N-04).
-        for page, soon, when, packages in (
-            ("index.html", "Em breve", "outubro de 2026", "Pacotes assinados para Fedora e Ubuntu"),
-            ("en/index.html", "Coming soon", "October 2026", "Signed packages for Fedora and Ubuntu"),
+        # have yet is marked as coming, and the compatibility figure is the latest real-site run's:
+        # the pages it reached with the protections on, its month, and "none broke" only while it found no breakage
+        # (frontend audit N-01, N-04; #202).
+        run = json.loads(SITE_RUN.read_text(encoding="utf-8"))
+        reached = sum(site["reached_with_protections"] for site in run["sites"].values())
+        broken = sum(site["breakage"] for site in run["sites"].values())
+        self.assertEqual((reached, broken), (run["summary"]["reached_with_protections"], run["summary"]["breakages"]))
+        year, month = (int(part) for part in run["date"].split("-")[:2])
+        for page, soon, when, intact, packages in (
+            (
+                "index.html",
+                "Em breve",
+                f"{MONTHS['pt'][month - 1]} de {year}",
+                "nenhum quebrou",
+                "Pacotes assinados para Fedora e Ubuntu",
+            ),
+            (
+                "en/index.html",
+                "Coming soon",
+                f"{MONTHS['en'][month - 1]} {year}",
+                "none broke",
+                "Signed packages for Fedora and Ubuntu",
+            ),
         ):
             with self.subTest(page=page):
                 tree = self.tree(page)
@@ -219,8 +271,14 @@ class SiteTest(unittest.TestCase):
                 for node in tree.all():
                     if node.tag in ("p", "td") and "FIDO2" in node.text():
                         self.assertRegex(node.text(), f"(?i){soon}", node.text())
-                figure = next(n.text() for n in tree.all("dt") if "50" in n.parent.text() and "sites" in n.text())
-                self.assertIn(when, figure)
+                figure = next(
+                    n.parent for n in tree.all("dt") if "sites" in n.text() and ("testados" in n.text() or "tested" in n.text())
+                )
+                label = next(n.text() for n in figure.children if isinstance(n, Node) and n.tag == "dt")
+                number = next(n.text() for n in figure.children if isinstance(n, Node) and n.tag == "dd")
+                self.assertEqual(number.strip(), str(reached))
+                self.assertIn(when, label)
+                self.assertEqual(intact in label, broken == 0, label)
                 self.assertNotIn(packages, self.read(page))
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:
@@ -239,7 +297,7 @@ class SiteTest(unittest.TestCase):
             self.assertNotIn("{{", self.read(page), page)
 
     def test_both_languages_have_the_same_ids(self):
-        for pages in (LANDING, WAITLIST, LINK, DOCUMENT):
+        for pages in (LANDING, WAITLIST, LINK, DOCUMENT, COMPARISON):
             ids = {page: [n.attrs["id"] for n in self.tree(page).all() if "id" in n.attrs] for page in pages}
             pt, en = ids.values()
             with self.subTest(pages=list(pages)):
@@ -271,7 +329,7 @@ class SiteTest(unittest.TestCase):
                         self.assertTrue(img.attrs["alt"].strip())
 
     def test_figures_tables_and_scroll_regions_are_labelled(self):
-        for page in (*LANDING, *WAITLIST, *LINK, *DOCUMENT):
+        for page in (*LANDING, *WAITLIST, *LINK, *DOCUMENT, *COMPARISON):
             tree = self.tree(page)
             with self.subTest(page=page):
                 figures = tree.all("figure")
@@ -349,6 +407,10 @@ class SiteTest(unittest.TestCase):
         border_pairs += [("accent-default", bg) for bg in ("bg-canvas", "bg-surface", "bg-sunken", "accent-tint")]
         border_pairs += [("status-warning", "accent-tint"), ("text-muted", "accent-tint"), ("status-critical", "bg-surface")]
         border_pairs += [("control-selected-edge", "bg-sunken"), ("security-temporary-edge", "bg-canvas")]
+        # The fingerprinting comparison's marks (#437): on the table and in the tinted Nulavio column.
+        border_pairs += [
+            (mark, bg) for mark in ("accent-default", "status-critical", "text-secondary") for bg in ("bg-surface", "accent-tint")
+        ]
         for scheme, values in (("light", light), ("dark", dark)):
             for pairs, minimum in ((text_pairs, 4.5), (border_pairs, 3.0)):
                 for fg, bg in pairs:
@@ -373,7 +435,7 @@ class SiteTest(unittest.TestCase):
                 self.assertIn(f"Firefox {build_site.firefox_version(ROOT)}", self.read(page))
 
     def test_link_preview_image_is_ours_and_has_the_declared_size(self):
-        for page in LANDING:
+        for page in (*LANDING, *COMPARISON):
             html = self.read(page)
             image = re.search(r'<meta property="og:image" content="([^"]+)">', html).group(1)
             with self.subTest(page=page):
@@ -467,6 +529,36 @@ class SiteTest(unittest.TestCase):
         for page in PAGES:
             loads = re.findall(r'(?:src|href)="[^"]*_worker[^"]*"', self.read(page))
             self.assertEqual(loads, [], f"{page}: no page loads the worker, it is server code")
+
+    def test_engineering_pages_count_the_site_run_as_its_evidence_does(self):
+        # Claim 2.7 retells the latest real-site run: the pages reached, the pages flagged and the unflagged
+        # pages checked must be the evidence's counts, recomputed from its per-site rows (#202).
+        run = json.loads(SITE_RUN.read_text(encoding="utf-8"))
+        sites = run["sites"].values()
+        flagged = sum(1 for site in sites if site["flags"])
+        checked = sum(1 for site in sites if not site["flags"] and site["triage"] != "No difference that matters.")
+        reached = sum(site["reached_with_protections"] for site in sites)
+        summary = run["summary"]
+        self.assertEqual(
+            (flagged, checked, reached),
+            (summary["flagged"], summary["checked_unflagged"], summary["reached_with_protections"]),
+        )
+        words = {
+            "pt": "zero um dois três quatro cinco seis sete oito nove dez onze doze treze catorze quinze",
+            "en": "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen",
+        }
+        words = {lang: names.split(" ") for lang, names in words.items()}
+        for page, lang, flagged_text, checked_text in (
+            ("engenharia/index.html", "pt", "{} páginas foram sinalizadas", "outras {} foram conferidas"),
+            ("en/engineering/index.html", "en", "{} pages were flagged", "{} more were checked"),
+        ):
+            with self.subTest(page=page):
+                claim = next(n for n in self.tree(page).all() if n.attrs.get("id") == "s2-7")
+                text = " ".join(claim.text().split())
+                self.assertIn(flagged_text.format(words[lang][flagged]).lower(), text.lower())
+                self.assertIn(checked_text.format(words[lang][checked]), text)
+                self.assertIn(f" {reached} ", text)
+                self.assertIn(SITE_RUN.name, text)
 
     def test_comparison_names_the_browsers_and_its_date(self):
         for page in LANDING:

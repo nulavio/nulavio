@@ -389,18 +389,20 @@ class AsanWorkflowTest(unittest.TestCase):
         asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")
         self.assertIn("--enable-address-sanitizer", asan)
 
-    def test_the_sandbox_is_a_trial_input_and_stays_off_in_the_scheduled_run(self):
-        # #490: the content sandbox under AddressSanitizer is tried by hand; the checked-in variant and the monthly
-        # run keep the engine's default (no sandbox), which test_engine_slice 04 expects to skip.
-        text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
-        inputs = text[text.index("workflow_dispatch:") : text.index("permissions:")]
-        self.assertIn("sandbox:", inputs)
-        self.assertIn("default: false", inputs)
-        self.assertIn("SANDBOX: ${{ inputs.sandbox }}", text)
-        self.assertIn("ac_add_options --enable-sandbox' >> browser/build/mozconfig.asan", text)
+    def test_the_sanitised_build_keeps_the_content_sandbox(self):
+        # #490: the engine's configure turns the sandbox off for an AddressSanitizer build on Linux; the variant asks for
+        # it, and test_engine_slice 04 checks it there like in every other run (no skip).
         asan = (ROOT / "browser" / "build" / "mozconfig.asan").read_text(encoding="utf-8")
-        self.assertNotRegex(asan, r"(?m)^\s*ac_add_options\s+--enable-sandbox")
-        self.assertLess(text.index("--enable-sandbox"), text.index("scripts/build/build_nulavio.sh"))
+        self.assertRegex(asan, r"(?m)^ac_add_options\s+--enable-sandbox\s*$")
+        # the trial input is gone, so no run can build the variant without it
+        text = (ROOT / ".github" / "workflows" / "asan.yml").read_text(encoding="utf-8")
+        self.assertNotIn("inputs.sandbox", text)
+        self.assertNotIn("--enable-sandbox' >>", text)
+        # the sandbox test has no skip of its own
+        engine = (ROOT / "tests" / "integration" / "test_engine_slice.py").read_text(encoding="utf-8")
+        start = engine.index("    def test_04_content_processes_are_sandboxed(self):")
+        end = engine.index("\n    def ", start + 1)
+        self.assertNotIn("skipTest(", engine[start:end])
 
     @unittest.skipUnless(shutil.which("bash"), "bash not available")
     def test_a_variant_build_is_never_rehearsed_as_a_release(self):

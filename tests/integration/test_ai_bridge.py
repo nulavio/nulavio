@@ -13,11 +13,13 @@ import http.server
 import json
 import os
 import shutil
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -890,6 +892,7 @@ class AiBridgeTest(unittest.TestCase):
         # Bridge reads as public and the engine as this computer, directly and through a public site's redirect. The
         # request goes out (the engine knows the address only once it has connected); the page reaches neither the
         # tab nor the agent. A public page still opens, and once the agent may reach local resources so does that one.
+        # An engine with patch 0015 (#561) refuses those requests before they are sent: test_33.
         hits: list[str] = []
 
         class Local(http.server.BaseHTTPRequestHandler):
@@ -945,7 +948,9 @@ class AiBridgeTest(unittest.TestCase):
                 self.assertNotIn("only on this computer", json.dumps(went))
                 read = bridge.call("page_read", {"tab": tab})
                 self.assertNotIn("only on this computer", json.dumps(read))
-        self.assertEqual(sorted(hits), ["/secret-agent", "/secret-redirect"])  # sent, and the pages were not shown
+        # Sent, and the pages were not shown; an engine with patch 0015 does not send them (test_33).
+        sent = sorted(hits)
+        self.assertIn(sent, ([],) if harness.built_from_this_tree() else ([], ["/secret-agent", "/secret-redirect"]))
         logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         self.assertEqual([e for e in logged if e.get("tool") == "network"], [])  # the Bridge refused nothing
         registry.grant(agent["id"], "local_resources", "allow")
@@ -959,7 +964,8 @@ class AiBridgeTest(unittest.TestCase):
         again = bridge.call("navigate", {"tab": tab, "url": f"{secret}-allowed"})
         self.assertNotIn("only on this computer", json.dumps(again))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
-        self.assertEqual(hits.count("/secret-allowed"), 2)
+        # An engine that sent the first two fetches this page again; one with patch 0015 refuses it before it is sent.
+        self.assertEqual(hits.count("/secret-allowed"), 2 if sent else 1)
 
     def test_28_a_place_the_user_allowed_by_asking_opens_during_that_call(self):
         # #243: the Shell lets a local page through when the Bridge allowed its place, here by asking (an address the
@@ -993,6 +999,97 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(opened["isError"], opened)
         self.assertEqual(opened["structuredContent"]["title"], "Asked")
         self.assertEqual([hit for hit in hits if hit != "/favicon.ico"], ["/asked"])  # the engine may ask for its icon
+
+    @unittest.skipUnless(harness.built_from_this_tree(), "patch 0015 is in this tree's engine build")
+    def test_33_what_the_agent_opens_reaches_nothing_local_it_may_not_reach(self):
+        # #561 (R29): with patch 0015, an engine the Bridge started refuses what its driver opens at a local address
+        # before the request is sent, unless the agent may reach that place now (the Bridge's file, which the Shell
+        # reads too). The Bridge reads 127.0.0.2 and 127.0.0.3 as public; to the engine 127.0.0.3 is this computer. A
+        # new tab (whose context has no address yet), a tab at a public page, and a public site's redirect: the local
+        # listener receives nothing. The public page the tab was at, which keeps asking for a local address, reaches it
+        # neither: the refused navigation leaves a blocked page in its place. Once the agent may reach local resources,
+        # the same place opens.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                body = b"<!doctype html><title>Local</title><p>only on this computer"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args):
+                pass
+
+        local = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}"
+        # A public page that asks for the local address every 200 ms (refused while the tab's context is public), and
+        # for its own /ping, which shows whether it is still in the tab.
+        page = (
+            "<!doctype html><title>Public</title><p>a public page<script>"
+            f"setInterval(() => fetch({json.dumps(local + '/from-page')}, {{mode: 'no-cors'}}).catch(() => {{}}), 200);"
+            "setInterval(() => fetch('/ping').catch(() => {}), 200);"
+            "</script>"
+        ).encode()
+        pings: list[float] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/page":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(page)))
+                    self.end_headers()
+                    self.wfile.write(page)
+                    return
+                if self.path == "/ping":
+                    pings.append(time.monotonic())
+                    self.send_response(204)
+                    self.end_headers()
+                    return
+                self.send_response(302)
+                self.send_header("Location", f"{local}/redirect")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        engine_side: dict = {}
+        self.rebinding(engine_side, port)
+        patched = mock.patch.dict(workspace.WORKSPACE_PREFS, engine_side)
+        patched.start()
+        self.addCleanup(patched.stop)
+        agent, _ = self.agent("autonomous", local=False)
+        bridge = tools.Bridge(agent["id"], "s-before-sent", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        fresh = bridge.call("tab_new", {"url": f"{local}/new-tab"})
+        self.assertNotIn("only on this computer", json.dumps(fresh))
+        opened = bridge.call("tab_new", {"url": f"http://127.0.0.2:{port}/page"})
+        self.assertFalse(opened["isError"], opened)
+        self.assertEqual(opened["structuredContent"]["title"], "Public")
+        tab = opened["structuredContent"]["tab"]
+        self.assertTrue(harness.wait_until(lambda: pings, timeout=10), "the page runs")
+        time.sleep(1)  # the page's own requests, refused by the engine's Local Network Access (test_26)
+        self.assertEqual(hits, [])
+        for url in (f"{local}/agent", f"http://127.0.0.2:{port}/moved"):
+            with self.subTest(url=url):
+                went = bridge.call("navigate", {"tab": tab, "url": url})
+                self.assertNotIn("only on this computer", json.dumps(went))
+                self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
+        time.sleep(2)  # the public page would have asked about ten times more by now, had it stayed
+        self.assertEqual(hits, [])  # not the new tab, the agent's navigation, the redirect or the page's own requests
+        self.assertLess(pings[-1], time.monotonic() - 1.5)  # a blocked page took its place: it asks for nothing
+        logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+        self.assertEqual([e for e in logged if e.get("tool") == "network"], [])  # the Bridge refused nothing
+        registry.grant(agent["id"], "local_resources", "allow")
+        allowed = bridge.call("navigate", {"tab": tab, "url": f"{local}/allowed"})
+        self.assertFalse(allowed["isError"], allowed)
+        self.assertEqual(allowed["structuredContent"]["title"], "Local")
+        self.assertEqual([hit for hit in hits if hit != "/favicon.ico"], ["/allowed"])  # the engine may ask for its icon
 
     @unittest.skipUnless(harness.nulavio_engine(), "the profile's Local Network Access is set by the Nulavio Shell")
     def test_29_a_users_profile_opened_for_an_agent_refuses_a_public_pages_local_requests_and_keeps_nothing(self):
@@ -1208,18 +1305,126 @@ class AiBridgeTest(unittest.TestCase):
         went = bridge.call("navigate", {"tab": tab, "url": f"{local}-direct"})
         self.assertNotIn("only on this computer", json.dumps(went))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
-        self.assertEqual(hits, ["/x-direct"])  # the engine connected directly, and the page was not shown
+        # The engine connected directly, and the page was not shown; with patch 0015 (#561) nothing was sent at all.
+        refused_before = harness.built_from_this_tree()
+        self.assertIn(hits, ([],) if refused_before else ([], ["/x-direct"]))
+        sent = list(hits)
         # A public page that redirects there, both hops direct: the second hop keeps the first one's address space in
         # the engine, so the Shell reads the address it connected to.
         moved = bridge.call("navigate", {"tab": tab, "url": f"http://127.0.0.2:{port}/moved"})
         self.assertNotIn("only on this computer", json.dumps(moved))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
-        self.assertEqual(hits, ["/x-direct", "/x-redirect"])
+        self.assertEqual(hits, [*sent, "/x-redirect"] if sent else [])
         # The same direct connection opens the page once the agent may reach local resources: nothing else stops it.
         registry.grant(agent["id"], "local_resources", "allow")
         allowed = bridge.call("navigate", {"tab": tab, "url": f"{local}-allowed"})
         self.assertFalse(allowed["isError"], allowed)
         self.assertEqual(allowed["structuredContent"]["title"], "Local")
+
+    @unittest.skipUnless(harness.built_from_this_tree(), "patch 0014 is in this tree's engine build")
+    def test_32_a_sites_saved_local_network_permission_in_a_users_profile_reaches_nothing_local(self):
+        # #570 (R29): the user allowed this site, in their own profile, to reach this computer and the local network (a
+        # saved permission in permissions.sqlite). The engine's Local Network Access reads a site's own entry before
+        # the default the Shell sets for an agent's run, so without patch 0014 that site's fetch, frame and pop-up
+        # reached 127.0.0.3. With it, an engine the Bridge started refuses them all the same, and the user's
+        # permission is still there, unchanged, after the run.
+        hits: list[str] = []
+
+        class Local(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                hits.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Length", "6")
+                self.end_headers()
+                self.wfile.write(b"secret")
+
+            def log_message(self, *_args):
+                pass
+
+        secret = f"http://127.0.0.3:{self.serve('127.0.0.3', Local)}/secret"
+        # The page reports back to its own (public) server: what the engine says of its permission (so the saved one
+        # was read: "granted"), how the fetch ended, and that the pop-up the agent's click opens was opened.
+        page = (
+            f'<!doctype html><title>Public</title><iframe src="{secret}-frame"></iframe>'
+            f"<button onclick=\"fetch('/ran?popup=' + (window.open('{secret}-popup') ? 'opened' : 'blocked'))\">Open</button>"
+            '<script>navigator.permissions.query({name: "loopback-network"}).then(p => p.state, e => e.name)'
+            '.then(state => fetch("/ran?permission=" + state));'
+            f'fetch("{secret}-fetch").then(() => "sent", () => "refused")'
+            '.then(how => fetch("/ran?fetch=" + how));</script>'
+        ).encode()
+        ran: list[str] = []
+
+        class Public(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path.startswith("/ran"):
+                    ran.append(self.path)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(page)))
+                self.end_headers()
+                self.wfile.write(page)
+
+            def log_message(self, *_args):
+                pass
+
+        port = self.serve("127.0.0.2", Public)
+        fixture: dict = {}
+        self.rebinding(fixture, port)
+        agent, _ = self.agent("autonomous", local=False)
+        work = self.home / "user-profiles" / "work"
+        work.mkdir(parents=True)
+        accepted = 'user_pref("termsofuse.acceptedVersion", 4);\nuser_pref("termsofuse.acceptedDate", "1761436800000");'
+        (work / "prefs.js").write_text(f"{accepted}\n")
+        (work / "user.js").write_text(prefs_lines(fixture))
+        # The user's saved permissions, as the engine writes them (PermissionManager::CreateTable, schema 13): allowed
+        # for good (expireType 0), for both kinds of local address, and used today.
+        origin = f"http://127.0.0.2:{port}"
+        now = int(time.time() * 1000)
+        saved = [(origin, kind, 1, 0, 0, now) for kind in ("loopback-network", "local-network")]
+        with closing(sqlite3.connect(work / "permissions.sqlite")) as db, db:
+            db.execute("PRAGMA user_version = 13")
+            db.execute(
+                "CREATE TABLE moz_perms (id INTEGER PRIMARY KEY, origin TEXT, type TEXT, permission INTEGER,"
+                " expireType INTEGER, expireTime INTEGER, modificationTime INTEGER)"
+            )
+            db.execute(
+                "CREATE TABLE moz_hosts (id INTEGER PRIMARY KEY, host TEXT, type TEXT, permission INTEGER,"
+                " expireType INTEGER, expireTime INTEGER, modificationTime INTEGER, isInBrowserElement INTEGER)"
+            )
+            db.execute("CREATE TABLE moz_origin_interactions (origin TEXT PRIMARY KEY, lastInteractionTime INTEGER)")
+            db.executemany(
+                "INSERT INTO moz_perms (origin, type, permission, expireType, expireTime, modificationTime)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                saved,
+            )
+            db.execute("INSERT INTO moz_origin_interactions VALUES (?, ?)", (origin, now))
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": str(work)}])
+        bridge = tools.Bridge(agent["id"], "s-profile-saved", approver=registry.Approver(), headless=True)
+        self.addCleanup(bridge.close)
+        opened = bridge.call("tab_new", {"profile": "Trabalho"})
+        self.assertFalse(opened["isError"], opened)
+        tab = opened["structuredContent"]["tab"]
+        self.assertFalse(bridge.call("navigate", {"tab": tab, "url": f"{origin}/page"})["isError"])
+        clicked = bridge.call(
+            "click", {"tab": tab, "element": self.element(bridge.call("page_snapshot", {"tab": tab}), name="Open")}
+        )
+        self.assertFalse(clicked["isError"], clicked)
+        self.assertTrue(harness.wait_until(lambda: len(ran) == 3, timeout=10), ran)
+        self.assertEqual(sorted(ran), ["/ran?fetch=refused", "/ran?permission=granted", "/ran?popup=opened"])
+        # As in test_29: the frame and the pop-up report no end when refused, so they get the same few seconds. The fetch
+        # answers "refused" either way (the listener sends no CORS header): what the listener received is the test.
+        reached = harness.wait_until(lambda: hits, timeout=3)
+        bridge.close()
+        with closing(sqlite3.connect(work / "permissions.sqlite")) as db:
+            kept = db.execute(
+                "SELECT origin, type, permission, expireType, expireTime FROM moz_perms"
+                " WHERE origin = ? AND type IN ('loopback-network', 'local-network') ORDER BY type",
+                (origin,),
+            ).fetchall()
+        # The user's, as they were, neither removed nor turned into a session entry. (The agent's click adds the
+        # engine's own storageAccessAPI entry for the site, as any click does: not one of these.)
+        self.assertEqual(kept, sorted(row[:5] for row in saved))
+        self.assertFalse(reached, hits)
 
 
 if __name__ == "__main__":

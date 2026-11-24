@@ -175,6 +175,17 @@ class TabGroupsTest(unittest.TestCase):
 
     def test_05_a_closed_group_comes_back_from_the_closed_groups(self):
         group = self.make_group()
+        # The engine keeps a closed group's tabs from what its session store holds of each. A tab whose page it does
+        # not hold yet may be left out (#544: under the sanitiser the closed group came back with one tab of two, the
+        # second tab perhaps still on its way to its page): wait until it holds both pages.
+        held = (
+            "return gBrowser.getAllTabGroups()[0].tabs.map(t => {"
+            " const e = JSON.parse(SessionStore.getTabState(t)).entries ?? [];"
+            " return e.length ? new URL(e[e.length - 1].url).pathname : ''; });"
+        )
+        self.assertTrue(
+            harness.wait_until(lambda: sorted(self.m.chrome(held)) == ["/page/dois", "/page/tres"], 20), self.m.chrome(held)
+        )
         self.m.set_context("chrome")
         try:
             self.m.execute_async(
@@ -185,8 +196,10 @@ class TabGroupsTest(unittest.TestCase):
             self.m.set_context("content")
         self.assertEqual(self.groups(), [])
         closed = "return SessionStore.getClosedTabGroups({ sourceWindow: window }).map(g => [g.id, g.name, g.tabs.length]);"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(closed), 10))
-        self.assertEqual(self.m.chrome(closed)[0], [group, "Trabalho", 2])
+        # The closed group itself, with both tabs: not any closed group (its entry may still be filling).
+        self.assertTrue(
+            harness.wait_until(lambda: (self.m.chrome(closed) or [None])[0] == [group, "Trabalho", 2], 10), self.m.chrome(closed)
+        )
         # The order the engine saved the tabs in, from its own state (the last history entry of each, in saved order).
         saved = self.m.chrome(
             "const g = SessionStore.getClosedTabGroups({ sourceWindow: window }).find(g => g.id == arguments[0]);"

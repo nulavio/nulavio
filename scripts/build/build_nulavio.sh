@@ -79,9 +79,10 @@ else
     memory_gib=${NULAVIO_BUILD_MEMORY_GIB:-16}
     cpu_quota=200000
 fi
-podman build --memory="${memory_gib}g" --memory-swap="${memory_gib}g" \
-    --cpu-period=100000 --cpu-quota="$cpu_quota" --jobs=1 -q -t "$image" \
-    -f "$repo/ci/containers/fedora-build.Containerfile" "$repo/ci/containers" >/dev/null
+# The image is built again from nothing when podman's copy is older than NULAVIO_IMAGE_MAX_AGE_DAYS (default 1),
+# so a machine that keeps its image does not keep an older Rust compiler than the build machine (#482).
+"$repo/scripts/build/build_image.sh" "$image" "$repo/ci/containers/fedora-build.Containerfile" "$repo/ci/containers" \
+    --memory="${memory_gib}g" --memory-swap="${memory_gib}g" --cpu-period=100000 --cpu-quota="$cpu_quota" --jobs=1
 
 # Repeatable builds: the build ID (application.ini, about:buildconfig) and the tools that
 # read SOURCE_DATE_EPOCH take the time of the Nulavio commit, not the clock, so the same

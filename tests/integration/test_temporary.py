@@ -254,9 +254,11 @@ class TemporaryFromTheBrowserTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(lambda: set(m.window_handles()) - before, 15))
             private = (set(m.window_handles()) - before).pop()
             m.switch_to(private)
-            self.assertTrue(
-                harness.wait_until(lambda: m.chrome("return !!document.querySelector('#nulavio-band .nv-band-row');"), 15)
-            )
+            # The band's row is there from the window's load, and drawn (names, seals, the private fill) only once the
+            # window has started (#544: under the sanitiser it was read before, its identity without a name): wait for
+            # the drawn row.
+            painted = "return !!document.querySelector('#nulavio-band .nv-band-row[data-private=\"true\"]');"
+            self.assertTrue(harness.wait_until(lambda: m.chrome(painted), 30), m.chrome(f"return {BAND_PROBE};"))
             state = m.chrome(f"return {BAND_PROBE};")
             assert_band(self, state)
             self.assertIn("apagado ao fechar", state["text"])
