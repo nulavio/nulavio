@@ -1893,7 +1893,7 @@ class HelperApiTest(StorageCase):
     def test_autolock_follows_an_engine_that_takes_the_profile_while_it_locks(self):
         """An engine that takes the profile while the watcher is still unmounting (the last engine's helpers holding a
         file) is followed like the first one: the volume stays mounted and shown as unlocked while it runs, and is
-        locked once it is gone. Never a volume detached under it while the profile reads as locked."""
+        locked once it is gone."""
         path = self.tmp / "taken"
         path.mkdir()
         self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})

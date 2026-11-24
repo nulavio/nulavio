@@ -155,7 +155,7 @@ def _unmount_unless_taken(box: Container, prof: profile.Profile, *, wait: float)
     such a start either comes before this, and its engine is then seen here, or after it, and finds the profile
     locked. Whether an engine runs is asked again before every unmount attempt and before the volume is
     detached, so one that arrived while the last engine's helpers were closing files keeps the volume mounted
-    and the profile reads as unlocked, instead of a detached volume in use while everything says "locked"."""
+    and the profile reads as unlocked while it runs."""
     with contextlib.ExitStack() as held:
         try:
             held.enter_context(box._state_lock())

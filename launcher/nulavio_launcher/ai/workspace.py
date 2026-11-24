@@ -328,7 +328,7 @@ class ProfileTarget(Workspace):
         """A protected profile's state lock, from the check until its engine runs. The auto-lock watcher locks the
         profile under the same lock and looks for a running engine first (vault.profiles._unmount_unless_taken), so
         an engine started here is either seen there and followed, or starts after the profile was locked and is
-        refused by check(). Never one that keeps a detached volume open while the profile reads as locked."""
+        refused by check()."""
         from ..vault.storage import Container, StorageError
 
         box = Container(self.profile_dir)

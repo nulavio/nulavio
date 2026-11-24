@@ -186,8 +186,8 @@ class LockedGroupProfileTest(unittest.TestCase):
     def test_engine_profile_menus_ask_to_unlock_instead_of_starting_it(self):
         """The engine's own Profiles lists (app menu, menu bar) and "Move tab to profile" start a profile through
         SelectableProfileService.launchInstance. For a locked protected profile they open the unlock page here and
-        start no engine on its folder, also when that folder was left writable (as a volume that went away without
-        a lock left it before the mount point stayed read-only underneath the volume)."""
+        start no engine on its folder, also when that folder is writable (as a profile mounted by an earlier version
+        leaves it after a crash)."""
         url = self.server.url("/page/moved-to-the-vault")
         os.chmod(self.path, 0o700)
         try:
@@ -215,6 +215,23 @@ class LockedGroupProfileTest(unittest.TestCase):
                 "for (const tab of [...gBrowser.tabs]) {"
                 " if (tab.linkedBrowser.currentURI.spec.includes('/vault/unlock.html')) { gBrowser.removeTab(tab); } }"
             )
+
+    def test_engine_profile_menus_still_start_a_profile_without_a_password(self):
+        """The lock check in front of launchInstance lets every other profile start as the engine meant."""
+        plain = self.call("return P.create({templateId: 'banking', name: 'Livre'});")["ok"]
+        path = Path(self.call("return (await SPS.getProfile(args[0])).path;", plain)["ok"])
+        try:
+            self.m.chrome("gProfiles.launchProfile({target: {getAttribute: () => String(arguments[0])}});", [plain])
+            self.assertTrue(harness.wait_until(lambda: self.session.processes_for(path), timeout=30))
+            self.assertEqual(
+                [u for u in self.m.chrome("return gBrowser.browsers.map(b => b.currentURI.spec);") if "/vault/unlock.html" in u],
+                [],
+            )
+        finally:
+            for pid in self.session.processes_for(path):
+                os.kill(pid, 15)
+            harness.wait_until(lambda: not self.session.processes_for(path), timeout=30)
+            self.call("await P.remove(args[0]);", plain)
 
     def test_selector_shows_locked_switching_refuses_and_delete_drops_the_keys(self):
         profiles = self.call("return (await P.list()).profiles;")["ok"]

@@ -516,9 +516,8 @@ class Container:
 
         `unless`: asked before every attempt and before the detach; when it answers
         true (an engine took the profile meanwhile), nothing more is tried and this
-        raises "in-use", with the volume still mounted. Without it, an engine that
-        arrived while the helpers were closing files would keep the volume open
-        after the detach while the profile reads as locked.
+        raises "in-use", with the volume still mounted: the profile is then in
+        use, and reads as unlocked.
         """
         tool = shutil.which("fusermount3") or shutil.which("fusermount") or "fusermount3"
         deadline = time.monotonic() + wait
