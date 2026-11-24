@@ -815,14 +815,17 @@ class FingerprintingTest(unittest.TestCase):
         first, other, again = self.readers("127.0.0.1"), self.readers("localhost"), self.readers("127.0.0.1")
         # The plain values come from the shield's exemption of each site, as a person gives it: no protection is
         # switched off for the profile. With one site exempt, the other still reads its own noisy values.
+        # Each exemption is removed in its own finally, so a failure to remove one still removes the other.
         try:
             shield("127.0.0.1", "add")
             plain, beside = self.readers("127.0.0.1"), self.readers("localhost")
-            shield("localhost", "add")
-            plain_other = self.readers("localhost")
+            try:
+                shield("localhost", "add")
+                plain_other = self.readers("localhost")
+            finally:
+                shield("localhost", "remove")
         finally:
             shield("127.0.0.1", "remove")
-            shield("localhost", "remove")
         back = self.readers("127.0.0.1")
         every = {**READERS, **BYTE_READERS}
         self.record(
