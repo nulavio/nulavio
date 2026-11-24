@@ -401,6 +401,8 @@ class Bridge:
         # What the person allowed in the current call by asking: (capability, site, place). The same question is not
         # asked twice in one call (an answer "once" is for the call); decide() still checks everything else again.
         self._approved: set[tuple[str, str | None, str]] = set()
+        self._checked: list[str] | None = None  # the current call's list of capabilities checked (for the audit)
+        self._entered: set[tuple[str, str]] = set()  # (profile, tab) the current call was allowed to act in
 
     # -- policy ----------------------------------------------------------------------
 
@@ -491,6 +493,9 @@ class Bridge:
         self.require("navigate", url, checked=checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
+        if (place := self._place()) and place in self.profiles:
+            # A tab of one of the user's profiles goes there with the user's signed-in sessions: asked for that site.
+            self.require("authenticated_sessions", url, checked=checked, place=place)
         return target
 
     def require_needs(self, url: str, *, checked: list[str]) -> None:
@@ -556,8 +561,10 @@ class Bridge:
             with self._lock:
                 self._args = arguments
                 self._cancel = cancel
+                self._checked, self._entered = checked, set()
                 if name != "session_state":  # the one tool a held session keeps: it says why
                     self._refuse_if_held(tool.capability or name, checked)
+                self._sync_profiles()
                 self._sync_downloads()
                 self._sync_forms()
                 self._sync_network()
@@ -566,6 +573,7 @@ class Bridge:
                 finally:
                     self._local_ok = set()  # what the user allowed for this call ends with it
                     self._approved = set()
+                    self._checked, self._entered = None, set()
                     self._write_local()
             outcome, decision, reason = "ok", "allow", None
         except Denied as denied:
@@ -634,8 +642,11 @@ class Bridge:
         return out + [(label, t) for label, t in self.profiles.items() if t.bidi is not None]
 
     def bidi(self, tab: str | None = None) -> Bidi:
-        """The AI Workspace's engine, or the engine that holds `tab`."""
+        """The AI Workspace's engine, or the engine that holds `tab`. A tab of one of the user's profiles only for a
+        call the user's choices allow to act there now (_enter_profile)."""
         owner = "" if tab is None else self._owner(tab)
+        if owner:
+            self._enter_profile(owner, tab)
         engine = self.profiles[owner].bidi if owner else self._workspace().start()
         if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
@@ -655,6 +666,62 @@ class Bridge:
         if tab not in self.owner:
             raise ToolError(f"no tab {tab}; call tabs_list")
         return self.owner[tab]
+
+    @staticmethod
+    def _profile_site(agent: dict, url: str | None) -> str | None:
+        """The site a question about acting in a profile names: the tab's web address when it is one of the agent's
+        sites, otherwise none (the tool's own checks refuse what is outside them)."""
+        if not url or urllib.parse.urlsplit(url).scheme not in ("http", "https"):
+            return None
+        return url if policy.in_scope(agent, policy.host_of(url)) else None
+
+    def _enter_profile(self, label: str, tab: str) -> None:
+        """A call acts in one of the user's profiles, with the user's signed-in sessions there. What lets it is asked of
+        the user's choices as they are now, once a call: authenticated_sessions for the site the tab is at, and
+        multiple_profiles while another place is open. An answer "once" is for that call; the profile was given, or
+        an answer was given, for a site and a place (registry.decide), not for the rest of the session."""
+        if (label, tab) in self._entered:
+            return
+        engine = self.profiles[label].bidi
+        tree = engine.command("browsingContext.getTree", {"maxDepth": 0}, cancel=self._cancel)
+        url = next((c.get("url", "") for c in tree.get("contexts", []) if c.get("context") == tab), "")
+        checked = self._checked if self._checked is not None else []
+        target = self._target  # the call's own address stays what the activity records
+        self.require("authenticated_sessions", self._profile_site(self._agent() or {}, url), checked=checked, place=label)
+        if any(name != label for name, _ in self._engines()):
+            self.require("multiple_profiles", checked=checked, place=label)
+        self._target = target
+        self._entered.add((label, tab))
+
+    def _profile_needs(self, agent: dict, label: str, url: str) -> list[str]:
+        """What acting in this profile's tab would ask the user first (_enter_profile): described only without it."""
+        missing = []
+        if not self._quiet(agent, "authenticated_sessions", policy.origin(self._profile_site(agent, url)), label):
+            missing.append("authenticated_sessions")
+        if any(name != label for name, _ in self._engines()) and not self._quiet(agent, "multiple_profiles", None, label):
+            missing.append("multiple_profiles")
+        return missing
+
+    def _sync_profiles(self) -> None:
+        """The user's profiles this session has open follow the user's choices as they are now, like every other
+        permission: one no longer given to this agent, given at another path, or whose signed-in sessions are now
+        blocked for it is closed before the call does anything, and its tabs are no longer this session's."""
+        if not self.profiles:
+            return
+        agent = self._agent() or {}
+        given = {p.get("label"): p.get("path") for p in agent.get("profiles", [])}
+        blocked = not agent or policy.effective_mode(agent, "authenticated_sessions", self.session_id)[0] == "block"
+        for label, target in list(self.profiles.items()):
+            if blocked or given.get(label) != str(target.profile_dir):
+                self._close_profile(label)
+
+    def _close_profile(self, label: str) -> None:
+        target = self.profiles.pop(label)
+        target.stop()
+        for tab in [t for t, owner in self.owner.items() if owner == label]:
+            del self.owner[tab]
+            self.elements.pop(tab, None)
+        self._downloads_mode.pop(label, None)
 
     def close(self) -> None:
         for target in self.profiles.values():
@@ -1216,11 +1283,15 @@ class Bridge:
         tabs = []
         for c in self._tabs(cancel)[:50]:
             url = c.get("url", "")
+            label = "" if c["profile"] == "AI Workspace" else c["profile"]
             entry = {"tab": c["context"], "profile": c["profile"], "url": None, "title": None}
             if not policy.in_scope(agent, policy.host_of(url)):
                 # Outside the agent's sites: the tab exists, but not where it is or what it shows (audit A8).
                 entry["outside_sites"] = True
-            elif missing := self._needs_not_allowed(agent, url):
+            elif label and (missing := self._profile_needs(agent, label, url)):
+                # A profile of the user's that acting in would ask about first: not described without the answer.
+                entry["needs_permission"] = missing
+            elif missing := self._needs_not_allowed(agent, url, label):
                 # A redirect or the page itself took the tab somewhere reading needs more than
                 # read_pages (the local network, an internal page): page_read asks; a list does not tell.
                 entry["needs_permission"] = missing
@@ -1543,8 +1614,18 @@ class Bridge:
 
     def _t_downloads_list(self, args, cancel, checked):
         self.require("files", checked=checked)
-        begun = self._events("browsingContext.downloadWillBegin")
-        ended = {e.get("navigation"): e for e in self._events("browsingContext.downloadEnd")}
+        agent = self._agent() or {}
+        begun, ended = [], {}
+        for label, target in self._engines():
+            # A profile's downloads only when this agent acts there without asking, or was allowed to in this call.
+            if label and not (self._quiet(agent, "authenticated_sessions", None, label) or
+                              any(c == "authenticated_sessions" and p == label for c, _t, p in self._approved)):  # fmt: skip
+                continue
+            for _, event in list(target.bidi.events):
+                if event.get("method") == "browsingContext.downloadWillBegin":
+                    begun.append(event["params"])
+                elif event.get("method") == "browsingContext.downloadEnd":
+                    ended[event["params"].get("navigation")] = event["params"]
         items = []
         for item in begun[-50:]:
             end = ended.get(item.get("navigation"), {})

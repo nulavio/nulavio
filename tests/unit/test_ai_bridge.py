@@ -1670,6 +1670,150 @@ class AuditTest(Home):
         self.assertNotIn("msg=42", text)
 
 
+class OpenProfileTest(Home):
+    """A profile of the user's that a session has open follows the user's choices on every call: taken away from the
+    agent, given at another path, its signed-in sessions blocked, an answer "once" that was for an earlier call, a
+    timed grant that ended, or a second place no longer allowed. The tab is acted on only when they allow it now."""
+
+    PATH = "/home/u/.nulavio/p1"
+    ACTS = frozenset({"script.evaluate", "script.callFunction", "input.performActions", "input.setFiles",
+                      "browsingContext.navigate", "browsingContext.close", "browsingContext.captureScreenshot",
+                      "browsingContext.handleUserPrompt"})  # fmt: skip
+
+    def opened(self, level="assisted", answer="once", url="https://mail.example/inbox"):
+        agent, _ = registry.add(f"p-{len(registry.load()['agents'])}", "other", level)
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": self.PATH}])
+        approver = Approve(answer)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        commands = []
+
+        def command(method, params=None, **_k):
+            commands.append(method)
+            if method == "browsingContext.getTree":
+                return {"contexts": [{"context": "w1", "url": url}]}
+            return {"script": "p-1", "intercept": "i-1"}
+
+        engine = mock.Mock(events=[])
+        engine.command.side_effect = command
+        target = mock.Mock(bidi=engine, profile_dir=Path(self.PATH))
+        bridge.profiles["Trabalho"] = target
+        bridge.owner["w1"] = "Trabalho"
+        bridge.elements["w1"] = {"e1": "shared-1"}
+        page = {"text": "Inbox: 3 new", "url": url, "title": "Mail"}
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        self.read = stack.enter_context(mock.patch.object(tools.Bridge, "_eval", return_value=page))
+        stack.enter_context(mock.patch.object(policy, "_resolves_locally", return_value=False))
+        stack.enter_context(mock.patch.object(tools.Bridge, "_forms_held", return_value=0))
+        return agent, bridge, approver, target, commands
+
+    @staticmethod
+    def arguments(tool) -> dict:
+        args = {}
+        for name in tool.schema.get("required", []):
+            kind = tool.schema["properties"][name].get("type")
+            args[name] = {"tab": "w1", "url": "https://mail.example/other"}.get(name, True if kind == "boolean" else "e1")
+        return args
+
+    def tab_tools(self):
+        return [tool for tool in tools.TOOLS if "tab" in tool.schema.get("properties", {})]
+
+    def test_an_answer_once_is_for_the_call_that_asked(self):
+        _agent, bridge, approver, _target, commands = self.opened(answer="once")
+        first = bridge.call("page_read", {"tab": "w1"})
+        self.assertFalse(first["isError"], first)
+        self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])
+        self.assertEqual(approver.places, ["Trabalho"])
+        for tool in self.tab_tools():
+            with self.subTest(tool=tool.name):
+                approver = Approve("deny")
+                bridge.approver = approver
+                commands.clear()
+                self.read.reset_mock()
+                result = bridge.call(tool.name, self.arguments(tool))
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(approver.asked[:1], [("authenticated_sessions", "https://mail.example")])
+                self.assertFalse(self.ACTS & set(commands), commands)
+                self.read.assert_not_called()
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["reason"], entry["capability"].split(",")[0]), ("denied", "authenticated_sessions"))
+
+    def test_a_profile_taken_away_moved_or_blocked_is_closed_before_the_call(self):
+        changes = {
+            "taken away": lambda a: registry.set_profiles(a, []),
+            "another path": lambda a: registry.set_profiles(a, [{"label": "Trabalho", "path": "/home/u/.nulavio/p2"}]),
+            "sessions blocked": lambda a: registry.grant(a, "authenticated_sessions", "block"),
+        }
+        for name, change in changes.items():
+            for tool in self.tab_tools():
+                with self.subTest(change=name, tool=tool.name):
+                    agent, bridge, approver, target, commands = self.opened(level="autonomous")
+                    change(agent["id"])
+                    result = bridge.call(tool.name, self.arguments(tool))
+                    self.assertTrue(result["isError"], result)
+                    target.stop.assert_called_once()
+                    self.assertNotIn("Trabalho", bridge.profiles)
+                    self.assertNotIn("w1", bridge.owner)
+                    self.assertFalse(self.ACTS & set(commands), commands)
+                    self.read.assert_not_called()
+                    self.assertEqual(approver.asked, [])
+        # tabs_list and downloads_list no longer reach it either.
+        agent, bridge, _approver, target, commands = self.opened(level="autonomous")
+        registry.set_profiles(agent["id"], [])
+        bridge.workspace = mock.Mock(bidi=None)
+        with mock.patch.object(tools.Bridge, "_tabs", return_value=[]):
+            self.assertNotIn("mail.example", json.dumps(bridge.call("tabs_list", {})))
+        target.stop.assert_called_once()
+
+    def test_a_timed_grant_that_ended_or_a_second_place_now_refused_stops_acting_there(self):
+        agent, bridge, approver, _target, _commands = self.opened(answer="deny")
+        registry.grant(agent["id"], "authenticated_sessions", "allow", minutes=30)
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
+        later = policy.now() + _dt.timedelta(minutes=31)
+        with mock.patch.object(policy, "now", return_value=later):
+            result = bridge.call("page_read", {"tab": "w1"})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])
+        # Autonomous: multiple_profiles asks; set to block while the AI Workspace is open too.
+        agent, bridge, approver, _target, _commands = self.opened(level="autonomous", answer="session")
+        workspace = mock.Mock(events=[])
+        workspace.command.side_effect = lambda method, *_a, **_k: {"script": "p-2", "intercept": "i-2", "contexts": []}
+        bridge.workspace = mock.Mock(bidi=workspace)
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
+        self.assertEqual(approver.asked, [("multiple_profiles", None)])
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])  # the answer stands for this session
+        self.assertEqual(len(approver.asked), 1)
+        registry.grant(agent["id"], "multiple_profiles", "block")
+        self.read.reset_mock()
+        result = bridge.call("page_read", {"tab": "w1"})
+        self.assertTrue(result["isError"], result)
+        self.read.assert_not_called()
+        self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], "grant")
+
+    def test_a_tab_list_describes_a_profiles_tab_only_where_acting_would_not_ask(self):
+        agent, bridge, approver, _target, _commands = self.opened(answer="deny")
+        listed = [{"context": "w1", "url": "https://mail.example/inbox", "profile": "Trabalho"}]
+        with mock.patch.object(tools.Bridge, "_tabs", return_value=listed):
+            entry = bridge.call("tabs_list", {})["structuredContent"]["tabs"][0]
+            self.assertEqual((entry["url"], entry["title"], entry["needs_permission"]), (None, None, ["authenticated_sessions"]))
+            self.assertEqual(approver.asked, [])  # a list does not ask
+            registry.grant(agent["id"], "authenticated_sessions", "allow")
+            entry = bridge.call("tabs_list", {})["structuredContent"]["tabs"][0]
+            self.assertEqual(entry["url"], "https://mail.example/inbox")
+
+    def test_navigating_a_profiles_tab_asks_for_the_site_it_goes_to(self):
+        _agent, bridge, approver, _target, commands = self.opened(answer="session")
+        with mock.patch.object(tools.Bridge, "_arrived"):
+            self.assertFalse(bridge.call("navigate", {"tab": "w1", "url": "https://mail.example/sent"})["isError"])
+            self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])
+            later = Approve("deny")
+            bridge.approver = later
+            result = bridge.call("navigate", {"tab": "w1", "url": "https://bank.example/"})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(later.asked, [("authenticated_sessions", "https://bank.example")])  # mail.example's answer stands
+        self.assertEqual(commands.count("browsingContext.navigate"), 1)
+
+
 class LocalRequestsTest(Home):
     """R29 (LESIS 83a648d8): an agent without local_resources has every request of its engines held, and one
     to this computer or the local network failed before it is sent, a redirect hop included."""

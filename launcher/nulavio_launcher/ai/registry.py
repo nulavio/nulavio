@@ -5,7 +5,9 @@ optional site list and a secret token. Only the token's SHA-256 is stored;
 the token sits in the agent's MCP configuration, so it identifies *that
 configuration*, not the program (any process of the same user that reads it
 can present it). The bridge re-reads this file on every call, so revocation,
-grant changes and the emergency stop apply to the next call.
+grant changes and the emergency stop apply to the next call, also in a profile
+of the user's that the session has open (tools.Bridge._sync_profiles and
+_enter_profile).
 """
 
 from __future__ import annotations
