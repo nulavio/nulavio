@@ -428,8 +428,9 @@ class NulavioSearchClass {
    * OpenSearch one). It becomes the default for normal windows and, unless `privateToo` is false, for private
    * windows. `suggest` true or false allows or stops sending what is typed to it (the per-provider consent);
    * left out, the consent stays as it is. `suggest` true needs `suggestHost`, the host the person was shown as the one
-   * that receives what is typed: when the engine's own suggestion host is another, nothing changes
-   * ("suggest-host-changed"). Nothing is sent to the provider by choosing it.
+   * that receives what is typed: when the engine's own suggestion host is another, the default and the consent do not
+   * change ("suggest-host-changed"; a provider named by its key may have been added to the list already). Nothing is
+   * sent to the provider by choosing it.
    */
   async choose({ provider = null, id = null, privateToo = true, suggest = undefined, suggestHost: shown = undefined } = {}) {
     await lazy.SearchService.init();
@@ -593,12 +594,17 @@ class NulavioSearchClass {
   /**
    * Allow or stop remote suggestions from one engine. Allowing also turns on
    * the engine's global switch (the user asked for suggestions); stopping the
-   * last one turns it off.
+   * last one turns it off. `shown`, when given, is the suggestion host the
+   * person was shown for this engine: allowing is refused when the engine's
+   * own host is another ("suggest-host-changed"), and nothing changes.
    */
-  async setSuggestOptIn(id, enabled) {
+  async setSuggestOptIn(id, enabled, shown = undefined) {
     const engine = await this.#engine(id);
     if (enabled && !engine.supportsResponseType(SUGGEST_TYPE)) {
       fail("no-suggestions");
+    }
+    if (enabled && shown !== undefined && (typeof shown !== "string" || suggestHost(engine) !== shown)) {
+      fail("suggest-host-changed");
     }
     const ids = this.optInIds().filter(x => x !== id);
     if (enabled) {

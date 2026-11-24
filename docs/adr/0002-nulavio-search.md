@@ -50,7 +50,7 @@ browser.nulavioSearch (experiment API, built-in Shell only; logic in browser/she
   addCustom({name, url, alias?, suggestUrl?}) -> id
   addOpenSearch({url}) -> id                 // downloads the description once, at the user's request
   remove(id) ; setDefault(id, {private?}) ; setAlias(id, alias)
-  setSuggestOptIn(id, enabled) ; setSuggestPrivate(enabled)
+  setSuggestOptIn(id, enabled, shown?) ; setSuggestPrivate(enabled)   // shown: the suggestion host the person was shown
 NulavioSearch.sys.mjs, called by the settings page (privileged), not part of the experiment API (#151):
   choose({provider | id, privateToo?, suggest?, suggestHost?}) -> id   // #151: add if missing, make default (and private), consent only if asked;
                                                                       // suggest: true needs the suggestion host that was shown
@@ -95,10 +95,14 @@ Where the consent lives: the upstream switch `browser.search.suggest.enabled` st
   line.
 - While another engine holds a provider's name, "Usar" and "Adicionar" for that provider are refused
   (`provider-name-taken`): names are unique in the engine's list, and the provider is never added in that engine's
-  place. Removing that engine makes room for it.
-- Suggestions are allowed in the chooser for the host the person was shown: with "Mostrar sugestões dele enquanto digito" ticked, each
-  row names its suggestion host before anything is chosen, `choose` takes that host (`suggestHost`), and refuses the
-  whole choice with `suggest-host-changed` when the engine's own host is another, before the default changes.
+  place. Removing that engine makes room for it. The provider's rows say so and offer neither button meanwhile.
+- Suggestions are allowed for the host the person was shown:
+  - in the chooser, with "Mostrar sugestões dele enquanto digito" ticked, each row names its suggestion host before
+    anything is chosen, `choose` takes that host (`suggestHost`), and refuses with `suggest-host-changed` when the
+    engine's own host is another, before the default or the consent changes (a provider named by its key may already
+    have been added to the list by then);
+  - in "Sugestões enquanto você digita", each switch names its engine's suggestion host while it is off, too, and
+    `setSuggestOptIn` takes that host and refuses the same way.
 - This replaces the behaviour of the #151 amendment where an engine of the person's with a provider's name was the one
   chosen for that provider.
 
