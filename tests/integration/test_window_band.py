@@ -104,8 +104,8 @@ FIRST_FRAME = f"""
 
 
 def first_frame_layout(test, m, features, close=True):
-    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same;
-    with where the row was laid out in each (#605), which the caller compares."""
+    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), with where the row was
+    laid out in each (#605). Returns (first band, first layout, band after, layout after); the caller compares them."""
     result = chrome_async(m, FIRST_FRAME, [features, close])
     test.assertNotIn("error", result, result)
     band, after = result["ok"]["band"], result["ok"]["after"]
@@ -114,13 +114,14 @@ def first_frame_layout(test, m, features, close=True):
     first = band.pop("layout")
     test.assertTrue(band["name"], band)
     test.assertTrue(band["label"], band)
-    test.assertEqual(band, after)
-    return band, first, result["ok"]["layout"]
+    return band, first, after, result["ok"]["layout"]
 
 
 def first_frame(test, m, features, close=True):
     """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same."""
-    return first_frame_layout(test, m, features, close)[0]
+    band, _, after, _ = first_frame_layout(test, m, features, close)
+    test.assertEqual(band, after)
+    return band
 
 
 def assert_band(test, state):
@@ -565,10 +566,10 @@ class WindowBandTest(unittest.TestCase):
         self.m.chrome("Services.prefs.setBoolPref('sidebar.verticalTabs', true);")
         self.addCleanup(self.m.chrome, "Services.prefs.setBoolPref('sidebar.verticalTabs', arguments[0]);", [vertical])
         # Wider than window-band.css's 64rem, which the navigation row needs to take the band in.
-        band, first, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
+        band, first, band_after, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
         out = harness.artifacts_dir() / "window-band"
         out.mkdir(parents=True, exist_ok=True)
-        measured = {"band": band, "first": first, "after": after}
+        measured = {"band": band, "first": first, "band_after": band_after, "after": after}
         (out / "first-frame-ordinary.json").write_text(json.dumps(measured, indent=2) + "\n")
         print(f"#605 first frame {first} after start-up {after}", file=sys.stderr)
         self.assertEqual((band["private"], band["temporary"], band["agent"]), ("false", "false", "false"), band)
@@ -577,6 +578,7 @@ class WindowBandTest(unittest.TestCase):
         self.assertTrue(after["wide"] and after["vertical"] and after["neutral"] and not after["named"], after)
         self.assertTrue(first["neutral"], f"the first frame drew the band in a row of its own: {first} then {after}")
         self.assertEqual(first, after)
+        self.assertEqual(band, band_after)  # and the row's own fill: the navigation row's surface, from the first frame
 
     def test_04_themes_orientation_density_narrow_scaling_and_fullscreen(self):
         shots = harness.artifacts_dir() / "window-band"
@@ -980,6 +982,9 @@ class WindowBandTest(unittest.TestCase):
             self.m,
             f"""
           const A = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs').NulavioAI;
+          // An agent is added from the user's own window (an AI Workspace may only tighten: workspace-change); test_10
+          // leaves its agent's workspace set.
+          Services.prefs.clearUserPref('nulavio.ai.workspace');
           const {{agent}} = await A.add({{name: args[0], client: 'other', autonomy: 'restricted'}});
           Services.prefs.setStringPref('nulavio.ai.workspace', agent.id);
           await {WINDOW}.refresh();
@@ -989,12 +994,13 @@ class WindowBandTest(unittest.TestCase):
         )
         self.assertNotIn("error", setup, setup)
         self.addCleanup(chrome_async, self.m, f"Services.prefs.clearUserPref('nulavio.ai.workspace'); await {WINDOW}.refresh();")
-        band, first, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
+        band, first, band_after, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
         self.assertEqual((band["agent"], band["name"]), ("true", name), band)
         self.assertTrue(any(name in (seal or "") for seal in band["seals"]), band)
         self.assertTrue(first["agentWindow"], first)
         self.assertFalse(first["neutral"], first)  # an alert: the band's own row, from the first frame
         self.assertEqual(first, after)
+        self.assertEqual(band, band_after)
 
 
 @unittest.skipUnless(harness.nulavio_engine() and sodium.available() and storage.tools_available(), "needs Vault and Track B")
