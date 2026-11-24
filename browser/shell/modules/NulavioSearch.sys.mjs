@@ -235,6 +235,36 @@ function normalizeName(raw) {
   return name;
 }
 
+/* A curated provider is known by who defined the engine and where it sends what is typed, never by a name alone: the
+   name of an added engine comes from whoever made it (an OpenSearch description declares its own), so an added engine
+   that only shares a curated provider's name is the person's own engine, listed with its own host. An engine of the
+   engine's own search configuration is the provider it is for (by `configId` where the provider has one, else by
+   name); an added one is the provider only as a user engine with its name and exactly its addresses, as `addProvider`
+   makes it. */
+const MARK = "nulavio";
+
+function submitted(engine, type) {
+  try {
+    return engine.supportsResponseType(type) ? (engine.getSubmission(MARK, type)?.uri?.spec ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isProvider(engine, provider) {
+  if (engine instanceof lazy.ConfigSearchEngine) {
+    return provider.configId ? engine.id === provider.configId : engine.name === provider.name;
+  }
+  if (!(engine instanceof lazy.UserSearchEngine) || engine.name !== provider.name) {
+    return false;
+  }
+  const expected = template => (template ? template.replace("{searchTerms}", MARK) : null);
+  return (
+    submitted(engine, lazy.SearchUtils.URL_TYPE.SEARCH) === expected(provider.search) &&
+    submitted(engine, SUGGEST_TYPE) === expected(provider.suggest)
+  );
+}
+
 function suggestHost(engine) {
   if (!engine.supportsResponseType(SUGGEST_TYPE)) {
     return null;
@@ -298,7 +328,7 @@ class NulavioSearchClass {
 
   #providerKey(engine) {
     for (const [key, provider] of Object.entries(PROVIDERS)) {
-      if (engine.id === provider.configId || engine.name === provider.name) {
+      if (isProvider(engine, provider)) {
         return key;
       }
     }
@@ -397,11 +427,16 @@ class NulavioSearchClass {
    * profile does not have it), or `id`, an engine already in the list (a SearXNG instance, a custom engine, an
    * OpenSearch one). It becomes the default for normal windows and, unless `privateToo` is false, for private
    * windows. `suggest` true or false allows or stops sending what is typed to it (the per-provider consent);
-   * left out, the consent stays as it is. Nothing is sent to the provider by choosing it.
+   * left out, the consent stays as it is. `suggest` true needs `suggestHost`, the host the person was shown as the one
+   * that receives what is typed: when the engine's own suggestion host is another, nothing changes
+   * ("suggest-host-changed"). Nothing is sent to the provider by choosing it.
    */
-  async choose({ provider = null, id = null, privateToo = true, suggest = undefined } = {}) {
+  async choose({ provider = null, id = null, privateToo = true, suggest = undefined, suggestHost: shown = undefined } = {}) {
     await lazy.SearchService.init();
     if ((provider === null) === (id === null) || (suggest !== undefined && typeof suggest !== "boolean")) {
+      fail("invalid-search-choice");
+    }
+    if (suggest === true && (typeof shown !== "string" || !shown)) {
       fail("invalid-search-choice");
     }
     if (provider !== null && !Object.hasOwn(PROVIDERS, provider)) {
@@ -410,6 +445,9 @@ class NulavioSearchClass {
     const engine = await this.#engine(provider !== null ? await this.addProvider(provider) : id);
     if (suggest === true && !engine.supportsResponseType(SUGGEST_TYPE)) {
       fail("no-suggestions");
+    }
+    if (suggest === true && suggestHost(engine) !== shown) {
+      fail("suggest-host-changed");
     }
     await lazy.SearchService.setDefault(engine, lazy.SearchService.CHANGE_REASON.USER);
     if (privateToo) {
@@ -451,6 +489,11 @@ class NulavioSearchClass {
     }
     const existing = lazy.SearchService.getEngineByName(provider.name);
     if (existing) {
+      // Names are unique in the engine's list: another engine with this name keeps it, and the provider is not added
+      // in its place or under its name.
+      if (!isProvider(existing, provider)) {
+        fail("provider-name-taken");
+      }
       existing.hidden = false;
       return existing.id;
     }
@@ -602,8 +645,9 @@ class NulavioSearchClass {
         console.error(`Nulavio Search: could not add ${provider.name}`, e);
       }
     }
+    const named = lazy.SearchService.getEngineByName(PROVIDERS.duckduckgo.name);
     const ddg = lazy.SearchService.getEngineById(PROVIDERS.duckduckgo.configId) ??
-      lazy.SearchService.getEngineByName(PROVIDERS.duckduckgo.name);
+      (named && isProvider(named, PROVIDERS.duckduckgo) ? named : null);
     const result = { migrated: true, added, defaultChanged: false, privateDefaultChanged: false };
     if (ddg) {
       const appDefault = lazy.SearchService.appDefaultEngine;

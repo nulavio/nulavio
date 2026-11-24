@@ -1593,18 +1593,31 @@
       const engines = enginesNow();
       const curated = search.state.value?.providers ?? [];
       const ofProvider = new Map(engines.filter(engine => engine.provider && engine.provider !== "searxng").map(engine => [engine.provider, engine]));
-      const rows = curated.map(provider => ({
-        key: `provider-${provider.key}`,
-        name: provider.name,
-        provider: provider.key,
-        engine: ofProvider.get(provider.key) ?? null,
-        account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
-        suggests: provider.suggests,
-      }));
+      const rows = curated.map(provider => {
+        const engine = ofProvider.get(provider.key) ?? null;
+        return {
+          key: `provider-${provider.key}`,
+          name: provider.name,
+          provider: provider.key,
+          engine,
+          account: provider.account ? (search.state.value?.accounts?.[provider.key] ?? null) : null,
+          suggests: engine ? engine.canSuggest : provider.suggests,
+          // Where typed text would go: the engine's own host once the profile has it, the provider's until then.
+          suggestHost: engine ? engine.suggestHost : provider.suggestHost,
+        };
+      });
       const curatedKeys = new Set(curated.map(provider => provider.key));
       for (const engine of engines) {
         if (!curatedKeys.has(engine.provider)) {
-          rows.push({ key: `engine-${engine.id}`, name: engine.name, provider: null, engine, account: null, suggests: engine.canSuggest });
+          rows.push({
+            key: `engine-${engine.id}`,
+            name: engine.name,
+            provider: null,
+            engine,
+            account: null,
+            suggests: engine.canSuggest,
+            suggestHost: engine.suggestHost,
+          });
         }
       }
       return rows.sort((a, b) => a.name.localeCompare(b.name));
@@ -1617,6 +1630,14 @@
         words.push(msg("chooseInUsePrivate"));
       } else if (!row.engine) {
         words.push(msg("chooseNotAdded"));
+      }
+      // An engine that is not one of Nulavio's providers is named with its own host (it may share a provider's name).
+      if (!row.provider && row.engine?.host) {
+        words.push(msg("chooseEngineHost", row.engine.host));
+      }
+      // With the box ticked, the host that would receive what is typed, before anything is chosen.
+      if (chooseBench.state.suggest && row.suggests && row.suggestHost) {
+        words.push(msg("chooseSuggestTo", row.suggestHost));
       }
       if (row.account) {
         // #152: said before the provider is chosen, with the providers that need no account, by name.
@@ -1685,17 +1706,19 @@
           return;
         }
         const target = row.provider ? { provider: row.provider } : { id: row.engine.id };
-        // The box speaks for this provider only when it can receive typed text at all.
+        // The box speaks for this provider only when it can receive typed text at all, and for the host the row named:
+        // the module refuses the choice when that is no longer the engine's.
         const suggest = row.suggests ? Boolean(chooseBench.state.suggest) : undefined;
+        const shown = suggest ? { suggestHost: row.suggestHost ?? "" } : {};
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
-        // chosen engine's own (an engine of the person's with a curated provider's name may send elsewhere).
+        // chosen engine's own, which the module checked against the one the row named.
         const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
         const said = id => {
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
         };
         chooseBench.act(
-          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest }),
+          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest, ...shown }),
           said
         );
         // Consent is given for one provider at a time: the box is clear again for the next choice.
