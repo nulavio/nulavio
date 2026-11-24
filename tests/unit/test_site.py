@@ -826,6 +826,11 @@ class WaitlistRemovalTest(unittest.TestCase):
         "é@exemplo.br",
     )
 
+    SQL = (
+        r"^DELETE FROM waitlist WHERE email = CAST\(X'([0-9a-f]+)' AS TEXT\); "
+        r"DELETE FROM waitlist_links WHERE email = CAST\(X'\1' AS TEXT\)$"
+    )
+
     @classmethod
     def setUpClass(cls):
         cls.schema = re.findall(r'"(CREATE TABLE IF NOT EXISTS waitlist(?:_links)? \(.*?\))"', WORKER.read_text(encoding="utf-8"))
@@ -868,6 +873,7 @@ class WaitlistRemovalTest(unittest.TestCase):
                 self.assertIsInstance(argv, list, "an argument list, never a shell")
                 self.assertEqual(argv[:6], ["wrangler", "d1", "execute", "nulavio-waitlist", "--remote", "--command"])
                 self.assertEqual(len(argv), 7, "the SQL is one argument")
+                self.assertRegex(argv[6], self.SQL, "the SQL holds none of the address's characters")
                 db.executescript(argv[6])
                 left = {email for (email,) in db.execute("SELECT email FROM waitlist")}
                 linked = {email for (email,) in db.execute("SELECT email FROM waitlist_links")}
@@ -876,7 +882,7 @@ class WaitlistRemovalTest(unittest.TestCase):
 
     def test_an_address_not_on_the_list_removes_nothing(self):
         db = self.listed(self.OTHERS)
-        _, (argv,), _ = self.removing("dora@example.org' OR 'a'='a")
+        _, (argv,), _ = self.removing("d'ora@example.org")
         db.executescript(argv[6])
         self.assertEqual(len(db.execute("SELECT * FROM waitlist").fetchall()), len(self.OTHERS))
 
@@ -902,6 +908,11 @@ class WaitlistRemovalTest(unittest.TestCase):
                 status, sent, out = self.removing(address)
                 self.assertEqual((status, sent), (2, []))
                 self.assertIn("Refused", out)
+
+    def test_a_missing_wrangler_is_said_plainly(self):
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(waitlist_remove.run_wrangler([str(ROOT / "no-such-wrangler")]), 2)
+        self.assertIn("was not found", out.getvalue())
 
     def test_contributing_points_to_the_script_and_holds_no_sql_to_fill_in(self):
         contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")

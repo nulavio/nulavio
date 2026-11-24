@@ -5,19 +5,21 @@
 
 For someone who lost their link, signed up before links existed or whose address someone else
 signed up, once a reply has come back from the address on the list. The address is read from
-standard input (typed at the prompt, or one line piped in), never from the command line: it was
-typed by someone on the internet, and a command line is read by a shell first. It is shown back
-with every character spelled out before anything is removed.
+standard input, never from the command line: it was typed by someone on the internet, and a
+command line is read by a shell first. Type or paste it at the prompt; without a terminal, give it
+as a file (`< address.txt`), never through `echo` or `printf`, which put it back on a shell line.
+It is shown back with every character spelled out before anything is removed.
 
-The two DELETE statements quote the address by SQLite's own rule (a quote is doubled), and the
-address must hold no control character, so its text never ends a string literal. They are passed
-to wrangler as one argument of an argument list, with no shell in between. The comparison is the
-column's (COLLATE NOCASE), as in site/_worker.js, so A@b.example removes a@b.example.
+The address is in the two DELETE statements only as the hexadecimal of its UTF-8 bytes
+(CAST(X'…' AS TEXT)), so the text of the SQL holds none of its characters. The statements are
+passed to wrangler as one argument of an argument list, with no shell in between. The comparison
+is the column's (COLLATE NOCASE), as in site/_worker.js, so A@b.example removes a@b.example.
 
 Any address that may be on the list is accepted, also one with characters the worker refuses
 today: entries made before it narrowed the addresses it takes can still have them.
 
-Exit status: wrangler's, or 2 when the address is refused or the removal is not confirmed.
+Exit status: wrangler's, or 2 when the address is refused, the removal is not confirmed or
+wrangler is not installed.
 Standard library only.
 """
 
@@ -48,8 +50,8 @@ def refused(address: str) -> str | None:
 
 
 def literal(text: str) -> str:
-    """An SQLite string literal for text: a quote inside is doubled, and nothing else is special."""
-    return "'" + text.replace("'", "''") + "'"
+    """An SQLite expression for text that holds none of its characters: a blob literal of its UTF-8 bytes, as TEXT."""
+    return f"CAST(X'{text.encode('utf-8').hex()}' AS TEXT)"
 
 
 def statements(address: str) -> str:
@@ -57,9 +59,9 @@ def statements(address: str) -> str:
     reason = refused(address)
     if reason:
         raise ValueError(reason)
-    # wrangler's --command takes no bound parameters: literal() is the quoting, tested on every ASCII character.
+    # wrangler's --command takes no bound parameters: literal() is hexadecimal digits only.
     where = f"WHERE email = {literal(address)}"
-    return f"DELETE FROM waitlist {where}; DELETE FROM waitlist_links {where}"  # noqa: S608 - quoted by literal()
+    return f"DELETE FROM waitlist {where}; DELETE FROM waitlist_links {where}"  # noqa: S608 - hex digits only
 
 
 def command(address: str, database: str = DATABASE) -> list[str]:
@@ -68,7 +70,11 @@ def command(address: str, database: str = DATABASE) -> list[str]:
 
 
 def run_wrangler(argv: Sequence[str]) -> int:
-    return subprocess.run(list(argv), check=False).returncode
+    try:
+        return subprocess.run(list(argv), check=False).returncode
+    except FileNotFoundError:
+        print(f"{argv[0]} was not found: install it (ci/site/package-lock.json pins the version) and run this again.")
+        return 2
 
 
 def main(
