@@ -308,7 +308,8 @@ class AddressTest(unittest.TestCase):
         # any other host is not one it opens, and a request shows the person nothing the agent wrote as a host.
         with mock.patch.object(policy.socket, "getaddrinfo", side_effect=AssertionError("looked up")):
             for url in ("http://local host text/", "http://a<b>c.example/", 'https://ex"ample.org/', "http://a{b}.example/",
-                        "http://allow,this.example/", "http://x;y.example:8080/", "http://a..b.example/"):  # fmt: skip
+                        "http://allow,this.example/", "http://x;y.example:8080/", "http://a..b.example/",
+                        "https://straße.example/", "https://ς.example/", "https://a\u200db.example/"):  # fmt: skip
                 with self.subTest(url=url), self.assertRaises(policy.UrlRefused):
                     policy.classify_url(url)
         for url in ("https://my_host.example/", "https://xn--80ak6aa92e.com/", "https://аррӏе.com/", "http://[::1]:8080/"):
@@ -323,6 +324,9 @@ class AddressTest(unittest.TestCase):
         self.assertEqual(policy.origin("http://[::1]:8080/a"), "http://[::1]:8080")
         self.assertEqual(policy.origin("http://[0:0::1]/"), "http://[::1]")
         self.assertEqual(policy.origin("view-source:https://аррӏе.com/"), "https://xn--80ak6aa92e.com")
+        self.assertEqual(policy.origin("https://example.org:443/"), "https://example.org")  # the engine drops it too
+        self.assertEqual(policy.origin("http://example.org:80/"), "http://example.org")
+        self.assertEqual(policy.origin("http://example.org:443/"), "http://example.org:443")
 
 
 class Approve(registry.Approver):
@@ -1685,17 +1689,23 @@ class OpenProfileTest(Home):
         registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": self.PATH}])
         approver = Approve(answer)
         bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
-        commands = []
+        commands, tabs = [], {"w1": url}
 
         def command(method, params=None, **_k):
             commands.append(method)
             if method == "browsingContext.getTree":
-                return {"contexts": [{"context": "w1", "url": url}]}
+                return {"contexts": [{"context": tab, "url": at} for tab, at in tabs.items()]}
+            if method == "browsingContext.create":
+                tabs["w2"] = "about:blank"
+                return {"context": "w2"}
+            if method == "browsingContext.navigate":
+                tabs[params["context"]] = params["url"]
             return {"script": "p-1", "intercept": "i-1"}
 
         engine = mock.Mock(events=[])
         engine.command.side_effect = command
         target = mock.Mock(bidi=engine, profile_dir=Path(self.PATH))
+        target.start.return_value = engine
         bridge.profiles["Trabalho"] = target
         bridge.owner["w1"] = "Trabalho"
         bridge.elements["w1"] = {"e1": "shared-1"}
@@ -1757,13 +1767,43 @@ class OpenProfileTest(Home):
                     self.assertFalse(self.ACTS & set(commands), commands)
                     self.read.assert_not_called()
                     self.assertEqual(approver.asked, [])
-        # tabs_list and downloads_list no longer reach it either.
+        # tabs_list no longer lists its tabs either (the AI Workspace is the one engine left).
         agent, bridge, _approver, target, commands = self.opened(level="autonomous")
         registry.set_profiles(agent["id"], [])
-        bridge.workspace = mock.Mock(bidi=None)
-        with mock.patch.object(tools.Bridge, "_tabs", return_value=[]):
-            self.assertNotIn("mail.example", json.dumps(bridge.call("tabs_list", {})))
+        workspace = mock.Mock(events=[])
+        workspace.command.side_effect = lambda method, *_a, **_k: {"script": "p-2", "intercept": "i-2", "contexts": []}
+        bridge.workspace = mock.Mock(bidi=workspace)
+        bridge.workspace.start.return_value = workspace
+        listed = bridge.call("tabs_list", {})
+        self.assertFalse(listed["isError"], listed)
+        self.assertNotIn("mail.example", json.dumps(listed))
+        self.assertNotIn("Trabalho", json.dumps(listed))
         target.stop.assert_called_once()
+
+    def test_a_profiles_downloads_are_listed_only_where_acting_there_would_not_ask(self):
+        agent, bridge, approver, target, _commands = self.opened(answer="deny")
+        registry.grant(agent["id"], "files", "allow")
+        target.bidi.events = [
+            (1, {"method": "browsingContext.downloadWillBegin",
+                 "params": {"navigation": "n1", "url": "https://mail.example/a.pdf", "suggestedFilename": "salary.pdf"}}),
+        ]  # fmt: skip
+        self.assertNotIn("salary.pdf", json.dumps(bridge.call("downloads_list", {})))
+        self.assertEqual(approver.asked, [])  # a list does not ask
+        registry.grant(agent["id"], "authenticated_sessions", "allow")
+        self.assertIn("salary.pdf", json.dumps(bridge.call("downloads_list", {})))
+
+    def test_a_new_tab_in_an_open_profile_asks_once_in_that_call_and_again_in_the_next(self):
+        _agent, bridge, approver, _target, _commands = self.opened(answer="once")
+        with mock.patch.object(tools.Bridge, "_arrived"):
+            made = bridge.call("tab_new", {"profile": "Trabalho", "url": "https://mail.example/new"})
+        self.assertFalse(made["isError"], made)
+        self.assertEqual(approver.asked, [("authenticated_sessions", "https://mail.example")])  # asked once, not per step
+        later = Approve("deny")
+        bridge.approver = later
+        self.read.reset_mock()
+        self.assertTrue(bridge.call("page_read", {"tab": "w2"})["isError"])
+        self.assertEqual(later.asked, [("authenticated_sessions", "https://mail.example")])
+        self.read.assert_not_called()
 
     def test_a_timed_grant_that_ended_or_a_second_place_now_refused_stops_acting_there(self):
         agent, bridge, approver, _target, _commands = self.opened(answer="deny")

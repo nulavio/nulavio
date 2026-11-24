@@ -171,6 +171,9 @@ class UrlRefused(ValueError):
     pass
 
 
+# Characters the engine keeps in a name (UTS #46, non-transitional) and Python's IDNA 2003 codec maps to others (ß to ss):
+# a host with one of them is not read here as the engine reads it.
+IDNA_DEVIATIONS = frozenset("\u00df\u03c2\u200c\u200d")
 # The only characters the engine sends to its resolver in a name (net_IsValidDNSHost, netwerk/base/nsURLHelper.cpp):
 # RFC 1035 plus "$+_". A host with any other one is not a name the engine looks up or opens.
 DNS_HOST = re.compile(r"[a-z0-9.\-$+_]{1,253}")
@@ -345,6 +348,8 @@ def classify_url(url: str, resolve: bool = True) -> Target:
             raise UrlRefused("addresses with a user name or password are not opened")
         if "%" in parsed.netloc:
             raise UrlRefused("addresses with an encoded host are not opened")
+        if IDNA_DEVIATIONS & set(parsed.hostname or ""):
+            raise UrlRefused("the address has a host the browser would read differently")
         try:
             host = (parsed.hostname or "").encode("idna").decode("ascii").lower().rstrip(".")
         except UnicodeError:
@@ -397,10 +402,10 @@ def origin(url: str | None) -> str | None:
         return None
     try:
         parsed = urllib.parse.urlsplit(subject(url))
-        port = f":{parsed.port}" if parsed.port else ""
+        scheme = parsed.scheme.lower()
+        port = f":{parsed.port}" if parsed.port and parsed.port != {"http": 80, "https": 443}.get(scheme) else ""
     except ValueError:
         return None
-    scheme = parsed.scheme.lower()
     if scheme in ("http", "https") and parsed.hostname:
         host = canonical_host(parsed.hostname)
         return f"{scheme}://[{host}]{port}" if ":" in host else f"{scheme}://{host}{port}"
