@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import paths
+
 PrefValue = bool | int | str
 
 _PREF_LINE = re.compile(r'^\s*(?:user_)?pref\(\s*"((?:[^"\\]|\\.)+)"\s*,\s*(.+?)\s*\)\s*;\s*$')
@@ -113,7 +115,7 @@ def read_user_prefs(path: Path) -> dict[str, PrefValue]:
     """
     values: dict[str, PrefValue] = {}
     try:
-        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        text = paths.read_private_file(Path(path)).decode("utf-8", errors="replace")
     except FileNotFoundError:
         return values
     for line in text.splitlines():

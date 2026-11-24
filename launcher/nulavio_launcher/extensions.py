@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
+import os
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -125,7 +125,12 @@ def fetch(entry: LockedExtension, timeout: float = 60.0) -> Path:
     request = urllib.request.Request(entry.url, headers={"User-Agent": "nulavio-launcher/0 (+preview)"})
     digest = hashlib.sha256()
     received = 0
-    with opener.open(request, timeout=timeout) as response, open(partial, "wb") as out:
+    partial.unlink(missing_ok=True)  # left by an interrupted download; a new one is created exclusively below
+    exclusive = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    with (
+        opener.open(request, timeout=timeout) as response,
+        os.fdopen(os.open(partial, exclusive, paths.PRIVATE_FILE_MODE), "wb") as out,
+    ):
         final = urllib.parse.urlparse(response.geturl())
         if final.scheme != "https" or final.hostname not in ALLOWED_HOSTS:
             raise IntegrityError(f"unexpected final URL host {final.hostname}")
@@ -151,10 +156,9 @@ def install(entry: LockedExtension, profile_dir: Path) -> Path:
         raise IntegrityError(f"{entry.key}: cache changed during install")
     ext_dir = paths.ensure_private_dir(Path(profile_dir) / "extensions")
     destination = ext_dir / entry.xpi_name
-    tmp = destination.with_suffix(".xpi.tmp")
-    shutil.copyfile(source, tmp)
-    tmp.chmod(paths.PRIVATE_FILE_MODE)
-    tmp.replace(destination)
+    # A new file opened exclusively and without following a symlink, then renamed over the destination: nothing
+    # the browser left in its extensions folder is written through.
+    paths.write_private_file(destination, source.read_bytes())
     log.event("extension.install", key=entry.key, version=entry.version, profile=Path(profile_dir).name)
     return destination
 
@@ -175,8 +179,8 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
     registry = profile_dir / "extensions.json"
     if registry.exists():
         try:
-            data = json.loads(registry.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = json.loads(paths.read_private_file(registry).decode("utf-8"))
+        except (OSError, ValueError, paths.UnsafePathError):
             data = {}
         for addon in data.get("addons", []):
             if addon.get("type") != "extension" or addon.get("location") != "app-profile":
