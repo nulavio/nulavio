@@ -436,15 +436,15 @@ class NulavioSearchClass {
     if ((provider === null) === (id === null) || (suggest !== undefined && typeof suggest !== "boolean")) {
       fail("invalid-search-choice");
     }
-    if (suggest === true && (typeof shown !== "string" || !shown)) {
-      fail("invalid-search-choice");
-    }
     if (provider !== null && !Object.hasOwn(PROVIDERS, provider)) {
       fail("unknown-provider");
     }
     const engine = await this.#engine(provider !== null ? await this.addProvider(provider) : id);
     if (suggest === true && !engine.supportsResponseType(SUGGEST_TYPE)) {
       fail("no-suggestions");
+    }
+    if (suggest === true && (typeof shown !== "string" || !shown)) {
+      fail("invalid-search-choice");
     }
     if (suggest === true && suggestHost(engine) !== shown) {
       fail("suggest-host-changed");
