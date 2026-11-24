@@ -848,7 +848,8 @@ class RoutingTest(unittest.TestCase):
             self.click("#link")
             ask = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/ask.html" in u], timeout=20)
             self.assertTrue(ask, "no question was shown")
-            self.assertIn("src=page", ask[0])
+            held = ask[0].split("h=", 1)[1]  # the page's address names only the held link; the module says the rest
+            self.assertEqual(self.call("return R.held(args[0], 'routing/ask.html').src;", held), "page")
             time.sleep(1)
             self.assertEqual(self.hits("/page/m5-link"), before, "the site was loaded before the user chose")
             self.assertTrue(self.selected_url().endswith("/m5") or "/routing/ask.html" in self.selected_url())
