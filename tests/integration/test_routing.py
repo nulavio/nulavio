@@ -1000,6 +1000,7 @@ class RoutingTest(unittest.TestCase):
             self.assertTrue(blocked, self.tabs(work))
             time.sleep(1)
             self.assertEqual(self.hits("/page/fallback-gone"), 0, "the link opened in the wrong profile")
+            self.assertTrue(self.held_page(work, "blocked", "/page/fallback-gone"))  # self.tabs() moved to another tab
             self.assertIn(
                 "perfil escolhido para esses links", work.execute("return document.getElementById('explain').textContent;")
             )

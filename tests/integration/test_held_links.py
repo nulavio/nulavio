@@ -22,6 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 
+from marionette import MarionetteError
+
 SHELL = "resource://builtin-addons/nulavio-shell/modules"
 PRELUDE = (
     f'const R = ChromeUtils.importESModule("{SHELL}/NulavioRouting.sys.mjs").NulavioRouting;'
@@ -36,7 +38,7 @@ return {
   ready: document.documentElement.dataset.ready === 'true',
   state: document.body.dataset.state ?? null,
   text: document.querySelector('main').textContent,
-  url: seen(document.getElementById('url')) ? document.getElementById('url').textContent : null,
+  url: (seen(document.getElementById('url')) && document.getElementById('url').textContent) || null,
   buttons: [...document.querySelectorAll('button')].filter(seen).map(b => [b.id || b.className, b.textContent.trim()]),
 };
 """
@@ -125,14 +127,19 @@ class HeldLinksTest(unittest.TestCase):
         return state
 
     def press_every_button(self) -> None:
+        """Click each button that could open something elsewhere (not "open here", "don't open" or "close"). A page
+        that closes its tab after a click has done what the click asked: what it called is in the recorders."""
         for index in range(len(self.m.execute(PAGE)["buttons"])):
-            self.m.execute(
-                "const b = [...document.querySelectorAll('#actions button, #alternatives button, #go-real')]"
-                ".filter(e => !e.hidden && e.checkVisibility() && !e.disabled"
-                " && !/Abrir aqui|Open here|Não abrir|Don.t open|Fechar|Close/.test(e.textContent))[arguments[0]];"
-                "b?.click();",
-                [index],
-            )
+            try:
+                self.m.execute(
+                    "const b = [...document.querySelectorAll('#actions button, #alternatives button, #go-real')]"
+                    ".filter(e => !e.hidden && e.checkVisibility() && !e.disabled"
+                    " && !/Abrir aqui|Open here|Não abrir|Don.t open|Fechar|Close/.test(e.textContent))[arguments[0]];"
+                    "b?.click();",
+                    [index],
+                )
+            except MarionetteError:
+                return  # the tab was closed
 
     def test_01_the_blocked_page_offers_no_other_profile_from_its_address(self):
         page = self.open_from_another_extension(
