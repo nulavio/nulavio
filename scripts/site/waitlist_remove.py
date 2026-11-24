@@ -22,7 +22,8 @@ hold any character but whitespace and @. Only what the worker never stored is re
 (it is trimmed at both ends, as the worker trims it), no @, more than 254 characters. Paste one
 line only: anything typed ahead of the question is dropped before it is asked.
 
-wrangler prints how many rows the statements changed: none means the address was not on the list.
+An exit status of 0 says that wrangler ran, not that a row matched: an address that is not on the
+list removes nothing and fails nothing. Read the list again to see that the entry is gone.
 
 Exit status: wrangler's, or 2 when the address is refused, the removal is not confirmed or
 wrangler is not installed.
@@ -140,7 +141,7 @@ def main(
         if answer.strip().lower() not in ("y", "yes"):
             print("Nothing removed.", file=out)
             return 2
-    print("wrangler says how many rows changed: none means the address was not on the list.", file=out)
+    print("An address not on the list removes nothing and is no error: read the list again to see the entry gone.", file=out)
     return run(argv_out)
 
 
