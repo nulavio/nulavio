@@ -9,6 +9,7 @@ through the running instance.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import unittest
@@ -75,16 +76,22 @@ class ConfinedRunTest(unittest.TestCase):
         self.assertTrue(command[0].decode().endswith("bwrap"), command[:2])
 
     def test_02_the_browser_sees_only_its_profile_and_downloads(self):
+        # The session bus and the user's service manager, where the host has them, are not there inside.
+        runtime = os.environ.get("XDG_RUNTIME_DIR", "")
+        session = [str(Path(runtime) / n) for n in ("bus", "systemd") if runtime and (Path(runtime) / n).exists()]
         seen = self.chrome_async(
-            "const [secret, repo, profile, downloads] = arguments;"
+            "const [secret, repo, profile, downloads, session] = arguments;"
+            "const reachable = [];"
+            "for (const path of session) { if (await IOUtils.exists(path)) reachable.push(path); }"
             "return {secret: await IOUtils.exists(secret), repo: await IOUtils.exists(repo),"
             " profileWritable: await IOUtils.writeUTF8(profile, 'x').then(() => true, () => false),"
-            " downloads: await IOUtils.exists(downloads)};",
+            " downloads: await IOUtils.exists(downloads), session: reachable};",
             [str(self.secret), str(ROOT / "README.md"), str(self.session.profile_dir / "confined-probe.txt"),
-             str(confine.download_dir())],
+             str(confine.download_dir()), session],
         )  # fmt: skip
         repo_in_home = ROOT.resolve().is_relative_to(Path.home().resolve())
-        self.assertEqual(seen, {"secret": False, "repo": not repo_in_home, "profileWritable": True, "downloads": True})
+        expected = {"secret": False, "repo": not repo_in_home, "profileWritable": True, "downloads": True, "session": []}
+        self.assertEqual(seen, expected)
 
     def test_03_the_engine_sandbox_is_unchanged(self):
         sandbox = self.chrome_async(
