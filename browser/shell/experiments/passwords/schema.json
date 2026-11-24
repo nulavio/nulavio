@@ -8,10 +8,8 @@
         "name": "choose", "type": "function", "async": true,
         "parameters": [{ "name": "key", "type": "string", "enum": ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"] }]
       },
-      {
-        "name": "dismiss", "type": "function", "async": true,
-        "parameters": [{ "name": "site", "type": "string", "maxLength": 300 }, { "name": "similar", "type": "string", "maxLength": 300 }]
-      }
+      { "name": "check", "type": "function", "async": true, "parameters": [{ "name": "url", "type": "string", "maxLength": 8192 }] },
+      { "name": "dismiss", "type": "function", "async": true, "parameters": [{ "name": "url", "type": "string", "maxLength": 8192 }] }
     ]
   }
 ]

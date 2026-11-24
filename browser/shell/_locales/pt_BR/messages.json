@@ -261,6 +261,7 @@
   "routingNothingLoaded": {"message": "Nada foi carregado deste endereço ainda."},
   "routingEditRules": {"message": "Editar regras de roteamento"},
   "routingBadLink": {"message": "Esta página foi aberta sem um endereço web válido."},
+  "routingLinkGone": {"message": "O Nulavio não guarda mais este link: os links retidos ficam guardados só até o navegador fechar. Nada foi aberto."},
   "routingAskExplain": {"message": "Um link de outro aplicativo leva a $HOST$. Sua regra pede para perguntar antes de abrir no perfil $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
   "routingRuleGone": {"message": "Este endereço é de $HOST$, mas a regra dele não existe mais.", "placeholders": {"host": {"content": "$1"}}},
   "routingOpenIn": {"message": "Abrir em $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},

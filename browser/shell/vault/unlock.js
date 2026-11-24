@@ -1,7 +1,11 @@
 /* The page shown instead of a locked profile (S6). It unlocks with the
    profile's own methods (password, this computer's login, recovery code),
    then opens the profile, with the address that was held back if there was
-   one. The address is shown as text and never loaded here. States are on
+   one. The address is shown as text and never loaded here. It is not taken
+   from this page's own address, which any installed extension can open with
+   parameters of its choosing: the page gets an id (`h`) and reads the link
+   and its profile back from the routing module. A bare `p` names a profile
+   to unlock, with no link. States are on
    <body data-state>: loading, idle, unlocking, unlocked, error,
    device-unavailable, recovery-required, storage-unavailable, not-locked. */
 
@@ -11,8 +15,8 @@ import { announce, chip, errorText, h } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
 const params = new URLSearchParams(location.search);
-const profileId = Number(params.get("p"));
-const url = webUrl(params.get("u"));
+let profileId = Number(params.get("p"));
+let url = null;
 const byId = id => document.getElementById(id);
 
 let profile = null;
@@ -170,6 +174,16 @@ async function startPhone() {
   }
 }
 
+/** The held link this page was opened for, if the routing module has it: its profile and address win. */
+async function heldLink() {
+  const id = params.get("h");
+  const held = id ? await browser.nulavioRouting.held(id, "vault/unlock.html").catch(() => null) : null;
+  if (held && Number.isInteger(held.p)) {
+    profileId = held.p;
+    url = webUrl(held.u);
+  }
+}
+
 async function render() {
   const capabilities = await vault.capabilities();
   if (!capabilities.storage || !capabilities.sodium) {
@@ -280,7 +294,8 @@ function unreadable(e) {
 }
 
 localize();
-render()
+heldLink()
+  .then(render)
   .catch(e => {
     if (UNAVAILABLE.has(String(e?.message))) {
       byId("headline").textContent = t("vaultUnavailableHeadline");

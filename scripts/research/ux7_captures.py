@@ -33,6 +33,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "launcher"), str(ROOT / "tests" / "lib")]
@@ -48,6 +49,15 @@ FIRST_RUN = (
     "Services.prefs.setBoolPref('nulavio.startpage.shellFirstTab', true);"
     "Services.prefs.setBoolPref('nulavio.layout.choicePending', true);"
     "Services.prefs.setBoolPref('nulavio.dns.chosen', false);"
+)
+# The look-alike warning names only what the passwords module finds for its address in the profile's saved
+# logins: an artificial login for example.com makes examp1e.com a look-alike. The page shows the address as
+# text and loads nothing from it.
+SAVED_LOGIN = (
+    "const done = arguments[arguments.length - 1];"
+    "const info = Cc['@mozilla.org/login-manager/loginInfo;1'].createInstance(Ci.nsILoginInfo);"
+    "info.init('https://example.com', 'https://example.com', null, 'tester', 'artificial-pass-1', 'username', 'password');"
+    "Services.logins.addLoginAsync(info).then(() => done(true), e => done(String(e)));"
 )
 # Back to the harness profile's state (first run finished), so the pages after it are not in it.
 FIRST_RUN_OVER = (
@@ -72,7 +82,8 @@ def pages(server) -> dict[str, dict]:
         "settings-appearance": {"path": "settings/settings.html#appearance", "settled": ready},
         "assistant": {"path": None, "sidebar": True},
         "lookalike": {
-            "path": "passwords/lookalike.html?" + "url=" + server.url("/page/Login") + "&site=examp1e.com&similar=example.com",
+            "path": "passwords/lookalike.html?url=" + quote("https://examp1e.com/login", safe=""),
+            "before_async": SAVED_LOGIN,
             "settled": "return document.readyState === 'complete';",
         },
         "guard-review": {"path": "guard/review.html", "settled": ready},
@@ -177,6 +188,12 @@ def main() -> int:
                     for name, page in pages(server).items():
                         if page.get("before"):
                             m.chrome(page["before"])
+                        if page.get("before_async"):
+                            m.set_context("chrome")
+                            try:
+                                m.execute_async(page["before_async"])
+                            finally:
+                                m.set_context("content")
                         if page.get("sidebar"):
                             m.navigate(server.url("/page/Notas"))
                             m.set_context("chrome")

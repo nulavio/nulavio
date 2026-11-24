@@ -261,6 +261,7 @@
   "routingNothingLoaded": {"message": "Nothing has been loaded from this address yet."},
   "routingEditRules": {"message": "Edit routing rules"},
   "routingBadLink": {"message": "This page was opened without a valid web address."},
+  "routingLinkGone": {"message": "Nulavio no longer holds this link: held links are kept only until the browser closes. Nothing was opened."},
   "routingAskExplain": {"message": "A link from another app goes to $HOST$. Your rule says to ask before opening it in $PROFILE$.", "placeholders": {"host": {"content": "$1"}, "profile": {"content": "$2"}}},
   "routingRuleGone": {"message": "This address is on $HOST$, but the rule for it no longer exists.", "placeholders": {"host": {"content": "$1"}}},
   "routingOpenIn": {"message": "Open in $PROFILE$", "placeholders": {"profile": {"content": "$1"}}},

@@ -1,6 +1,10 @@
 /* Flow D: this site looks like one where you keep a saved login. Going to the real site is the
    first choice; continuing is remembered for this pair of sites in this profile only, says so next
-   to the button, and can be undone in Settings › Passwords. */
+   to the button, and can be undone in Settings › Passwords.
+
+   The page's address carries only the site's address. Which saved site it looks like is asked of
+   the passwords module, which compares it with this profile's saved logins again: another extension
+   can open this page with parameters of its own, and the page names no site the module did not. */
 
 import { localize, t } from "../lib/i18n.js";
 import { announce } from "../lib/ui.js";
@@ -19,8 +23,9 @@ function target() {
 
 localize();
 const url = target();
-const site = params.get("site") ?? "";
-const similar = params.get("similar") ?? "";
+const verdict = url ? await browser.nulavioPasswords.check(url.href).catch(() => null) : null;
+const site = verdict?.suspicious ? String(verdict.site ?? "") : "";
+const similar = verdict?.suspicious ? String(verdict.similar ?? "") : "";
 if (url && HOST.test(similar) && site) {
   document.getElementById("explain").textContent = t("lookalikeBody", [site, similar]);
   document.getElementById("address").textContent = url.href;
@@ -32,7 +37,7 @@ if (url && HOST.test(similar) && site) {
   onward.addEventListener("click", async () => {
     onward.disabled = true;
     try {
-      await browser.nulavioPasswords.dismiss(site, similar);
+      await browser.nulavioPasswords.dismiss(url.href);
     } catch (e) {
       // Not remembered: do not open the site as if it were (the warning would silently differ next time).
       console.error("look-alike: could not remember the choice", e);
@@ -45,9 +50,10 @@ if (url && HOST.test(similar) && site) {
   document.body.dataset.state = "ready";
   real.focus();
 } else {
-  // Opened without a site to compare (a hand-made or damaged address): say so, and leave only a way
-  // out. No warning, no empty address and no button that would do nothing (audit 2026-11 S-01).
-  document.title = t("lookalikeInvalidHeadline");
+  // Opened without a site to compare (a hand-made or damaged address, or one the module finds nothing
+  // for): say so, and leave only a way out. No warning, no empty address and no button that would do
+  // nothing (audit 2026-11 S-01). The tab keeps the page's one title: another extension can read a tab's
+  // title, and a different one here would tell it whether this profile keeps a login the address imitates.
   document.getElementById("headline").textContent = t("lookalikeInvalidHeadline");
   const callout = document.querySelector(".callout");
   callout.classList.replace("callout--warning", "callout--info");

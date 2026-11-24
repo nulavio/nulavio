@@ -41,7 +41,8 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!shell) {
       return true;
     }
-    const query = new URLSearchParams({ url, site: verdict.site, similar: verdict.similar });
+    // Only the address: the page asks the module again which saved site it imitates.
+    const query = new URLSearchParams({ url });
     browser.loadURI(Services.io.newURI(shell.getURL(`passwords/lookalike.html?${query}`)), {
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
     });
