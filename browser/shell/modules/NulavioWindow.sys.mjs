@@ -1456,9 +1456,11 @@ class WindowUI {
    * trust, read with #header's own conditions on that tab's browser. The engine swaps the browser in before the
    * window's delayed start-up (browser-init.js onLoad, swapBrowsers), so #header names the page at #attach and sets
    * [nv-named] itself. Setting it here too, with [nv-neutral] built as for any other window, gives the band its full row
-   * from the first frame, with the neutral row's border (none), so neither the row nor its border changes at #attach.
+   * from the first frame, so the row does not change at #attach. In a calm window ([nv-neutral]) the row keeps the
+   * neutral row's border (none) from the first frame too; a private window or an active alert is not neutral and keeps
+   * its own border, as at #attach.
    * [nv-named] only lays the row out (window-band.css); the page's name in the band still comes only from #header.
-   * Residual, not covered (each still moves once, from the navigation row to its own row, as before #605): a window
+   * Residual, not covered (each still moves once, from the navigation row to its own row, as on main since #605): a window
    * opened on a trust page's address and a restored window. Both pages commit only after #attach, so the band cannot be
    * named before it moves: the address is loaded in the delayed start-up (_handleURIToLoad), and SessionStore, which
    * holds a restored window's state from when it opens (getWindowState), puts its tabs back at
