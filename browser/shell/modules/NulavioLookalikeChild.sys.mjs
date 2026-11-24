@@ -9,9 +9,9 @@
    Only the person's own input counts: a click or a key in the field, or the field getting the focus
    while the document has the engine's transient user activation (a click, a tap or a key the person
    pressed in it, a few seconds at most). A focus the page gives itself (script, autofocus) asks
-   nothing; the first click or key in that field then does (a held key's repeats do not count). A
-   click or a key needs no activation:
-   a trusted one is the person's input, and the page can use up the activation before it arrives.
+   nothing; the first click or key in that field then does (a held key's repeated keydowns in it do
+   not). A click or a key needs no activation: a trusted one is the person's input, and the page can
+   use up the activation before it arrives.
    The engine sends these actors trusted events only; isTrusted is checked as well. */
 
 const EVENTS = new Set(["focusin", "mousedown", "keydown"]);

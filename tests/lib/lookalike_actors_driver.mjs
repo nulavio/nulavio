@@ -127,7 +127,7 @@ const cases = {
   // A click or a key is the person's input even when the page has used up the activation.
   child_key_without_activation: () => child([["focusin", password, false], ["keydown", password, false]]),
   child_click_without_activation: () => child([["mousedown", password, false]]),
-  // A held key's repeats are not a new press, in this document or the next.
+  // A held key's repeated keydowns in the field ask nothing, with or without the activation.
   child_held_key_repeats: () => child([["focusin", password, false], ["keydown", password, true, true, true], ["keydown", password, false, true, true]]),
   child_untrusted: () => child([["focusin", password, true, false], ["keydown", password, true, false]]),
   child_not_a_password_field: () => child([["focusin", text, true], ["keydown", text, true]]),
