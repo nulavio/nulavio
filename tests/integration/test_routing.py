@@ -1083,6 +1083,48 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: state()["missing"] is False and state()["profileId"] == reused, timeout=10))
         self.call("await R.setFallback(0);")
 
+    # -- an engine the AI Bridge started (its environment names the agent) ------------------------------
+
+    def test_30_an_engine_an_agent_drives_routes_no_page_and_starts_no_other_profile(self):
+        """In an engine an agent drives, a page's navigation loads in that engine, under the Bridge's checks, and the Shell
+        starts no other profile's engine: that one would inherit the agent's environment. The variable is set in this
+        running engine, as the Bridge sets it at start, and the in-page switch is turned on again so its check runs."""
+        self.m5_setup()
+        if "Bancos" in self.others:
+            self.stop("Bancos")
+        self.call("await R.setInPage(true);")
+        self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', 'ag-routing-test');")
+        try:
+            self.call("await R.setInPage(false); await R.setInPage(true);")
+            self.open_m5()
+            self.m.execute("document.getElementById('link').href += '-agent';")
+            self.click("#link")
+            self.stayed_here("m5-link-agent")
+            self.assertTrue(any(u.endswith("/page/m5-link-agent") for u in self.own_tabs()), "not loaded in this engine")
+            # A typed address: the rule's profile is not started from here; a local page says why, and nothing loads.
+            self.m.navigate("about:blank")
+            self.type_address(self.ip("/page/typed-agent"))
+            blocked = harness.wait_until(lambda: [u for u in self.own_tabs() if "/routing/blocked.html" in u], timeout=20)
+            self.assertTrue(blocked, self.own_tabs())
+            self.assertIn("why=agent", blocked[0])
+            time.sleep(1)
+            self.assertEqual(self.hits("/page/typed-agent"), 0)
+            # The explicit ways to open another profile from this window are refused the same way.
+            opened = self.error_of("await R.openIn(args[0], args[1]);", self.ids["Bancos"], self.ip("/page/x"))
+            self.assertEqual(opened, "agent-route")
+            self.assertEqual(self.error_of("await P.switchTo(args[0]);", self.ids["Bancos"]), "agent-window")
+            self.assertEqual(self.error_of("await P.openTemporary();"), "agent-window")
+            time.sleep(1)
+            self.assertFalse(self.session.processes_for(self.paths["Bancos"]), "another profile was started")
+        finally:
+            self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', '');")
+            self.call("await R.setInPage(false); await R.setInPage(true);")
+        # The same engine, no longer an agent's: the same click is routed again.
+        self.open_m5()
+        self.m.execute("document.getElementById('link').href += '-after';")
+        self.click("#link")
+        self.routed_only("m5-link-after")
+
 
 if __name__ == "__main__":
     unittest.main()
