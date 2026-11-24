@@ -117,10 +117,22 @@ def first_frame_layout(test, m, features, close=True):
     return band, first, after, result["ok"]["layout"]
 
 
-def first_frame(test, m, features, close=True):
-    """The band in a new window's first painted frame and once it has started (FIRST_FRAME), checked to be the same."""
-    band, _, after, _ = first_frame_layout(test, m, features, close)
-    test.assertEqual(band, after)
+def first_frame_own_row(test, m, features, close=True):
+    """#605: a window whose band keeps its own row (private, temporary, an agent's) shows it from the first frame.
+    Read where it would show: wider than window-band.css's 64rem with tabs down the side, the only case in which a
+    neutral row (nv-neutral) leaves its own row for the navigation row. Not neutral in the first frame nor once
+    started, laid out the same in both, and the same row. Returns the first frame's band."""
+    vertical = m.chrome("return Services.prefs.getBoolPref('sidebar.verticalTabs');")
+    m.chrome("Services.prefs.setBoolPref('sidebar.verticalTabs', true);")
+    try:
+        band, first, band_after, after = first_frame_layout(test, m, {**features, "features": "width=1280,height=720"}, close)
+    finally:
+        m.chrome("Services.prefs.setBoolPref('sidebar.verticalTabs', arguments[0]);", [vertical])
+    for layout in (first, after):
+        test.assertTrue(layout["wide"] and layout["vertical"], layout)
+        test.assertFalse(layout["neutral"], layout)
+    test.assertEqual(first, after)
+    test.assertEqual(band, band_after)
     return band
 
 
@@ -547,7 +559,7 @@ class WindowBandTest(unittest.TestCase):
     def test_03c_a_new_windows_first_frame_names_the_profile_and_the_private_window(self):
         """#599: the row was built while the window loaded and filled in only at its delayed start-up, which the
         engine runs after the window's first paint: that frame showed no name, no label and no private seal or fill."""
-        band = first_frame(self, self.m, {"private": True})
+        band = first_frame_own_row(self, self.m, {"private": True})
         self.assertEqual(band["private"], "true", band)
         self.assertIn(self.message("bandPrivate"), band["seals"], band)
         self.assertEqual(
@@ -976,7 +988,9 @@ class WindowBandTest(unittest.TestCase):
 
     def test_10b_an_agents_windows_first_frame_says_it_is_an_agents(self):
         """#605 (from #599): a new window of an AI Workspace takes the same build-time paint (#paintRow). Its first frame
-        already names the agent and marks the window as an agent's, and the band keeps its own row from that frame on."""
+        already names the agent and marks the window as an agent's, and the band keeps its own row from that frame on.
+        That last check guards #605's build-time nv-neutral (it keeps an agent's window out of the neutral row); it
+        passed before #605 too, when nothing set the attribute before the delayed start-up."""
         name = "Agente do primeiro quadro"
         setup = chrome_async(
             self.m,
@@ -997,7 +1011,7 @@ class WindowBandTest(unittest.TestCase):
             [name],
         )
         self.assertNotIn("error", setup, setup)
-        self.addCleanup(chrome_async, self.m, f"Services.prefs.clearUserPref('nulavio.ai.workspace'); await {WINDOW}.refresh();")
+        self.addCleanup(self.forget_agent, setup["ok"])
         band, first, band_after, after = first_frame_layout(self, self.m, {"features": "width=1280,height=720"})
         self.assertEqual((band["agent"], band["name"]), ("true", name), band)
         self.assertTrue(any(name in (seal or "") for seal in band["seals"]), band)
@@ -1005,6 +1019,20 @@ class WindowBandTest(unittest.TestCase):
         self.assertFalse(first["neutral"], first)  # an alert: the band's own row, from the first frame
         self.assertEqual(first, after)
         self.assertEqual(band, band_after)
+
+    def forget_agent(self, agent_id):
+        """10b's cleanup: the workspace pref first (an AI Workspace may not remove an agent), then the agent it added."""
+        done = chrome_async(
+            self.m,
+            f"""
+          Services.prefs.clearUserPref('nulavio.ai.workspace');
+          const A = ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioAI.sys.mjs').NulavioAI;
+          await A.change(args[0], 'remove');
+          await {WINDOW}.refresh();
+        """,
+            [agent_id],
+        )
+        self.assertNotIn("error", done, done)
 
 
 @unittest.skipUnless(harness.nulavio_engine() and sodium.available() and storage.tools_available(), "needs Vault and Track B")
