@@ -148,10 +148,32 @@ class DownloadsIndicatorTest(unittest.TestCase):
         self.assertEqual(bool(state["description"]), value, state)
         return state
 
-    def capture(self, name):
-        self.m.set_context("chrome")
-        (self.out / f"{name}.png").write_bytes(self.m.screenshot_png())
-        self.m.set_context("content")
+    def paint(self):
+        # Two animation frames of the chrome window: the next paint after a theme switch has been presented.
+        self.run_js(
+            "await Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),"
+            " new Promise(r => setTimeout(r, 3000))]);"
+        )
+
+    def capture(self, name, attempts=5):
+        # WebDriver:TakeScreenshot in the chrome context is a cross-process paint of the window and of every
+        # content process it embeds. When a fragment is lost (a content process busy relaying out after the
+        # theme switch, as in the AddressSanitizer engine) it fails with "Unable to capture screenshot" and no
+        # reason (#602). Wait for a paint, and take it again after the next one; the image is still kept.
+        for attempt in range(attempts):
+            self.paint()
+            self.m.set_context("chrome")
+            try:
+                png = self.m.screenshot_png()
+            except MarionetteError as error:
+                if "Unable to capture screenshot" not in str(error) or attempt == attempts - 1:
+                    raise
+                time.sleep(1 + attempt)
+            else:
+                (self.out / f"{name}.png").write_bytes(png)
+                return
+            finally:
+                self.m.set_context("content")
 
     def test_01_completed_program_render_and_native_names(self):
         # The state that has an accessible name is the one kept: read again a moment later, the engine may be
