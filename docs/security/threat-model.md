@@ -409,6 +409,21 @@ The item was removed before it shipped (#460, 2026-11-17): Nulavio no longer ask
 | Tests | `test_track_b`, `check_rpm.sh`, `check_deb.sh` |
 | Residual | Low: the same trust as a manual `dnf upgrade nulavio` or `apt upgrade`, on a schedule; R83 |
 
+### S25 — Another extension opens Nulavio's own pages
+
+| Field | |
+|---|---|
+| Assets | A1, A2; the separation between profiles |
+| Adversary | T-EXT: an extension installed in the profile, malicious or compromised |
+| Preconditions | The extension knows the Shell's `moz-extension:` address (any extension with the `tabs` permission sees it on a new tab) |
+| Boundary | TB3, TB11 |
+| Impact | The engine lets an extension open another extension's page as a top-level tab with any query string. Nulavio's ask, blocked, unlock and look-alike pages are genuine pages under the window band's own name; if they took the link, the profile or the sites to name from their address, a click on them could open an address the extension chose in another profile, or make the look-alike warning recommend a site it chose |
+| Preventive | The pages take nothing that decides an action from their address. A link held back by routing is kept by `NulavioRouting` under a random id, and the ask, blocked and unlock pages get only that id and read the link, the rule, the profile and the reason back, each for its own kind of page. The look-alike page gets the site's address only; `NulavioPasswords` finds the saved site it imitates again, and "continue" remembers the pair the module finds. Other extensions cannot read or script the pages, and websites cannot open them (no `web_accessible_resources`) |
+| Detective | None |
+| Limitations | R85: the unlock page names its profile in its address (a profile to unlock, with no link); a page for a held link can be opened again by an extension that saw its address, showing the same decision; held links do not outlive a restart |
+| Tests | `test_held_links`, `test_shell.RoutingTest.test_pages_for_a_held_link_read_it_from_the_module`, `test_shell.PasswordsTest.test_the_warning_page_names_only_what_the_module_finds` |
+| Residual | **Low** |
+
 ---
 
 See the [threat matrix](threat-matrix.md) for the at-a-glance view and [residual risks](residual-risks.md) for what users must know.
