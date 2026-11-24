@@ -149,7 +149,8 @@ class DownloadsIndicatorTest(unittest.TestCase):
         return state
 
     def paint(self):
-        # Two animation frames of the chrome window: the next paint after a theme switch has been presented.
+        # Two animation frames of the chrome window's refresh driver: they show that the parent process ticked
+        # after the theme switch. They say nothing about the content process of a remote browser.
         self.run_js(
             "await Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),"
             " new Promise(r => setTimeout(r, 3000))]);"
@@ -157,9 +158,9 @@ class DownloadsIndicatorTest(unittest.TestCase):
 
     def capture(self, name, attempts=5):
         # WebDriver:TakeScreenshot in the chrome context is a cross-process paint of the window and of every
-        # content process it embeds. When a fragment is lost (a content process busy relaying out after the
-        # theme switch, as in the AddressSanitizer engine) it fails with "Unable to capture screenshot" and no
-        # reason (#602). Wait for a paint, and take it again after the next one; the image is still kept.
+        # content process it embeds. In the AddressSanitizer engine it failed once with "Unable to capture
+        # screenshot" and no reason (#602). The cause is not established: possibly a fragment of a slow content
+        # process after the theme switch, see #602. Wait for a chrome paint and retry; the image is still kept.
         for attempt in range(attempts):
             self.paint()
             self.m.set_context("chrome")
@@ -168,6 +169,8 @@ class DownloadsIndicatorTest(unittest.TestCase):
             except MarionetteError as error:
                 if "Unable to capture screenshot" not in str(error) or attempt == attempts - 1:
                     raise
+                # The state the capture needs (every embedded browser able to return a fragment) cannot be
+                # observed from the test, so the operation itself is polled: a growing, bounded interval.
                 time.sleep(1 + attempt)
             else:
                 (self.out / f"{name}.png").write_bytes(png)
