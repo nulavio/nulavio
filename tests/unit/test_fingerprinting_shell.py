@@ -1,4 +1,7 @@
-"""What the Shell adds to the engine's fingerprinting protection (#79; ADR 0016 to 0018): where it starts and what it says."""
+"""What the Shell adds to the engine's fingerprinting protection (#79; ADR 0016 to 0018): where it starts and what it says.
+
+Also the shape of the engine patches for the screen and the audio noise (0012, 0016).
+"""
 
 from __future__ import annotations
 
@@ -69,6 +72,112 @@ class ScreenTest(unittest.TestCase):
         self.assertIn(
             "    Services.prefs.removeObserver(OVERRIDES, watching);\n    Services.prefs.removeObserver(SHARE, watching);", MODULE
         )
+
+
+class AudioReadersTest(unittest.TestCase):
+    """#406: the audio noise is also on what a node inside an offline rendering hands to script (patch 0016, ADR 0019).
+    What a page reads is checked on the engine (tests/integration/test_fingerprinting.py, 11b); this holds the
+    patch's shape, which that test cannot see: where it reaches, and that a context that plays is left alone."""
+
+    NAME = "0016-rfp-the-audio-noise-on-what-a-node-reads-in-an-offline-rendering.patch"
+    WEBAUDIO = "dom/media/webaudio/"
+
+    def setUp(self):
+        self.patch = (ROOT / "browser" / "patches" / self.NAME).read_text(encoding="utf-8")
+        self.header, _, diff = self.patch.partition("\n---\n")
+        # The lines the patch adds, per file.
+        self.added: dict[str, str] = {}
+        for part in ("\n" + diff).split("\n--- a/")[1:]:
+            path, _, body = part.partition("\n")
+            self.added[path] = "\n".join(ln[1:] for ln in body.splitlines() if ln.startswith("+") and not ln.startswith("+++"))
+
+    def test_it_is_applied_after_the_patch_that_adds_the_noise(self):
+        lines = (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8").splitlines()
+        series = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+        self.assertIn(self.NAME, series)
+        self.assertLess(series.index("0012-rfp-per-site-audio-noise-and-one-screen-size.patch"), series.index(self.NAME))
+        self.assertIn("\nOwner: ", self.header)
+        self.assertIn("\nUpstream: ", self.header)
+
+    def test_it_reaches_the_readers_and_nothing_else(self):
+        readers = {"AnalyserNode.cpp", "ScriptProcessorNode.cpp", "AudioWorkletNode.cpp", "DynamicsCompressorNode.cpp"}
+        expected = {self.WEBAUDIO + name for name in readers | {"AudioContext.cpp", "AudioContext.h", "DynamicsCompressorNode.h"}}
+        expected |= {"toolkit/components/resistfingerprinting/nsRFPService." + ext for ext in ("cpp", "h")}
+        self.assertEqual(set(self.added), expected)
+        for name in sorted(readers):
+            with self.subTest(reader=name):
+                self.assertIn("nsRFPService::RandomizeAudioSamplesWithKey(", self.added[self.WEBAUDIO + name])
+        # A worklet has two places: its inputs, and the values of a parameter a node is connected to, in a block
+        # where that node gave samples, on the whole value there (the stored schedule is not changed, and a block in
+        # which no connected node gave samples reads as written).
+        worklet = self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"]
+        self.assertEqual(worklet.count("RandomizeAudioSamplesWithKey("), 2)
+        self.assertIn(
+            "if (frames == WEBAUDIO_BLOCK_SIZE && connected &&\n        !connected->LastChunks()[0].IsNull()) {", worklet
+        )
+        # The noise is patch 0012's own steps, moved to one function, not a second set of numbers.
+        service = self.added["toolkit/components/resistfingerprinting/nsRFPService.cpp"]
+        self.assertEqual(service.count("1.0e-4f / 32768.0f"), 1)
+        self.assertEqual(service.count("MoveAudioSamples("), 3)  # the function, and its two callers
+        # No new target: the readers follow AudioRandomization, which the default set of both tracks turns on.
+        self.assertNotIn("RFPTargets.inc", self.patch)
+        for path in ("browser/branding/nulavio/pref/firefox-branding.js", "browser/config/prefs/baseline.js"):
+            line = next(
+                ln
+                for ln in (ROOT / path).read_text(encoding="utf-8").splitlines()
+                if '"privacy.fingerprintingProtection.overrides"' in ln
+            )
+            self.assertIn("+AudioRandomization", line, path)
+
+    def test_what_a_value_reads_does_not_depend_on_how_many_values_are_read(self):
+        """Review of #593: the noise is made from the values, so noise made from fewer of them is other noise. An
+        analyser's short read of its samples gets the start of the whole window's noisy copy (its spectrum is always
+        made from the whole window); the other readers put the noise on all they hand over, whatever script reads."""
+        analyser = self.added[self.WEBAUDIO + "AnalyserNode.cpp"]
+        self.assertIn("if (aLength < fftSize) {", analyser)
+        self.assertIn(
+            "GetTimeDomainData(window.Elements(), fftSize);\n      PodCopy(aData, window.Elements(), aLength);", analyser
+        )
+        # Without room for the whole window the page reads silence, not the plain samples.
+        self.assertIn(
+            "if (!window.SetLength(fftSize, fallible)) {\n        // Not the plain samples instead.\n"
+            "        PodZero(aData, aLength);\n        return;",
+            analyser,
+        )
+        self.assertIn(
+            "noiseKey, mInputBuffer->GetDataForWrite(i),\n                  aNode->BufferSize());",
+            self.added[self.WEBAUDIO + "ScriptProcessorNode.cpp"],
+        )
+        worklet = self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"]
+        block = "RandomizeAudioSamplesWithKey(mNoiseKey, dest,\n" + " " * 49 + "WEBAUDIO_BLOCK_SIZE);"
+        self.assertEqual(worklet.count(block), 2)
+        self.assertIn("&reduction, 1);", self.added[self.WEBAUDIO + "DynamicsCompressorNode.cpp"])
+
+    def test_a_context_that_plays_has_no_key_so_nothing_a_person_hears_is_changed(self):
+        context = self.added[self.WEBAUDIO + "AudioContext.cpp"]
+        # The one place the key is made: only for an offline context, and only where the protection applies.
+        self.assertIn("Document* doc = aIsOffline ? aWindow->GetExtantDoc() : nullptr;", context)
+        self.assertIn("doc->ShouldResistFingerprinting(RFPTarget::AudioRandomization)", context)
+        self.assertEqual(context.count("GetFingerprintingRandomizationKey("), 1)
+        self.assertIn("const nsTArray<uint8_t> mAudioNoiseKey;", self.added[self.WEBAUDIO + "AudioContext.h"])
+        # Every reader takes the key from the context (the worklet's engine holds a copy made when the node was):
+        # none asks the document itself, so none can be on where the context's key is empty.
+        for name in ("AnalyserNode.cpp", "ScriptProcessorNode.cpp", "AudioWorkletNode.cpp", "DynamicsCompressorNode.cpp"):
+            with self.subTest(reader=name):
+                added = self.added[self.WEBAUDIO + name]
+                self.assertIn("AudioNoiseKey()", added)
+                self.assertNotIn("ShouldResistFingerprinting", added)
+                self.assertNotIn("CookieJarSettings", added)
+        # An empty key changes nothing.
+        service = self.added["toolkit/components/resistfingerprinting/nsRFPService.cpp"]
+        self.assertIn("if (aSiteKey.Length() < sizeof(words) || !aData || !aLength) {\n    return;", service)
+
+    def test_the_documents_name_the_readers(self):
+        for page in ("docs/adr/0019-rendered-audio-differs-per-site.md", "docs/research/fingerprinting.md"):
+            text = (ROOT / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                for words in ("patch 0016", "AnalyserNode", "ScriptProcessorNode", "AudioWorklet", "reduction"):
+                    self.assertTrue(words in text, f"{page} does not say: {words}")
 
 
 class TimeZoneTest(unittest.TestCase):
