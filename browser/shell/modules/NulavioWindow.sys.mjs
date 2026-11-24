@@ -171,6 +171,7 @@ class WindowUI {
   #connected = []; // agents connected through the bridge now (UX5-I2)
   #actionError = false;
   #startPageChecked = false;
+  #read = false; // a refresh has read the profile's state once: until then a new row is left as built (#599)
 
   start() {
     if (this.#started) {
@@ -196,7 +197,9 @@ class WindowUI {
         // draggable CustomizeMode toolbaritem: its stop/review buttons keep receiving input.
         const item = doc.createXULElement("hbox");
         item.id = WIDGET;
-        item.append(this.#build(doc));
+        const row = this.#build(doc);
+        this.#paintBuilt(doc.defaultView, row);
+        item.append(row);
         return item;
       },
     });
@@ -1412,7 +1415,28 @@ class WindowUI {
     win.document.documentElement.toggleAttribute("nulavio-own-page-pending", pending);
   }
 
-  #paint(win) {
+  /**
+   * #599: the band's row says what it is in the window's first frame. The row is built while the window loads (onBuild)
+   * and #attach paints it only at the window's delayed start-up, which the engine runs after the first paint. So the
+   * row is painted here as soon as it is built, from the state the last refresh read, and again at #attach. Only what
+   * the row itself says: the window's header, Immersive and the neutral row need the window's tabs (gBrowser) and its
+   * #attach state. A failure here leaves the row as built and never costs the window its band.
+   */
+  #paintBuilt(win, row) {
+    if (!this.#read || !win || win.closed) {
+      return;
+    }
+    try {
+      const said = this.#said(win);
+      win.document.documentElement.toggleAttribute("nulavio-window-agent", Boolean(said.agent));
+      this.#paintRow(win, row, said);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  /** What the band says of this window, from the state the last refresh read (#paint, #paintBuilt). */
+  #said(win) {
     const profile = this.#profile;
     const agent = this.#agent;
     const workspace = agent?.target.kind === "workspace";
@@ -1423,11 +1447,17 @@ class WindowUI {
           || t(this.#profileUnavailable ? "bandProfileUnavailable" : "bandProfileDefault");
     const protection = t(this.#protection === "unlocked" ? "bandProtected" : this.#protection === "plain" ? "bandUnprotected" : "bandProtectionUnknown");
     const privateWindow = lazy.PrivateBrowsingUtils.isWindowPrivate(win);
+    const activity = lazy.NulavioAI.activityState(win);
+    return { profile, agent, workspace, name, protection, privateWindow, activity };
+  }
+
+  #paint(win) {
+    const said = this.#said(win);
+    const { agent, name, privateWindow, activity } = said;
     const root = win.document.documentElement;
     root.toggleAttribute("nulavio-window-agent", Boolean(agent));
     this.#applyImmersive(win);
     const state = this.#windows.get(win);
-    const activity = lazy.NulavioAI.activityState(win);
     const kinds = { normal: true, temporary: this.#temporary, private: privateWindow,
       agent: Boolean(agent), guard: this.#guardCount > 0, activity: Boolean(activity) };
     for (const [kind, visible] of Object.entries(kinds)) {
@@ -1443,80 +1473,85 @@ class WindowUI {
       this.#showNotice(win);
     }
     for (const row of this.#rows(win)) {
-      row.dataset.temporary = String(this.#temporary);
-      row.dataset.private = String(privateWindow);
-      row.dataset.agent = String(Boolean(agent));
-      row.dataset.workspace = String(Boolean(workspace));
-      // Which outline glyph the protection and the agent status draw (window-band.css); words stay the cue.
-      row.dataset.protection = this.#protection === "unlocked" ? "unlocked" : this.#protection === "plain" ? "plain" : "unknown";
-      row.dataset.agentStatus = this.#actionError ? "failed" : this.#agentUnavailable ? "unknown"
-        : agent?.stopped ? "stopped" : agent?.revoked ? "revoked" : "paused";
-      const identity = row.querySelector(".nv-band-identity");
-      const color = profile?.color ?? "slate";
-      const fill = workspace ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${color})`;
-      if (identity.style.getPropertyValue("--profile-fill") !== fill) {
-        identity.style.setProperty("--profile-fill", fill);
-        // Calmaria: the neutral row draws the soft tile; alert rows keep the strong fill above.
-        identity.style.setProperty("--profile-tile", `var(--nv-color-identityTile-${color})`);
-        identity.style.setProperty("--profile-glyph", `var(--nv-color-identityGlyph-${color})`);
-      }
-      setAttr(identity, "aria-label", t("profilesButtonNamed", [name]));
-      setAttr(identity, "title", name);
-      const glyph = row.querySelector(".nv-band-flag");
-      // The profile's own glyph, the hourglass of a temporary profile or the AI Workspace's; else its
-      // initial, and the person glyph for a name with no letter (never "?": that means unknown).
-      const d = workspace ? lazy.SPECIAL_GLYPHS.workspace
-        : this.#temporary ? lazy.SPECIAL_GLYPHS.temporary : lazy.AVATAR_GLYPHS[profile?.avatar] ?? null;
-      const letter = d ? null : lazy.profileInitial(name);
-      if (d || !letter) {
-        showGlyph(glyph, d ?? lazy.SPECIAL_GLYPHS.person);
-      } else if (glyph.firstElementChild || glyph.textContent !== letter) {
-        glyph.textContent = letter;
-      }
-      setAttr(glyph, "aria-hidden", "true");
-      setText(row.querySelector(".nv-band-name"), name);
-      // "Protegido" fits the Lateral column; the whole "Protegido · desbloqueado" is its name and title.
-      const protectionNode = row.querySelector(".nv-band-protection");
-      setText(protectionNode, this.#protection === "unlocked" ? t("bandProtectedShort") : protection);
-      setAttr(protectionNode, "aria-label", protection);
-      setAttr(protectionNode, "title", protection);
-      const seal = (kind, visible, text) => {
-        const node = row.querySelector(`.nv-band-${kind}`);
-        const hadFocus = node === win.document.activeElement;
-        if (node.hidden !== !visible) {
-          node.hidden = !visible;
-        }
-        named(node, text);
-        if (!visible && hadFocus) {
-          row.querySelector(".nv-band-stop").focus();
-        }
-      };
-      seal("temporary", this.#temporary, t("bandTemporary"));
-      seal("private", privateWindow, t("bandPrivate"));
-      const level = agent?.autonomy ? t(`aiLevel_${agent.autonomy}`) : t("bandLevelUnknown");
-      const agentName = agent?.name ?? "";
-      const agentText = agent?.target.kind === "profile"
-        ? t("bandAgentProfile", [agentName, agent.target.profile || name, level])
-        : t("bandAgentWorkspace", [agentName, level]);
-      seal("agent", Boolean(agent), agentText);
-      seal("status", Boolean(agent && (agent.paused || agent.stopped || agent.revoked || this.#agentUnavailable || this.#actionError)),
-        t(this.#actionError ? "bandStopFailed" : this.#agentUnavailable ? "bandAgentUnknown" : agent?.stopped ? "aiStoppedNow" : agent?.revoked ? "aiRevoked" : "aiPaused"));
-      seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
-      seal("pause", Boolean(agent && !agent.paused && !agent.stopped && !agent.revoked), t("bandPauseAgent", [agentName]));
-      seal("stop", Boolean(agent), t("bandStopAll"));
-      // A count only once an action ran: never "0 ações" (refused or stopped calls are not actions).
-      const acting = !activity?.steps ? t("bandAssistantActingNone")
-        : activity.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity.steps)]);  // prettier-ignore
-      seal("activity", Boolean(activity), activity?.stopping ? t("bandAssistantStopping") : activity?.waiting ? t("bandAssistantWaiting") : acting);
-      row.dataset.activity = String(Boolean(activity));
-      // Not where an agent drives this window: it would learn which other agents are connected (review UX5-I F5).
-      const others = privateWindow || agent ? [] : this.#connected.filter(c => c.agent !== agent?.id);
-      seal("connected", others.length > 0, others.length === 1 ? t("bandAgentConnected", [others[0].name])
-        : t("bandAgentsConnected", [String(others.length)]));  // prettier-ignore
-      seal("task-stop", Boolean(activity && !activity.stopping), t("bandTaskStop"));
-      seal("assistant-pause", Boolean(activity && !activity.stopping), t("bandAssistantPause"));
+      this.#paintRow(win, row, said);
     }
     this.#header(win);
+  }
+
+  /** One row of the band (the band's own or the full-screen one): its identity, protection and seals. */
+  #paintRow(win, row, { profile, agent, workspace, name, protection, privateWindow, activity }) {
+    row.dataset.temporary = String(this.#temporary);
+    row.dataset.private = String(privateWindow);
+    row.dataset.agent = String(Boolean(agent));
+    row.dataset.workspace = String(Boolean(workspace));
+    // Which outline glyph the protection and the agent status draw (window-band.css); words stay the cue.
+    row.dataset.protection = this.#protection === "unlocked" ? "unlocked" : this.#protection === "plain" ? "plain" : "unknown";
+    row.dataset.agentStatus = this.#actionError ? "failed" : this.#agentUnavailable ? "unknown"
+      : agent?.stopped ? "stopped" : agent?.revoked ? "revoked" : "paused";
+    const identity = row.querySelector(".nv-band-identity");
+    const color = profile?.color ?? "slate";
+    const fill = workspace ? "var(--nv-color-security-agent-ink)" : `var(--nv-color-identity-${color})`;
+    if (identity.style.getPropertyValue("--profile-fill") !== fill) {
+      identity.style.setProperty("--profile-fill", fill);
+      // Calmaria: the neutral row draws the soft tile; alert rows keep the strong fill above.
+      identity.style.setProperty("--profile-tile", `var(--nv-color-identityTile-${color})`);
+      identity.style.setProperty("--profile-glyph", `var(--nv-color-identityGlyph-${color})`);
+    }
+    setAttr(identity, "aria-label", t("profilesButtonNamed", [name]));
+    setAttr(identity, "title", name);
+    const glyph = row.querySelector(".nv-band-flag");
+    // The profile's own glyph, the hourglass of a temporary profile or the AI Workspace's; else its
+    // initial, and the person glyph for a name with no letter (never "?": that means unknown).
+    const d = workspace ? lazy.SPECIAL_GLYPHS.workspace
+      : this.#temporary ? lazy.SPECIAL_GLYPHS.temporary : lazy.AVATAR_GLYPHS[profile?.avatar] ?? null;
+    const letter = d ? null : lazy.profileInitial(name);
+    if (d || !letter) {
+      showGlyph(glyph, d ?? lazy.SPECIAL_GLYPHS.person);
+    } else if (glyph.firstElementChild || glyph.textContent !== letter) {
+      glyph.textContent = letter;
+    }
+    setAttr(glyph, "aria-hidden", "true");
+    setText(row.querySelector(".nv-band-name"), name);
+    // "Protegido" fits the Lateral column; the whole "Protegido · desbloqueado" is its name and title.
+    const protectionNode = row.querySelector(".nv-band-protection");
+    setText(protectionNode, this.#protection === "unlocked" ? t("bandProtectedShort") : protection);
+    setAttr(protectionNode, "aria-label", protection);
+    setAttr(protectionNode, "title", protection);
+    const seal = (kind, visible, text) => {
+      const node = row.querySelector(`.nv-band-${kind}`);
+      const hadFocus = node === win.document.activeElement;
+      if (node.hidden !== !visible) {
+        node.hidden = !visible;
+      }
+      named(node, text);
+      if (!visible && hadFocus) {
+        row.querySelector(".nv-band-stop").focus();
+      }
+    };
+    seal("temporary", this.#temporary, t("bandTemporary"));
+    seal("private", privateWindow, t("bandPrivate"));
+    const level = agent?.autonomy ? t(`aiLevel_${agent.autonomy}`) : t("bandLevelUnknown");
+    const agentName = agent?.name ?? "";
+    const agentText = agent?.target.kind === "profile"
+      ? t("bandAgentProfile", [agentName, agent.target.profile || name, level])
+      : t("bandAgentWorkspace", [agentName, level]);
+    seal("agent", Boolean(agent), agentText);
+    seal("status", Boolean(agent && (agent.paused || agent.stopped || agent.revoked || this.#agentUnavailable || this.#actionError)),
+      t(this.#actionError ? "bandStopFailed" : this.#agentUnavailable ? "bandAgentUnknown" : agent?.stopped ? "aiStoppedNow" : agent?.revoked ? "aiRevoked" : "aiPaused"));
+    seal("guard", this.#guardCount > 0, t("bandGuard", [String(this.#guardCount)]));
+    seal("pause", Boolean(agent && !agent.paused && !agent.stopped && !agent.revoked), t("bandPauseAgent", [agentName]));
+    seal("stop", Boolean(agent), t("bandStopAll"));
+    // A count only once an action ran: never "0 ações" (refused or stopped calls are not actions).
+    const acting = !activity?.steps ? t("bandAssistantActingNone")
+      : activity.steps === 1 ? t("bandAssistantActingOne") : t("bandAssistantActing", [String(activity.steps)]);  // prettier-ignore
+    seal("activity", Boolean(activity), activity?.stopping ? t("bandAssistantStopping") : activity?.waiting ? t("bandAssistantWaiting") : acting);
+    row.dataset.activity = String(Boolean(activity));
+    // Not where an agent drives this window: it would learn which other agents are connected (review UX5-I F5).
+    const others = privateWindow || agent ? [] : this.#connected.filter(c => c.agent !== agent?.id);
+    seal("connected", others.length > 0, others.length === 1 ? t("bandAgentConnected", [others[0].name])
+      : t("bandAgentsConnected", [String(others.length)]));  // prettier-ignore
+    seal("task-stop", Boolean(activity && !activity.stopping), t("bandTaskStop"));
+    seal("assistant-pause", Boolean(activity && !activity.stopping), t("bandAssistantPause"));
   }
 
   refresh() {
@@ -1559,6 +1594,7 @@ class WindowUI {
       }
       this.#guardCount = lazy.NulavioGuard.findings().length;
       this.#connected = connected;
+      this.#read = true;
       for (const win of this.#windows.keys()) {
         this.#paint(win);
       }
