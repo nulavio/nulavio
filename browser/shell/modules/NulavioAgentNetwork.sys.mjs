@@ -44,7 +44,8 @@
    inherit the agent's environment. about:profiles is blocked as the engine's own
    BlockAboutProfiles policy blocks it (its address and its chrome document, in
    this engine only), and a tab already at it is loaded again, so it is blocked
-   too; restoring a backup is switched off on the default branch and locked. */
+   too; restoring a backup is switched off on the default branch and locked, as
+   above (a value of the person's that already has it off stays, unlocked). */
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
