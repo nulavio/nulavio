@@ -340,6 +340,31 @@ class ExtensionLockTest(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"PK fake xpi payload")
         self.assertEqual(os.stat(target).st_mode & 0o777, 0o600)
 
+    def test_install_never_writes_through_a_link_left_in_the_profile(self):
+        # The profile is the browser's to write: whatever it left in extensions/ under a name the install uses is
+        # replaced, never written through, and a file elsewhere keeps its content and mode.
+        entry = self._seed_cache(b"PK fake xpi payload")
+        profile_dir = Path(self._tmp.name) / "profile"
+        (profile_dir / "extensions").mkdir(parents=True, mode=0o700)
+        elsewhere = Path(self._tmp.name) / "elsewhere.txt"
+        elsewhere.write_text("not the browser's\n")
+        elsewhere.chmod(0o644)
+        for name in (f"{entry.xpi_name}.tmp", entry.xpi_name):
+            (profile_dir / "extensions" / name).symlink_to(elsewhere)
+        target = extensions.install(entry, profile_dir)
+        self.assertEqual(elsewhere.read_text(), "not the browser's\n")
+        self.assertEqual(os.stat(elsewhere).st_mode & 0o777, 0o644)
+        self.assertFalse(target.is_symlink())
+        self.assertEqual(target.read_bytes(), b"PK fake xpi payload")
+
+    def test_installed_list_does_not_read_through_a_link(self):
+        profile_dir = Path(self._tmp.name) / "profile"
+        profile_dir.mkdir(mode=0o700)
+        elsewhere = Path(self._tmp.name) / "extensions.json"
+        elsewhere.write_text('{"addons": [{"id": "x@y", "type": "extension", "location": "app-profile"}]}')
+        (profile_dir / "extensions.json").symlink_to(elsewhere)
+        self.assertEqual(extensions.installed_in_profile(profile_dir), [])
+
     def test_tampered_cache_is_not_installed(self):
         entry = self._seed_cache(b"original")
         extensions.cached_path(entry).write_bytes(b"tampered")
