@@ -169,14 +169,18 @@ class DownloadsIndicatorTest(unittest.TestCase):
             except MarionetteError as error:
                 if "Unable to capture screenshot" not in str(error) or attempt == attempts - 1:
                     raise
-                # The state the capture needs (every embedded browser able to return a fragment) cannot be
-                # observed from the test, so the operation itself is polled: a growing, bounded interval.
-                time.sleep(1 + attempt)
             else:
                 (self.out / f"{name}.png").write_bytes(png)
                 return
             finally:
                 self.m.set_context("content")
+            # Before the next attempt, the selected tab's content process paints two frames of its own: the
+            # fragment the capture missed is that process's (a hypothesis, #602).
+            self.m.execute_async(
+                "const done = arguments[arguments.length - 1];"
+                "Promise.race([new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))),"
+                " new Promise(r => setTimeout(r, 3000))]).then(() => done(true));"
+            )
 
     def test_01_completed_program_render_and_native_names(self):
         # The state that has an accessible name is the one kept: read again a moment later, the engine may be
