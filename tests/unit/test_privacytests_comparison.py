@@ -213,9 +213,11 @@ class ComparisonTest(unittest.TestCase):
                 pt.parse_page(page(cells))
         with self.assertRaisesRegex(pt.ComparisonError, "one browser each"):
             pt.parse_page(page(good + good, columns=("brave", "brave")))
-        # Rows with attributes are still rows: a section read as empty would put "·" across every probe in it.
+        # Rows with attributes are still rows: a section read as empty would put "·" across every probe in it. The
+        # page names the settings probe by its old name, which reads as the integration test's (RENAMED).
         self.assertEqual(
-            set(pt.parse_page(page(good + na).replace("<tr>", '<tr class="x">'))["rows"]), {"Device memory", "Time zone"}
+            set(pt.parse_page(page(good + na).replace("<tr>", '<tr class="x">'))["rows"]),
+            {"Device memory", "Time zone region"},
         )
 
     def test_a_probe_that_leaves_their_page_stops_refresh(self):
@@ -227,7 +229,7 @@ class ComparisonTest(unittest.TestCase):
             "rows": {p: {b: c["verdict"] for b, c in cells.items()} for p, cells in fixture["rows"].items()},
         }
         data = {"time_started": "", "harness": "", "browsers": {b["id"]: {} for b in fixture["browsers"]}}
-        del page["rows"]["Time zone"]
+        del page["rows"]["Time zone region"]
         with self.assertRaisesRegex(pt.ComparisonError, "no row for"):
             pt.published(page, data, self.constants["PROBES"], fixture["sources"])
 
@@ -241,6 +243,10 @@ class ComparisonTest(unittest.TestCase):
             pt.parse_data({**data, "all_tests": [run("1"), run("2")]})
         with self.assertRaisesRegex(pt.ComparisonError, "private or nightly"):
             pt.parse_data({**data, "all_tests": [run("1", incognito=True)]})
+        # A probe their data file still has under its old name is read under the integration test's (RENAMED).
+        renamed = run("1", testResults={"settings_fingerprinting": {"Time zone": {"passed": True}}})
+        runs = pt.parse_data({**data, "all_tests": [renamed]})["browsers"]["brave"]["runs"]
+        self.assertEqual(runs, {"Time zone region": [{"passed": True}]})
 
     # -- Nulavio's column ----------------------------------------------------------------------
 
@@ -264,7 +270,8 @@ class ComparisonTest(unittest.TestCase):
         self.assertEqual([p for p, m in marks.items() if m == "one-architecture"], [pt.ONE_ARCHITECTURE])
         probes = {**self.constants["PROBES"], "NOT_IN_THE_ENGINE": self.constants["NOT_IN_THE_ENGINE"]}
         lines = [line.replace("Time zone ... ok", "Time zone ... skipped 'known gap'") for line in self.release["log"]]
-        self.assertEqual(pt.nulavio_marks({"log": lines}, probes)["Time zone"], "failed")
+        # The release's log has the probe's old name (RENAMED); its mark is under the integration test's.
+        self.assertEqual(pt.nulavio_marks({"log": lines}, probes)["Time zone region"], "failed")
         lines = [line.replace("Device memory ... ok", "Device memory ... FAIL") for line in self.release["log"]]
         self.assertEqual(pt.nulavio_marks({"log": lines}, probes)["Device memory"], "failed")
         # "No such feature" needs the run to show the engine answering Unsupported, with and without protections.
