@@ -89,6 +89,7 @@ The screen's part of the patch is one more comparison where the engine answers `
 
 - `test_privacytests`: PrivacyTests' own audio probe reads three different values on three sites.
 - `test_fingerprinting` 11, on the real engine: two sites read different sums and different digests of the whole buffer; one site reads the same again in the same page and in a later one; with the protections off both sites read the same; the loudest sample stays within one part in a thousand. Measured on 2026-11-16: the probe's sum was `35.749972093850374` plain, `35.74992819688123` on one site and `35.750030019269616` on another; the loudest sample was 0.113791 plain and 0.113782 with the noise.
+- `test_fingerprinting` 11b, on the engine built with patches 0001 to 0016 (2026-11-24): each of the five readings differs between two sites and from the plain values and reads the same again on one site (the analyser's byte getters only the last); the plain values come from the shield's exemption of each site; a short read (300 values) of each of the analyser's four getters is the start of a full read of the same window, on every site.
 
 Not checked: a second session (the key is the canvas noise's, whose change per session the engine's own tests hold); a context that plays, which neither patch touches and which did not start in the test session (decision 2). That a playing context gets no key is held by the patch's shape (`test_fingerprinting_shell`, `AudioReadersTest`).
 
