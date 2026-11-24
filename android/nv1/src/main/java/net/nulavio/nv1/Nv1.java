@@ -14,7 +14,8 @@ public final class Nv1 {
     public static final long MAX_REQUEST_AHEAD = 60 + CLOCK_SKEW;
     /**
      * Pairing version 2: the QR commits to a nonce the desktop reveals in its accept, and the 6 digits cover it
-     * (ADR 0005, amendment of 2026-11-24). A QR or an accept of any other version is refused, never followed.
+     * (ADR 0005, amendment of 2026-11-24). The phone refuses a QR of any other version, and the desktop a hello of
+     * any other version: neither falls back.
      */
     public static final long PAIRING_VERSION = 2;
     public static final int NONCE_BYTES = 32;
