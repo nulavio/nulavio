@@ -1,10 +1,10 @@
 """Pages for a held-back link act only on what the Shell's modules hold. Nulavio build only.
 
 Another installed extension can open any Shell page as a top-level tab, with any query string
-(the engine allows a tab to load another extension's page). So the routing pages (ask, blocked),
-the unlock page and the look-alike warning take no link, rule or site from their address:
-the routing and unlock pages get an id the routing module made when it held the link, and the
-look-alike page has the passwords module check the address again.
+(the engine allows a tab to load another extension's page). So the routing pages (ask, blocked)
+and the unlock page take no link, rule or site from their address, and the look-alike warning
+only the address it checks: the routing and unlock pages get an id the routing module made when
+it held the link, and the look-alike page has the passwords module check the address again.
 
 Each test installs a throwaway extension that opens one Shell page with its own parameters, the
 way such an extension would, and checks that the page offers nothing it did not get from a module.
