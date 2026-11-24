@@ -1203,7 +1203,7 @@ class AgentEngineStartTest(unittest.TestCase):
                 self.assertTrue(shown.startswith("about:neterror?e=blockedByPolicy"), shown)
         status = chrome_async(
             self.m,
-            'const { BackupService } = ChromeUtils.importESModule("resource:///modules/backup/BackupService.sys.mjs");'
+            'const { BackupService } = ChromeUtils.importESModule("moz-src:///browser/components/backup/BackupService.sys.mjs");'
             "const status = BackupService.init().restoreEnabledStatus;"
             "let refused = null;"
             "try { await BackupService.get().recoverFromBackupArchive('/nonexistent/backup.html', null, true); }"
