@@ -170,7 +170,8 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
 # (tests/integration/test_fingerprinting.py, 11b): an analyser's four getters, a script processor's input buffers,
 # a worklet's inputs and the values of a parameter a node is connected to, and a compressor's reduction. The sound
 # is the usual probe's (FP_SURFACE_PAGE): an oscillator through a compressor. Each read happens twice. A second
-# parameter has a schedule of its own and a node connected that gives no samples (a source never started).
+# parameter has a schedule of its own and a node connected that gives no samples (a source never started). A second
+# analyser is read short (300 values) and in full, to show that a short read is the start of the full one.
 FP_AUDIO_READERS_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-audio-readers</title><pre id=fp></pre>
 <script type="text/plain" id=worklet>
 registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
@@ -221,6 +222,8 @@ registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
   const render = async () => {
     const { context, compressor } = graph(10000), out = {};
     const analyser = context.createAnalyser(); analyser.fftSize = 2048; compressor.connect(analyser);
+    // A second analyser, without smoothing (each spectrum read smooths again), for a short read and a full one.
+    const still = context.createAnalyser(); still.fftSize = 2048; still.smoothingTimeConstant = 0; compressor.connect(still);
     const events = [], processor = context.createScriptProcessor(1024, 1, 1);
     processor.onaudioprocess = e => events.push(e.inputBuffer.getChannelData(0).slice());
     compressor.connect(processor); processor.connect(context.destination);
@@ -248,6 +251,22 @@ registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
       analyser.getByteTimeDomainData(byteTime); analyser.getByteFrequencyData(byteFrequency);
       return { floatTime: await read(floatTime), floatFrequency: await read(floatFrequency),
         byteTime: await read(byteTime), byteFrequency: await read(byteFrequency) };
+    });
+    // A read of fewer values than there are is the start of a full read: the short one first, then the full one.
+    out.prefix = await guarded(async () => {
+      const getters = {
+        floatTime: ['getFloatTimeDomainData', Float32Array, still.fftSize],
+        byteTime: ['getByteTimeDomainData', Uint8Array, still.fftSize],
+        floatFrequency: ['getFloatFrequencyData', Float32Array, still.frequencyBinCount],
+        byteFrequency: ['getByteFrequencyData', Uint8Array, still.frequencyBinCount],
+      };
+      const result = {};
+      for (const [name, [getter, Type, length]] of Object.entries(getters)) {
+        const short = new Type(300), full = new Type(length);
+        still[getter](short); still[getter](full);
+        result[name] = { prefix: short.every((v, i) => Object.is(v, full[i])), ...(await read(short)) };
+      }
+      return result;
     });
     out.scriptProcessor = await guarded(async () => {
       const all = new Float32Array(8192);

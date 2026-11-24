@@ -151,6 +151,8 @@ BYTE_READERS = {
     "an analyser's samples as bytes": ("analyser", "byteTime"),
     "an analyser's spectrum as bytes": ("analyser", "byteFrequency"),
 }
+# The analyser getters read short and in full (the fixture's second analyser).
+PREFIX_READERS = ("floatTime", "byteTime", "floatFrequency", "byteFrequency")
 TARGETS = """
 const { RFPHelper } = ChromeUtils.importESModule("resource://gre/modules/RFPHelper.sys.mjs");
 const set = Services.rfp.enabledFingerprintingProtections;
@@ -805,9 +807,23 @@ class FingerprintingTest(unittest.TestCase):
             """What two readings are compared by: every value's digest (the four reductions as they are)."""
             return reading if isinstance(reading, list) else (reading["sum"], reading["digest"])
 
+        def shield(host: str, switch: str) -> None:
+            """The shield's switch in the address bar, for one site: its exemption on ("add") or off ("remove")."""
+            self.m.navigate(f"http://{host}:{self.server.port}/long-page?n=1")
+            self.m.chrome(f"{ALLOW_LIST}.{switch}(gBrowser.selectedBrowser);")
+
         first, other, again = self.readers("127.0.0.1"), self.readers("localhost"), self.readers("127.0.0.1")
-        with self.unprotected():
-            plain, plain_other = self.readers("127.0.0.1"), self.readers("localhost")
+        # The plain values come from the shield's exemption of each site, as a person gives it: no protection is
+        # switched off for the profile. With one site exempt, the other still reads its own noisy values.
+        try:
+            shield("127.0.0.1", "add")
+            plain, beside = self.readers("127.0.0.1"), self.readers("localhost")
+            shield("localhost", "add")
+            plain_other = self.readers("localhost")
+        finally:
+            shield("127.0.0.1", "remove")
+            shield("localhost", "remove")
+        back = self.readers("127.0.0.1")
         every = {**READERS, **BYTE_READERS}
         self.record(
             "audio-readers",
@@ -836,6 +852,12 @@ class FingerprintingTest(unittest.TestCase):
             with self.subTest(plain=name):
                 self.assertEqual(values(at(plain, where)), values(at(plain_other, where)))
                 self.assertEqual(values(at(plain, where)), values(at(plain, where, "again")))
+        # A short read of each analyser getter is the start of a full read of the same window, with or without the
+        # noise: what one value reads does not depend on how many values the page asked for.
+        for page in (first, other, plain):
+            for name in PREFIX_READERS:
+                with self.subTest(prefix=name):
+                    self.assertIs(at(page, ("prefix", name))["prefix"], True, "a short read is not the start of a full one")
         # A parameter's own schedule is not sound: on any engine it reads as written, also with a node connected that
         # gives no samples (the patch asks whether the node gave samples in the block, not whether one is connected).
         schedule = at(plain, ("worklet", "schedule"))
@@ -858,6 +880,13 @@ class FingerprintingTest(unittest.TestCase):
                 # The same sound on the same site reads the same, in one page and in the next (sites keep working).
                 self.assertEqual(site, values(at(first, where, "again")))
                 self.assertEqual(site, values(at(again, where)))
+        # A short read still differs per site (the float getters; the bytes round most of the noise away).
+        for name in ("floatTime", "floatFrequency"):
+            with self.subTest(short=name):
+                site = values(at(first, ("prefix", name)))
+                self.assertNotEqual(site, values(at(plain, ("prefix", name))), "the plain value was given out")
+                self.assertNotEqual(site, values(at(other, ("prefix", name))), "two sites read the same value")
+                self.assertEqual(site, values(at(again, ("prefix", name))))
         # The noise comes from the values handed over: the same values in the same blocks get the same noise, as
         # here, where the parameter carries the very samples the input does. (A reading of another extent, the
         # script processor's buffers of 1024, gets other noise for them.)
@@ -896,20 +925,12 @@ class FingerprintingTest(unittest.TestCase):
             self.assertAlmostEqual(float(noisy), float(quiet), delta=abs(float(quiet)) / 1000)
         # The buffer the rendering returns keeps test 11's noise.
         self.assertNotEqual(values(at(first, ("buffer",))), values(at(plain, ("buffer",))))
-        # A site the person exempts with the shield reads the plain values, and only that site.
-        self.readers("127.0.0.1")
-        self.m.chrome(f"{ALLOW_LIST}.add(gBrowser.selectedBrowser);")  # the shield's switch in the address bar
-        try:
-            exempt, beside = self.readers("127.0.0.1"), self.readers("localhost")
-            for name, where in READERS.items():
-                with self.subTest(exempt=name):
-                    self.assertEqual(values(at(exempt, where)), values(at(plain, where)))
-                    self.assertEqual(values(at(beside, where)), values(at(other, where)), "the exemption reached another site")
-        finally:
-            self.readers("127.0.0.1")
-            self.m.chrome(f"{ALLOW_LIST}.remove(gBrowser.selectedBrowser);")
-        back = self.readers("127.0.0.1")
-        self.assertEqual(values(at(back, ("worklet", "inputs"))), values(at(first, ("worklet", "inputs"))))
+        # A site the person exempts with the shield reads the plain values (above), and only that site; once the
+        # exemption is gone the site reads its noisy values again.
+        for name, where in READERS.items():
+            with self.subTest(exempt=name):
+                self.assertEqual(values(at(beside, where)), values(at(other, where)), "the exemption reached another site")
+                self.assertEqual(values(at(back, where)), values(at(first, where)), "the exemption outlived its removal")
 
     def test_08_pages_read_one_screen_size_and_an_exempted_site_reads_the_displays(self):
         self.needs_the_engines_screen()

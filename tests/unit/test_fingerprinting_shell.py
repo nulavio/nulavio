@@ -128,6 +128,30 @@ class AudioReadersTest(unittest.TestCase):
             )
             self.assertIn("+AudioRandomization", line, path)
 
+    def test_what_a_value_reads_does_not_depend_on_how_many_values_are_read(self):
+        """Review of #593: the noise is made from the values, so noise made from fewer of them is other noise. An
+        analyser's short read of its samples gets the start of the whole window's noisy copy (its spectrum is always
+        made from the whole window); the other readers put the noise on all they hand over, whatever script reads."""
+        analyser = self.added[self.WEBAUDIO + "AnalyserNode.cpp"]
+        self.assertIn("if (aLength < fftSize) {", analyser)
+        self.assertIn(
+            "GetTimeDomainData(window.Elements(), fftSize);\n      PodCopy(aData, window.Elements(), aLength);", analyser
+        )
+        # Without room for the whole window the page reads silence, not the plain samples.
+        self.assertIn(
+            "if (!window.SetLength(fftSize, fallible)) {\n        // Not the plain samples instead.\n"
+            "        PodZero(aData, aLength);\n        return;",
+            analyser,
+        )
+        self.assertIn(
+            "noiseKey, mInputBuffer->GetDataForWrite(i),\n                  aNode->BufferSize());",
+            self.added[self.WEBAUDIO + "ScriptProcessorNode.cpp"],
+        )
+        worklet = self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"]
+        block = "RandomizeAudioSamplesWithKey(mNoiseKey, dest,\n" + " " * 49 + "WEBAUDIO_BLOCK_SIZE);"
+        self.assertEqual(worklet.count(block), 2)
+        self.assertIn("&reduction, 1);", self.added[self.WEBAUDIO + "DynamicsCompressorNode.cpp"])
+
     def test_a_context_that_plays_has_no_key_so_nothing_a_person_hears_is_changed(self):
         context = self.added[self.WEBAUDIO + "AudioContext.cpp"]
         # The one place the key is made: only for an offline context, and only where the protection applies.

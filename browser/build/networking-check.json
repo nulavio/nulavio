@@ -9,6 +9,6 @@
   "built_with": {
     "mozconfig_sha256": "2e45964e937939f184ab80d921ffd36b857432838fb2b8e667999d5bc0287fdb",
     "variant_sha256": "913ccfc5fe248ffbaa52157c6c41f4d4aa56e32b22a4d2a4390c76d225762390",
-    "patch_stack_sha256": "7e3a5fae2c7110161573c0b982ddd66394579d991330ebe0f5bd5b9259be60ad"
+    "patch_stack_sha256": "d4b4d181e3d46ad76b43514ad0baa74cd744e247f6a4090f4f1764f92dbd89ec"
   }
 }
