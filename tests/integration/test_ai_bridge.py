@@ -1072,9 +1072,9 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse(opened["isError"], opened)
         self.assertEqual(opened["structuredContent"]["title"], "Public")
         tab = opened["structuredContent"]["tab"]
+        self.assertTrue(harness.wait_until(lambda: pings, timeout=10), "the page runs")
         time.sleep(1)  # the page's own requests, refused by the engine's Local Network Access (test_26)
         self.assertEqual(hits, [])
-        self.assertTrue(pings)  # the page runs
         for url in (f"{local}/agent", f"http://127.0.0.2:{port}/moved"):
             with self.subTest(url=url):
                 went = bridge.call("navigate", {"tab": tab, "url": url})
