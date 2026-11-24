@@ -166,6 +166,132 @@ FP_SURFACE_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-surface</tit
 </script>"""
 
 
+# What a node inside an offline audio rendering hands to script while it renders
+# (tests/integration/test_fingerprinting.py, 11b): an analyser's four getters, a script processor's input buffers,
+# a worklet's inputs and the values of a parameter a node is connected to, and a compressor's reduction. The sound
+# is the usual probe's (FP_SURFACE_PAGE): an oscillator through a compressor. Each read happens twice. A second
+# parameter has a schedule of its own and a node connected that gives no samples (a source never started). A second
+# analyser is read short (300 values) and in full, to show that a short read is the start of the full one.
+FP_AUDIO_READERS_PAGE = """<!doctype html><meta charset="utf-8"><title>fp-audio-readers</title><pre id=fp></pre>
+<script type="text/plain" id=worklet>
+registerProcessor('nulavio-reader', class extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return ['tap', 'ramp'].map(name => ({ name, defaultValue: 0, automationRate: 'a-rate' }));
+  }
+  constructor() {
+    super();
+    this.heard = new Float32Array(8192); this.tap = new Float32Array(8192); this.ramp = new Float32Array(8192); this.at = 0;
+  }
+  process(inputs, outputs, parameters) {
+    if (this.at < 8192) {
+      if (inputs[0][0]) this.heard.set(inputs[0][0], this.at);
+      for (const name of ['tap', 'ramp']) {
+        const values = parameters[name];
+        this[name].set(values.length === 128 ? values : new Float32Array(128).fill(values[0]), this.at);
+      }
+      this.at += 128;
+      if (this.at === 8192) this.port.postMessage({ inputs: this.heard, parameter: this.tap, schedule: this.ramp });
+    }
+    return true;
+  }
+});
+</script>
+<script>
+(async () => {
+  const hex = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+    .map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  const guarded = async fn => { try { return await fn(); } catch (e) { return 'error: ' + e.name + ': ' + e.message; } };
+  const later = ms => new Promise(r => setTimeout(r, ms));
+  // The sum of what is there (a silent bin of the spectrum is -Infinity), the loudest value, and a digest of all.
+  const read = async data => {
+    let sum = 0, peak = 0;
+    for (const v of data) { if (Number.isFinite(v)) { sum += Math.abs(v); peak = Math.max(peak, Math.abs(v)); } }
+    return { sum: String(sum), peak, digest: await hex(new Uint8Array(data.buffer.slice(0))),
+      bytes: data instanceof Uint8Array ? Array.from(data) : undefined };
+  };
+  const graph = pitch => {
+    const context = new OfflineAudioContext(1, 8192, 44100), oscillator = context.createOscillator();
+    oscillator.type = 'triangle'; oscillator.frequency.value = pitch;
+    const compressor = context.createDynamicsCompressor();
+    compressor.threshold.value = -50; compressor.knee.value = 40; compressor.ratio.value = 12;
+    compressor.attack.value = 0; compressor.release.value = 0.25;
+    oscillator.connect(compressor); compressor.connect(context.destination); oscillator.start(0);
+    return { context, compressor };
+  };
+  const module = URL.createObjectURL(new Blob([document.getElementById('worklet').textContent], { type: 'text/javascript' }));
+  const render = async () => {
+    const { context, compressor } = graph(10000), out = {};
+    const analyser = context.createAnalyser(); analyser.fftSize = 2048; compressor.connect(analyser);
+    // A second analyser, without smoothing (each spectrum read smooths again), for a short read and a full one.
+    const still = context.createAnalyser(); still.fftSize = 2048; still.smoothingTimeConstant = 0; compressor.connect(still);
+    const events = [], processor = context.createScriptProcessor(1024, 1, 1);
+    processor.onaudioprocess = e => events.push(e.inputBuffer.getChannelData(0).slice());
+    compressor.connect(processor); processor.connect(context.destination);
+    let heard = null;
+    out.worklet = await guarded(async () => {
+      await context.audioWorklet.addModule(module);
+      const options = { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] };
+      const node = new AudioWorkletNode(context, 'nulavio-reader', options);
+      heard = new Promise(r => { node.port.onmessage = e => r(e.data); });
+      compressor.connect(node); compressor.connect(node.parameters.get('tap')); node.connect(context.destination);
+      const ramp = node.parameters.get('ramp');
+      ramp.setValueAtTime(0.25, 0); ramp.linearRampToValueAtTime(1, 8192 / 44100);
+      context.createConstantSource().connect(ramp);  // connected and never started: it gives no samples
+      return null;
+    });
+    out.buffer = await read((await context.startRendering()).getChannelData(0));
+    // What the rendering thread sent while it ran has arrived: the eight input buffers, the worklet's message.
+    for (let i = 0; i < 500 && events.length < 8; i++) await later(10);
+    const sent = heard ? await Promise.race([heard, later(5000)]) : null;
+    await later(0);
+    out.analyser = await guarded(async () => {
+      const floatTime = new Float32Array(analyser.fftSize), floatFrequency = new Float32Array(analyser.frequencyBinCount);
+      const byteTime = new Uint8Array(analyser.fftSize), byteFrequency = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getFloatTimeDomainData(floatTime); analyser.getFloatFrequencyData(floatFrequency);
+      analyser.getByteTimeDomainData(byteTime); analyser.getByteFrequencyData(byteFrequency);
+      return { floatTime: await read(floatTime), floatFrequency: await read(floatFrequency),
+        byteTime: await read(byteTime), byteFrequency: await read(byteFrequency) };
+    });
+    // A read of fewer values than there are is the start of a full read: the short one first, then the full one.
+    out.prefix = await guarded(async () => {
+      const getters = {
+        floatTime: ['getFloatTimeDomainData', Float32Array, still.fftSize],
+        byteTime: ['getByteTimeDomainData', Uint8Array, still.fftSize],
+        floatFrequency: ['getFloatFrequencyData', Float32Array, still.frequencyBinCount],
+        byteFrequency: ['getByteFrequencyData', Uint8Array, still.frequencyBinCount],
+      };
+      const result = {};
+      for (const [name, [getter, Type, length]] of Object.entries(getters)) {
+        const short = new Type(300), full = new Type(length);
+        still[getter](short); still[getter](full);
+        result[name] = { prefix: short.every((v, i) => Object.is(v, full[i])), ...(await read(short)) };
+      }
+      return result;
+    });
+    out.scriptProcessor = await guarded(async () => {
+      const all = new Float32Array(8192);
+      events.slice(0, 8).forEach((data, i) => all.set(data, i * 1024));
+      return { events: events.length, ...(await read(all)) };
+    });
+    if (out.worklet === null) {
+      out.worklet = !sent ? 'error: no message'
+        : { inputs: await read(sent.inputs), parameter: await read(sent.parameter), schedule: await read(sent.schedule) };
+    }
+    // One number is a small thing to tell two sites apart by, so four sounds give four of them.
+    const reductions = [String(compressor.reduction)];
+    for (const pitch of [9000, 8000, 7000]) {
+      const other = graph(pitch); await other.context.startRendering(); await later(0);
+      reductions.push(String(other.compressor.reduction));
+    }
+    out.reduction = reductions;
+    return out;
+  };
+  const out = { first: await guarded(render), again: await guarded(render) };
+  document.getElementById('fp').textContent = JSON.stringify(out);
+})().catch(e => { document.getElementById('fp').textContent = JSON.stringify({ fatal: String(e) }); });
+</script>"""
+
+
 def minimal_pdf(text: str) -> bytes:
     """A valid one-page PDF showing `text` (ASCII) in Helvetica, with its cross-reference table."""
     stream = f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode()
@@ -429,6 +555,8 @@ class FixtureServer:
             return page.encode(), html, {}
         if path == "/fp-surface":
             return FP_SURFACE_PAGE.encode(), html, {}
+        if path == "/fp-audio-readers":
+            return FP_AUDIO_READERS_PAGE.encode(), html, {}
         if path == "/tracker.js":
             return b"document.getElementById('state').textContent = 'tracker ran';", "text/javascript", {}
         if path == "/agent-task":
