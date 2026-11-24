@@ -1089,14 +1089,15 @@ class RoutingTest(unittest.TestCase):
         """In an engine an agent drives, a page's navigation loads in that engine, under the Bridge's checks, and the Shell
         starts no other profile's engine: that one would inherit the agent's environment. The variables are set in this
         running engine, as the Bridge sets them at start, and the in-page switch is turned on again so its check runs.
-        The Bridge's file lets the agent reach every local place, so the engine's own checks of an agent's local pages
-        (patch 0015, the Shell's) leave this test's fixture pages alone."""
+        The Bridge's file lets the agent reach the fixture's two places, so the engine's own checks of an agent's local
+        pages (patch 0015, the Shell's) leave this test's pages alone."""
         self.m5_setup()
         if "Bancos" in self.others:
             self.stop("Bancos")
         self.call("await R.setInPage(true);")
         allowed = self.session.tmp / "agent-local.json"
-        allowed.write_text(json.dumps({"v": 1, "all": True, "places": []}))
+        port = self.server.port
+        allowed.write_text(json.dumps({"v": 1, "all": False, "places": [["localhost", port], ["127.0.0.1", port]]}))
         self.m.chrome("Services.env.set('NULAVIO_AI_LOCAL', arguments[0]);", [str(allowed)])
         self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', 'ag-routing-test');")
         try:
