@@ -582,6 +582,9 @@ function showResult(result, task) {
     const why = result.stopped === "step-limit" ? t("assistantStoppedStepLimit", [count(result.limit ?? 8)]) : errorText(result.stopped);
     $("activity-actions").hidden = false;
     announce(result.steps?.length ? `${why} ${t("assistantTaskMayHaveActed")}` : why, "error");
+    if (STATE_CHANGED.has(result.stopped)) {
+      render().catch(() => {}); // the provider changed in Settings: the panel names the new one
+    }
   } else {
     announce(t("assistantAnswerReady"));
   }

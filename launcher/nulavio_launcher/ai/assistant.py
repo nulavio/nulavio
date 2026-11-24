@@ -163,7 +163,10 @@ def _key_target(provider: dict | None) -> list | None:
     if not provider:
         return None
     url = urllib.parse.urlsplit(provider["base_url"])
-    port = url.port or (443 if url.scheme == "https" else 80)
+    try:
+        port = url.port or (443 if url.scheme == "https" else 80)
+    except ValueError:  # an address saved before ports were checked: bound to its text, so no other matches it
+        port = url.netloc
     return [provider["kind"], url.scheme, (url.hostname or "").lower(), port]
 
 
@@ -178,6 +181,10 @@ def check_endpoint(raw: str) -> str:
     url = urllib.parse.urlsplit(str(raw or "").strip())
     if url.scheme not in ("https", "http") or not url.hostname or url.username or url.password or url.query or url.fragment:
         raise AssistantError("bad-endpoint")
+    try:
+        url.port  # noqa: B018 - raises ValueError for a port that is not a number in range
+    except ValueError:
+        raise AssistantError("bad-endpoint") from None
     if url.scheme == "http" and url.hostname not in ("127.0.0.1", "localhost", "::1"):
         raise AssistantError("endpoint-needs-https")
     return urllib.parse.urlunsplit((url.scheme, url.netloc, url.path.rstrip("/"), "", ""))
@@ -286,12 +293,19 @@ def _key_for(provider: dict) -> str | None:
 
     Refused when Settings no longer name that provider (a run that started before a change stops here, so a key saved
     for the new provider never reaches the old one). None when the key was saved for another kind or origin."""
-    data = load()
-    if not _same_provider(data["provider"], provider):
-        raise AssistantError("assistant-settings-changed")
-    if _key_bound(data) != _key_target(provider):
+
+    def usable(data: dict) -> bool:
+        if not _same_provider(data["provider"], provider):
+            raise AssistantError("assistant-settings-changed")
+        return _key_bound(data) == _key_target(provider)
+
+    if not usable(load()):
         return None
     found = _keyring().lookup(KEY_ATTRIBUTES)
+    # Checked again after the read: a save that came in between may have stored another provider's key. configure()
+    # saves the new provider before it stores a new key, so a key read here is still this provider's if this holds.
+    if not usable(load()):
+        return None
     return bytes(found).decode() if found else None
 
 

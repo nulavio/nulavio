@@ -78,6 +78,8 @@ class AssistantTest(unittest.TestCase):
             ("https://user:pw@api.example.com", "bad-endpoint"),
             ("file:///etc/passwd", "bad-endpoint"),
             ("https://api.example.com/v1?x=1", "bad-endpoint"),
+            ("https://api.example.com:99999/v1", "bad-endpoint"),
+            ("https://api.example.com:port/v1", "bad-endpoint"),
         ):
             with self.subTest(bad), self.assertRaises(assistant.AssistantError) as caught:
                 assistant.check_endpoint(bad)
@@ -627,6 +629,36 @@ class AssistantTest(unittest.TestCase):
         # A request built for the earlier provider after the change, however late, is refused before it carries a key.
         with self.assertRaises(assistant.AssistantError) as caught:
             assistant._request(started_with, [{"role": "user", "content": "x"}], tools=True)
+        self.assertEqual(caught.exception.code, "assistant-settings-changed")
+
+    def test_a_key_saved_while_a_request_reads_it_is_not_sent_to_the_earlier_provider(self):
+        """Settings saved between the check of the provider and the keyring read: the key read is not used."""
+        self.configure(key="")
+        started_with = dict(assistant.load()["provider"])
+        other = self.other_provider()
+        real = assistant._keyring
+
+        class SavesDuringTheRead:
+            def __init__(self):
+                self.ring = real()
+                self.saved = False
+
+            def lookup(self, attributes):
+                if not self.saved:
+                    self.saved = True
+                    with mock.patch.object(assistant, "_keyring", real):
+                        assistant.configure("openai", other.base, "other-model", "", "sk-new-artificial-key")
+                return self.ring.lookup(attributes)
+
+        ring = SavesDuringTheRead()
+        # A binding for the earlier provider, so the read happens at all.
+        path = self.home / "nv" / "state" / "ai" / "assistant.json"
+        data = json.loads(path.read_text())
+        data["key_for"] = assistant._key_target(started_with)
+        path.write_text(json.dumps(data))
+        with mock.patch.object(assistant, "_keyring", lambda: ring), self.assertRaises(assistant.AssistantError) as caught:
+            assistant._request(started_with, [{"role": "user", "content": "x"}], tools=True)
+        self.assertTrue(ring.saved)
         self.assertEqual(caught.exception.code, "assistant-settings-changed")
 
     def test_cli_api_never_returns_the_key(self):
