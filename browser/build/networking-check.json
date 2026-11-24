@@ -3,12 +3,12 @@
   "firefox": "160.0.1",
   "source_sha256": "7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d",
   "result": "accepted",
-  "accepted_in": "#584",
-  "checked": "2026-11-20",
-  "how": "Not read: the maintainer accepted this patch stack without a new reading (#584, 2026-11-20), as the release process allows. The stack is the one whose Rust library passed networking_check.py on 2026-11-18 (libgkrust.a sha256 4b92a365b3679664e1775fcf7061ce67f9744d00aac28b1488b99523c8418ff4, patches 0001 to 0012), plus patch 0013 (#527, accepted in #562: chrome JavaScript only) and patch 0014 (#570), which changes only C++ in netwerk/ (netwerk/protocol/http/nsHttpChannel.cpp, netwerk/base/LNAPermissionRequest.cpp and .h): no Rust, no build file (test_track_b's Rust guard). The mozconfig and the variant are unchanged.",
+  "accepted_in": "#589",
+  "checked": "2026-11-23",
+  "how": "Not read: the maintainer accepted this patch stack without a new reading (#589, 2026-11-23), as the release process allows. The stack is the one whose Rust library passed networking_check.py on 2026-11-18 (libgkrust.a sha256 4b92a365b3679664e1775fcf7061ce67f9744d00aac28b1488b99523c8418ff4, patches 0001 to 0012), plus patch 0013 (#527, accepted in #562: chrome JavaScript only), patch 0014 (#570, accepted in #584: C++ in netwerk/ only) and patch 0015 (#561), which changes only C++ in netwerk/protocol/http (nsHttpChannel.cpp, a new NulavioAgentLocalAccess.cpp and .h) and that directory's moz.build, which builds the new file and adds jsoncpp's include path: no Rust (test_track_b's Rust guard). The mozconfig and the variant are unchanged.",
   "built_with": {
     "mozconfig_sha256": "2e45964e937939f184ab80d921ffd36b857432838fb2b8e667999d5bc0287fdb",
     "variant_sha256": "913ccfc5fe248ffbaa52157c6c41f4d4aa56e32b22a4d2a4390c76d225762390",
-    "patch_stack_sha256": "ca58f2b0ca6102ce6f734e44954f72eda0235d047b9b3cced28aeec12e2b1ed7"
+    "patch_stack_sha256": "3f5d9edffc73f3632e24953020376217bce882924e2506fc647aabf08738de1c"
   }
 }
