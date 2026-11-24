@@ -108,7 +108,8 @@ class AudioReadersTest(unittest.TestCase):
             with self.subTest(reader=name):
                 self.assertIn("nsRFPService::RandomizeAudioSamplesWithKey(", self.added[self.WEBAUDIO + name])
         # A worklet has two places: its inputs, and the values of a parameter a node is connected to, in a block
-        # where that node gave samples (a parameter's own value and schedule are left alone).
+        # where that node gave samples, on the whole value there (the stored schedule is not changed, and a block in
+        # which no connected node gave samples reads as written).
         worklet = self.added[self.WEBAUDIO + "AudioWorkletNode.cpp"]
         self.assertEqual(worklet.count("RandomizeAudioSamplesWithKey("), 2)
         self.assertIn(
