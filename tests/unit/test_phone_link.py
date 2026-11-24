@@ -236,6 +236,23 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertEqual((session.state, session.error), ("failed", "sas-mismatch"))
         self.assertEqual(self.phone_methods(), [])
 
+    def test_02a_a_phone_of_another_pairing_version_is_told_so(self):
+        class OtherVersion(ReferencePhone):
+            def scan(self, qr):
+                return dict(super().scan(qr), v=1)
+
+        other = LinkedPhone(OtherVersion("Antigo"))
+        self.addCleanup(other.close)
+        session, first, thread = self.start("pair", {"current": PASSWORD}, other.resolver)
+        phone = other.pair(first["qr"])
+        thread.join(20)
+        phone.join(20)
+        self.assertEqual((session.state, session.error), ("failed", "unsupported-version"))
+        self.assertNotIn("sas", session.status())
+        self.assertEqual(other.result, {"t": "error", "code": "unsupported-version"})
+        self.assertIsNone(other.sas)
+        self.assertEqual(self.phone_methods(), [])
+
     def test_03_pairing_needs_the_current_secret(self):
         _session, first, thread = self.start("pair", {"current": "wrong"})
         thread.join(20)

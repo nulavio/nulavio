@@ -62,6 +62,24 @@
    "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8"
   ]
  },
+ "pairing_commitment": {
+  "invite": "invite-1",
+  "n": "yMnKy8zNzs_Q0dLT1NXW19jZ2tvc3d7f4OHi4-Tl5uc",
+  "out": "Q8xtH90IDvicQ901mjrHfjSd1wha6kXRfRetSGVdT9I"
+ },
+ "pairing_transcript": {
+  "commitment": "Q8xtH90IDvicQ901mjrHfjSd1wha6kXRfRetSGVdT9I",
+  "invite": "invite-1",
+  "keys": [
+   "CgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCk",
+   "FBUWFxgZGhscHR4fICEiIyQlJicoKSorLC0uLzAxMjM",
+   "Hh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0",
+   "KCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4_QEFCQ0RFRkc",
+   "MjM0NTY3ODk6Ozw9Pj9AQUJDREVGR0hJSktMTU5PUFE"
+  ],
+  "name": "Pixel \u00e9",
+  "out": "oIO-L6DpT2ixwT5HprbPWzU3CuNe5Sn_2pOmwR3cAnQ"
+ },
  "phone_kek": {
   "dsig_pk": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
   "envelope_id": "env-1",
@@ -77,7 +95,8 @@
   "shared": "lmOqHal-hIqRSkNtBBY9-7iRePEH8bW3ftOFQgM4KFQ"
  },
  "sas": {
-  "digits": "526301",
+  "digits": "954048",
+  "n": "yMnKy8zNzs_Q0dLT1NXW19jZ2tvc3d7f4OHi4-Tl5uc",
   "shared": "lmOqHal-hIqRSkNtBBY9-7iRePEH8bW3ftOFQgM4KFQ",
   "t": "Fpn0JXgmhjJM_RoQI6PasqLoYTR7pRkje8WNG6QSBtM"
  },

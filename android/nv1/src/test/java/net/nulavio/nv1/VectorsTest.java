@@ -55,7 +55,7 @@ public class VectorsTest {
             for (String tag : new String[] {"fa-IR", "ar-EG", "hi-IN-u-nu-deva", "th-TH-u-nu-thai"}) {
                 Locale.setDefault(Locale.forLanguageTag(tag));
                 Map<String, Object> s = m("sas");
-                assertEquals(tag, s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t")));
+                assertEquals(tag, s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t"), b(s, "n")));
                 Map<String, Object> c = m("canonical");
                 assertEquals(tag, c.get("bytes"), new String(Json.canonical(c.get("object")), StandardCharsets.US_ASCII));
             }
@@ -72,7 +72,14 @@ public class VectorsTest {
         Map<String, Object> t = m("transcript");
         assertArrayEquals(b(t, "out"), Nv1.transcript(parts((List<Object>) t.get("parts"), true)));
         Map<String, Object> s = m("sas");
-        assertEquals(s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t")));
+        assertEquals(s.get("digits"), Nv1.sasDigits(b(s, "shared"), b(s, "t"), b(s, "n")));
+        Map<String, Object> pc = m("pairing_commitment");
+        assertArrayEquals(b(pc, "out"), Nv1.pairingCommitment((String) pc.get("invite"), b(pc, "n")));
+        Map<String, Object> pt = m("pairing_transcript");
+        Object[] keys = ((List<Object>) pt.get("keys")).stream().map(key -> B64.decode((String) key)).toArray();
+        assertArrayEquals(b(pt, "out"), Nv1.pairingTranscript((String) pt.get("invite"), (byte[]) keys[0],
+                (byte[]) keys[1], (byte[]) keys[2], (byte[]) keys[3], (byte[]) keys[4], (String) pt.get("name"),
+                b(pt, "commitment")));
         Map<String, Object> pk = m("phone_kek");
         assertArrayEquals(b(pk, "out"), Nv1.phoneKek(b(pk, "z"), (String) pk.get("profile_id"),
                 (String) pk.get("envelope_id"), (String) pk.get("phone_id"), b(pk, "eph_pk"), b(pk, "dsig_pk")));

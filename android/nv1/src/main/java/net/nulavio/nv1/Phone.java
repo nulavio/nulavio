@@ -1,6 +1,7 @@
 package net.nulavio.nv1;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -39,6 +40,7 @@ public final class Phone {
         byte[] shared;
         byte[] secret;
         byte[] t;
+        byte[] commitment;
         byte[] dsigPk;
         String desktopName;
     }
@@ -119,20 +121,31 @@ public final class Phone {
 
     // -- pairing ---------------------------------------------------------------------------
 
-    /** Kind of QR: "pair" (an invite), "unlock" (a signed request) or null. */
+    /**
+     * Kind of QR: "pair" (an invite, of any version: {@link #scan} says which it refuses), "unlock" (a signed
+     * request) or null.
+     */
     public static String kindOf(Map<String, Object> qr) {
         if (qr.containsKey("r") && qr.containsKey("sig")) {
             return "unlock";
         }
-        if (Long.valueOf(1).equals(qr.get("v")) && qr.containsKey("s") && qr.containsKey("i")) {
+        if (qr.get("v") instanceof Long && qr.containsKey("s") && qr.containsKey("i")) {
             return "pair";
         }
         return null;
     }
 
+    /** Start pairing with an invite; only version 2 is followed (unsupported-version, expired, bad-message). */
     public Map<String, Object> scan(Map<String, Object> qr) {
-        if (!Long.valueOf(1).equals(qr.get("v")) || !(qr.get("e") instanceof Long) || now() > (Long) qr.get("e")) {
+        if (!Long.valueOf(Nv1.PAIRING_VERSION).equals(qr.get("v"))) {
+            throw new PhoneRejected("unsupported-version"); // no fallback to an older pairing
+        }
+        if (!(qr.get("e") instanceof Long) || now() > (Long) qr.get("e")) {
             throw new PhoneRejected("expired");
+        }
+        byte[] commitment = B64.decode(str(qr, "c"));
+        if (commitment.length != 32) {
+            throw new PhoneRejected("bad-message");
         }
         String invite = str(qr, "i");
         byte[] dePk = B64.decode(str(qr, "k"));
@@ -152,19 +165,25 @@ public final class Phone {
         pairing.pePk = pe[1];
         pairing.shared = shared;
         pairing.secret = secret;
+        pairing.commitment = commitment;
         Map<String, Object> hello = new TreeMap<>();
+        hello.put("v", Nv1.PAIRING_VERSION);
         hello.put("i", invite);
         hello.put("pe", B64.encode(pe[1]));
         hello.put("box", box);
         return hello;
     }
 
-    /** Check the desktop's signature against the key in the QR; returns the 6 digits to show. */
+    /**
+     * Check the desktop's signature against the key in the QR, and its nonce against the commitment in the QR;
+     * returns the 6 digits to show.
+     */
     public String onAccept(Map<String, Object> msg) {
         Pairing p = requirePairing();
         String invite = str(p.qr, "i");
         byte[] dsigPk = B64.decode(str(p.qr, "d"));
-        byte[] t = Nv1.transcript(invite, B64.decode(str(p.qr, "k")), p.pePk, dsigPk, sigPk, kxPk, name);
+        byte[] t = Nv1.pairingTranscript(invite, B64.decode(str(p.qr, "k")), p.pePk, dsigPk, sigPk, kxPk, name,
+                p.commitment);
         Map<String, Object> body;
         byte[] k2 = Nv1.kdf(p.secret, "pair/k2", p.shared, t);
         try {
@@ -179,10 +198,16 @@ public final class Phone {
             cancelPairing();
             throw new PhoneRejected("bad-signature");
         }
+        byte[] nonce = body.get("n") instanceof String ? B64.decode((String) body.get("n")) : new byte[0];
+        if (nonce.length != Nv1.NONCE_BYTES
+                || !MessageDigest.isEqual(Nv1.pairingCommitment(invite, nonce), p.commitment)) {
+            cancelPairing();
+            throw new PhoneRejected("bad-commitment"); // not the nonce the QR committed to: the digits would mean nothing
+        }
         p.t = t;
         p.dsigPk = dsigPk;
         p.desktopName = str(body, "name");
-        return Nv1.sasDigits(p.shared, t);
+        return Nv1.sasDigits(p.shared, t, nonce);
     }
 
     public String pairingDesktopName() {

@@ -511,6 +511,8 @@ public final class MainActivity extends Activity {
             case "not-for-this-phone": return getString(R.string.error_not_for_this_phone);
             case "unreachable": case "timeout": case "closed": return getString(R.string.error_unreachable);
             case "sas-mismatch": return getString(R.string.pairing_cancelled);
+            case "unsupported-version": return getString(R.string.error_version);
+            case "bad-commitment": return getString(R.string.error_bad_commitment);
             default: return getString(R.string.error_generic, code);
         }
     }

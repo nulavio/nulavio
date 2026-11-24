@@ -39,6 +39,7 @@ from nulavio_launcher.vault.phone import (
     add_password_and_phone,
     add_phone,
     nkdf,
+    pairing_commitment,
     remove_phone,
     request_signing_input,
     response_key,
@@ -594,7 +595,7 @@ class SubstitutedPairingTest(VaultTestCase):
                 k1 = nkdf(b64d(invite["s"]), "pair/k1", shared, invite["i"], b64d(invite["k"]), pe_pk)
                 box = seal_json(k1, body, invite["i"].encode())
                 with self.assertRaises(ProtocolError):
-                    pairing.on_hello({"i": invite["i"], "pe": b64e(pe_pk), "box": box})
+                    pairing.on_hello({"v": 2, "i": invite["i"], "pe": b64e(pe_pk), "box": box})
                 self.assertEqual(pairing.state, "cancelled")
 
     def test_hello_without_the_qr_secret(self):
@@ -626,6 +627,62 @@ class SubstitutedPairingTest(VaultTestCase):
         with self.assertRaises(ProtocolError) as ctx:
             pairing.on_hello(ReferencePhone("Two", self.clock).scan(qr))
         self.assertEqual(ctx.exception.code, "bad-state")
+
+    def test_the_desktops_digits_are_not_known_before_the_hello(self):
+        """U-T7 with someone on both halves (the phone scans their QR, they answer the real one): whoever sends the
+        hello must not be able to work out the desktop's 6 digits before sending it, or they could try hellos
+        offline until those digits equal the phone's. `copy` holds everything that sender has: what the QR shows,
+        and the exchange result (X25519 gives the same from either side, so the desktop's half stands in for the
+        sender's). It lacks only the nonce the desktop keeps back until the hello."""
+        for _ in range(3):
+            real = Pairing(self.identity, "Test desktop", clock=self.clock)
+            copy = Pairing(self.identity, "Test desktop", clock=self.clock)
+            for name, value in vars(real).items():
+                if name != "nonce":
+                    setattr(copy, name, bytearray(value) if isinstance(value, bytearray) else value)
+            hello = ReferencePhone("Phone", self.clock).scan(real.invite())
+            copy.on_hello(dict(hello))
+            real.on_hello(dict(hello))
+            self.assertNotEqual(copy.sas, real.sas)
+
+    def test_the_nonce_is_not_in_the_qr(self):
+        pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+        shown = canonical(pairing.invite())
+        self.assertNotIn(b64e(pairing.nonce).encode(), shown)
+        self.assertEqual(pairing.invite()["c"], b64e(pairing_commitment(pairing.invite_id, pairing.nonce)))
+
+    def test_the_phone_refuses_a_nonce_the_qr_did_not_commit_to(self):
+        """A desktop (or someone answering for one) that picks its nonce after the hello gets no digits shown."""
+        pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+        qr = pairing.invite()
+        phone = ReferencePhone("Phone", self.clock)
+        hello = phone.scan(qr)
+        pairing.nonce = sodium.random_bytes(32)  # chosen after the QR was shown
+        with self.assertRaises(PhoneRejected) as ctx:
+            phone.on_accept(pairing.on_hello(hello))
+        self.assertEqual(ctx.exception.code, "bad-commitment")
+        self.assertEqual(phone.desktops, {})
+
+    def test_the_phone_refuses_another_pairing_version(self):
+        pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+        qr = pairing.invite()
+        without = {k: v for k, v in qr.items() if k != "c"}
+        for shown, code in ((dict(without, v=1), "unsupported-version"), (dict(qr, v=1), "unsupported-version"),
+                            (dict(qr, v=3), "unsupported-version"), (without, "bad-message")):  # fmt: skip
+            with self.subTest(shown=shown), self.assertRaises(PhoneRejected) as ctx:
+                ReferencePhone("Phone", self.clock).scan(shown)
+            self.assertEqual(ctx.exception.code, code)
+
+    def test_the_desktop_refuses_a_hello_of_another_version(self):
+        for version in (None, 1, 3):
+            pairing = Pairing(self.identity, "Test desktop", clock=self.clock)
+            hello = ReferencePhone("Phone", self.clock).scan(pairing.invite())
+            hello = {k: v for k, v in hello.items() if k != "v"} if version is None else dict(hello, v=version)
+            with self.subTest(version=version), self.assertRaises(ProtocolError) as ctx:
+                pairing.on_hello(hello)
+            self.assertEqual(ctx.exception.code, "unsupported-version")
+            self.assertEqual(pairing.state, "cancelled")  # no fallback, and the invite is spent
+            self.assertIsNone(pairing.sas)
 
     def test_confirmation_signed_by_another_key(self):
         pairing = Pairing(self.identity, "Test desktop", clock=self.clock)

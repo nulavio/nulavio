@@ -19,6 +19,8 @@ from nulavio_launcher.vault import link, sodium
 from nulavio_launcher.vault.core import b64e, canonical
 from nulavio_launcher.vault.phone import (
     nkdf,
+    pairing_commitment,
+    pairing_transcript,
     phone_id_for,
     phone_kek,
     response_key,
@@ -51,6 +53,9 @@ def build() -> dict:
     nonce = pattern(7, 24)
     shared = bytes(sodium.x25519(key, x25519_public(other)))
     t = transcript("invite-1", pattern(1, 32), b"", "Pixel é")
+    pair_nonce = pattern(200)
+    commitment = pairing_commitment("invite-1", pair_nonce)
+    pair_keys = [pattern(10), pattern(20), pattern(30), pattern(40), pattern(50)]  # de, pe, Dsig, Psig, Pkx
     obj = {
         "b": 1,
         "a": "é café",
@@ -69,7 +74,15 @@ def build() -> dict:
             "out": b64e(nkdf(key, "pair/k1", pattern(1, 5), "invite-1", other)),
         },
         "transcript": {"parts": ["invite-1", b64e(pattern(1, 32)), b64e(b""), "Pixel é"], "out": b64e(t)},
-        "sas": {"shared": b64e(shared), "t": b64e(t), "digits": sas_digits(shared, t)},
+        "sas": {"shared": b64e(shared), "t": b64e(t), "n": b64e(pair_nonce), "digits": sas_digits(shared, t, pair_nonce)},
+        "pairing_commitment": {"invite": "invite-1", "n": b64e(pair_nonce), "out": b64e(commitment)},
+        "pairing_transcript": {
+            "invite": "invite-1",
+            "keys": [b64e(k) for k in pair_keys],
+            "name": "Pixel é",
+            "commitment": b64e(commitment),
+            "out": b64e(pairing_transcript("invite-1", *pair_keys, "Pixel é", commitment)),
+        },
         "x25519": {
             "sk": b64e(key),
             "pk": b64e(x25519_public(other)),
