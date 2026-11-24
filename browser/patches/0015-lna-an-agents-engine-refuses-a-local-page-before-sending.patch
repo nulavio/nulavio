@@ -12,13 +12,18 @@ service that a rebinding name pointed to still received it (#561, R29).
 With this, in such an engine (its environment carries NULAVIO_AI_WORKSPACE,
 which workspace.py sets and the Shell reads too), a top-level load whose
 triggering principal is the system principal is checked as a public page's
-request is. One to this computer or the local network is refused at the point
-where Local Network Access refuses a subresource, before the request is sent,
-unless the agent may reach that place (host and port) now, as the Bridge's
-file says: the file whose path is in NULAVIO_AI_LOCAL, which the Shell reads
-for its own check (same format and limits, an http place covering its https
-upgrade). A refusal ends as the Shell's does, with NS_ERROR_BLOCKED_BY_POLICY
-and a blocked page in the tab in place of the page that was there. Outside an
+request is (the browser's own loads too, such as an address typed in its
+window). One to this computer or the local network is refused at the point
+where Local Network Access refuses a subresource, before the request is sent
+(for https on the local network, after the TLS handshake, as upstream defers
+it), unless the agent may reach that place (host and port) now, as the
+Bridge's file says: the file whose path is in NULAVIO_AI_LOCAL, which the
+Shell reads for its own check (same format and limits, an http place covering
+its https upgrade; jsoncpp's reader here also takes comments and text after
+the value, which the Shell's JSON.parse refuses and the Bridge never writes).
+A refusal ends as the Shell's does, with NS_ERROR_BLOCKED_BY_POLICY and a
+blocked page in the tab in place of the page that was there. Upstream's grant
+for a captive-portal tab still lets it reach the local network. Outside an
 agent's engine, and for any load another principal triggers, nothing changes.
 
 Owner: Nulavio maintainers

@@ -37,7 +37,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
   - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
   - A page loaded through a proxy is not checked this way; R29 lists what else is not.
   - In your profiles opened for an agent, a site you allowed yourself to reach this computer or the local network no longer keeps that permission for the agent's run: engine patch 0014 refuses its pages' requests to local addresses there too, before they are sent. The permission stays in the profile, for the windows you browse (#570).
-  - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address, and the tab shows a blocked page. A page loaded through a proxy is not checked this way either (R29).
+  - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address (for https on the local network it refuses only after the TLS handshake), and the tab shows a blocked page; what the browser itself opens there is checked the same way, and a captive-portal login tab is not (R29). A page loaded through a proxy is not checked this way either (R29).
   - Nothing to do: it comes with the update.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19

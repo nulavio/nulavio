@@ -949,8 +949,8 @@ class AiBridgeTest(unittest.TestCase):
                 read = bridge.call("page_read", {"tab": tab})
                 self.assertNotIn("only on this computer", json.dumps(read))
         # Sent, and the pages were not shown; an engine with patch 0015 does not send them (test_33).
-        refused_before = harness.built_from_this_tree()
-        self.assertIn(sorted(hits), ([],) if refused_before else ([], ["/secret-agent", "/secret-redirect"]))
+        sent = sorted(hits)
+        self.assertIn(sent, ([],) if harness.built_from_this_tree() else ([], ["/secret-agent", "/secret-redirect"]))
         logged = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
         self.assertEqual([e for e in logged if e.get("tool") == "network"], [])  # the Bridge refused nothing
         registry.grant(agent["id"], "local_resources", "allow")
@@ -964,7 +964,8 @@ class AiBridgeTest(unittest.TestCase):
         again = bridge.call("navigate", {"tab": tab, "url": f"{secret}-allowed"})
         self.assertNotIn("only on this computer", json.dumps(again))
         self.assertNotIn("only on this computer", json.dumps(bridge.call("page_read", {"tab": tab})))
-        self.assertIn(hits.count("/secret-allowed"), (1,) if refused_before else (1, 2))
+        # An engine that sent the first two fetches this page again; one with patch 0015 refuses it before it is sent.
+        self.assertEqual(hits.count("/secret-allowed"), 2 if sent else 1)
 
     def test_28_a_place_the_user_allowed_by_asking_opens_during_that_call(self):
         # #243: the Shell lets a local page through when the Bridge allowed its place, here by asking (an address the
