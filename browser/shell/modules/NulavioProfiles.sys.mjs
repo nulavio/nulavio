@@ -914,7 +914,8 @@ class NulavioProfilesClass {
    * start, Nulavio's lock check stands in front of it in this instance: a locked protected profile, or one whose
    * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
    * starts as the engine meant. The state is read at each launch, from the profile's files, as switchTo() and
-   * routing read it. Of several addresses meant for a locked profile, the unlock page carries the first.
+   * routing read it. Of several addresses meant for a locked profile, the unlock page carries the first. In an
+   * engine an agent drives, they start nothing (agent-window, as switchTo()).
    */
   guardLaunches() {
     const service = this.#service;
@@ -938,6 +939,9 @@ class NulavioProfilesClass {
   }
 
   async #launchChecked(engines, profile, urls) {
+    // In an engine an agent drives, these menus start no other profile and open no unlock page for one, as
+    // switchTo() and openTemporary() refuse: the engine started would inherit the agent's environment.
+    refuseInAgentEngine();
     let state = null;
     try {
       state = await lazy.profileLockState(profile.path);

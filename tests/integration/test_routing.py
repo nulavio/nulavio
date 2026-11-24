@@ -1130,7 +1130,19 @@ class RoutingTest(unittest.TestCase):
             self.assertEqual(opened, "agent-route")
             self.assertEqual(self.error_of("await P.switchTo(args[0]);", self.ids["Bancos"]), "agent-window")
             self.assertEqual(self.error_of("await P.openTemporary();"), "agent-window")
-            time.sleep(1)
+            # So are the engine's own profile menus (app menu, menu bar) and "Move tab to profile": their launches go
+            # through the Shell's check in front of SelectableProfileService.launchInstance.
+            self.m.chrome("gProfiles.launchProfile({target: {getAttribute: () => String(arguments[0])}});", [self.ids["Bancos"]])
+            self.m.chrome(
+                "gProfiles.openTabsInProfile({target: {getAttribute: () => String(arguments[0])}},"
+                " [{linkedBrowser: {currentURI: {spec: arguments[1]}}}]);",
+                [self.ids["Bancos"], self.ip("/page/moved-agent")],
+            )
+            # Watched for a while: an engine started anyway shows as a process or as the moved tab's request.
+            started = harness.wait_until(
+                lambda: self.session.processes_for(self.paths["Bancos"]) or self.hits("/page/moved-agent"), timeout=8
+            )
+            self.assertFalse(started, "another profile was started")
             self.assertFalse(self.session.processes_for(self.paths["Bancos"]), "another profile was started")
         finally:
             self.m.chrome("Services.env.set('NULAVIO_AI_WORKSPACE', ''); Services.env.set('NULAVIO_AI_LOCAL', '');")
