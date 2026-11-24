@@ -361,6 +361,16 @@ class DesktopTest(unittest.TestCase):
         self.assertFalse((ROOT / "launcher" / "nulavio_launcher" / "desktop.py").exists())
         self.assertFalse((ROOT / "packaging" / "linux" / "nulavio-preview.desktop.in").exists())
 
+    def test_the_menu_entry_opens_profiles_only_through_nulavio(self):
+        # The engine's old profile manager (--ProfileManager, -P) starts the profile group's folder directly, past
+        # Nulavio's chooser and its lock check, and its checkbox turns the group's chooser off. The menu entry's
+        # actions never start it; profiles are opened from the browser's own Profiles screens.
+        text = (ROOT / "packaging" / "linux" / "nulavio.desktop").read_text(encoding="utf-8")
+        actions = next(line for line in text.splitlines() if line.startswith("Actions="))
+        self.assertEqual(actions, "Actions=new-window;new-private-window;")
+        commands = [line for line in text.splitlines() if line.startswith("Exec=")]
+        self.assertEqual(commands, ["Exec=nulavio %u", "Exec=nulavio --new-window", "Exec=nulavio --private-window"])
+
 
 if __name__ == "__main__":
     unittest.main()

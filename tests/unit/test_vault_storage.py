@@ -160,6 +160,26 @@ class ContainerTest(StorageCase):
         with self.assertRaises(PermissionError):
             (box.mountpoint / "prefs.js").write_text("plaintext")
 
+    def test_a_volume_gone_without_a_lock_leaves_a_read_only_folder(self):
+        """The bare mount point is read-only underneath the open volume: a volume that goes away without Nulavio's
+        lock (a crash, a reboot, a killed gocryptfs, its -idle timer) leaves a folder no engine can write to, before
+        any launcher call has looked at the profile again."""
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "inside.txt").write_text(MARKER)
+        subprocess.run(["fusermount3", "-u", str(box.mountpoint)], check=True, capture_output=True)  # not box.unmount()
+        self.assertFalse(box.mounted())
+        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o500)
+        with self.assertRaises(PermissionError):
+            (box.mountpoint / "prefs.js").write_text("plaintext")
+        # The volume's own root keeps its mode: unlocked again, the profile takes writes as before.
+        self.assertEqual(os.stat(box.cipher).st_mode & 0o777, 0o700)
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("inside")
+        self.assertEqual((box.mountpoint / "inside.txt").read_text(), MARKER)
+        box.unmount()
+        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o500)
+
     def test_wrong_key_and_wrong_container(self):
         box, _vault = self.new_container("a")
         _other, other_vault = self.new_container("b")
@@ -1139,12 +1159,16 @@ class EncryptedProfileTest(StorageCase):
     def test_a_volume_that_ended_without_a_lock_is_read_only_again(self):
         # Audit V6: a crash, a killed gocryptfs or its -idle timer left the empty mount point
         # writable (0700); an engine started on it would write a new profile in the clear.
+        # The mount point is read-only underneath the volume now, so such an end leaves it 0500
+        # by itself; a volume mounted by an earlier version still leaves it 0700, which the next
+        # launcher call on the profile puts right.
         prof, _ = self.encrypted_profile()
         profiles.unlock(prof, password=PASSWORD).lock()
         box = profiles.container(prof)
         subprocess.run(["fusermount3", "-u", "-z", str(box.mountpoint)], check=True, capture_output=True)  # not unmount()
         self.assertFalse(box.mounted())
-        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o700)
+        self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o500)
+        os.chmod(box.mountpoint, 0o700)  # as a volume mounted by an earlier version left it
         self.assertTrue(profiles.status(prof)["locked"])
         self.assertEqual(os.stat(box.mountpoint).st_mode & 0o777, 0o500)
         with self.assertRaises(PermissionError):
@@ -1865,6 +1889,82 @@ class HelperApiTest(StorageCase):
         prof = profile.Profile(name="r", path=path)
         self.assertEqual(profiles.autolock(prof, grace=0.5, poll=0.1), "unused")
         self.assertFalse(storage.Container(path).mounted())
+
+    def test_autolock_follows_an_engine_that_takes_the_profile_while_it_locks(self):
+        """An engine that takes the profile while the watcher is still unmounting (the last engine's helpers holding a
+        file) is followed like the first one: the volume stays mounted and shown as unlocked while it runs, and is
+        locked once it is gone."""
+        path = self.tmp / "taken"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        box = storage.Container(path)
+        prof = profile.Profile(name="taken", path=path)
+        looks = []
+        real_running_pid = prof.running_pid
+
+        def running_pid():
+            looks.append(1)
+            return real_running_pid()
+
+        prof.running_pid = running_pid
+        unmounting = threading.Event()
+        real_unmount = storage.Container.unmount
+
+        def unmount(container, *args, **kwargs):
+            unmounting.set()
+            return real_unmount(container, *args, **kwargs)
+
+        held = open(path / "closing-helper.txt", "w")  # noqa: SIM115 - the last engine's helper, still closing a file
+        result: list = []
+        with mock.patch.object(storage.Container, "unmount", unmount):
+            thread = threading.Thread(target=lambda: result.append(profiles.autolock(prof, grace=0.3, poll=0.1)), daemon=True)
+            thread.start()
+            self.assertTrue(unmounting.wait(10), "the watcher never began to lock")
+            env = self.fake_engine()
+            engine = subprocess.Popen([env["NULAVIO_ENGINE"], "--profile", str(path)], env=env)
+            self.addCleanup(lambda: engine.poll() is None and engine.kill())
+            wait_for(lambda: real_running_pid())
+            held.close()
+            seen = len(looks)
+            wait_for(lambda: len(looks) > seen + 5 or not box.mounted())
+            self.assertTrue(box.mounted(), "the volume went while an engine was using it")
+            self.assertTrue(profiles.status(prof)["running"])
+            self.assertTrue(thread.is_alive())
+            self.stop_file.touch()
+            engine.wait(10)
+            thread.join(30)
+        self.assertEqual(result, ["closed"])
+        self.assertFalse(box.mounted())
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o500)
+
+    def test_an_agents_engine_starts_under_the_profiles_state_lock(self):
+        """ProfileTarget checks a protected profile and starts its engine under the profile's state lock, the one the
+        auto-lock watcher locks under: while it is held elsewhere, the agent is refused and nothing is written."""
+        from nulavio_launcher.ai import workspace
+
+        path = self.tmp / "agent"
+        path.mkdir()
+        self.api({"op": "encrypt", "path": str(path), "password": PASSWORD})
+        self.api({"op": "unlock", "path": str(path), "method": "password", "secret": PASSWORD, "autolock": False})
+        box = storage.Container(path)
+        target = workspace.ProfileTarget("ag-1", "Trabalho", path, downloads_dir=self.tmp / "dl")
+
+        def starting(timeout=60.0):
+            with self.assertRaises(storage.StorageError), box._state_lock(wait=0):
+                pass  # held by the start itself
+            return "bidi"
+
+        with mock.patch.object(workspace.Workspace, "start", side_effect=starting) as started:
+            with box._state_lock(), self.assertRaises(workspace.TargetError) as refused:
+                target.start()
+            self.assertEqual(refused.exception.code, "profile-busy")
+            started.assert_not_called()
+            self.assertFalse((path / "user.js").exists())
+            self.assertEqual(target.start(), "bidi")
+            started.assert_called_once()
+        with box._state_lock(wait=0):
+            pass  # and released once the engine runs
 
     def short_lived_engine(self, path: Path, *, killed: bool) -> None:
         """An engine that takes the lock and is gone again within a tenth of a second: killed (the lock

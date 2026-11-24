@@ -16,6 +16,21 @@ this.nulavioProfiles = class extends ExtensionAPI {
     return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles;
   }
 
+  /* From the Shell's start, the engine's own profile menus go through Nulavio's lock check (U-T23). */
+  onStartup() {
+    try {
+      this.module().guardLaunches();
+    } catch (e) {
+      console.error("Nulavio profiles", e);
+    }
+  }
+
+  onShutdown(isAppShutdown) {
+    if (!isAppShutdown) {
+      this.module().unguardLaunches();
+    }
+  }
+
   getAPI(context) {
     const profiles = this.module();
     const call = fn => async (...args) => {
