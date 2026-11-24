@@ -155,6 +155,9 @@ class PasswordsTest(unittest.TestCase):
         )
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        # The page asks the module again which saved site the address imitates (as slow here as the first check).
+        ready = "return document.documentElement?.dataset.ready === 'true';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
         self.assertIn(self.fake + "/login", self.m.execute("return document.getElementById('address').textContent;"))
 
     def test_01e_a_page_the_tab_left_during_the_check_is_not_replaced_and_is_checked_on_return(self):

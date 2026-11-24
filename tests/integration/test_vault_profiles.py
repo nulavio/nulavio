@@ -199,7 +199,10 @@ class LockedGroupProfileTest(unittest.TestCase):
                 [self.vault_id, url],
             )
             self.assertTrue(harness.wait_until(lambda: len(self.unlock_tabs()) == 2, timeout=20), self.unlock_tabs())
-            self.assertTrue(any("u=" in u and "moved-to-the-vault" in u for u in self.unlock_tabs()), self.unlock_tabs())
+            # The page's address names the profile and the id of the held link; the link is read from the routing module.
+            held = [u.split("h=", 1)[1] for u in self.unlock_tabs() if "h=" in u]
+            links = [self.call("return R.held(args[0], 'vault/unlock.html').u;", h).get("ok") or "" for h in held]
+            self.assertTrue(any("moved-to-the-vault" in link for link in links), (self.unlock_tabs(), links))
             time.sleep(2)  # an engine started anyway would have its process and first files by now
             self.assertEqual(self.session.processes_for(self.path), [])
             self.assertEqual(list(self.path.iterdir()), [])
