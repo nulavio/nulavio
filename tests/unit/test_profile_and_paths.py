@@ -158,7 +158,10 @@ class ProfileTest(TempHome):
         with self.assertRaises(paths.UnsafePathError):
             profile.prepare_for_launch(prof, {"engine": "Engine 1", "filter": ""})
         self.assertEqual(other.settings_path.read_bytes(), other_settings)
-        # The launcher's own preview theme is removed only from the profile's own chrome folder.
+        self.assertEqual(doctor.check_seeds(prof), [], "doctor goes on; its profile check reports the profile")
+
+    def test_the_preview_theme_is_removed_only_from_the_profiles_own_chrome_folder(self):
+        prof, other = self.make(), self.make("other")
         css = other.path / "chrome" / "userChrome.css"
         css.parent.mkdir()
         css.write_text(f"/* {profile.PREVIEW_THEME_MARKER} */\n")

@@ -10,7 +10,9 @@ media are empty, and so are the user's runtime folder and Nulavio's own
 folders wherever they are, except for what is put back. /dev is bubblewrap's
 own minimal one (null, zero, random, its own terminals) with only the GPU and
 the cameras put back: no input devices, terminals of the session, HID or other
-hardware nodes. System V IPC is its own too.
+hardware nodes (the terminal `nulavio run` was started from stays the engine's
+standard input; --new-session keeps it from typing into it). System V IPC is
+its own too.
 
 From the runtime folder only the display and sound sockets are put back
 (Wayland, PipeWire, PulseAudio) and KeePassXC's browser socket when it is
