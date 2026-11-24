@@ -18,7 +18,7 @@ Documents: [build](../../docs/architecture/build.md) ("Packages", "Signing in CI
 ## Checks
 
 - `python3 -I tests/run.py unit` (here mostly `test_release_*.py`, `test_openpgp_sign.py`, `test_kms_import_key.py`, `test_track_b.py`, `test_sbom.py`).
-- End to end without AWS: `scripts/release/test_kms_signing.sh`, `test_signed_repo.sh` and `test_apt_repo.sh` (podman, clean containers).
+- End to end without AWS: `scripts/release/test_kms_signing.sh`, `test_signed_repo.sh`, `test_apt_repo.sh` and `test_update_key.sh` (podman, clean containers).
 
 ## Not here
 

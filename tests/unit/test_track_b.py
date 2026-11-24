@@ -810,7 +810,7 @@ class PackagingTest(unittest.TestCase):
         self.assertEqual(
             commands,
             [
-                "exec dnf -y --refresh upgrade --from-repo=nulavio nulavio",
+                'exec dnf -y --refresh "--setopt=nulavio.gpgkey=file://$key" upgrade --from-repo=nulavio nulavio',
                 'apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0',
                 "exec apt-get -q -y --no-remove -o Dpkg::Options::=--force-confold install --only-upgrade nulavio",
             ],
@@ -821,6 +821,41 @@ class PackagingTest(unittest.TestCase):
             self.assertNotIn(weaker, " ".join(commands))
         timer_fields = dict(line.split("=", 1) for line in timer.splitlines() if "=" in line and not line.startswith("#"))
         self.assertEqual((timer_fields["OnCalendar"], timer_fields["Persistent"]), ("*-*-* 00,12:00:00", "true"))
+
+    def test_automatic_updates_on_fedora_take_signing_keys_only_from_the_packaged_key(self):
+        """The unattended dnf run imports signing keys from the key file the RPM installed, never from the repository
+        file's gpgkey address, and refuses without that file; the RPM carries the site's public key there.
+        scripts/release/test_update_key.sh checks the same with dnf itself, in a container."""
+        key = "/usr/share/nulavio/nulavio-packages.asc"
+        update = (ROOT / "packaging" / "linux" / "updates" / "update-nulavio").read_text(encoding="utf-8")
+        dnf = update.split("rpm -q nulavio >/dev/null 2>&1; then\n", 1)[1].split("\nfi\n", 1)[0]
+        steps = [line.strip() for line in dnf.splitlines() if line.strip() and not line.strip().startswith("#")]
+        self.assertEqual(
+            steps,
+            [
+                f"key={key}",
+                '[ -s "$key" ] || { echo "$key is missing: reinstall the nulavio package" >&2; exit 1; }',
+                'exec dnf -y --refresh "--setopt=nulavio.gpgkey=file://$key" upgrade --from-repo=nulavio nulavio',
+            ],
+        )
+        # The RPM installs the site's key at that place, as a plain file (not %config, so `rpm -V` reports a change).
+        spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8").replace("%{_datadir}", "/usr/share")
+        source = re.search(r"(?m)^(Source\d+):\s+nulavio-packages\.asc$", spec)
+        self.assertIsNotNone(source, "the spec carries no nulavio-packages.asc")
+        self.assertIn(f"install -Dm0644 %{{{source.group(1).upper()}}} %{{buildroot}}{key}\n", spec)
+        files = spec.split("\n%files\n", 1)[1].split("\n%changelog", 1)[0]
+        self.assertIn("\n/usr/share/nulavio\n", files)
+        self.assertNotIn("%config", files)
+        make_rpm = (ROOT / "scripts" / "release" / "make_rpm.sh").read_text(encoding="utf-8")
+        self.assertIn('cp "$repo/site/keys/nulavio-packages.asc" "$work/"', make_rpm)
+        # The probe of a clean RPM install checks the file is there and goes with the package.
+        probe = (ROOT / "scripts" / "release" / "updates_probe.sh").read_text(encoding="utf-8")
+        self.assertIn(f'shipped="$shipped {key}"', probe)
+        # The site's repository file keeps its gpgkey address for the first, manual install (the person checks the
+        # fingerprint there), so the unattended run has to override it.
+        repo = (ROOT / "site" / "rpm" / "nulavio.repo").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(repo[0], "[nulavio]")
+        self.assertIn("gpgkey=https://nulavio.net/keys/nulavio-packages.asc", repo)
 
     def test_packages_install_under_system_directories_only(self):
         spec = (ROOT / "packaging" / "rpm" / "nulavio.spec").read_text(encoding="utf-8")
