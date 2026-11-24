@@ -790,6 +790,27 @@ class SearchPrivacyTest(unittest.TestCase):
         self.addCleanup(self.search, "await S.remove(args[0]);", engine)
         self.assertIn("Fixture OS limpo", self.search(names))
 
+    def test_19b_an_opensearch_description_with_a_curated_providers_name_is_its_own_engine(self):
+        """A description that declares a curated provider's name: the engine is listed as its own, with its own
+        suggestion host; the provider is not added under that name; and suggestions are allowed only for the host shown."""
+        self.require_nulavio()
+        url = self.server.url("/opensearch.xml?name=Ecosia")
+        engine = self.search("return S.addOpenSearch({url: args[0]});", url)
+        self.addCleanup(self.search, "await S.remove(args[0]);", engine)
+        listed = self.search("return (await S.list()).find(e => e.id === args[0]);", engine)
+        self.assertEqual((listed["name"], listed["provider"], listed["suggestHost"]), ("Ecosia", None, "127.0.0.1"))
+        for body in ("return S.addProvider('ecosia');", "return S.choose({provider: 'ecosia', privateToo: false});"):
+            with self.subTest(body=body):
+                self.assertEqual(self.search_error(body), "provider-name-taken")
+        self.assertEqual(self.search("return (await S.list()).filter(e => e.name === 'Ecosia').length;"), 1)
+        # The switch in Settings passes the host it named: the provider's host is refused, and nothing changes.
+        refused = self.search_error("return S.setSuggestOptIn(args[0], true, 'ac.ecosia.org');", engine)
+        self.assertEqual(refused, "suggest-host-changed")
+        self.assertNotIn(engine, self.pref("nulavio.search.suggest.optin", ""))
+        self.search("await S.setSuggestOptIn(args[0], true, '127.0.0.1');", engine)
+        self.addCleanup(self.search, "await S.setSuggestOptIn(args[0], false);", engine)
+        self.assertIn(engine, self.pref("nulavio.search.suggest.optin", ""))
+
 
 VAULT = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs')"
 PROFILES = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs').NulavioProfiles"
