@@ -291,8 +291,10 @@ class AddressTest(unittest.TestCase):
                         "view-source:https://user@x.example/", "view-source:", "view-source:http://[::1"):  # fmt: skip
                 with self.subTest(url=url), self.assertRaises(policy.UrlRefused):
                     policy.classify_url(url)
-        for url in ("about:config", "about:reader", "about:blank", "file:///etc/hostname", None, ""):
+        for url in ("about:blank", None, ""):  # no address: nothing for a site list to bound
             self.assertIsNone(policy.host_of(url), url)
+        for url in ("about:config", "about:reader", "file:///etc/hostname"):  # an address with no site: not on any list
+            self.assertEqual(policy.host_of(url), "", url)
         self.assertEqual(policy.host_of("https://docs.example.org/a"), "docs.example.org")
         with self.assertRaises(policy.UrlRefused):
             policy.classify_url("http://[::1")  # the parser refuses it: an answer, not an exception
@@ -300,6 +302,27 @@ class AddressTest(unittest.TestCase):
     def test_origin_drops_path_and_query(self):
         self.assertEqual(policy.origin("https://bank.example:8443/acct?id=123#x"), "https://bank.example:8443")
         self.assertEqual(policy.origin("file:///home/me/secret.txt"), "file:")
+
+    def test_a_host_the_engine_would_not_look_up_is_refused_before_any_lookup(self):
+        # The engine sends a name to its resolver only when it is made of letters, digits and ".-$+_" (net_IsValidDNSHost):
+        # any other host is not one it opens, and a request shows the person nothing the agent wrote as a host.
+        with mock.patch.object(policy.socket, "getaddrinfo", side_effect=AssertionError("looked up")):
+            for url in ("http://local host text/", "http://a<b>c.example/", 'https://ex"ample.org/', "http://a{b}.example/",
+                        "http://allow,this.example/", "http://x;y.example:8080/", "http://a..b.example/"):  # fmt: skip
+                with self.subTest(url=url), self.assertRaises(policy.UrlRefused):
+                    policy.classify_url(url)
+        for url in ("https://my_host.example/", "https://xn--80ak6aa92e.com/", "https://аррӏе.com/", "http://[::1]:8080/"):
+            with self.subTest(url=url):
+                policy.classify_url(url, resolve=False)
+        self.assertEqual(policy.classify_url("https://аррӏе.com/", resolve=False).host, "xn--80ak6aa92e.com")
+
+    def test_a_request_names_the_host_as_the_engine_reads_it(self):
+        self.assertEqual(policy.origin("https://аррӏе.com/x"), "https://xn--80ak6aa92e.com")
+        self.assertEqual(policy.origin("HTTPS://Docs.Example.ORG/a"), "https://docs.example.org")
+        self.assertEqual(policy.origin("http://127.1:8080/"), "http://127.0.0.1:8080")
+        self.assertEqual(policy.origin("http://[::1]:8080/a"), "http://[::1]:8080")
+        self.assertEqual(policy.origin("http://[0:0::1]/"), "http://[::1]")
+        self.assertEqual(policy.origin("view-source:https://аррӏе.com/"), "https://xn--80ak6aa92e.com")
 
 
 class Approve(registry.Approver):
@@ -752,6 +775,46 @@ class AuditTest(Home):
             bridge.require("submit_forms", "https://example.org/", checked=[])
         self.assertEqual(denied.exception.decision.reason, "key-replaced")
         self.assertEqual(approver.asked, [("submit_forms", "https://example.org")])
+
+    def test_a_site_list_also_bounds_addresses_without_a_host(self):
+        # "Only these sites": a file: address has no site, so it is not one of them; local_resources alone does not
+        # open it for such an agent. Without a site list it stays what local_resources allows.
+        agent, _ = registry.add("files", "other", "full_control", domains=["example.org"], accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=Approve("session"))
+        for url in ("file:///etc/passwd", "file:///home/u/", "about:srcdoc"):
+            with self.subTest(url=url):
+                decision = registry.decide(agent["id"], "navigate", host=policy.host_of(url), target=policy.origin(url),
+                                           session_id="s-1", approver=registry.Approver())  # fmt: skip
+                self.assertEqual((decision.allowed, decision.reason), (False, "out-of-scope"))
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="about:blank"),
+            mock.patch.object(tools.Bridge, "bidi", side_effect=AssertionError("navigated")),
+        ):
+            result = bridge.call("navigate", {"tab": "t1", "url": "file:///etc/passwd"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("outside the sites", result["content"][0]["text"])
+        with self.assertRaises(tools.Denied) as denied:
+            bridge.require_url("file:///etc/passwd", checked=[])
+        self.assertEqual(denied.exception.decision.reason, "out-of-scope")
+        page = {"text": "root:x:0:0", "url": "file:///etc/passwd", "title": ""}
+        with (
+            mock.patch.object(tools.Bridge, "_url_of", return_value="file:///etc/passwd"),
+            mock.patch.object(tools.Bridge, "_eval", return_value=page),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            result = bridge.call("page_read", {"tab": "t1"})
+        self.assertTrue(result["isError"], result)
+        self.assertNotIn("root:x", json.dumps(result))
+        self.assertEqual(json.loads(audit.audit_path().read_text().splitlines()[-1])["reason"], "out-of-scope")
+        # No address at all, about:blank and the listed site stay in scope.
+        bridge.require("navigate", checked=[])
+        bridge.require_url("about:blank", checked=[])
+        with mock.patch.object(policy, "_resolves_locally", return_value=False):
+            bridge.require_url("https://docs.example.org/a", checked=[])
+        anywhere, _ = registry.add("anywhere", "other", "full_control", accept_full_control=True)
+        decision = registry.decide(anywhere["id"], "navigate", host=policy.host_of("file:///etc/passwd"), target="file:",
+                                   session_id="s-1", approver=registry.Approver())  # fmt: skip
+        self.assertTrue(decision.allowed)
 
     def test_the_source_viewer_is_refused_before_anything_is_asked(self):
         # LESIS afa509d1: with raw automation on, view-source: took an agent outside its sites. Raw automation is gone

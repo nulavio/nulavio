@@ -141,7 +141,8 @@ def effective_mode(agent: dict, capability: str, session_id: str, at: _dt.dateti
 
 
 def in_scope(agent: dict, host: str | None) -> bool:
-    """An agent with a site list may only act on those sites (and their subdomains)."""
+    """An agent with a site list may only act on those sites (and their subdomains). `host` is host_of(): None when
+    there is no address (nothing to bound), "" for an address with no site (file:, an internal page), never on a list."""
     domains = agent.get("domains") or []
     if not domains or host is None:
         return True
@@ -162,6 +163,10 @@ class Target:
 class UrlRefused(ValueError):
     pass
 
+
+# The only characters the engine sends to its resolver in a name (net_IsValidDNSHost, netwerk/base/nsURLHelper.cpp):
+# RFC 1035 plus "$+_". A host with any other one is not a name the engine looks up or opens.
+DNS_HOST = re.compile(r"[a-z0-9.\-$+_]{1,253}")
 
 LOCAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", ".intranet")
 INTERNAL_SCHEMES = {"about", "file", "chrome", "resource", "moz-extension", "view-source"}
@@ -200,14 +205,15 @@ def subject(url: str | None) -> str | None:
 
 
 def host_of(url: str | None) -> str | None:
-    """The host the site list and the routes are checked against, for any address a tab can be at."""
+    """The host the site list and the routes are checked against, for any address a tab can be at: None when there is
+    no address (nothing, about:blank), "" when the address has no host (file:///…, about:…), which no site list holds."""
     url = subject(url)
-    if not url:
+    if not url or url == "about:blank":
         return None
     try:
-        return urllib.parse.urlsplit(url).hostname
+        return urllib.parse.urlsplit(url).hostname or ""
     except ValueError:
-        return None
+        return ""
 
 
 NAT64 = ipaddress.IPv6Network("64:ff9b::/96")  # carries an IPv4 address a NAT64 gateway reaches
@@ -338,6 +344,14 @@ def classify_url(url: str, resolve: bool = True) -> Target:
             raise UrlRefused("the address has a host the browser would read differently") from None
         if not host:
             raise UrlRefused("the address has no host")
+        if ":" in host:
+            try:
+                ipaddress.IPv6Address(host)
+            except ValueError:
+                raise UrlRefused("the address has a host that is not a valid IPv6 address") from None
+        elif not DNS_HOST.fullmatch(host) or "" in host.split("."):
+            # Before any lookup: such a host never reaches a request, and a permission request would show its text.
+            raise UrlRefused("the address has a host the browser would not look up")
         if ":" not in host and _ends_in_number(host):  # an IPv6 literal has its own syntax
             ipv4 = _whatwg_ipv4(host)
             if ipv4 is None:
@@ -370,7 +384,8 @@ def classify_url(url: str, resolve: bool = True) -> Target:
 
 
 def origin(url: str | None) -> str | None:
-    """scheme://host[:port] for logs: never the path or query."""
+    """scheme://host[:port] for logs and permission requests: never the path or query. The host as the engine writes
+    it (canonical_host: punycode, IPv4 dotted, IPv6 in brackets), never as an agent typed it."""
     if not url:
         return None
     try:
@@ -378,6 +393,8 @@ def origin(url: str | None) -> str | None:
         port = f":{parsed.port}" if parsed.port else ""
     except ValueError:
         return None
-    if parsed.scheme in ("http", "https") and parsed.hostname:
-        return f"{parsed.scheme}://{parsed.hostname}{port}"
-    return f"{parsed.scheme}:" if parsed.scheme else None
+    scheme = parsed.scheme.lower()
+    if scheme in ("http", "https") and parsed.hostname:
+        host = canonical_host(parsed.hostname)
+        return f"{scheme}://[{host}]{port}" if ":" in host else f"{scheme}://{host}{port}"
+    return f"{scheme}:" if scheme else None
