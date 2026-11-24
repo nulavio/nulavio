@@ -629,11 +629,9 @@ class SubstitutedPairingTest(VaultTestCase):
         self.assertEqual(ctx.exception.code, "bad-state")
 
     def test_the_desktops_digits_are_not_known_before_the_hello(self):
-        """U-T7 with someone on both halves (the phone scans their QR, they answer the real one): whoever sends the
-        hello must not be able to work out the desktop's 6 digits before sending it, or they could try hellos
-        offline until those digits equal the phone's. `copy` holds everything that sender has: what the QR shows,
-        and the exchange result (X25519 gives the same from either side, so the desktop's half stands in for the
-        sender's). It lacks only the nonce the desktop keeps back until the hello."""
+        """U-T7: the desktop's 6 digits depend on a value it keeps until the hello is in. `copy` holds what the
+        sender of a hello holds (what the QR shows, and the exchange result, which X25519 gives the same from either
+        side), but not the desktop's nonce."""
         for _ in range(3):
             real = Pairing(self.identity, "Test desktop", clock=self.clock)
             copy = Pairing(self.identity, "Test desktop", clock=self.clock)
