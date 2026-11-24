@@ -2,7 +2,7 @@
 
 Another installed extension can open any Shell page as a top-level tab, with any query string
 (the engine allows a tab to load another extension's page). So the routing pages (ask, blocked),
-the unlock page and the look-alike warning take nothing that decides an action from their address:
+the unlock page and the look-alike warning take no link, rule or site from their address:
 the routing and unlock pages get an id the routing module made when it held the link, and the
 look-alike page has the passwords module check the address again.
 
@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
@@ -37,6 +38,7 @@ const seen = e => e && !e.hidden && e.checkVisibility();
 return {
   ready: document.documentElement.dataset.ready === 'true',
   state: document.body.dataset.state ?? null,
+  title: document.title,
   text: document.querySelector('main').textContent,
   url: (seen(document.getElementById('url')) && document.getElementById('url').textContent) || null,
   buttons: [...document.querySelectorAll('button')].filter(seen).map(b => [b.id || b.className, b.textContent.trim()]),
@@ -93,6 +95,9 @@ class HeldLinksTest(unittest.TestCase):
     def tearDown(self):
         self.m.switch_to(self.home)
         self.call("delete R.openIn; delete R.__calls; delete P.switchTo; delete P.__calls;")
+
+    def message(self, key: str) -> str:
+        return self.m.execute("return browser.i18n.getMessage(arguments[0]);", [key])
 
     def calls(self) -> list:
         return self.call("return [...R.__calls, ...P.__calls];")
@@ -179,6 +184,8 @@ class HeldLinksTest(unittest.TestCase):
         )
         self.assertEqual(page["state"], "invalid", page)  # no saved login in this profile: nothing to compare
         self.assertNotIn("elsewhere.example", page["text"], page)
+        # The tab's title is the page's one title, as with a pair: another extension can read a tab's title.
+        self.assertEqual(page["title"], self.message("lookalikeTitle"), page)
         self.assertEqual(self.call("return W.listConfirmed();"), [])
 
     def test_05_a_held_link_is_shown_only_on_its_own_page_and_for_its_own_profile(self):
@@ -199,6 +206,52 @@ class HeldLinksTest(unittest.TestCase):
         self.assertIsNone(page["url"], page)
         self.press_every_button()
         self.assertFalse(harness.wait_until(self.calls, timeout=3), self.calls())
+
+    def test_06_with_a_saved_login_the_warning_shows_and_remembers_only_the_modules_pair(self):
+        real, fake = "https://paypal.example", "https://paypa1.example/login"  # the pair test_passwords uses
+        self.call(
+            "const info = Cc['@mozilla.org/login-manager/loginInfo;1'].createInstance(Ci.nsILoginInfo);"
+            "info.init(args[0], args[0], null, 'tester', 'artificial-pass-1', 'username', 'password');"
+            "await Services.logins.addLoginAsync(info);",
+            real,
+        )
+        try:
+            self.assertEqual(
+                self.call("return W.checkLogin(args[0]);", fake),
+                {"suspicious": True, "site": "paypa1.example", "similar": "paypal.example"},
+            )
+            # The page's own `site` and `similar` name another pair.
+            page = self.open_from_another_extension(
+                f"passwords/lookalike.html?url={quote(fake, safe='')}&site=elsewhere.example&similar=elsewhere.example"
+            )
+            self.assertEqual(page["state"], "ready", page)
+            self.assertIn("paypal.example", page["text"], page)
+            self.assertNotIn("elsewhere.example", page["text"], page)
+            self.assertEqual(page["title"], self.message("lookalikeTitle"), page)  # the same title as with nothing to compare
+            self.m.execute("document.getElementById('continue').click();")
+            self.m.switch_to(self.home)  # the tab goes on to the address it was opened for
+            confirmed = harness.wait_until(lambda: self.call("return W.listConfirmed();"), timeout=10)
+            self.assertEqual(confirmed, [{"site": "paypa1.example", "similar": "paypal.example"}])
+        finally:
+            self.m.switch_to(self.home)
+            self.call(
+                "W.removeConfirmed('paypa1.example', 'paypal.example');"
+                "for (const login of await Services.logins.getAllLogins()) { Services.logins.removeLogin(login); }"
+            )
+
+    def test_07_the_default_destination_page_tries_again_only_the_profile_it_held(self):
+        held = self.call(
+            "return R.hold('routing/blocked.html', {u: args[0], p: args[1], why: 'launch', by: 'default'});",
+            "https://held.example/default",
+            self.other,
+        )
+        page = self.open_from_another_extension(f"routing/blocked.html?h={held}&p={self.current}")
+        self.assertEqual(page["url"], "https://held.example/default", page)
+        self.assertIn("Bancos", page["buttons"][0][1], page)  # "try again" names the held link's profile
+        self.m.execute("document.querySelector('#actions button').click();")
+        self.m.switch_to(self.home)  # the page closes its tab after the call
+        self.assertTrue(harness.wait_until(self.calls, timeout=10))
+        self.assertEqual(self.calls(), [["openIn", self.other, "https://held.example/default"]])
 
 
 if __name__ == "__main__":
