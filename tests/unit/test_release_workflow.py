@@ -37,7 +37,29 @@ FAKE_AWS = """#!/bin/sh
   printf '%s ' "$@"
   printf '\\n'
 } >> "$FAKE_AWS_LOG"
+# The bucket, for upload_repo.sh's check before it writes (#656): FAKE_AWS_LISTING is what list-objects-v2 prints
+# (the empty listing's shape of aws-cli 2 otherwise), and a download copies from FAKE_AWS_BUCKET.
+case " $* " in
+  *" s3api list-objects-v2 "*)
+    [ -z "${FAKE_AWS_LIST_FAILS:-}" ] || exit 254
+    if [ -n "${FAKE_AWS_LISTING:-}" ]; then cat "$FAKE_AWS_LISTING"; else printf '{"RequestCharged": null}\\n'; fi
+    ;;
+  *" s3 cp s3://"*)
+    shift 2
+    cp "$FAKE_AWS_BUCKET/${3#s3://nulavio-packages/}" "$4"
+    ;;
+esac
 """
+
+
+def hold(test, bucket: Path, key: str, data: str):
+    """Put an object in the stand-in bucket, as an earlier run's upload, and list it."""
+    (bucket / key).parent.mkdir(parents=True, exist_ok=True)
+    (bucket / key).write_text(data)
+    listing = test.tmp / "listing.json"
+    entry = {"Key": key, "LastModified": "2026-11-20T10:00:00+00:00", "Size": len(data)}
+    listing.write_text(json.dumps({"Contents": [entry], "RequestCharged": None}))
+    test.env.update(FAKE_AWS_LISTING=str(listing), FAKE_AWS_BUCKET=str(bucket))
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
@@ -76,11 +98,15 @@ class UploadRepoTest(unittest.TestCase):
         out = self.run_upload()
         self.assertEqual(out.returncode, 0, out.stderr)
         calls = self.log.read_text().splitlines()
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
         for call in calls:
             self.assertIn("key=r2-key secret=r2-secret token=none region=auto checksums=when_required", call)
             self.assertIn("--endpoint-url https://acct.r2.cloudflarestorage.com s3", call)
             self.assertNotIn("--delete", call)
+        # First what the bucket holds in the pool (#656), with s3api's own flags: --only-show-errors is s3's.
+        self.assertIn("s3api list-objects-v2 --bucket nulavio-packages --prefix rpm/x86_64/ --output json", calls[0])
+        self.assertNotIn("--only-show-errors", calls[0])
+        calls = calls[1:]
         self.assertIn("sync", calls[0])
         self.assertIn("--exclude repodata/repomd.xml --exclude repodata/repomd.xml.asc", calls[0])
         self.assertIn("repomd.xml.asc s3://nulavio-packages/rpm/repodata/repomd.xml.asc", calls[1])
@@ -92,6 +118,58 @@ class UploadRepoTest(unittest.TestCase):
         self.assertEqual(out.returncode, 2)
         self.assertIn("not a signed repository", out.stderr)
         self.assertFalse(self.log.exists())
+
+    def uploads(self) -> list[str]:
+        """The calls that write to the bucket."""
+        calls = self.log.read_text().splitlines() if self.log.exists() else []
+        return [call for call in calls if " sync " in call or f" cp {self.repo}" in call]
+
+    def test_a_package_the_bucket_holds_with_other_bytes_is_never_overwritten(self):
+        # #656: a run that uploaded 160.0-0.3 and stopped before its draft left no tag and no draft; a fresh run that
+        # built 160.0-0.3 again stops here, before anything of the repository is written.
+        key = "rpm/x86_64/nulavio-160.0-0.3.fc44.x86_64.rpm"
+        hold(self, self.tmp / "bucket", key, "the earlier run's build")
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 3, out.stderr)
+        self.assertIn(f"nulavio-packages/{key}, uploaded 2026-11-20T10:00:00+00:00, holds other bytes", out.stderr)
+        self.assertIn("Re-run that run's publish job, or retire that run", out.stderr)
+        self.assertIn('"After a failed publish"', out.stderr)
+        self.assertEqual(self.uploads(), [])
+        self.assertIn(f"s3 cp s3://nulavio-packages/{key} ", self.log.read_text())  # it was compared, by download
+
+    def test_the_same_bytes_are_uploaded_again(self):
+        # The same run's publish job, run again after a later step failed: the signed bytes are the ones in the bucket.
+        hold(self, self.tmp / "bucket", "rpm/x86_64/nulavio-160.0-0.3.fc44.x86_64.rpm", "x")
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(len(self.uploads()), 3)
+        # Another package in the pool (an older release) is neither downloaded nor in the way.
+        hold(self, self.tmp / "bucket", "rpm/x86_64/nulavio-160.0-0.2.fc44.x86_64.rpm", "older")
+        self.log.unlink()
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn(" cp s3://", self.log.read_text())
+
+    def test_a_listing_that_fails_or_cannot_be_read_stops_the_upload(self):
+        self.env["FAKE_AWS_LIST_FAILS"] = "1"
+        out = self.run_upload()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.uploads(), [])
+        del self.env["FAKE_AWS_LIST_FAILS"]
+        self.log.unlink()
+        listing = self.tmp / "listing.json"
+        listing.write_text("not json")
+        self.env["FAKE_AWS_LISTING"] = str(listing)
+        out = self.run_upload()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.uploads(), [])
+
+    def test_a_download_that_fails_stops_the_upload(self):
+        hold(self, self.tmp / "bucket", "rpm/x86_64/nulavio-160.0-0.3.fc44.x86_64.rpm", "x")
+        (self.tmp / "bucket" / "rpm" / "x86_64" / "nulavio-160.0-0.3.fc44.x86_64.rpm").unlink()
+        out = self.run_upload()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.uploads(), [])
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
@@ -121,7 +199,10 @@ class UploadAptRepoTest(unittest.TestCase):
         out = self.run_upload()
         self.assertEqual(out.returncode, 0, out.stderr)
         calls = self.log.read_text().splitlines()
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 5)
+        self.assertIn("s3api list-objects-v2 --bucket nulavio-packages --prefix apt/pool/main/n/nulavio/ --output json",
+                      calls[0])  # fmt: skip
+        calls = calls[1:]
         self.assertIn("sync", calls[0])
         self.assertIn("s3://nulavio-packages/apt/", calls[0])
         self.assertIn(
@@ -144,6 +225,18 @@ class UploadAptRepoTest(unittest.TestCase):
         self.assertEqual(out.returncode, 2)
         self.assertIn("neither a staged rpm/ nor apt/", out.stderr)
         self.assertFalse(self.log.exists())
+
+    def test_a_deb_the_bucket_holds_with_other_bytes_is_never_overwritten(self):  # #656
+        key = "apt/pool/main/n/nulavio/nulavio_160.0-0.4_amd64.deb"
+        hold(self, self.tmp / "bucket", key, "the earlier run's build")
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 3, out.stderr)
+        self.assertIn(f"nulavio-packages/{key}, uploaded 2026-11-20T10:00:00+00:00, holds other bytes", out.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual([call for call in calls if " sync " in call or f" cp {self.repo}" in call], [])
+        (self.tmp / "bucket" / key).write_text("x")  # the same bytes: uploaded again
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
 
 
 class ReleaseWorkflowTest(unittest.TestCase):
@@ -259,6 +352,26 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # is not <version>-<release>, which not-older would otherwise drop without a word.
         self.assertIn('if ! [[ "$served" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
         self.assertNotIn("${{", step.split("run: |", 1)[1])
+
+    def test_the_build_takes_a_revision_above_the_served_one_and_builds_that_one(self):
+        # #656: a run that uploaded and stopped before its draft left no tag and no draft, only the bucket's index.
+        # The build job counts the served version, computes the revision once, and both the whats-new check and the
+        # rehearsal use that one value.
+        step = self.build[self.build.index("id: revision") : self.build.index("- name: What is new in this version")]
+        self.assertIn("served=$(curl -fsSL --proto '=https'", step)
+        self.assertIn("sed -n 's/^URIs: //p' site/apt/nulavio.sources", step)
+        self.assertIn('if ! [[ "$served" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
+        self.assertIn('release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served")',
+                      step)  # fmt: skip
+        self.assertIn('echo "release=$release" >> "$GITHUB_OUTPUT"', step)
+        self.assertNotIn("${{", step.split("run: |", 1)[1])
+        self.assertEqual(self.build.count("next-release"), 1)
+        self.assertLess(self.build.index("id: revision"), self.build.index("whats_new.py require"))
+        self.assertIn('RELEASE: ${{ steps.revision.outputs.release }}\n        run: python3 -I scripts/release/whats_new.py '
+                      'require "$FIREFOX-$RELEASE"', self.build)  # fmt: skip
+        start = self.build.index("- name: Rehearse the release")
+        rehearse = self.build[start : self.build.index("run: scripts/release/rehearse_release.sh", start)]
+        self.assertIn("NULAVIO_RELEASE: ${{ steps.revision.outputs.release }}", rehearse)
 
     def test_only_the_release_jobs_name_the_signing_and_upload_environments(self):
         # `release-upload` has no required reviewer (#334): any job on main that named it would get the R2 token
