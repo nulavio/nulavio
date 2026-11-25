@@ -10,7 +10,9 @@
    checked. A change of address inside the document (history.replaceState, a new fragment) keeps the
    origin, so it does not cancel the warning; a document the tab has left (another page, or this one
    kept in the back-forward cache) is never replaced. The answer to the child says whether a
-   decision was made for this document: false when it was not, so the child asks again. */
+   decision was made for this document: false when it was not, so the child asks again. Nothing is
+   decided either while a Primary Password is set and not yet entered: the module compares nothing
+   rather than ask for it, and the person's next input in a password field asks again. */
 
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
@@ -26,7 +28,7 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     const url = checked?.spec;
     const verdict = url ? await lazy.NulavioPasswords.checkLogin(url) : { suspicious: false };
     if (!verdict.suspicious) {
-      return true;
+      return !verdict.locked;
     }
     // After the wait. `this.manager` is null once this document's actor is gone, and
     // `this.browsingContext` would then throw: read the manager first.

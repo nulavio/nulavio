@@ -1293,6 +1293,7 @@
   "warnMissingHeadline": {"message": "Este download não está mais na lista"},
   "warnOpenFolder": {"message": "Abrir pasta de downloads"},
   "warnCloseTab": {"message": "Fechar aba"},
+  "tabCloseFailed": {"message": "Esta aba não pôde ser fechada. Feche-a pela barra de abas."},
   "guardEmptyTitle": {"message": "Nenhuma mudança para revisar"},
   "guardIntroEmpty": {"message": "O Nulavio Guard compara este perfil com a última vez que o Nulavio abriu, e nada mudou por fora desde então."},
   "guardEmptyCardTitle": {"message": "Nada para revisar"},

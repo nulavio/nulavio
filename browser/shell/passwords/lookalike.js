@@ -7,6 +7,7 @@
    can open this page with parameters of its own, and the page names no site the module did not. */
 
 import { localize, t } from "../lib/i18n.js";
+import { closeOwnTab } from "../lib/tabs.js";
 import { announce } from "../lib/ui.js";
 
 const params = new URLSearchParams(location.search);
@@ -65,11 +66,7 @@ if (url && HOST.test(similar) && site) {
   }
   const close = document.getElementById("go-real");
   close.textContent = t("warnCloseTab");
-  close.addEventListener("click", async () => {
-    const tab = await browser.tabs.getCurrent();
-    const siblings = await browser.tabs.query({ windowId: tab.windowId });
-    return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
-  });
+  close.addEventListener("click", () => closeOwnTab());
   document.body.dataset.state = "invalid";
   close.focus();
 }

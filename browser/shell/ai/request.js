@@ -8,6 +8,7 @@
    <body data-state>: loading, asking, answered, expired, error. */
 
 import { localize, t } from "../lib/i18n.js";
+import { closeOwnTabSoon } from "../lib/tabs.js";
 import { announce, errorText, icon } from "../lib/ui.js";
 
 const ai = browser.nulavioAI;
@@ -20,10 +21,8 @@ function setState(state, message = "", level = "ok") {
   announce(message, level);
 }
 
-async function closeSoon() {
-  const tab = await browser.tabs.getCurrent();
-  const siblings = await browser.tabs.query({ windowId: tab.windowId });
-  setTimeout(() => (siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" })), 1200);
+function closeSoon() {
+  closeOwnTabSoon(1200);
 }
 
 function expired() {
@@ -66,7 +65,7 @@ async function answer(value) {
   try {
     await ai.answer(id, value);
     setState("answered", t(value === "deny" ? "aiAnsweredDeny" : value === "session" ? "aiAnsweredSession" : "aiAnsweredOnce"));
-    await closeSoon();
+    closeSoon();
   } catch (e) {
     const expired = e?.message === "invalid"; // answered elsewhere or timed out: a warning, not a failure
     setState(expired ? "expired" : "error", expired ? t("aiRequestExpired") : errorText(e), expired ? "warn" : "error");

@@ -65,6 +65,11 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertIs(case["decided"], True)
         self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None})
 
+    def test_a_locked_primary_password_decides_nothing_so_the_next_input_asks_again(self):
+        # The module compared nothing rather than ask for the Primary Password (#708): the child asks again.
+        case = self.cases["parent_primary_password_locked"]
+        self.assertEqual((case["warned"], case["decided"]), (False, False), case)
+
     def test_a_change_of_address_inside_the_document_does_not_cancel_the_warning(self):
         case = self.cases["parent_replace_state"]
         self.assertTrue(case["warned"], case)
