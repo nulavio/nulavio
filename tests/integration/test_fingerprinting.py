@@ -1120,6 +1120,13 @@ class FingerprintingTest(unittest.TestCase):
         private = next(iter(set(self.m.window_handles()) - before))
         self.m.switch_to(private)
         try:
+            # The new window's first page must have finished loading: otherwise it can replace the navigation below.
+            ready = (
+                "return Boolean(window.gBrowserInit && gBrowserInit.delayedStartupFinished)"
+                " && gBrowser.selectedBrowser.currentURI?.spec === 'about:privatebrowsing'"
+                " && !gBrowser.selectedBrowser.webProgress.isLoadingDocument;"
+            )
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(ready), 20), "the private window never started")
             self.assertTrue(self.m.chrome("return PrivateBrowsingUtils.isWindowPrivate(window);"))
             self.assertEqual(self.measure("127.0.0.1")["screen"]["size"], "1920x1080")
             # The shield's switch in a private window is kept apart from the ordinary windows' (review of #375).
