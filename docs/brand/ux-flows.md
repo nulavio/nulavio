@@ -129,8 +129,8 @@ The panel/Library no-Open guards and safe actions are unchanged.
 ## J. Ask the assistant about the page you are on
 
 1. In the side panel, **+ Incluir esta página: Guia** (the page's title) is an offer; nothing is included until the user clicks it.
-2. The panel shows the page as an item that goes with the next message, for example "Texto da página · só da aba “Guia” · docs.example". It names the recipient and has a remove control (×).
-3. **Enviar** (or Ctrl+Enter) sends the question with that tab's text. The status says "Enviado para 127.0.0.1…" (the recipient, here a local model) with no check mark, then "Resposta pronta." The answer sits under a "Resposta" heading, and a receipt says what went ("N caracteres desta página…" or "Só a pergunta…").
+2. The panel shows the page as an item that goes with the next message, for example "Texto, título e endereço da página · só da aba “Guia” · https://docs.example/guia/integracao": the address as it goes with the text, origin and path, never its query or fragment (#653). It names the recipient and has a remove control (×).
+3. **Enviar** (or Ctrl+Enter) sends the question with that tab's text. The status says "Enviado para 127.0.0.1…" (the recipient, here a local model) with no check mark, then "Resposta pronta." The answer sits under a "Resposta" heading, and a receipt says what went ("N caracteres do texto desta página, com o título e o endereço…" or "Só a pergunta…").
 4. The item leaves with that message, and every follow-up goes without it until the user includes a page again. **Resumir esta página** includes the page shown at that moment, for that one message.
 5. If the user selects another tab, the item leaves, and the panel says "“Guia” era de outra aba e saiu da mensagem" and offers the new page. If the included tab goes to another address or closes, the item leaves the same way ("… não está mais nesta aba …"). If the tab changes between the click and Send, nothing is sent and the panel asks the user to include the page again.
 

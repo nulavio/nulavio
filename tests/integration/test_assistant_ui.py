@@ -487,7 +487,6 @@ class AssistantUiTest(unittest.TestCase):
 
     def test_06_the_side_panel_includes_the_page_next_to_it_for_one_message(self):
         url = self.server.url("/page/Artigo")
-        host = url.split("/")[2]
         self.select_new_tab(url)
         view = self.show_sidebar()
         self.assertEqual(view["state"], "ready")
@@ -508,7 +507,7 @@ class AssistantUiTest(unittest.TestCase):
         self.panel("document.getElementById('include-page').click();")
         view = self.wait_view(lambda v: v["attached"])
         self.assertEqual(self.provider.count, before)  # nothing leaves before Send
-        self.assertEqual(view["attached"], f"só da aba “Artigo” · {host}")
+        self.assertEqual(view["attached"], f"só da aba “Artigo” · {url}")  # the address as it goes (#653)
         self.assertRegex(view["size"], r"^\d+ caracteres$")
         self.assertEqual(view["heading"], f"Vai junto com a próxima mensagem, para {self.recipient()}")
         self.assertEqual(view["remove"], "Remover a página “Artigo” da mensagem")
@@ -525,7 +524,8 @@ class AssistantUiTest(unittest.TestCase):
         self.assertIn("Artigo", self.sent_since(before))
         self.assertRegex(
             view["receipt"],
-            rf"^\d+ caracteres desta página foram enviados para {re.escape(self.recipient())}, [\d.]+ no total\.$",
+            r"^\d+ caracteres do texto desta página, com o título e o endereço,"
+            rf" foram enviados para {re.escape(self.recipient())}, [\d.]+ no total\.$",
         )
         # Consent is per message: the item left with the message. The conversation keeps the copy that went,
         # for the same recipient, and says so (Q1); a new conversation goes without it.
@@ -1425,7 +1425,7 @@ class AssistantUiTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))  # opened in this window
         view = self.wait_view(lambda v: v["attached"])
         self.assertTrue(self.panel("return document.querySelector('#chips li[data-kind=selection]') !== null;"))
-        self.assertEqual(view["attached"], f"só da aba “long-page” · {url.split('/')[2]}")
+        self.assertEqual(view["attached"], f"só da aba “long-page” · {self.server.url('/long-page')}")  # never the query (#653)
         self.assertTrue(harness.wait_until(lambda: self.focused_in_panel() == "prompt", 10))
         self.assertEqual(self.provider.count, before)  # nothing went
         self.type("O que diz a seleção?")
@@ -1538,7 +1538,7 @@ class AssistantUiTest(unittest.TestCase):
         self.m.chrome(actions + "Q.getAction('nulavio-assistant').onPick(null, {browserWindow: window});")
         self.assertTrue(harness.wait_until(self.sidebar_shows_assistant, 10))
         view = self.wait_view(lambda v: v["attached"])
-        self.assertEqual(view["attached"], f"só da aba “Acao” · {url.split('/')[2]}")
+        self.assertEqual(view["attached"], f"só da aba “Acao” · {url}")
         self.assertEqual(self.provider.count, before)
         # With a private window in front, the action is not offered.
         handles = set(self.m.window_handles())
@@ -1828,6 +1828,64 @@ class AssistantUiTest(unittest.TestCase):
         chrome_async(self.m, f"return await {AI}.setStopped(false);")
         self.show_sidebar(reload=True)
         self.wait_view(lambda v: v["state"] == "ready")
+
+    def test_40_the_address_goes_and_shows_without_its_user_part_query_or_fragment(self):
+        """#653: an included page's address goes to the provider as its origin and path, which the item shows
+        before Send; never its `?query` or `#fragment` (a reset token, a key the browser never sends), in the
+        page, the conversation's copy or a selection's frame (which also carries a user part here), nor as the
+        title of a page without one. The size the panel shows is still what goes."""
+        base = self.server.url("/page/Recibo")
+        url = base + "?reset=RESET-MARK-653#part=FRAGMENT-MARK-653"
+        markers = ("RESET-MARK-653", "FRAGMENT-MARK-653", "reset=", "#part", "ANA-USER", "S3NHA", "SIGNED-653", "FRAME-MARK-653")
+        start = self.provider.count
+        self.close_other_tabs()
+        self.select_new_tab(url)
+        self.show_sidebar(reload=True)
+        self.wait_view(lambda v: v["offer"] == "+ Incluir esta página: Recibo")
+        self.panel("document.getElementById('include-page').click();")
+        view = self.wait_view(lambda v: v["attached"])
+        self.assertEqual(view["attached"], f"só da aba “Recibo” · {base}")
+        self.assertEqual(self.panel("return document.querySelector('#chips li span span').textContent;"),
+                         "Texto, título e endereço da página")  # fmt: skip
+        self.shoot_window("sidebar-address")
+        before = self.provider.count
+        view = self.ask_panel("Do que trata a página?")
+        self.assertIn(f"Page content (untrusted, from {base}, title", self.sent_since(before))
+        self.assertRegex(view["receipt"], r"^\d+ caracteres do texto desta página, com o título e o endereço, foram enviados")
+        # The next question carries the copy that went, with the same address; the earlier turn names it.
+        self.ask_panel("E o prazo?")
+        self.assertIn(f"from {base}, title", json.dumps(self.user_turns()[0], ensure_ascii=False))
+        hints = self.panel("return [...document.querySelectorAll('#thread .hint')].map(p => p.textContent);")
+        self.assertIn(f"Com a página “Recibo” · {base}", hints)
+        # A selection in a frame: the frame's address as it goes, under the item, and in the request.
+        self.panel("document.getElementById('new-thread').click();")
+        tab = chrome_async(self.m, f"return {TABS}.getId(gBrowser.selectedTab);")["ok"]
+        frame = f"http://ANA-USER:S3NHA@127.0.0.1:{self.server.port}/frame/x?sig=SIGNED-653#part=FRAME-MARK-653"
+        offer = (
+            f"return await {AI}.assistantOffer("
+            "{kind: 'selection', pageUrl: args[0], frameUrl: args[1], text: args[2]}, args[3]);"
+        )
+        chrome_async(self.m, offer, [url, frame, "Texto selecionado no quadro.", tab])
+        self.wait_view(lambda v: v["attached"])
+        shown = self.panel("return document.querySelector('#chips [data-part=frame]')?.textContent ?? null;")
+        self.assertEqual(shown, f"de um quadro em {self.server.url('/frame/x')}")
+        before = self.provider.count
+        self.ask_panel("O que diz a seleção?")
+        self.assertIn(f"from {base}, in a frame from {self.server.url('/frame/x')}, title", self.sent_since(before))
+        # A page without a title goes by the address that is sent, never the full one.
+        self.panel("document.getElementById('new-thread').click();")
+        untitled = self.server.url("/untitled")
+        self.go(untitled + "?reset=RESET-MARK-653#part=FRAGMENT-MARK-653")
+        self.wait_view(lambda v: v["offer"] == f"+ Incluir esta página: {untitled}")
+        self.panel("document.getElementById('include-page').click();")
+        view = self.wait_view(lambda v: v["attached"])
+        self.assertEqual(view["attached"], f"só da aba “{untitled}” · {untitled}")
+        self.ask_panel("Do que trata?")
+        sent = self.sent_since(start)
+        self.assertEqual(self.provider.count, start + 4)
+        for marker in markers:
+            self.assertNotIn(marker, sent)
+        self.close_other_tabs()
 
 
 if __name__ == "__main__":

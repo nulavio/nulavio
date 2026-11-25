@@ -459,6 +459,9 @@ class FixtureServer:
                 html,
                 {},
             )
+        if path == "/untitled":
+            # Assistant fixture (tests/integration/test_assistant_ui.py): a page without a title.
+            return b"<!doctype html><p id=text>Uma pagina sem titulo.</p>", html, {}
         if path == "/long-page":
             # Assistant fixture (tests/integration/test_assistant_ui.py): about `n` characters of visible
             # text in paragraphs, accents included, to check where an included page is cut.

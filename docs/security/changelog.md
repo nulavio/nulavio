@@ -29,6 +29,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+**Nulavio fixes**:
+
+- Assistant (#653): an included page's address now goes to the provider as its origin and path only. Until 160.0.1-0.3 the whole address went with the page text and with every later question of the conversation, its `?query` and `#fragment` included (a sign-in or reset token, a signed download, a key the browser itself never sends to a server), while the panel named only the host. The same holds for a selected text and its frame, and a page without a title no longer goes by its full address. The item before Send now shows the address that goes, and the receipt says the title and address went with the text. A path can still carry a token of its own (R43). Nothing to do: it comes with the update.
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.
