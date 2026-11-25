@@ -88,8 +88,16 @@ class WindowTitleTest(unittest.TestCase):
         private = (set(self.m.window_handles()) - handles).pop()
         self.m.switch_to(private)
         try:
+            # The new window is ready for a navigation once its delayed start-up has run and its first page has
+            # loaded; a navigation sent before that can be replaced by the window's own first page.
+            ready = (
+                "return Boolean(window.gBrowserInit && gBrowserInit.delayedStartupFinished)"
+                " && !gBrowser.selectedBrowser.webProgress.isLoadingDocument;"
+            )
+            self.assertTrue(harness.wait_until(lambda: self.m.chrome(ready), 20), "the private window never started")
             self.m.navigate(self.server.url("/page/Privada-secreta"))
-            self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.title") == "Privada-secreta", 10))
+            page = "return [document.title, location.href];"
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(page)[0] == "Privada-secreta", 10), self.m.execute(page))
             self.assertFalse(harness.wait_until(lambda: "Privada-secreta" in self.m.chrome(TITLE), 2), self.m.chrome(TITLE))
         finally:
             self.m.send("WebDriver:CloseWindow")
