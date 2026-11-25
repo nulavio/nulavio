@@ -1,5 +1,7 @@
 # Independent review of the Vault and the release chain: scope packet
 
+A review of everything Nulavio ships, by AI models, was done separately in November 2026: [full review](full-review-2026-11.md) (#454).
+
 Status: prepared 2026-11-14 for #224, not yet sent. The reviewer and the terms are the maintainer's to choose (an outside engagement); nothing here is agreed with anyone yet. This page is what the reviewer receives, together with a commit of this repository.
 
 The [scope of 1.0](../product/release-criteria.md#scope-of-10-decided-2026-11-04) asks for "an independent review of the Vault and of the release chain with its findings fixed or recorded" (decision D11 in the [execution plan](../product/execution-plan.md): the audit is limited to those two areas). Every pull request gets a review of its own, and the riskier ones a second, independent one ([pull requests](../process/pull-requests.md#review-and-merging)), but those are coding agents reading one change at a time. Nobody outside the project has read either area as a whole.
