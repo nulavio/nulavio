@@ -161,6 +161,9 @@ class ConfinedThroughLinksTest(unittest.TestCase):
         (cls.disk / "share").mkdir(parents=True)
         (cls.disk / "Downloads").mkdir()
         (cls.user / ".local").mkdir(parents=True)
+        (cls.user / ".config").mkdir()
+        # The desktop's own setting, which both the engine and the launcher read.
+        (cls.user / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/Downloads"\n')
         (cls.user / "Downloads").symlink_to(cls.disk / "Downloads")
         (cls.user / ".local/share").symlink_to(cls.disk / "share")
         if session.home.exists():  # the harness's seeded cache
