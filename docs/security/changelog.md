@@ -29,6 +29,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+**Nulavio fixes**:
+
+- **Look-alike login warning and the Primary Password** (#708): with a Primary Password set and not yet entered, using a password field on any site could ask for it, as the check read every saved login to learn their sites. The check now reads nothing until the person has entered the Primary Password where the engine asks for it (a site with a matching login); the next use of a password field after that is checked. Before that, a look-alike is not caught (R41). Nothing to do.
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.

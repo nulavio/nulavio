@@ -251,8 +251,18 @@ class Passwords {
 
   // -- flow D ------------------------------------------------------------------------------
 
+  /* The sites of the saved logins, or null while a Primary Password is set and not entered in this session.
+     Reading the logins decrypts them, and with the token locked that asks for the Primary Password, on
+     whatever site the person is on: the engine's own fill asks only on a site with a matching login, and
+     no other call lists the logins' sites without decrypting them. So the check waits for the person to
+     unlock the token where the engine asks for it, and nothing is kept meanwhile (R41). isLoggedIn is
+     also false while the store starts, which is why its start is awaited first. */
   async #sites() {
     if (!this.#savedSites) {
+      await Services.logins.initializationPromise;
+      if (!Services.logins.isLoggedIn) {
+        return null;
+      }
       const logins = await Services.logins.getAllLogins();
       const sites = new Set();
       for (const login of logins) {
@@ -278,7 +288,10 @@ class Passwords {
     }
   }
 
-  /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null. */
+  /**
+   * The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null.
+   * `{ locked: true }` when the saved logins cannot be read without asking for the Primary Password.
+   */
   async #lookalike(url) {
     let parsed;
     try {
@@ -289,7 +302,11 @@ class Passwords {
     if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname) {
       return null;
     }
-    const similar = lookalikeOf(parsed.hostname, await this.#sites());
+    const saved = await this.#sites();
+    if (!saved) {
+      return { locked: true };
+    }
+    const similar = lookalikeOf(parsed.hostname, saved);
     const pair = similar ? pairEntry(siteOf(parsed.hostname), similar) : null;
     if (!similar || this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair)) {
       return null;
@@ -300,9 +317,13 @@ class Passwords {
   /**
    * Whether a password field on `url` belongs to a site that imitates one with a saved login. Also what
    * the warning page shows: it passes only the address it was opened for, and names what this returns.
+   * `locked: true` says that nothing was compared, as the Primary Password has not been entered yet.
    */
   async checkLogin(url) {
     const found = await this.#lookalike(url);
+    if (found?.locked) {
+      return { suspicious: false, locked: true };
+    }
     return found ? { suspicious: true, site: displayHost(found.site), similar: found.similar } : { suspicious: false };
   }
 
@@ -350,7 +371,7 @@ class Passwords {
    */
   async dismissFor(url) {
     const found = await this.#lookalike(url);
-    if (!found) {
+    if (!found || found.locked) {
       return { dismissed: false };
     }
     this.dismiss(found.site, found.similar);
