@@ -29,6 +29,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+**Nulavio fixes**:
+
+- Confined mode (`--confined`, #711): when `~/Downloads` or the data folder above a profile was a symbolic link, for example to another disk, the confined browser found an empty folder at the path it was given. Files downloaded there, or a whole profile, were then kept in memory and lost when the browser closed. Each folder is now also put back at the path the browser uses, so downloads land in the real folder and the real profile opens. A `Downloads` link to a folder that is missing refuses the confined start, where it stopped with a Python error before. Nothing to do: it comes with the update. Files saved that way before the update are already lost.
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.

@@ -4,7 +4,11 @@
 namespace where the home folder is an empty in-memory folder with only these
 put back: the profile and the Downloads folder (read-write), and the few
 read-only settings a desktop browser needs (fonts, themes, the desktop's
-folder names, registered native-messaging hosts). The rest of the system is
+folder names, registered native-messaging hosts). The profile and Downloads
+are put back at the paths the browser is given too, when those go through a
+symlink in a hidden folder (a `~/Downloads` link to another disk, a data
+folder reached through a link), since that link is not there inside (#711).
+The rest of the system is
 visible read-only, as for any program; /tmp, /var/tmp, /dev/shm and removable
 media are empty, and so are the user's runtime folder and Nulavio's own
 folders wherever they are, except for what is put back. /dev is bubblewrap's
@@ -173,6 +177,47 @@ def nulavio_dirs() -> list[Path]:
     return found
 
 
+def _inside_hidden(path: Path, hidden: list[Path]) -> bool:
+    return any(path != folder and path.is_relative_to(folder) for folder in hidden)
+
+
+def seen_inside(path: Path, hidden: list[Path]) -> Path | None:
+    """Where a folder must also be bound so that `path` reaches it inside, or None when its resolved path does.
+
+    A hidden folder is empty inside, so a symlink in it is not there. `path` is followed as the kernel would follow
+    it inside: a link that is still visible is followed, and the first link met in a hidden folder ends the walk.
+    The path from that link on is returned; bubblewrap makes plain folders for it in the empty one.
+    """
+    if not path.is_absolute():
+        raise ConfineError(f"not starting: {path} is not an absolute path")
+    pending = list(reversed(path.parts[1:]))
+    current, links = Path("/"), 0
+    while pending:
+        name = pending.pop()
+        if name in ("", "."):
+            continue
+        if name == "..":
+            current = current.parent
+            continue
+        candidate = current / name
+        if not candidate.is_symlink():
+            current = candidate
+            continue
+        rest = list(reversed(pending))
+        if _inside_hidden(candidate, hidden):
+            if ".." in rest:
+                raise ConfineError(f"not starting: {path} goes through a link and then '..'; give a plain path")
+            return candidate.joinpath(*rest)
+        links += 1
+        if links > 40:  # the kernel's own limit
+            raise ConfineError(f"not starting: too many levels of symbolic links in {path}")
+        target = Path(os.readlink(candidate))
+        if target.is_absolute():
+            current = Path("/")
+        pending.extend(reversed(target.parts[1:] if target.is_absolute() else target.parts))
+    return None
+
+
 def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised: bool = False,
          home: Path | None = None, binary: str | None = None) -> list[str]:  # fmt: skip
     """The engine command inside bubblewrap. Paths must exist; the Downloads folder is created if missing.
@@ -191,8 +236,17 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
             "session, or run without --confined"
         )
     binary = binary or check()
+    profile_dir = Path(profile_dir)
+    if not profile_dir.is_absolute() or not profile_dir.is_dir():
+        raise ConfineError(f"not starting: the profile folder {profile_dir} is not there")
     downloads = download_dir(home)
-    downloads.mkdir(parents=True, exist_ok=True)
+    try:
+        downloads.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ConfineError(
+            f"not starting: the Downloads folder {downloads} is not a folder and cannot be made ({exc.strerror}); "
+            "if it is a link, the folder it points to is missing. Make that folder, or run without --confined"
+        ) from None
     # Writable /proc: the engine maps user ids for its own content sandboxes there. bubblewrap's own /dev, with
     # only the GPU and cameras put back (--dev-bind: device nodes work only on such a mount); its own System V IPC.
     args = [binary, "--ro-bind", "/", "/", "--dev", "/dev", "--bind", "/proc", "/proc", "--unshare-ipc"]
@@ -201,11 +255,13 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     # Hidden: empty in-memory folders. A socket under a read-only mount still accepts connections, so the runtime
     # folder is hidden whole rather than left read-only.
     hidden = [Path("/home"), home, *(Path(f) for f in EMPTY_DIRS), *runtime, *nulavio_dirs()]
+    emptied: list[Path] = []
     for folder in sorted(hidden, key=lambda f: len(f.parts)):  # a folder before those inside it
         if folder.is_dir() and not folder.is_symlink():  # /home is a link on some systems
             # A runtime folder stays private (0700), as programs that use it check.
             args += ["--perms", "0700"] if folder in runtime else []
             args += ["--tmpfs", str(folder)]
+            emptied.append(folder)
     # Put back.
     sockets = [wayland] if wayland else []
     if socket_dir is not None:
@@ -218,8 +274,15 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
             args += ["--ro-bind", str(path), str(path)]
     engine_dir = Path(engine_dir).resolve()
     args += ["--ro-bind", str(engine_dir), str(engine_dir)]  # it may live under a hidden folder
-    for path in (Path(profile_dir).resolve(), downloads.resolve()):
-        args += ["--bind", str(path), str(path)]
+    # Writable: the profile and Downloads, at their resolved paths, and also at the paths the browser is given when
+    # those go through a link that is hidden inside: otherwise the engine would make an empty folder there, in
+    # memory, and a download or a whole profile would be lost when it closes (#711).
+    for path in (profile_dir, downloads):
+        real = path.resolve()
+        args += ["--bind", str(real), str(real)]
+        seen = seen_inside(path, emptied)
+        if seen is not None and seen != real:
+            args += ["--bind", str(real), str(seen)]
     for name in UNSET_ENV:
         args += ["--unsetenv", name]
     args += ["--chdir", str(home), "--new-session"]

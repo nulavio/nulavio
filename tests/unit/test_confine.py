@@ -191,6 +191,67 @@ class WrapTest(unittest.TestCase):
         with mock.patch.object(confine, "bwrap", return_value=None), self.assertRaises(confine.ConfineError):
             confine.check()
 
+    def binds(self, args: list[str]) -> list[tuple[str, str]]:
+        options = args[: args.index("--")]
+        return [(options[i + 1], options[i + 2]) for i, a in enumerate(options) if a == "--bind"]
+
+    def test_a_downloads_folder_through_a_link_is_put_back_where_the_browser_looks(self):
+        # ~/Downloads as a link to another disk (#711): the link is in the hidden home folder, so the folder is bound
+        # at ~/Downloads too, or the engine would make an empty one there, in memory.
+        real = self.tmp / "disk/Downloads"
+        real.mkdir(parents=True)
+        (self.home / "Downloads").symlink_to(real)
+        binds = self.binds(self.wrap())
+        self.assertIn((str(real.resolve()), str(real.resolve())), binds)
+        self.assertIn((str(real.resolve()), str(self.home.resolve() / "Downloads")), binds)
+        self.assertEqual(len(binds), 4, binds)  # /proc, the profile, Downloads twice: nothing else writable
+
+    def test_a_data_folder_through_a_link_is_put_back_at_the_profile_path_the_engine_is_given(self):
+        disk = self.tmp / "disk/nulavio"
+        (disk / "data/profiles/p").mkdir(parents=True)
+        (disk / "data/profiles/other").mkdir()
+        link = self.home / ".local/share/nulavio-linked"
+        link.symlink_to(disk)
+        os.environ["NULAVIO_HOME"] = str(link)  # the data folder is reached through the link, as ~/.local/share may be
+        profile = link / "data/profiles/p"
+        args = confine.wrap(["/engine/nulavio", "--profile", str(profile)], profile_dir=profile,
+                            engine_dir=self.engine, home=self.home, binary="/usr/bin/bwrap")  # fmt: skip
+        real = str((disk / "data/profiles/p").resolve())
+        self.assertIn((real, real), self.binds(args))
+        self.assertIn((real, str(profile)), self.binds(args))
+        self.assertIn(str((disk / "data").resolve()), self.pairs(args, "--tmpfs"), "the other profiles stay hidden")
+        self.assertFalse([b for b in self.binds(args) if "other" in b[0] or "other" in b[1]])
+        self.assertEqual(args[args.index("--") + 1 :], ["/engine/nulavio", "--profile", str(profile)])
+
+    def test_a_link_still_there_inside_adds_no_bind(self):
+        # A home folder reached through a link outside the hidden folders (/home -> var/home): the link is there
+        # inside, so the resolved path bound at itself is what the browser's path leads to.
+        users = self.tmp / "var/home/u"
+        (users / ".local/share/p").mkdir(parents=True)
+        (self.tmp / "home-link").symlink_to("var/home")
+        self.assertIsNone(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users]))
+        (self.tmp / "disk").mkdir()
+        (users / "Downloads").symlink_to(self.tmp / "disk")
+        self.assertEqual(confine.seen_inside(self.tmp / "home-link/u/Downloads", [users]), users / "Downloads")
+        (users / "loop").symlink_to(users / "loop")
+        with self.assertRaises(confine.ConfineError):
+            confine.seen_inside(self.tmp / "home-link/u/loop/x", [self.tmp / "elsewhere"])
+        with self.assertRaises(confine.ConfineError):
+            confine.seen_inside(Path("relative/p"), [users])
+
+    def test_a_downloads_link_to_a_missing_folder_or_a_missing_profile_is_refused(self):
+        (self.home / "Downloads").symlink_to(self.tmp / "unplugged-disk/Downloads")
+        with self.assertRaises(confine.ConfineError) as refused:
+            self.wrap()
+        self.assertIn("Downloads", str(refused.exception))
+        self.assertIn("without --confined", str(refused.exception))
+        self.assertFalse((self.tmp / "unplugged-disk").exists(), "nothing made where the link points")
+        (self.home / "Downloads").unlink()
+        with self.assertRaises(confine.ConfineError) as refused:
+            confine.wrap(["/engine/nulavio"], profile_dir=self.home / "missing", engine_dir=self.engine,
+                         home=self.home, binary="/usr/bin/bwrap")  # fmt: skip
+        self.assertIn("profile folder", str(refused.exception))
+
 
 class CheckTest(unittest.TestCase):
     """Each answer of the check before a confined start (#282)."""
@@ -369,6 +430,26 @@ class RealBubblewrapTest(unittest.TestCase):
         self.assertTrue((profile / "written").exists())
         self.assertTrue((home / "Downloads" / "written").exists())
         self.assertFalse((home / "elsewhere").exists(), "a write outside the bound folders reached the disk")
+
+    def test_files_written_through_linked_downloads_and_data_folders_land_in_the_real_folders(self):
+        # #711: ~/Downloads and ~/.local/share as links to another disk. Without the second bind the writes go to
+        # empty in-memory folders and are lost.
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home, disk = tmp / "home", tmp / "disk"
+        (disk / "Downloads").mkdir(parents=True)
+        (disk / "share/nulavio/data/profiles/p").mkdir(parents=True)
+        (home / ".local").mkdir(parents=True)
+        (home / "Downloads").symlink_to(disk / "Downloads")
+        (home / ".local/share").symlink_to(disk / "share")
+        profile = home / ".local/share/nulavio/data/profiles/p"
+        script = f"touch {profile}/written && echo profile-ok; touch {home}/Downloads/written && echo downloads-ok; true"
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=profile, engine_dir=Path("/usr/bin"), home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        out = subprocess.run(args, capture_output=True, text=True, timeout=30, check=True).stdout.split()
+        self.assertEqual(out, ["profile-ok", "downloads-ok"])
+        self.assertTrue((disk / "share/nulavio/data/profiles/p/written").exists())
+        self.assertTrue((disk / "Downloads/written").exists())
 
 
 if __name__ == "__main__":

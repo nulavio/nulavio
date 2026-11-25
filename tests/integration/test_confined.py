@@ -4,13 +4,16 @@ Checked from inside the browser (chrome code): files outside the profile and
 Downloads are not there, the profile is writable, /dev is bubblewrap's own,
 and the engine's own content sandbox is as strong as without confinement; from outside: every content
 process runs under seccomp, and a running profile is not reopened "confined"
-through the running instance.
+through the running instance. With the Downloads and data folders reached
+through symlinks, the confined browser uses the real profile and a download
+lands in the real folder (#711).
 """
 
 from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 import unittest
 from pathlib import Path
@@ -145,6 +148,64 @@ class ConfinedRunTest(unittest.TestCase):
         result = self.session.nulavio("run", "--confined", "--dry-run", "--allow-weakened", "--profile", "confined", check=False)
         self.assertEqual(result.returncode, 1)
         self.assertIn("already open", result.stderr)
+
+
+@unittest.skipUnless(harness.engine_available() and bwrap_works(), "needs a Gecko engine and a working bubblewrap")
+class ConfinedThroughLinksTest(unittest.TestCase):
+    """~/Downloads and ~/.local/share as links to another disk (#711): both links are in the hidden home folder."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.session = session = harness.Session(profile="confined-links", run_args=("--confined",))
+        cls.disk, cls.user = session.tmp / "disk", session.tmp / "user"
+        (cls.disk / "share").mkdir(parents=True)
+        (cls.disk / "Downloads").mkdir()
+        (cls.user / ".local").mkdir(parents=True)
+        (cls.user / "Downloads").symlink_to(cls.disk / "Downloads")
+        (cls.user / ".local/share").symlink_to(cls.disk / "share")
+        if session.home.exists():  # the harness's seeded cache
+            shutil.move(session.home, cls.disk / "share/nulavio")
+        session.home = cls.user / ".local/share/nulavio"  # the data folder, reached through the link
+        session.env.update(HOME=str(cls.user), NULAVIO_HOME=str(session.home))
+        for name in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+            session.env.pop(name, None)  # the engine finds the Downloads folder from this home's settings
+        cls.m = session.start()  # the Marionette port file is read from the real profile
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.session.cleanup()
+
+    def test_01_the_real_profile_is_used(self):
+        self.m.set_context("chrome")
+        try:
+            seen = self.m.execute(
+                "const profile = Services.dirsvc.get('ProfD', Ci.nsIFile).path;"
+                "return IOUtils.writeUTF8(PathUtils.join(profile, 'linked-probe.txt'), 'x').then(() => profile);"
+            )
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(seen, str(self.session.profile_dir))
+        self.assertTrue((self.disk / "share/nulavio/data/profiles/confined-links/linked-probe.txt").is_file())
+
+    def test_02_a_download_lands_in_the_real_downloads_folder(self):
+        script = (
+            "const done = arguments[arguments.length - 1];"
+            "(async () => {"
+            'const {Downloads} = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");'
+            "const dir = await Downloads.getSystemDownloadsDirectory();"
+            "const target = PathUtils.join(dir, 'confined-download.txt');"
+            "const download = await Downloads.createDownload({source: 'data:text/plain,confined', target});"
+            "await download.start();"
+            "return dir;"
+            "})().then(done, e => done({error: String(e)}));"
+        )
+        self.m.set_context("chrome")
+        try:
+            folder = self.m.execute_async(script, [])
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(folder, str(self.user / "Downloads"))
+        self.assertEqual((self.disk / "Downloads/confined-download.txt").read_text(), "confined")
 
 
 if __name__ == "__main__":
