@@ -8,6 +8,8 @@ folder names, registered native-messaging hosts). The profile and Downloads
 are put back at the paths the browser is given too, when those go through a
 symlink in a hidden folder (a `~/Downloads` link to another disk, a data
 folder reached through a link), since that link is not there inside (#711).
+A home folder that is itself such a link is not handled yet: Downloads and the
+read-only settings are bound under the resolved home only (#722).
 The rest of the system is
 visible read-only, as for any program; /tmp, /var/tmp, /dev/shm and removable
 media are empty, and so are the user's runtime folder and Nulavio's own
@@ -178,7 +180,9 @@ def nulavio_dirs() -> list[Path]:
 
 
 def _inside_hidden(path: Path, hidden: list[Path]) -> bool:
-    return any(path != folder and path.is_relative_to(folder) for folder in hidden)
+    # `path` has every link resolved; a hidden folder may be written under a linked parent (/var/tmp, /var a link).
+    folders = {form for folder in hidden for form in (folder, folder.resolve())}
+    return any(path != folder and path.is_relative_to(folder) for folder in folders)
 
 
 def seen_inside(path: Path, hidden: list[Path]) -> Path | None:
@@ -276,7 +280,8 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     args += ["--ro-bind", str(engine_dir), str(engine_dir)]  # it may live under a hidden folder
     # Writable: the profile and Downloads, at their resolved paths, and also at the paths the browser is given when
     # those go through a link that is hidden inside: otherwise the engine would make an empty folder there, in
-    # memory, and a download or a whole profile would be lost when it closes (#711).
+    # memory, and a download or a whole profile would be lost when it closes (#711). Downloads is found from the
+    # resolved home, so a home folder that is itself such a link still loses it (#722).
     for path in (profile_dir, downloads):
         real = path.resolve()
         args += ["--bind", str(real), str(real)]

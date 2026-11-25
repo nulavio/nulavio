@@ -238,6 +238,12 @@ class WrapTest(unittest.TestCase):
             confine.seen_inside(self.tmp / "home-link/u/loop/x", [self.tmp / "elsewhere"])
         with self.assertRaises(confine.ConfineError):
             confine.seen_inside(Path("relative/p"), [users])
+        # A hidden folder written under a linked parent (/var/tmp with /var a link) still ends the walk.
+        (self.tmp / "realvar/tmp").mkdir(parents=True)
+        (self.tmp / "var-link").symlink_to("realvar")
+        (self.tmp / "realvar/tmp/x").symlink_to(self.tmp / "disk")
+        found = confine.seen_inside(self.tmp / "var-link/tmp/x", [self.tmp / "var-link/tmp"])
+        self.assertEqual(found, (self.tmp / "realvar").resolve() / "tmp/x")
 
     def test_a_downloads_link_to_a_missing_folder_or_a_missing_profile_is_refused(self):
         (self.home / "Downloads").symlink_to(self.tmp / "unplugged-disk/Downloads")
