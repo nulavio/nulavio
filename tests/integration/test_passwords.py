@@ -20,6 +20,8 @@ import settings_page
 
 PASSWORDS = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs")'
 REAL, FAKE = "paypal.example", "paypa1.example"
+PRIMARY = "artificial-primary-1"  # a throwaway profile's Primary Password (test_07)
+TOKEN = "const token = Cc['@mozilla.org/security/internalkeytoken;1'].createInstance(Ci.nsIPKCS11Token);"
 
 
 def chrome_async(m, body: str, args=()):
@@ -276,6 +278,40 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
         url = self.focus_password(self.fake)
         self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"the warning did not come back: {url}")
+
+    def test_07_a_primary_password_not_entered_is_not_asked_for_and_is_waited_for(self):
+        """#708: reading the saved logins decrypts them, which asks for a Primary Password not yet entered, and
+        the check runs on any site with a password field. So nothing is read, and nothing asked, until the person
+        enters it; then their next input in the field is checked (R41)."""
+        other = f"http://other.example:{self.server.port}"
+        locked = chrome_async(
+            self.m,
+            TOKEN + "await token.changePassword('', args[0]);"
+            # A change to the saved logins, so the module reads them again rather than keep what it read before.
+            "const info = Cc['@mozilla.org/login-manager/loginInfo;1'].createInstance(Ci.nsILoginInfo);"
+            "info.init(args[1], args[1], null, 'tester', 'artificial-pass-2', 'username', 'password');"
+            "await Services.logins.addLoginAsync(info); await token.logout();"
+            "return token.hasPassword && !Services.logins.isLoggedIn;",
+            [PRIMARY, other],
+        )
+        self.addCleanup(
+            chrome_async,
+            self.m,
+            TOKEN + "await token.changePassword(args[0], '');"
+            "for (const l of await Services.logins.searchLoginsAsync({ origin: args[1] })) {"
+            " await Services.logins.removeLoginAsync(l); } return true;",
+            [PRIMARY, other],
+        )
+        self.assertTrue(locked, "the Primary Password was not set, or the token not locked")
+        url = self.focus_password(self.fake)
+        self.assertFalse(self.m.chrome("return Services.logins.uiBusy;"), "the Primary Password was asked for")
+        self.assertTrue(url.startswith(self.fake), f"warned without reading the saved logins: {url}")
+        # The person enters it elsewhere (the token's own check logs it in, with no prompt here).
+        unlock = "await token.changePassword(args[0], args[0]); return Services.logins.isLoggedIn;"
+        entered = chrome_async(self.m, TOKEN + unlock, [PRIMARY])
+        self.assertTrue(entered)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})  # the same page
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"not checked once entered: {self.m.current_url()}")
 
     @unittest.skipUnless(os.environ.get("NULAVIO_NETWORK_TESTS") == "1", "downloads Proton Pass from addons.mozilla.org")
     def test_05_choosing_proton_pass_installs_the_pinned_version_and_switching_back_keeps_it(self):
