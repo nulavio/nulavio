@@ -27,7 +27,19 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**: <none, or the table above>.
 ```
 
-## Unreleased (on `main`, after 160.0.1-0.2)
+## Unreleased (on `main`, after 160.0.1-0.3)
+
+## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
+
+A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.
+- **Earlier run:** run 45498941823, from `d3e16d45`, stopped in integration in all three attempts.
+  - Attempt 1 stopped on `test_shortcuts` 12 (#695).
+  - Attempts 2 and 3 stopped on `test_window_title` 03 and `test_fingerprinting` 08c. These two navigated a new private window before its first page had loaded, and #696 made them wait for it.
+- **The maintainer's exception:** at the maintainer's request in chat, the agent dispatched the run, gave the `release` environment's approval, published the draft and published the advisory below.
+  - The agent published only after checking `SHA256SUMS.asc` against the published key (`298A 9093 … 8DB1`) and every asset against `SHA256SUMS`.
+  - `scripts/release/AGENTS.md` and [private work](../process/private-work.md) leave those steps to the maintainer, who asked for this exception, as for 160.0.1-0.2.
+
+**Upstream**: unchanged, Firefox 160.0.1.
 
 **New protections and their limits**:
 
@@ -44,6 +56,32 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
   - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address (for https on the local network it refuses only after the TLS handshake), and the tab shows a blocked page; what the browser itself opens there is checked the same way, and a captive-portal login tab is not (R29). A page loaded through a proxy is not checked this way either (R29).
   - What is left of #243 is accepted as residual risk for 1.0 (R29, #614): pages loaded through a proxy; requests with no tab (shared workers, beacons, keepalive fetches) and WebRTC; the pages you browse; and, in an engine an agent drives, a captive-portal tab, which keeps the engine's own grant. The first three have After 1.0 issues (#609, #610, #611).
   - Nothing to do: it comes with the update.
+- From the full review of what Nulavio ships (#454, at `74edfea4`), fixed in #694 ([advisory GHSA-7qcr-35cg-393g](https://github.com/nulavio/nulavio/security/advisories/GHSA-7qcr-35cg-393g), medium). The advisory was published on 2026-11-25.
+  - **AI Bridge:**
+    - "Allow once" now covers one call.
+    - An answer "until the agent disconnects" covers only the site and place the request showed.
+    - A profile taken away from an agent closes for it at the next call.
+    - An agent's click can no longer follow in-page routing into a profile it was not given.
+    - An engine an agent drives starts and messages no other profile.
+  - **Shell pages:** another extension can no longer open Nulavio's routing, unlock and look-alike pages with values of its own. They take what they show from the Shell's records.
+  - **Phone pairing (`nv1`):** an attacker in the middle of both halves of a pairing could make the six-digit codes match. The exchange is now protocol version 2.
+    - To pair a phone again, update Nulavio Companion to 0.2.0.
+    - Phones already paired keep working.
+  - **Assistant:**
+    - The provider key is bound to the provider it was saved for.
+    - Changing the address with an empty key field removes the key, where it sent the key to the new address before.
+    - A search engine holding a curated provider's name is not taken for that provider.
+  - **Waitlist (site):** the worker accepts plain addresses only, and the documented manual removal takes the address as data.
+  - **Confined mode (`--confined`):**
+    - The confined browser gets its own `/dev`, no session bus and only its own runtime folder.
+    - Symbolic links to profile files are refused.
+    - X11-only sessions are refused.
+  - **Vault:**
+    - The engine's own profile menus go through Nulavio's lock check.
+    - The auto-lock re-checks the profile before it unmounts.
+  - **Look-alike login warning:** the check starts only on the person's own click or key in the password field, so a page cannot learn its result or skip it.
+  - **Package updates (Fedora):** unattended updates accept only the release key whose fingerprint the package pins.
+  - What to do: update (`sudo dnf upgrade nulavio`, `sudo apt upgrade nulavio`), and update the Companion before pairing a phone again.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19
 
