@@ -1298,6 +1298,7 @@
   "warnMissingHeadline": {"message": "This download is no longer in the list"},
   "warnOpenFolder": {"message": "Open downloads folder"},
   "warnCloseTab": {"message": "Close tab"},
+  "tabCloseFailed": {"message": "This tab could not be closed. Close it from the tab bar."},
   "guardEmptyTitle": {"message": "No changes to review"},
   "guardIntroEmpty": {"message": "Nulavio Guard compares this profile with the last time Nulavio opened it, and nothing changed from outside since then."},
   "guardEmptyCardTitle": {"message": "Nothing to review"},

@@ -774,6 +774,46 @@ class LocaleKeysTest(unittest.TestCase):
                 self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
 
 
+class LastTabCloseTest(unittest.TestCase):
+    """#700: Close and Cancel on a page that is its window's only tab. The engine refuses `tabs.update` to an
+    about: address from an extension page, so the button did nothing; one function closes every such page."""
+
+    PAGES = (
+        "ai/request.js",
+        "vault/unlock.js",
+        "vault/create.js",
+        "guard/review.js",
+        "warning/warning.js",
+        "passwords/lookalike.js",
+    )
+
+    def test_no_shell_script_loads_an_about_address_into_a_tab(self):
+        for script in sorted(p for p in SHELL.rglob("*") if p.suffix in (".js", ".mjs")):
+            text = script.read_text(encoding="utf-8")
+            for call in re.finditer(r"tabs\.update\(", text):
+                arguments = text[call.end() : text.find(")", call.end())]
+                with self.subTest(script=str(script.relative_to(SHELL))):
+                    self.assertNotRegex(arguments, r"""["'`]about:""")
+
+    def test_every_page_with_close_or_cancel_uses_the_one_function(self):
+        for page in self.PAGES:
+            text = (SHELL / page).read_text(encoding="utf-8")
+            with self.subTest(page=page):
+                self.assertRegex(text, r'import \{ closeOwnTab(?:Soon)? \} from "\.\./lib/tabs\.js";')
+                self.assertNotIn("tabs.remove(", text)
+                self.assertNotIn("siblings", text)
+
+    def test_the_function_opens_a_new_tab_before_it_removes_the_page_and_says_when_it_cannot(self):
+        text = (SHELL / "lib" / "tabs.js").read_text(encoding="utf-8")
+        body = text[text.index("export async function closeOwnTab(") :]
+        body = body[: body.index("\n}\n")]
+        self.assertLess(body.index("browser.tabs.create({ windowId: tab.windowId })"), body.index("browser.tabs.remove(tab.id)"))
+        self.assertIn('failed(t("tabCloseFailed"))', body.split("catch", 1)[1])
+        self.assertNotIn("about:", body)
+        for name in ("en", "pt_BR"):
+            self.assertIn("tabCloseFailed", locale(name))
+
+
 class PasswordsTest(unittest.TestCase):
     """Flows B and D: pinned providers, and a content script that never reads what is typed."""
 
