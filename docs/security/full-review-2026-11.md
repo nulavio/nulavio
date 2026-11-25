@@ -1,19 +1,19 @@
 # Full review of what Nulavio ships, November 2026
 
-[#454](https://github.com/nulavio/nulavio/issues/454) reviewed everything Nulavio ships at one commit of `main`: `74edfea4` (2026-11-24). Before this review, only the Vault and the release chain had a review scoped as a whole ([scope packet](independent-review.md), #224). Everything else had been read one pull request or one area at a time.
+[#454](https://github.com/nulavio/nulavio/issues/454) reviewed everything Nulavio ships at one commit of `main`: `74edfea4` (2026-11-24). Before this review, only the Vault and the release chain had a review scoped as a whole ([scope packet](independent-review.md), #224). Everything else had been read one pull request or one area at a time. For the Vault, this review read what changed since #224 and how it meets the other areas, not again what #224 covers.
 
 ## Method
 
 - **Areas.** The product was split into twelve areas: engine configuration, engine patches, Shell modules and actors, Shell pages, Settings, launcher and tools, AI Bridge and assistant, Vault and unlock, the Android Companion and its pairing, the site, CI and release, and dependencies.
 - **Reviewers.** Each area was reviewed by a model other than the one that wrote most of it. The reviewer used the area's `AGENTS.md`, the [trust boundaries](../architecture/trust-boundaries.md), the threat-model scenarios that apply, and the invariants in [`REVIEW.md`](../../REVIEW.md). The reviewers were GPT-6.2 Sol and Claude Fable 5.2 or Opus 5.5. The OpenAI models' safety filter refused six areas, so Claude models reviewed those.
-- **Verification.** A second model checked every finding adversarially, against the code and with targeted scripts where it was safe to run them.
+- **Verification.** A second model, Claude Opus 5.5 or Sonnet 5.5, checked every finding adversarially, against the code and with targeted scripts where it was safe to run them.
 - **Gaps.** A completeness pass read every reviewer's coverage notes, then reviewed five gaps nobody had reached, mostly where two areas meet: agents on a person's own profiles, agent input and Shell pages, the assistant panel, routing entry points, and window spoofing.
 - **Tools on the commit.**
   - The scanners in `ci`: actionlint, zizmor, gitleaks, shellcheck, Opengrep.
   - CodeQL.
   - An AddressSanitizer run of the integration suite: 682 tests, no report.
   - A fuzz run.
-  - The release rehearsal.
+  - The release rehearsal, which failed on that commit. The cause was a timing race in two private-window tests, fixed in #696.
 
 The checklist, with who reviewed each area, is on #454.
 
@@ -28,13 +28,13 @@ The checklist, with who reviewed each area, is on #454.
 - **Not public yet: one more private advisory.** It is published, and added here, when its fix ships.
 - **Ordinary bugs, doc errors and hardening: 90 public issues.** Each ends with "Found by the full review (#454)".
   - 74 were filed on 2026-11-24.
-  - 16 were filed on 2026-11-25, after the advisory, because their text was close to a finding that was not public yet.
+  - 16 were filed on 2026-11-25.
   - Two more drafts were not filed, because #694 had already fixed them.
-  - Bugs and errors in the security docs are in milestone 1.0. Low-priority hardening is in After 1.0.
+  - Each issue is in milestone 1.0 or After 1.0, by its priority.
 - **Docs the review showed wrong.** The fixes corrected the threat models, the trust boundaries, the residual risks and the ADRs they touch. The errors that remain in the security docs each have an issue in 1.0.
 
 ## Limits
 
 - **Coverage.** The review read one commit, with the areas' own documents as its map. Code that changed after `74edfea4` is reviewed one pull request at a time, as before.
 - **Who reviewed.** The reviewers are AI models, not an outside firm. The independent review of the Vault and the release chain (#224) is separate from this one.
-- **What was run.** The reproductions ran against that commit's code and test engines. A finding that needs a real phone, account or network was argued from the code, and the finding says so.
+- **What was run.** The findings were checked against the code, with targeted scripts only where they were safe to run. Each issue says what was run for it and what was not.
