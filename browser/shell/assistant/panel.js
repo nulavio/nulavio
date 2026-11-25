@@ -396,7 +396,7 @@ async function render() {
 }
 
 /** Passages the answer quoted word for word from a page that went (UX5-E): the label says where
-    from; "Mostrar a aba" only selects that tab while it still shows that address (no scrolling in v1). */
+    from; "Mostrar a aba" only selects that tab while it still shows that address, as it went: origin and path (#653; no scrolling in v1). */
 function showSources(list) {
   $("sources").replaceChildren(
     ...(list ?? []).map(source =>
