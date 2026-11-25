@@ -2,6 +2,7 @@
    "Show in folder" and "Delete". There is deliberately no "Open". */
 
 import { localize, t } from "../lib/i18n.js";
+import { closeOwnTab } from "../lib/tabs.js";
 
 const id = Number(new URLSearchParams(location.search).get("id"));
 const SAFE_DANGER = new Set(["safe", "accepted", undefined]);
@@ -57,11 +58,7 @@ function missing() {
   folder.textContent = t("warnOpenFolder");
   close.textContent = t("warnCloseTab");
   folder.addEventListener("click", () => browser.downloads.showDefaultFolder());
-  close.addEventListener("click", async () => {
-    const tab = await browser.tabs.getCurrent();
-    const siblings = await browser.tabs.query({ windowId: tab.windowId });
-    return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
-  });
+  close.addEventListener("click", () => closeOwnTab(text => finish(text, "error"))); // no status line here
   document.getElementById("actions").hidden = false;
   folder.focus();
   document.documentElement.dataset.state = "missing";
