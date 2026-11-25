@@ -29,6 +29,12 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+**Nulavio fixes**
+
+| Date | Weakness | Effect | Fixed in |
+|---|---|---|---|
+| 2026-11-25 | Settings offered five agent permissions that no tool checked (purchases and payments, account settings, private tabs, network inspection, background work), and the level hints said Assisted and Autonomous asked before purchases and account changes | A person who chose a level by its hint could expect a question that never came: in Autonomous a form that pays is sent like any other form | #714: the five are no longer offered, and the hints, the full-control warning and the guides say only what a tool checks. A grant a registry holds for one counts for nothing, as before. What is left: [R88](residual-risks.md) |
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.

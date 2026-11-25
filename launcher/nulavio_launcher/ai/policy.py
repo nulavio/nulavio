@@ -15,9 +15,9 @@ import socket
 import urllib.parse
 from dataclasses import dataclass
 
-# Capability id -> what the user sees. Mirrors the brief's list; "files" covers
-# upload and download, "local_resources" covers this computer, the local
-# network and internal pages (about:, file:).
+# Capability id -> what the user sees. Each one is checked by a tool (tools.py) before it acts: a capability no
+# tool checks is not offered, so that a setting never promises a question nobody asks (#714). "files" covers
+# upload and download, "local_resources" covers this computer, the local network and internal pages (about:, file:).
 CAPABILITIES: dict[str, str] = {
     "read_pages": "Read pages",
     "navigate": "Open tabs and go to addresses",
@@ -27,16 +27,16 @@ CAPABILITIES: dict[str, str] = {
     "files": "Upload and download files",
     "authenticated_sessions": "Use signed-in sessions",
     "execute_js": "Run JavaScript in pages",
-    "network": "Inspect network activity",
     "cookies_storage": "Read or change cookies and site storage",
     "multiple_profiles": "Work in more than one profile",
-    "private_tabs": "Use private tabs",
     "local_resources": "Reach this computer and the local network",
-    "transactions": "Make purchases and payments",
-    "account_settings": "Change account settings",
-    "background": "Keep working in the background",
     "debugging": "The browser's internal pages (not offered to agents)",
 }
+# Offered until 2026-11-25 although no tool checked them (#714): no tool opens a private tab, shows network traffic
+# or tells a purchase or an account change from any other click or form, and nothing asked before working in the
+# background. A grant for one that a registry still holds stays in the file and counts for nothing (effective_mode
+# answers "block" for an id that is not offered, and nothing asks for one); Settings and the CLI do not show it.
+RETIRED_CAPABILITIES = frozenset({"transactions", "account_settings", "private_tabs", "network", "background"})
 MODES = ("allow", "ask", "block")
 # The browser's internal pages (about:, chrome:, the Shell's own pages, the source viewer, Reader View). Only raw
 # automation's separate opt-in ever turned this on; raw automation was removed (#463, ADR 0007 amendment of
@@ -44,7 +44,7 @@ MODES = ("allow", "ask", "block")
 INTERNAL_CAPABILITY = "debugging"
 
 # How a permission request presents each capability (Shell page ai/request.html): critical for
-# money, code, the user's own data and places outside the AI Workspace; warning for what changes
+# code, the user's own data and places outside the AI Workspace; warning for what changes
 # pages or sends data; info for reading. Unknown capabilities are shown as critical.
 RISK: dict[str, str] = {
     "read_pages": "info",
@@ -53,16 +53,11 @@ RISK: dict[str, str] = {
     "interact": "warning",
     "submit_forms": "warning",
     "files": "warning",
-    "background": "warning",
     "authenticated_sessions": "critical",
     "execute_js": "critical",
-    "network": "critical",
     "cookies_storage": "critical",
     "multiple_profiles": "critical",
-    "private_tabs": "critical",
     "local_resources": "critical",
-    "transactions": "critical",
-    "account_settings": "critical",
     "debugging": "critical",
 }
 
@@ -74,16 +69,17 @@ def _preset(allow: set[str], ask: set[str]) -> dict[str, str]:
 PRESETS: dict[str, dict[str, str]] = {
     # Unknown agents: read and move around; everything that acts asks first.
     "restricted": _preset({"read_pages", "navigate", "screenshots"}, {"interact", "submit_forms"}),
-    # Supervised automation: acts on pages, asks for consequential steps.
+    # Supervised automation: acts on pages, asks before it sends a form, uses files or a signed-in session.
     "assisted": _preset(
-        {"read_pages", "navigate", "screenshots", "interact"},
-        {"submit_forms", "files", "authenticated_sessions", "transactions", "account_settings", "background"},
+        {"read_pages", "navigate", "screenshots", "interact"}, {"submit_forms", "files", "authenticated_sessions"}
     ),
-    # Trusted agent: no prompts for ordinary work; money, account changes and
-    # stronger tools still ask until the user allows them explicitly.
+    # Trusted agent: no prompts for ordinary work, forms included, a form that pays or changes an account as much as
+    # any other (no tool tells them apart, AI-T13, R88); this computer and the local network and other profiles
+    # still ask until the user allows them explicitly. Scripts ask, but `evaluate` also needs cookies_storage, which
+    # stays blocked: no script runs until the user allows both.
     "autonomous": _preset(
-        {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions", "background"},
-        {"transactions", "account_settings", "local_resources", "execute_js", "network", "multiple_profiles", "private_tabs"},
+        {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions"},
+        {"local_resources", "execute_js", "multiple_profiles"},
     ),
     # Everything without confirmations, except the internal pages, which no agent gets.
     "full_control": _preset(set(CAPABILITIES) - {INTERNAL_CAPABILITY}, set()),
@@ -91,8 +87,9 @@ PRESETS: dict[str, dict[str, str]] = {
 # For the CLI only: the browser shows its own localised text (aiFullControlBody).
 FULL_CONTROL_WARNING = (
     "Full control: this agent will do without asking everything the other levels ask about: any action on "
-    "pages, purchases and payments, account changes, private tabs, the profiles in its list and running "
-    "scripts in pages. The browser's internal pages are never included. "
+    "pages, forms that pay or change an account included, cookies and site storage, this computer and the "
+    "local network, the profiles in its list and running scripts in pages. The browser's internal pages are "
+    "never included. "
     "If the agent is compromised or makes a mistake, your data and accounts can be affected. You can revoke "
     "access later, but actions already taken may be irreversible."
 )

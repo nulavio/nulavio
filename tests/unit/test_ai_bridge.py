@@ -358,8 +358,17 @@ class PolicyTest(Home):
     def test_presets(self):
         expect = {
             "restricted": {"read_pages": True, "interact": False, "execute_js": False, "submit_forms": False},
-            "assisted": {"interact": True, "submit_forms": False, "execute_js": False},
-            "autonomous": {"interact": True, "submit_forms": True, "files": True, "transactions": False, "execute_js": False},
+            "assisted": {"interact": True, "submit_forms": False, "authenticated_sessions": False, "execute_js": False},
+            "autonomous": {
+                "interact": True,
+                "submit_forms": True,
+                "files": True,
+                "authenticated_sessions": True,
+                "multiple_profiles": False,
+                "local_resources": False,
+                "execute_js": False,
+                "cookies_storage": False,
+            },
             # Everything but the internal pages, which no agent gets (#463).
             "full_control": {c: c != policy.INTERNAL_CAPABILITY for c in policy.CAPABILITIES},
         }
@@ -571,13 +580,88 @@ class PolicyTest(Home):
     def test_every_capability_has_a_risk_tier(self):
         self.assertEqual(set(policy.RISK), set(policy.CAPABILITIES))
         self.assertTrue(set(policy.RISK.values()) <= {"critical", "warning", "info"})
-        for capability in ("transactions", "execute_js", "local_resources", "private_tabs", "multiple_profiles",
-                           policy.INTERNAL_CAPABILITY):  # fmt: skip
+        for capability in ("authenticated_sessions", "execute_js", "cookies_storage", "local_resources",
+                           "multiple_profiles", policy.INTERNAL_CAPABILITY):  # fmt: skip
             self.assertEqual(policy.RISK[capability], "critical", capability)
         for capability in ("interact", "submit_forms", "files"):
             self.assertEqual(policy.RISK[capability], "warning", capability)
         for capability in ("read_pages", "navigate", "screenshots"):
             self.assertEqual(policy.RISK[capability], "info", capability)
+
+    def test_only_checked_capabilities_are_offered(self):
+        """#714: every capability Settings and the CLI offer is one a tool checks before it acts, so that no row or
+        level hint promises a question nobody asks. The five offered until 2026-11-25 are checked by none."""
+        import ast
+        import inspect
+
+        checked = set()
+        for node in ast.walk(ast.parse(inspect.getsource(tools))):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args
+                    and node.func.attr in ("require", "require_here", "_refuse_if_held")
+                    and isinstance(node.args[0], ast.Constant)):  # fmt: skip
+                checked.add(node.args[0].value)
+        # The rest come from what an address needs (classify_url), which require_needs asks for.
+        checked |= set(policy.classify_url("http://127.0.0.1/").needs) | set(policy.classify_url("about:config").needs)
+        offered = set(policy.CAPABILITIES)
+        self.assertEqual(offered - checked, set(), "offered, and checked by no tool")
+        self.assertEqual(policy.RETIRED_CAPABILITIES & offered, set())
+        self.assertEqual(policy.RETIRED_CAPABILITIES & checked, set(), "checked again: offer it again")
+        self.assertEqual(policy.RETIRED_CAPABILITIES, {"transactions", "account_settings", "private_tabs", "network",
+                                                       "background"})  # fmt: skip
+        for level, modes in policy.PRESETS.items():
+            self.assertEqual(set(modes), offered, level)
+        self.assertEqual(set(ai_cli.api_request({"op": "overview"})["capabilities"]), offered)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ai_cli._capabilities(None)
+        listed = {line.split()[0] for line in out.getvalue().splitlines()[1:]}
+        self.assertEqual(listed, offered)
+        for locale in ("en", "pt_BR"):
+            path = Path(__file__).resolve().parents[2] / "browser" / "shell" / "_locales" / locale / "messages.json"
+            keys = {k.removeprefix("aiCap_") for k in json.loads(path.read_text(encoding="utf-8")) if k.startswith("aiCap_")}
+            self.assertEqual(keys, offered, locale)
+
+    def test_a_saved_grant_for_a_capability_no_longer_offered_loads_and_counts_for_nothing(self):
+        """#714: a registry written while the five were offered still loads; their grants and session answers stay in
+        the file, grant nothing, are not shown, and every other change still works."""
+        agent, _ = registry.add("old", "other", "assisted")
+        path = self.home / "state" / "ai" / "agents.json"
+        data = json.loads(path.read_text())
+        stored = data["agents"][agent["id"]]
+        for capability in sorted(policy.RETIRED_CAPABILITIES):
+            stored["grants"][capability] = {"mode": "allow", "set": "2026-11-01T10:00:00+00:00", "until": None,
+                                            "session": None}  # fmt: skip
+            stored.setdefault("session_grants", {})[capability] = {
+                "session": "s-1", "set": "2026-11-01T10:00:00+00:00", "scopes": [[None, ""]]}  # fmt: skip
+        path.write_text(json.dumps(data))
+        approver = Approve("once")
+        for capability in sorted(policy.RETIRED_CAPABILITIES):
+            decision = self.decide(agent["id"], capability, approver)
+            self.assertEqual((decision.allowed, decision.reason), (False, "unknown-capability"), capability)
+            self.assertEqual(policy.effective_mode(registry.get(agent["id"]), capability, "s-1", scope=(None, "")),
+                             ("block", "unknown-capability"))  # fmt: skip
+            with self.assertRaises(registry.RegistryError):
+                registry.grant(agent["id"], capability, "allow")
+            with self.assertRaises(registry.RegistryError):
+                registry.grant_session(agent["id"], capability, "s-1")
+        self.assertEqual(approver.asked, [])
+        listed = ai_cli.api_request({"op": "overview"})["agents"][0]
+        self.assertEqual(set(listed["modes"]), set(policy.CAPABILITIES))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ai_cli._agents(mock.Mock(json=False))
+        for capability in policy.RETIRED_CAPABILITIES:
+            self.assertNotIn(capability, out.getvalue())
+        # The rest of the record is untouched by them.
+        registry.grant(agent["id"], "submit_forms", "allow")
+        self.assertTrue(self.decide(agent["id"], "submit_forms").allowed)
+        registry.set_autonomy(agent["id"], "autonomous")
+        registry.end_session(agent["id"], "s-1")
+        ai_cli.api_request({"op": "clear-grant", "agent": agent["id"], "capability": "transactions"})
+        stored = registry.get(agent["id"])
+        self.assertNotIn("transactions", stored["grants"])
+        self.assertIn("account_settings", stored["grants"])  # kept in the file, as it was
+        self.assertEqual(self.decide(agent["id"], "account_settings").reason, "unknown-capability")
 
     def test_requests_say_where_the_agent_acts(self):
         agent, _ = registry.add("where", "other", "restricted")
@@ -2845,7 +2929,7 @@ class AutonomyControlsTest(Home):
                 time.sleep(0.05)
 
         cases = (
-            ("transactions", "Trabalho", "critical", {"kind": "profile", "profile": "Trabalho"}),
+            ("multiple_profiles", "Trabalho", "critical", {"kind": "profile", "profile": "Trabalho"}),
             ("interact", "", "warning", {"kind": "workspace"}),
         )
         for capability, place, risk, where in cases:

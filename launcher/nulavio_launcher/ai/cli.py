@@ -87,6 +87,8 @@ def _agents(args) -> int:
         for cap, g in sorted(a.get("grants", {}).items()):
             if cap == policy.INTERNAL_CAPABILITY:
                 continue  # an earlier version's grant: it grants nothing (#463), said below
+            if cap not in policy.CAPABILITIES:
+                continue  # a capability no longer offered (policy.RETIRED_CAPABILITIES, #714): it counts for nothing
             scope = f" until {g['until']}" if g.get("until") else " this session" if g.get("session") else ""
             _out(f"      {cap}: {g['mode']}{scope}")
         if a.get("raw_automation_accepted") or policy.INTERNAL_CAPABILITY in a.get("grants", {}):
