@@ -132,7 +132,7 @@ class UploadRepoTest(unittest.TestCase):
         out = self.run_upload()
         self.assertEqual(out.returncode, 3, out.stderr)
         self.assertIn(f"nulavio-packages/{key}, uploaded 2026-11-20T10:00:00+00:00, holds other bytes", out.stderr)
-        self.assertIn("Re-run that run's publish job, or retire that run", out.stderr)
+        self.assertIn("Re-run that run's publish job while its signed files last", out.stderr)
         self.assertIn('"After a failed publish"', out.stderr)
         self.assertEqual(self.uploads(), [])
         self.assertIn(f"s3 cp s3://nulavio-packages/{key} ", self.log.read_text())  # it was compared, by download

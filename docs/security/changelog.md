@@ -29,6 +29,8 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+- **Release process** (#656): a release run after a failed publish no longer uploads other bytes under a revision an earlier run already uploaded. The build job counts the version the package bucket serves, and `upload_repo.sh` stops before it writes a package over one with other bytes. A revision that only the dnf repository serves still needs the maintainer (#723).
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.

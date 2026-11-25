@@ -65,10 +65,10 @@ s3() { r2 s3 "$@" --only-show-errors; }
 listing=$(r2 s3api list-objects-v2 --bucket "$bucket" --prefix "$kind/$pool/" --output json)
 held=$(python3 -I -c '
 import json, sys
-listing = json.loads(sys.argv[1])
+listing = json.load(sys.stdin)
 for entry in listing.get("Contents") or []:
     print(entry["Key"], entry["LastModified"], sep="\t")
-' "$listing")
+' <<<"$listing")
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 for package in "$repo/$pool"/nulavio[-_]*.{rpm,deb}; do
@@ -84,8 +84,8 @@ for package in "$repo/$pool"/nulavio[-_]*.{rpm,deb}; do
     if [[ $theirs != "$ours" ]]; then
         echo "upload_repo: $bucket/$key, uploaded $uploaded, holds other bytes (sha256 $theirs) than this run's $name" \
             "($ours): another release run uploaded this revision and stopped before its draft. Nothing of $repo was uploaded." \
-            "Re-run that run's publish job, or retire that run and start a new one, which takes the next revision" \
-            "(docs/architecture/build.md, \"After a failed publish\")" >&2
+            "Re-run that run's publish job while its signed files last (7 days); a new run would stop here too." \
+            "See docs/architecture/build.md, \"After a failed publish\", before starting another run." >&2
         exit 3
     fi
 done
