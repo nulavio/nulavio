@@ -74,9 +74,10 @@ PRESETS: dict[str, dict[str, str]] = {
         {"read_pages", "navigate", "screenshots", "interact"}, {"submit_forms", "files", "authenticated_sessions"}
     ),
     # Trusted agent: no prompts for ordinary work, forms included, a form that pays or changes an account as much as
-    # any other (no tool tells them apart, AI-T13, R88); this computer and the local network and other profiles
-    # still ask until the user allows them explicitly. Scripts ask, but `evaluate` also needs cookies_storage, which
-    # stays blocked: no script runs until the user allows both.
+    # any other (no tool tells them apart, AI-T13, R88), and signed-in sessions in the profiles on its list. This
+    # computer and the local network, and a second place at once (a profile beside the AI Workspace, or two
+    # profiles: multiple_profiles), still ask until the user allows them explicitly. Scripts ask, but `evaluate`
+    # also needs cookies_storage, which stays blocked: no script runs until the user allows both.
     "autonomous": _preset(
         {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions"},
         {"local_resources", "execute_js", "multiple_profiles"},
@@ -86,10 +87,10 @@ PRESETS: dict[str, dict[str, str]] = {
 }
 # For the CLI only: the browser shows its own localised text (aiFullControlBody).
 FULL_CONTROL_WARNING = (
-    "Full control: this agent will do without asking everything the other levels ask about: any action on "
-    "pages, forms that pay or change an account included, cookies and site storage, this computer and the "
-    "local network, the profiles in its list and running scripts in pages. The browser's internal pages are "
-    "never included. "
+    "Full control: this agent will do without asking everything the other levels ask about or block: any "
+    "action on pages, forms that pay or change an account included, cookies and site storage, this computer "
+    "and the local network, the profiles in its list and running scripts in pages. The browser's internal "
+    "pages are never included. "
     "If the agent is compromised or makes a mistake, your data and accounts can be affected. You can revoke "
     "access later, but actions already taken may be irreversible."
 )

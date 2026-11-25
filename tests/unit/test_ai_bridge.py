@@ -647,6 +647,9 @@ class PolicyTest(Home):
         self.assertEqual(approver.asked, [])
         listed = ai_cli.api_request({"op": "overview"})["agents"][0]
         self.assertEqual(set(listed["modes"]), set(policy.CAPABILITIES))
+        self.assertEqual(set(listed["grants"]) & policy.RETIRED_CAPABILITIES, set())
+        self.assertEqual(set(listed["session_grants"]) & policy.RETIRED_CAPABILITIES, set())
+        self.assertEqual(set(registry.get(agent["id"])["grants"]), policy.RETIRED_CAPABILITIES)  # the file keeps them
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             ai_cli._agents(mock.Mock(json=False))
@@ -1927,6 +1930,18 @@ class OpenProfileTest(Home):
         self.assertTrue(result["isError"], result)
         self.read.assert_not_called()
         self.assertNotIn("Trabalho", bridge.profiles)  # let go before the call (the next test)
+
+    def test_autonomous_acts_in_a_given_profile_alone_without_asking(self):
+        """The Autonomous level hint says what this does (#714 review): with signed-in sessions allowed, a profile on
+        the agent's list is worked in without a question while it is the only place open; only a second place at once
+        asks (multiple_profiles, the test above)."""
+        _agent, bridge, approver, _target, _commands = self.opened(level="autonomous", answer="deny")
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
+        with mock.patch.object(tools.Bridge, "_arrived"):
+            made = bridge.call("tab_new", {"profile": "Trabalho", "url": "https://mail.example/new"})
+        self.assertFalse(made["isError"], made)
+        self.assertEqual(approver.asked, [])
+        self.assertEqual([name for name, _ in bridge._engines()], ["Trabalho"])  # one place only: no AI Workspace
 
     def test_a_tab_list_describes_a_profiles_tab_only_where_acting_would_not_ask(self):
         agent, bridge, approver, _target, _commands = self.opened(answer="deny")

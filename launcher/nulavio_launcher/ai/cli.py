@@ -244,6 +244,11 @@ def _public(agent: dict, active: dict | None = None) -> dict:
     # An agent that had raw automation on before it was removed (#463): the agents' page says so once.
     view["raw_automation_removed"] = bool(agent.get("raw_automation_accepted"))
     view["modes"] = {c: policy.effective_mode(agent, c, "")[0] for c in policy.CAPABILITIES}
+    # A grant or an answer for a capability no longer offered (policy.RETIRED_CAPABILITIES, #714) counts for nothing:
+    # the UI does not see it. New dicts: `view` is a shallow copy of the stored record.
+    for key in ("grants", "session_grants"):
+        if key in view:
+            view[key] = {c: g for c, g in view[key].items() if c in policy.CAPABILITIES}
     view["active_sessions"] = (active or {}).get(agent["id"], [])
     return view
 

@@ -42,7 +42,7 @@ Audit (A0), 2026-10-26:
    | cookies and storage | block | block | block | allow |
    | raw automation and privileged pages ("debugging"; [amendment of 2026-10-28](#amendment-2026-10-28-raw-automation-leaves-full-control-ux1-d-ux4)) | block | block | block | block: a separate opt-in per agent |
 
-   Purchases, account settings, background work, network inspection and private tabs left this table on 2026-11-25: no tool checked them ([amendment](#amendment-2026-11-25-capabilities-no-tool-checks-are-not-offered-714)).
+   Purchases, account settings, background work, network inspection and private tabs left this table on 2026-11-25: no tool checked them ([amendment](#amendment-2026-11-25-capabilities-no-tool-checks-are-not-offered-714)). "Other profiles" is `multiple_profiles` (item 9): a second place at once, a profile beside the AI Workspace or two profiles; one profile on the agent's list, alone, needs only `authenticated_sessions`.
 
    Full control needs an explicit acceptance of a warning (`--accept-full-control`; the Shell screen in S7). "Autonomous" never asks again for what it covers (tested).
 6. **AI Workspace: one engine profile per agent**, separate cookies, history, downloads and storage; persistent or disposable. It is the only place where the Remote Agent runs. Its prefs are the Nulavio baseline plus `remote.prefs.recommended=false`, so Safe Browsing, updates and the pop-up blocker stay on (tested with a positive control). Sandboxes are untouched (`engine.launch_env`). `navigator.webdriver` is true there, as the standard requires; sites can tell automation apart.
