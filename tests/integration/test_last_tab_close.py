@@ -122,11 +122,14 @@ class LastTabCloseTest(unittest.TestCase):
 
     def close_alone(self, page: str, state: str | None, button: str) -> None:
         opened = self.open_alone(page)
-        shown = harness.wait_until(lambda: self.m.execute(PAGE_STATE, [button]), timeout=20)
+        # Wait for the expected state itself (a page may show "loading" first), or, for a page with no state,
+        # for the page and its button: an empty state is falsy, and would make the wait run out its timeout.
         if state:
-            self.assertEqual(shown, state, f"{page} did not reach its {state} state")
+            reached = harness.wait_until(lambda: self.m.execute(PAGE_STATE, [button]) == state, timeout=20)
+            self.assertTrue(reached, f"{page} did not reach its {state} state: {self.m.execute(PAGE_STATE, [button])}")
         else:
-            self.assertIsNotNone(shown, f"{page} did not load")
+            loaded = harness.wait_until(lambda: self.m.execute(PAGE_STATE, [button]) is not None, timeout=20)
+            self.assertTrue(loaded, f"{page} did not load")
         window = self.m.chrome(FIND_WINDOW, [self.base + page])
         self.assertTrue(window, f"{page}: its window was not found")
         self.assertEqual(window["id"], opened, f"{page} did not load in the window opened for it")
