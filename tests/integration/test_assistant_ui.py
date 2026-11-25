@@ -1692,7 +1692,7 @@ class AssistantUiTest(unittest.TestCase):
         self.wait_view(lambda v: v["attached"])
         self.provider.replies.append({"choices": [{"message": {"content": "Primeira."}}]})
         view = self.ask_panel("PERGUNTA-A?")
-        self.assertIn("desta página foram enviados", view["receipt"])  # only the page went with it
+        self.assertIn("desta página, com o título e o endereço, foram enviados", view["receipt"])  # only the page went with it
         # The page again with the next question, which fails; then "Deixar a página de fora".
         self.wait_view(lambda v: v["offer"])
         self.panel("document.getElementById('include-page').click();")
