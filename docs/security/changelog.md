@@ -34,7 +34,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.
 - **Earlier run:** run 45498941823, from `d3e16d45`, stopped in integration in all three attempts.
   - Attempt 1 stopped on `test_shortcuts` 12 (#695).
-  - Attempts 2 and 3 stopped on `test_window_title` 03 and `test_fingerprinting` 08c. These two navigated a new private window before its first page had loaded, and #696 made them wait for it.
+  - Attempt 2 stopped on `test_window_title` 03, and attempt 3 on that test and `test_fingerprinting` 08c. Both navigated a new private window before its first page had loaded, and #696 made them wait for it.
 - **The maintainer's exception:** at the maintainer's request in chat, the agent dispatched the run, gave the `release` environment's approval, published the draft and published the advisory below.
   - The agent published only after checking `SHA256SUMS.asc` against the published key (`298A 9093 … 8DB1`) and every asset against `SHA256SUMS`.
   - `scripts/release/AGENTS.md` and [private work](../process/private-work.md) leave those steps to the maintainer, who asked for this exception, as for 160.0.1-0.2.
@@ -49,11 +49,11 @@ A Nulavio release on the same engine ([release](https://github.com/nulavio/nulav
 
 - AI Bridge, local network, continued (#243, #560, #584, #589, #614):
   - In your own profiles opened for an agent, the engine's Local Network Access now refuses a public page's requests to local addresses with no prompt, a pop-up's included. This holds for the agent's run only, and none of these settings stays in the profile.
-  - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29).
+  - A page the agent itself opens, or that a redirect on its way leads to, is not shown when it comes from an address the engine reads as local and the agent may not reach that place. The engine knows the address only once it has connected, so that request has been sent and the local service still receives it (R29). For a page the agent opens, engine patch 0015 (below) now refuses it before it is sent; this check stays behind it.
   - For that check, the agent's engines never take a top-level page from the cache: it is fetched, or not shown.
   - A page loaded through a proxy is not checked this way; R29 lists what else is not.
   - In your profiles opened for an agent, a site you allowed yourself to reach this computer or the local network no longer keeps that permission for the agent's run: engine patch 0014 refuses its pages' requests to local addresses there too, before they are sent. The permission stays in the profile, for the windows you browse (#570).
-  - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address (for https on the local network it refuses only after the TLS handshake), and the tab shows a blocked page; what the browser itself opens there is checked the same way, and a captive-portal login tab is not (R29). A page loaded through a proxy is not checked this way either (R29).
+  - Engine patch 0015 (#561): in the engines an agent drives, a page the agent opens at this computer or the local network, a redirect hop's and a new tab's included, is now refused before the request is sent, unless the agent may reach that place then. The engine still connects to that address (for https on the local network it refuses only after the TLS handshake, and with a TLS session it resumes for that host it may already have sent the request as early data; not reproduced), and the tab shows a blocked page; what the browser itself opens there is checked the same way, and a captive-portal login tab is not (R29). A page loaded through a proxy is not checked this way either (R29).
   - What is left of #243 is accepted as residual risk for 1.0 (R29, #614): pages loaded through a proxy; requests with no tab (shared workers, beacons, keepalive fetches) and WebRTC; the pages you browse; and, in an engine an agent drives, a captive-portal tab, which keeps the engine's own grant. The first three have After 1.0 issues (#609, #610, #611).
   - Nothing to do: it comes with the update.
 - From the full review of what Nulavio ships (#454, at `74edfea4`), fixed in #694 ([advisory GHSA-7qcr-35cg-393g](https://github.com/nulavio/nulavio/security/advisories/GHSA-7qcr-35cg-393g), medium). The advisory was published on 2026-11-25.
@@ -63,7 +63,7 @@ A Nulavio release on the same engine ([release](https://github.com/nulavio/nulav
     - A profile taken away from an agent closes for it at the next call.
     - An agent's click can no longer follow in-page routing into a profile it was not given.
     - An engine an agent drives starts and messages no other profile.
-  - **Shell pages:** another extension can no longer open Nulavio's routing, unlock and look-alike pages with values of its own. They take what they show from the Shell's records.
+  - **Shell pages:** the routing pages and the unlock page take no link, rule or site from their address, and the look-alike page takes only the address it checks. Another extension can still open them as tabs; what that still allows is R87.
   - **Phone pairing (`nv1`):** an attacker in the middle of both halves of a pairing could make the six-digit codes match. The exchange is now protocol version 2.
     - To pair a phone again, update Nulavio Companion to 0.2.0.
     - Phones already paired keep working.
@@ -71,6 +71,7 @@ A Nulavio release on the same engine ([release](https://github.com/nulavio/nulav
     - The provider key is bound to the provider it was saved for.
     - Changing the address with an empty key field removes the key, where it sent the key to the new address before.
     - A search engine holding a curated provider's name is not taken for that provider.
+    - A key saved before this update is bound to the provider Settings name at the update (R86). Whoever changed the provider with the key field empty before updating: type the current provider's key again in Settings, or revoke the earlier key at the provider that issued it.
   - **Waitlist (site):** the worker accepts plain addresses only, and the documented manual removal takes the address as data.
   - **Confined mode (`--confined`):**
     - The confined browser gets its own `/dev`, no session bus and only its own runtime folder.
@@ -79,8 +80,8 @@ A Nulavio release on the same engine ([release](https://github.com/nulavio/nulav
   - **Vault:**
     - The engine's own profile menus go through Nulavio's lock check.
     - The auto-lock re-checks the profile before it unmounts.
-  - **Look-alike login warning:** the check starts only on the person's own click or key in the password field, so a page cannot learn its result or skip it.
-  - **Package updates (Fedora):** unattended updates accept only the release key whose fingerprint the package pins.
+  - **Look-alike login warning:** the check runs only on the person's own input in the password field: a click, a tap or a key, or the field getting the focus right after the person's input on that page. A focus the page gives itself never starts it, so each answer a site gets needs the person's input there (R41).
+  - **Package updates (Fedora):** unattended updates import signing keys only from the key the package installed, never from the repository file's key address, so they accept no key the administrator has not (R83).
   - What to do: update (`sudo dnf upgrade nulavio`, `sudo apt upgrade nulavio`), and update the Companion before pairing a phone again.
 
 ## Nulavio 160.0.1-0.2 (Firefox 160.0.1), published 2026-11-19
