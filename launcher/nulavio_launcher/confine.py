@@ -185,12 +185,15 @@ def _inside_hidden(path: Path, hidden: list[Path]) -> bool:
     return any(path != folder and path.is_relative_to(folder) for folder in folders)
 
 
-def seen_inside(path: Path, hidden: list[Path]) -> Path | None:
+def seen_inside(path: Path, hidden: list[Path], restored: list[Path] = ()) -> Path | None:
     """Where a folder must also be bound so that `path` reaches it inside, or None when its resolved path does.
 
-    A hidden folder is empty inside, so a symlink in it is not there. `path` is followed as the kernel would follow
-    it inside: a link that is still visible is followed, and the first link met in a hidden folder ends the walk.
-    The path from that link on is returned; bubblewrap makes plain folders for it in the empty one.
+    A hidden folder is empty inside, so a symlink in it is not there, except where a bind made before puts it back
+    (`restored`, the destinations of those binds). `path` is followed as the kernel would follow it inside: a link
+    that is still visible, or put back, is followed, and the first link met in a hidden folder ends the walk. A hidden
+    link above an earlier destination is a plain folder inside, which bubblewrap made on the way to it, and holds
+    nothing else. The path from where the walk ends is returned; bubblewrap makes plain folders for it in the empty
+    one. bubblewrap refuses to mount on a link, so a link that is put back is never returned.
     """
     if not path.is_absolute():
         raise ConfineError(f"not starting: {path} is not an absolute path")
@@ -204,14 +207,19 @@ def seen_inside(path: Path, hidden: list[Path]) -> Path | None:
             current = current.parent
             continue
         candidate = current / name
+        if _inside_hidden(candidate, hidden) and not any(candidate.is_relative_to(r) for r in restored):
+            if any(r != candidate and r.is_relative_to(candidate) for r in restored):
+                current = candidate  # a folder bubblewrap made on the way to an earlier bind
+                continue
+            # A link, or anything in such a made folder (`current` then still goes through the link outside).
+            if candidate.is_symlink() or current.resolve() != current:
+                rest = list(reversed(pending))
+                if ".." in rest:
+                    raise ConfineError(f"not starting: {path} goes through a link and then '..'; give a plain path")
+                return candidate.joinpath(*rest)
         if not candidate.is_symlink():
             current = candidate
             continue
-        rest = list(reversed(pending))
-        if _inside_hidden(candidate, hidden):
-            if ".." in rest:
-                raise ConfineError(f"not starting: {path} goes through a link and then '..'; give a plain path")
-            return candidate.joinpath(*rest)
         links += 1
         if links > 40:  # the kernel's own limit
             raise ConfineError(f"not starting: too many levels of symbolic links in {path}")
@@ -280,14 +288,18 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     args += ["--ro-bind", str(engine_dir), str(engine_dir)]  # it may live under a hidden folder
     # Writable: the profile and Downloads, at their resolved paths, and also at the paths the browser is given when
     # those go through a link that is hidden inside: otherwise the engine would make an empty folder there, in
-    # memory, and a download or a whole profile would be lost when it closes (#711). Downloads is found from the
-    # resolved home, so a home folder that is itself such a link still loses it (#722).
+    # memory, and a download or a whole profile would be lost when it closes (#711). A link that an earlier bind
+    # puts back (a Downloads link inside the profile) is there inside and needs nothing more. Downloads is found
+    # from the resolved home, so a home folder that is itself such a link still loses it (#722).
+    restored = [Path(args[i + 2]) for i, a in enumerate(args) if a in ("--bind", "--ro-bind") and args[i + 2] != "/"]
     for path in (profile_dir, downloads):
         real = path.resolve()
         args += ["--bind", str(real), str(real)]
-        seen = seen_inside(path, emptied)
+        restored.append(real)
+        seen = seen_inside(path, emptied, restored)
         if seen is not None and seen != real:
             args += ["--bind", str(real), str(seen)]
+            restored.append(seen)
     for name in UNSET_ENV:
         args += ["--unsetenv", name]
     args += ["--chdir", str(home), "--new-session"]
