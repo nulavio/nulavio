@@ -195,6 +195,10 @@ class WrapTest(unittest.TestCase):
         options = args[: args.index("--")]
         return [options[i + 2] for i, a in enumerate(options) if a in ("--bind", "--ro-bind", "--dev-bind")]
 
+    def triples(self, args: list[str]) -> list[tuple[str, str, str]]:
+        options = args[: args.index("--")]
+        return [(a, options[i + 1], options[i + 2]) for i, a in enumerate(options) if a.endswith("bind")]
+
     def binds(self, args: list[str]) -> list[tuple[str, str]]:
         options = args[: args.index("--")]
         return [(options[i + 1], options[i + 2]) for i, a in enumerate(options) if a == "--bind"]
@@ -239,7 +243,7 @@ class WrapTest(unittest.TestCase):
         self.assertFalse([d for d in self.destinations(args) if Path(d).is_symlink()], self.destinations(args))
         self.assertEqual(self.binds(args)[1:], [(str(self.profile.resolve()),) * 2, (str(real.resolve()),) * 2])
         # Seen from the walk: a link under a folder put back is followed; one in a folder still hidden is not.
-        restored = [self.profile.resolve()]
+        restored = [(self.profile.resolve(), True), (real.resolve(), True)]
         self.assertIsNone(confine.seen_inside(self.profile / "Downloads", [self.home.resolve()], restored))
         (self.home / "Downloads").symlink_to(real)
         found = confine.seen_inside(self.home / "Downloads", [self.home.resolve()], restored)
@@ -266,13 +270,46 @@ class WrapTest(unittest.TestCase):
                                                         (str((disk / "x/p").resolve()), str(home / "link/p")),
                                                         (str(real),) * 2, *extra])  # fmt: skip
 
+    def test_a_downloads_folder_in_a_linked_read_only_folder_is_bound_writable_where_the_browser_looks(self):
+        # ~/.fonts is a link and is put back read-only, so ~/.fonts/Downloads is there inside but not writable: the
+        # folder is bound writable at that path too, never on a link that the read-only put-back shows.
+        fonts = self.tmp / "disk/fonts"
+        fonts.mkdir(parents=True)
+        (self.home / ".fonts").symlink_to(fonts)
+        (self.home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
+        home, fonts = self.home.resolve(), fonts.resolve()
+        layouts = {
+            "a plain folder": (None, fonts / "Downloads", home / ".fonts/Downloads"),
+            "an absolute link": (fonts.parent / "dl2", fonts.parent / "dl2", None),  # writable where it points
+            "a relative link": ("dl2", fonts / "dl2", home / ".fonts/dl2"),
+        }
+        for layout, (target, real, extra) in layouts.items():
+            with self.subTest(layout):
+                for leftover in (fonts / "Downloads", fonts / "dl2", fonts.parent / "dl2"):
+                    if leftover.is_symlink():
+                        leftover.unlink()
+                if target is None:
+                    (fonts / "Downloads").mkdir(exist_ok=True)
+                else:
+                    if (fonts / "Downloads").is_dir():
+                        (fonts / "Downloads").rmdir()
+                    real.mkdir(exist_ok=True)
+                    (fonts / "Downloads").symlink_to(target)
+                args = self.wrap()
+                self.assertIn(("--ro-bind", str(home / ".fonts"), str(home / ".fonts")), self.triples(args))
+                expected = [(str(real), str(real))] + ([(str(real), str(extra))] if extra else [])
+                self.assertEqual(self.binds(args)[2:], expected)
+
     def test_a_link_still_there_inside_adds_no_bind(self):
         # A home folder reached through a link outside the hidden folders (/home -> var/home): the link is there
         # inside, so the resolved path bound at itself is what the browser's path leads to.
         users = self.tmp / "var/home/u"
         (users / ".local/share/p").mkdir(parents=True)
         (self.tmp / "home-link").symlink_to("var/home")
-        self.assertIsNone(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users]))
+        bound = [(users.resolve() / ".local/share/p", True)]  # the resolved path, bound writable at itself
+        self.assertIsNone(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], bound))
+        self.assertEqual(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], [(users, False)]),
+                         users.resolve() / ".local/share/p", "reached, but only read-only: bound writable there")  # fmt: skip
         (self.tmp / "disk").mkdir()
         (users / "Downloads").symlink_to(self.tmp / "disk")
         self.assertEqual(confine.seen_inside(self.tmp / "home-link/u/Downloads", [users]), users / "Downloads")
@@ -353,17 +390,17 @@ CONNECT = (
     "        s.close()\n"
 )
 
-# Run inside bubblewrap: argv is pairs of a name and a folder; write a file in each and print "<name>-ok" when it
-# could be written.
+# Run inside bubblewrap: argv is pairs of a name and a folder; write a file in each and print "<name>-ok", or
+# "<name>-<errno name>" (downloads-EROFS) when it could not be written.
 WRITE = (
-    "import sys\n"
+    "import errno, sys\n"
     "from pathlib import Path\n"
     "for name, folder in zip(sys.argv[1::2], sys.argv[2::2]):\n"
     "    try:\n"
     "        (Path(folder) / 'written').touch()\n"
     "        print(name + '-ok')\n"
-    "    except OSError:\n"
-    "        pass\n"
+    "    except OSError as exc:\n"
+    "        print(name + '-' + errno.errorcode.get(exc.errno, 'error'))\n"
 )
 
 
@@ -541,6 +578,34 @@ class RealBubblewrapTest(unittest.TestCase):
                 self.assertEqual(run.stdout.split(), ["profile-ok", "downloads-ok"])
                 self.assertTrue((profile.resolve() / "written").exists())
                 self.assertTrue((disk / "Downloads/written").exists())
+
+    def test_a_downloads_folder_in_a_linked_fonts_folder_is_writable(self):
+        # ~/.fonts is a link put back read-only: without a writable bind at ~/.fonts/Downloads a download fails with
+        # "Read-only file system"; a bind on a link there would stop the start. A plain folder, then links to others.
+        for target in (None, "dl2", "/abs"):
+            with self.subTest(target=target):
+                tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+                self.addCleanup(shutil.rmtree, tmp, True)
+                home, fonts = tmp / "home", tmp / "disk/fonts"
+                profile = home / ".local/share/nulavio/data/profiles/p"
+                for folder in (profile, home / ".config", fonts):
+                    folder.mkdir(parents=True)
+                (home / ".fonts").symlink_to(fonts)
+                if target is None:
+                    real = fonts / "Downloads"
+                    real.mkdir()
+                else:
+                    real = fonts / "dl2" if target == "dl2" else tmp / "disk/dl2"
+                    real.mkdir()
+                    (fonts / "Downloads").symlink_to("dl2" if target == "dl2" else real)
+                (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
+                write = [sys.executable, "-I", "-c", WRITE, "downloads", str(home / ".fonts/Downloads")]
+                args = confine.wrap(write, profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent,
+                                    home=home, binary=confine.bwrap())  # fmt: skip
+                run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+                self.assertEqual(run.returncode, 0, run.stderr)
+                self.assertEqual(run.stdout.split(), ["downloads-ok"])
+                self.assertTrue((real / "written").exists())
 
 
 if __name__ == "__main__":
