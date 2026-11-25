@@ -11,6 +11,114 @@ Update an installed Nulavio with `sudo dnf upgrade nulavio`. Only the latest rel
 
 <!-- releases -->
 
+<!-- release:v160.0.1-0.3 -->
+## [160.0.1-0.3](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3) — 2026-11-25
+
+Nulavio 160.0.1-0.3, built from Firefox 160.0.1 (commit 20bfe39319ec).
+
+### What's new
+
+The side panel can open on the other side of the tabs, the engine an AI agent uses refuses more local pages, the audio noise reaches more reads, and a new window's band names its profile and kind in its first frame, with security fixes.
+
+#### Changes that need your attention
+
+- Pairing a phone now needs Nulavio Companion 0.2.0, which ships with this version. Version 0.1.0 does not read the new pairing code; phones already paired keep working.
+- AI agents: "Allow once" covers one call, and "until the agent disconnects" covers the site and place the request showed. An engine an agent drives does not open or contact another profile.
+- Confined mode (--confined): the confined browser has its own /dev, with the GPU and the cameras present at start, and no session bus; USB security keys and gamepads do not reach it. X11-only sessions are refused.
+
+#### What is new
+
+- Side panel opposite the tabs, in Settings, under Appearance: the assistant, the bookmarks and the history open on the side of the page opposite the sidebar, in every layout. In Immersive it leaves by its own edge and comes back from it, as the tab list does. It starts off.
+- In an engine opened for an AI agent, a page at your computer or the local network that the agent opens, or whose address you type in that engine's window, is refused before the request is sent (for https on the local network, after the TLS handshake), unless the agent may reach the place.
+- In your own profile opened for an AI agent, a site you allowed to reach the local network loses that permission during the run. It stays saved, and the windows you browse do not change.
+- The per-site noise on generated audio also reaches what a node reads inside an offline rendering (analyser, script processor, worklet and compressor). Sound that plays does not change.
+- The nulavio-doctor command warns when the engine is not the Nulavio build and says the Bridge will refuse it.
+
+#### Fixes
+
+- A new window's band says its profile and kind of window in its first frame and, in an ordinary wide window with tabs down the side, is already in the navigation row in that frame.
+- With the side panel open beside the page in a window without the tab bar and sidebar, the panel has the frame margin at the window's edge and a single gap to the page.
+
+In Portuguese and English: https://nulavio.net/novidades/160.0.1-0.3/ and https://nulavio.net/en/whats-new/160.0.1-0.3/
+
+### Features
+
+- window: the side panel can open on the other side of the tabs (Aparência, patch 0013) (#562) ([4e0959e27479](https://github.com/nulavio/nulavio/commit/4e0959e27479ba43f2946d12b474e14c8a35af89))
+- window: in Imersivo the side panel opposite the tabs has an edge of its own (#564) ([fd2adccead65](https://github.com/nulavio/nulavio/commit/fd2adccead65bd7d98334ea384c54a977a7903dc))
+- doctor: warn when the engine is not the Nulavio build (#577) ([9d1b757750c6](https://github.com/nulavio/nulavio/commit/9d1b757750c62ead6b7b9056460af0d1d1e89a13))
+- site: PrivacyTests.org's fingerprinting probes side by side, generated from published data (#590) ([4229ee3477d1](https://github.com/nulavio/nulavio/commit/4229ee3477d104e0f165bb8d2bfffdf751d4f7f2))
+- fingerprinting: the audio noise reaches what a node reads inside an offline rendering (engine patch 0016) (#593) ([65c3c8c1280c](https://github.com/nulavio/nulavio/commit/65c3c8c1280c92515392510ab9c103dd6ef192f8))
+
+### Fixes
+
+- release: the advisory watch has one time budget, skips other monorepo products and keeps exceptions on a failed fetch (#572) ([89e0d4756f00](https://github.com/nulavio/nulavio/commit/89e0d4756f0019f6531853a0aba092fa0ea4c721))
+- theme: a side panel without a launcher has the frame margin and one gap (#586) ([58679992e59d](https://github.com/nulavio/nulavio/commit/58679992e59d3e807b1d1aace142b61397d4e7f5))
+- docs: LICENSES.md and the committed SBOM follow the extension lock (#582) ([8e936ebef9b5](https://github.com/nulavio/nulavio/commit/8e936ebef9b5fe0664624ac3cffe912701076c46))
+- build: rebuild the build image when it is old and report its rustc (#583) ([1f0e21d36182](https://github.com/nulavio/nulavio/commit/1f0e21d3618239f5c91122ee06883601262a6424))
+- ci: the KeePassXC step presses Connect again when no dialog opens (#581) ([e6dfac42f2cc](https://github.com/nulavio/nulavio/commit/e6dfac42f2cc600193a4de8f37476d7fbacae485))
+- research: pin PrivacyTests.org at ec9ad19f, Time zone is now Time zone region (#598) ([a236989520de](https://github.com/nulavio/nulavio/commit/a236989520de02b69e7e336d25d11a5d374cc899))
+- shell: a new window's band says its profile and kind in its first frame (#604) ([7c97495ff824](https://github.com/nulavio/nulavio/commit/7c97495ff824a101fbfeb482690c26bb430b6c1c))
+- shell: a new window's band joins the navigation row in its first frame (#606) ([a2af4c8a8ae5](https://github.com/nulavio/nulavio/commit/a2af4c8a8ae55fd9a8a4bf82374eb8999571140d))
+- shell: a window that starts on a trust page does not build the band neutral (#608) ([74edfea48107](https://github.com/nulavio/nulavio/commit/74edfea4810751d4f54aeedd80e634aefb7a9552))
+- security: harden agent permissions, Shell page inputs, pairing, the assistant key and the Vault entry points (#694) ([d3e16d45fe22](https://github.com/nulavio/nulavio/commit/d3e16d45fe22612ccfd16a5ebae719c724c3b287))
+
+### Security-related changes
+
+- ai: the Shell checks what the agent opens on the address the engine connects to (#560) ([69964b0b2cb0](https://github.com/nulavio/nulavio/commit/69964b0b2cb02900edbfd59763a8ee11d82fe653))
+- engine: an agent's engine ignores a site's saved local-network permission (patch 0014) (#584) ([a2a74733255d](https://github.com/nulavio/nulavio/commit/a2a74733255d55e11e87990423d0c68be7f04bff))
+- engine: an agent's engine refuses a local page its driver opens before sending it (patch 0015) (#589) ([e72fdacb519f](https://github.com/nulavio/nulavio/commit/e72fdacb519f5f1fdc799df8935a5524d12276e0))
+
+### Documentation
+
+- security: 160.0.1-0.2 published, and a new Unreleased section (#569) ([ce8f2d3a9835](https://github.com/nulavio/nulavio/commit/ce8f2d3a98351a33889e8e1180da09807ba35ac4))
+- security: link GHSA-95h5-h3m4-3jhv in the 160.0.1-0.2 changelog (#573) ([7050c25d866d](https://github.com/nulavio/nulavio/commit/7050c25d866d2cc1c11c8c48d74f9ec6ad177fb3))
+- adr: ADR 0003's start-up profile row says what #289 changed (#594) ([abed10794184](https://github.com/nulavio/nulavio/commit/abed10794184b0ab4662fcf26175656f73346eb1))
+- research: the 50-site run repeated on engine 160 (#592) ([770b51f55057](https://github.com/nulavio/nulavio/commit/770b51f55057e3a2d67556e19c74062f6ee1270a))
+- brand: the brand review's audit, references and proposals (#588) ([5fe97f08ddd5](https://github.com/nulavio/nulavio/commit/5fe97f08ddd5ddc35f4e69d5644cec2d4898233f))
+- security: R29 records what is left of #243 as accepted residual risk (#614) ([a28b4d060e3b](https://github.com/nulavio/nulavio/commit/a28b4d060e3b0a28c05d4be626020b7ce24a2ac1))
+- performance: the measured gap to Firefox, and PGO after 1.0 (#613) ([4d99073e6f5e](https://github.com/nulavio/nulavio/commit/4d99073e6f5e5e1460757dfffe4e666f18bb9260))
+- release: the public notes for 160.0.1-0.3 (#693) ([7413aba7be29](https://github.com/nulavio/nulavio/commit/7413aba7be296ee955ebd7a7824c14acd0d82373))
+
+### Tests
+
+- integration: steady the tab\_groups 05 and ai\_bridge 26 flakes (#578) ([4468c95e8327](https://github.com/nulavio/nulavio/commit/4468c95e832782b0b31f8cb83b3d4fdf7ef08528))
+- asan: wait for the state each test reads under the sanitiser (#576) ([87b6644bb77c](https://github.com/nulavio/nulavio/commit/87b6644bb77c079839db04ddcb211e47d15edb88))
+- release: package checks assert the installed tools use the Nulavio engine beside a distribution Firefox (#585) ([f6bbc321d118](https://github.com/nulavio/nulavio/commit/f6bbc321d118a1bd331b6daa8a248bb5291f7bcd))
+- asan: the sanitised build keeps the content sandbox (#596) ([3a426fac5b61](https://github.com/nulavio/nulavio/commit/3a426fac5b6148f6323b035870798c7df0cebc3d))
+- asan: five more tests wait for the state they read (#600) ([0c5968b6a147](https://github.com/nulavio/nulavio/commit/0c5968b6a1477d16209475d5187f6b87958541de))
+- downloads: the screenshot after a theme switch waits for a paint and retries (#603) ([71d127d924c0](https://github.com/nulavio/nulavio/commit/71d127d924c07f11a65b39f320dc82215e893011))
+- integration: the private-window tests wait for the new window before they navigate (#696) ([20bfe39319ec](https://github.com/nulavio/nulavio/commit/20bfe39319ec59097a78423f5179bf347450a7a5))
+
+### Maintenance
+
+- release: record v160.0.1-0.2 (#568) ([90473545be84](https://github.com/nulavio/nulavio/commit/90473545be847e7b845910390631c8d4ad96240c))
+
+### Build and CI
+
+- asan: a sandbox input to try the content sandbox in the AddressSanitizer build (#580) ([39e1070eaf9e](https://github.com/nulavio/nulavio/commit/39e1070eaf9e1a1cd94f0831badc0221795b752a))
+
+[Full changelog](https://github.com/nulavio/nulavio/compare/v160.0.1-0.2...20bfe39319ec59097a78423f5179bf347450a7a5)
+
+### Install and verify
+
+Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/
+
+On Ubuntu, `nulavio.sources` from the download page has the SHA-256 `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`.
+
+Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.2.0.apk`. Its signing certificate's SHA-256 is `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (`apksigner verify --print-certs nulavio-companion-0.2.0.apk` prints it).
+
+Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`): check that first, as the download page shows. Each also has a GitHub build-provenance attestation from the release workflow on `main`; check it with both of these options:
+
+```sh
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
+```
+
+[Build and test run](https://github.com/nulavio/nulavio/actions/runs/45608565176).
+
+[Security changelog](https://github.com/nulavio/nulavio/blob/main/docs/security/changelog.md) and [published advisories](https://github.com/nulavio/nulavio/security/advisories). Commit categories are not a vulnerability assessment.
+
+
 <!-- release:v160.0.1-0.2 -->
 ## [160.0.1-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.2) — 2026-11-19
 
