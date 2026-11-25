@@ -1123,6 +1123,7 @@ class FingerprintingTest(unittest.TestCase):
             # The new window's first page must have finished loading: otherwise it can replace the navigation below.
             ready = (
                 "return Boolean(window.gBrowserInit && gBrowserInit.delayedStartupFinished)"
+                " && gBrowser.selectedBrowser.currentURI?.spec === 'about:privatebrowsing'"
                 " && !gBrowser.selectedBrowser.webProgress.isLoadingDocument;"
             )
             self.assertTrue(harness.wait_until(lambda: self.m.chrome(ready), 20), "the private window never started")

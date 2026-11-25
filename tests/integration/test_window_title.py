@@ -92,6 +92,7 @@ class WindowTitleTest(unittest.TestCase):
             # loaded; a navigation sent before that can be replaced by the window's own first page.
             ready = (
                 "return Boolean(window.gBrowserInit && gBrowserInit.delayedStartupFinished)"
+                " && gBrowser.selectedBrowser.currentURI?.spec === 'about:privatebrowsing'"
                 " && !gBrowser.selectedBrowser.webProgress.isLoadingDocument;"
             )
             self.assertTrue(harness.wait_until(lambda: self.m.chrome(ready), 20), "the private window never started")
