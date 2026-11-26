@@ -8,6 +8,7 @@ import { localize, t } from "../lib/i18n.js";
 import { TEMPLATE_NAMES, templateHintKey } from "../lib/names.js";
 import { clearCode, guardLeaving, printCode, showCode } from "../lib/recovery.js";
 import { wireSettingsLinks } from "../lib/settings.js";
+import { closeOwnTab } from "../lib/tabs.js";
 import { acceptField, announce, chip, errorText, h, refuseField } from "../lib/ui.js";
 import "../lib/moment.js";
 
@@ -231,11 +232,7 @@ byId("protection-back").addEventListener("click", () => {
   state.fromMenu = false;
   step("profile");
 });
-byId("cancel").addEventListener("click", async () => {
-  const tab = await browser.tabs.getCurrent();
-  const siblings = await browser.tabs.query({ windowId: tab.windowId });
-  return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
-});
+byId("cancel").addEventListener("click", () => closeOwnTab());
 byId("step-recovery").addEventListener("submit", finish);
 
 localize();

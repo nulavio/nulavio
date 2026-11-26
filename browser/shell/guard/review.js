@@ -3,6 +3,7 @@
    happens on its own. */
 
 import { localize, t } from "../lib/i18n.js";
+import { closeOwnTab } from "../lib/tabs.js";
 import { announce, errorText, h } from "../lib/ui.js";
 
 const guard = browser.nulavioGuard;
@@ -184,11 +185,7 @@ function render(findings) {
   reviewing = findings.length > 0;
 }
 
-document.getElementById("close").addEventListener("click", async () => {
-  const tab = await browser.tabs.getCurrent();
-  const siblings = await browser.tabs.query({ windowId: tab.windowId });
-  return siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" });
-});
+document.getElementById("close").addEventListener("click", () => closeOwnTab());
 
 // #351: a finding added or updated while the page is open (the engine takes a replaced extension in a moment after
 // the start-up check, and the finding then says its version) is shown without reopening the page. The keyboard

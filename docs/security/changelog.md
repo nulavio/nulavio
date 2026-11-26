@@ -31,6 +31,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Nulavio fixes**:
 
+- **Look-alike login warning and the Primary Password** (#708): with a Primary Password set and not yet entered, using a password field on any site could ask for it, as the check read every saved login to learn their sites. The check now reads nothing until the person has entered the Primary Password where the engine asks for it (a site with a matching login); the next use of a password field after that is checked. Before that, a look-alike is not caught (R41). Nothing to do.
 - Confined mode (`--confined`, #711): when `~/Downloads` or the data folder above a profile was a symbolic link, for example to another disk, the confined browser found an empty folder at the path it was given. Files downloaded there, or a whole profile, were then kept in memory and lost when the browser closed. Each folder is now also put back at the path the browser uses, so downloads land in the real folder and the real profile opens. A `Downloads` link to a folder that is missing refuses the confined start, where it stopped with a Python error before. Nothing to do: it comes with the update. Files saved that way before the update are already lost. Not fixed yet: a home folder that is itself a link inside a hidden folder (for example `/home/u` linked to another disk) still loses downloads in confined mode (#722); the profile is fine there.
 
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
