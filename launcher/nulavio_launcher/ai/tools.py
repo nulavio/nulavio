@@ -251,6 +251,20 @@ class ToolError(Exception):
     """A tool failed in a way the agent can act on (bad id, stale element, page error)."""
 
 
+# page_read and page_snapshot run their helper in the page's own realm, where the page can redefine what it
+# calls (document.title, document.body, querySelectorAll, getComputedStyle) and so return values of any type
+# (#674). A result of another shape is this tool error, which names neither the page's values nor their types.
+_UNEXPECTED = "%s came back in an unexpected shape, which the page can cause; nothing was read. Call %s again."
+
+
+def _element_pair(pair: object) -> bool:
+    """One entry of SNAPSHOT_FN's result: [node handle, info object]."""
+    if not isinstance(pair, list) or len(pair) != 2:
+        return False
+    node, info = pair
+    return isinstance(node, dict) and isinstance(node.get("sharedId"), str) and bool(node["sharedId"]) and isinstance(info, dict)
+
+
 @dataclass(frozen=True)
 class Tool:
     name: str
@@ -1755,8 +1769,10 @@ class Bridge:
         self.still_at(tab, url, cancel)
         limit = args.get("max_chars", 20000)
         page = self._eval(tab, READ_EXPR % (limit + 1), cancel)
-        text = page.get("text") or ""
-        data = {"tab": tab, "url": page.get("url"), "title": page.get("title"), "text": text[:limit],
+        if not isinstance(page, dict) or not all(isinstance(page.get(key), str) for key in ("title", "url", "text")):
+            raise ToolError(_UNEXPECTED % ("the page's text", "page_read"))
+        text = page["text"]
+        data = {"tab": tab, "url": page["url"], "title": page["title"], "text": text[:limit],
                 "truncated": len(text) > limit, "untrusted": True, "dialog": self._open_dialog(tab)}  # fmt: skip
         self._say_forms_held(tab, data, cancel)
         return self._ok(data, f"{UNTRUSTED}\n\nTitle: {data['title']}\nURL: {data['url']}\n\n{data['text']}"), url
@@ -1772,12 +1788,16 @@ class Bridge:
         url = self._url_of(tab, cancel, enter=False)
         url = self.require_here("read_pages", url, checked=checked)
         self.still_at(tab, url, cancel)
-        pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": args.get("max_elements", 200)}], cancel)
+        most = args.get("max_elements", 200)
+        pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": most}], cancel)
+        if not isinstance(pairs, list) or len(pairs) > most or not all(_element_pair(pair) for pair in pairs):
+            raise ToolError(_UNEXPECTED % ("the page's elements", "page_snapshot"))
         mapping, elements = {}, []
-        for index, (node, info) in enumerate(pairs or [], start=1):
+        for index, (node, info) in enumerate(pairs, start=1):
             uid = f"e{index}"
             mapping[uid] = node["sharedId"]
-            elements.append({"element": uid, **info})
+            # The page can add properties to `info` (a setter on Object.prototype): its own `element` is dropped.
+            elements.append({"element": uid, **{key: value for key, value in info.items() if key != "element"}})
         self.elements[tab] = mapping
         data = {"tab": tab, "url": url, "title": self._title(tab, cancel), "elements": elements, "untrusted": True}
         self._say_forms_held(tab, data, cancel)
