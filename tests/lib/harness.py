@@ -34,6 +34,7 @@ import threading
 import time
 import urllib.parse
 import zlib
+from html import escape
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -397,8 +398,11 @@ class FixtureServer:
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
             # `frame=<address>`: the page holds a frame (#f) with that address, also when it is loaded again.
-            frame = urllib.parse.quote(urllib.parse.unquote(query["frame"]), safe=":/?=&") if "frame" in query else ""
-            frame = f'<iframe id=f src="{frame}"></iframe>' if frame else ""
+            # Decoded once and kept as given (only escaped for the attribute); an address other than http(s) is a 404.
+            frame = urllib.parse.unquote_plus(query["frame"]) if "frame" in query else ""
+            if frame and not frame.startswith(("http://", "https://")):
+                return None, html, {}
+            frame = f'<iframe id=f src="{escape(frame)}"></iframe>' if frame else ""
             return f"<!doctype html><title>{name}</title><p id=name>{name}</p>{frame}".encode(), html, {}
         if path == "/opensearch.xml":
             # OpenSearch fixture (test_search 19): a description whose search, suggestion or search-form address adds
