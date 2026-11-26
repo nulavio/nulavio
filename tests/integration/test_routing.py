@@ -167,6 +167,51 @@ class RoutingTest(unittest.TestCase):
     def hits(self, path: str) -> int:
         return len(self.server.requests_to(path))
 
+    def open_from_link_menu(self, profile: str) -> None:
+        """Right-click the page's #go link and choose a profile in its "Open link in profile" item."""
+        link = self.m.find_element("#go")
+        menu_item = 'document.querySelector("[id$=\\"nulavio-open-link-in\\"]")'
+        self.m.send(
+            "WebDriver:PerformActions",
+            {
+                "actions": [
+                    {
+                        "type": "pointer",
+                        "id": "mouse",
+                        "parameters": {"pointerType": "mouse"},
+                        "actions": [
+                            {
+                                "type": "pointerMove",
+                                "origin": {"element-6066-11e4-a52e-4f735466cecf": link},
+                                "x": 0,
+                                "y": 0,
+                            },
+                            {"type": "pointerDown", "button": 2},
+                            {"type": "pointerUp", "button": 2},
+                        ],
+                    }
+                ]
+            },
+        )
+        self.m.send("WebDriver:ReleaseActions")
+        shown = harness.wait_until(
+            lambda: self.m.chrome(
+                "const m = document.getElementById('contentAreaContextMenu');"
+                f"const item = {menu_item};"
+                "return m.state === 'open' && item && !item.hidden ? item.getAttribute('label') : null;"
+            ),
+            timeout=10,
+        )
+        self.assertTrue(shown, "the link menu has no 'Open link in profile' item")
+        target = self.m.chrome(
+            f"const item = {menu_item};"
+            "const choice = [...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === arguments[0]);"
+            "if (!choice) { return [...item.querySelectorAll('menuitem')].map(i => i.getAttribute('label')); }"
+            "choice.click(); document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';",
+            [profile],
+        )
+        self.assertEqual(target, "clicked")
+
     # -- the decision engine (pure, on the engine's PSL and IDN) -------------
 
     def test_01_decisions(self):
@@ -674,48 +719,7 @@ class RoutingTest(unittest.TestCase):
     def test_14_link_menu_opens_the_link_in_the_chosen_profile(self):
         work = self.others["Trabalho"]
         self.m.navigate(self.server.url("/links"))
-        link = self.m.find_element("#go")
-        menu_item = 'document.querySelector("[id$=\\"nulavio-open-link-in\\"]")'
-        self.m.send(
-            "WebDriver:PerformActions",
-            {
-                "actions": [
-                    {
-                        "type": "pointer",
-                        "id": "mouse",
-                        "parameters": {"pointerType": "mouse"},
-                        "actions": [
-                            {
-                                "type": "pointerMove",
-                                "origin": {"element-6066-11e4-a52e-4f735466cecf": link},
-                                "x": 0,
-                                "y": 0,
-                            },
-                            {"type": "pointerDown", "button": 2},
-                            {"type": "pointerUp", "button": 2},
-                        ],
-                    }
-                ]
-            },
-        )
-        self.m.send("WebDriver:ReleaseActions")
-        shown = harness.wait_until(
-            lambda: self.m.chrome(
-                "const m = document.getElementById('contentAreaContextMenu');"
-                f"const item = {menu_item};"
-                "return m.state === 'open' && item && !item.hidden ? item.getAttribute('label') : null;"
-            ),
-            timeout=10,
-        )
-        self.assertTrue(shown, "the link menu has no 'Open link in profile' item")
-        target = self.m.chrome(
-            f"const item = {menu_item};"
-            "const choice = [...item.querySelectorAll('menuitem')].find(i => i.getAttribute('label') === arguments[0]);"
-            "if (!choice) { return [...item.querySelectorAll('menuitem')].map(i => i.getAttribute('label')); }"
-            "choice.click(); document.getElementById('contentAreaContextMenu').hidePopup(); return 'clicked';",
-            ["Trabalho"],
-        )
-        self.assertEqual(target, "clicked")
+        self.open_from_link_menu("Trabalho")
         self.assertTrue(harness.wait_until(lambda: self.hits("/page/from-menu"), timeout=30), "nothing was opened")
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/from-menu") for u in self.tabs(work)), timeout=10))
         time.sleep(1)
@@ -789,6 +793,42 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.hits(path), timeout=20), f"{name}: never loaded")
         time.sleep(1)
         self.assertFalse(any(path in u for u in self.tabs(self.others["Trabalho"])), f"{name}: routed")
+
+    def test_14c_a_link_opened_in_its_rules_profile_from_the_menu_is_not_credited_to_the_rule(self):
+        """#791: choosing, in the link menu, the very profile the site's rule names is the person's explicit choice.
+        NulavioRouting.openIn marks it --nulavio-route-by explicit (as #785 does for the engine's "Move tab to
+        profile", test_06c), so the band there does not say "Aberto pela sua regra". test_04b shows the notice for a
+        link the rule did send there."""
+        # localhost has the bank rule (open in Bancos); the page's link points to a localhost address of its own.
+        rule = self.call("return R.ruleFor(args[0]);", self.local("/page/menu-to-rule"))["rule"]
+        self.assertEqual((rule["id"], rule["action"], rule["profileId"]), (self.bank_rule, "open-in", self.ids["Bancos"]))
+        self.assertTrue(self.call("return R.enabled();"))
+        self.m.navigate(self.local("/links"))
+        self.m.execute("document.getElementById('go').href = '/page/menu-to-rule';")
+        self.open_from_link_menu("Bancos")
+        bank = self.instance("Bancos")
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/menu-to-rule") for u in self.tabs(bank)), timeout=30),
+            self.tabs(bank),
+        )
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.current_url().endswith("/page/menu-to-rule"):
+                break
+        self.assertTrue(
+            harness.wait_until(
+                lambda: bank.chrome("return gBrowser.selectedBrowser.currentURI.spec;").endswith("/page/menu-to-rule"),
+                timeout=15,
+            )
+        )
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=10)
+        self.assertFalse(shown, "a link the person opened from the menu was credited to the rule")
+        self.assertEqual(self.hits("/page/menu-to-rule"), 1, "the link was requested more than once")
+        self.assertFalse(any("/page/menu-to-rule" in u for u in self.own_tabs()), "it was opened here too")
 
     def test_15_in_page_routing_is_off_by_default(self):
         self.m5_setup()

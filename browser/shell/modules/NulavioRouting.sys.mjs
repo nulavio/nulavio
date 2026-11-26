@@ -368,7 +368,11 @@ class NulavioRoutingClass {
 
   // -- explicit choices (from Nulavio pages) ----------------------------------
 
-  /** Open a web URL in a profile because the user chose it. Never routed again there. */
+  /**
+   * Open a web URL in a profile because the user chose it: the link menu's "Open link in profile", a choice on the
+   * ask or blocked page, the held-back address after an unlock. Never routed again there, and marked explicit, so the
+   * band there credits no rule, even when the profile is the one the site's rule names (#791).
+   */
   async openIn(profileId, url) {
     const spec = webUrl(url);
     refuseInAgentEngine();
@@ -384,13 +388,15 @@ class NulavioRoutingClass {
     if ((await lazy.profileLockState(profile.path)) === "locked") {
       fail("locked");
     }
-    return { action: this.#launchRouted(profile, spec) };
+    return { action: this.#launchRouted(profile, spec, "explicit") };
   }
 
+  /** `by`: null for a rule, "default" for the default destination (UX6), "explicit" for the person's choice. */
   #launchRouted(profile, url, by = null) {
     refuseInAgentEngine();
     const service = lazy.SelectableProfileService;
-    const args = [`--${ROUTED_FLAG}`, ...(by === "default" ? [`--${ROUTE_BY_FLAG}`, "default"] : []), "-new-tab", url];
+    const marker = by === "default" || by === "explicit" ? [`--${ROUTE_BY_FLAG}`, by] : [];
+    const args = [`--${ROUTED_FLAG}`, ...marker, "-new-tab", url];
     try {
       service.sendCommandLine(profile.path, args, true);
       return "delivered";
