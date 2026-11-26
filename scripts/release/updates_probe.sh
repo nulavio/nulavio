@@ -1,7 +1,8 @@
 #!/bin/sh
 # Check Nulavio's automatic updates on a clean package install (#241), as root inside the package check containers:
 # they are off after the install, the helper turns them on and off, the units are valid where systemd-analyze is
-# there, and removing the package takes the units away (the flag file stays, empty, read by nothing).
+# there, the update fails without Nulavio's repository and, on APT, when the refresh of its index fails, and removing
+# the package takes the units away (the flag file stays, empty, read by nothing).
 #
 #   updates_probe.sh <command that removes the nulavio package>...
 set -eu
@@ -36,6 +37,22 @@ if /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
 fi
 after=$(rpm -q nulavio 2>/dev/null || dpkg-query -W -f='${Version}' nulavio)
 [ "$before" = "$after" ] || fail "update-nulavio changed the package without Nulavio's repository"
+# On APT, with Nulavio's list pointing at an address that refuses the connection: the failed refresh of its index fails
+# the run (#713), instead of a warning and an install from the lists APT had before.
+refresh=""
+if ! rpm -q nulavio >/dev/null 2>&1; then
+    list=/etc/apt/sources.list.d/nulavio.sources
+    printf 'Types: deb\nURIs: http://127.0.0.1:9/apt\nSuites: stable\nComponents: main\n' >"$list"
+    if /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
+        fail "update-nulavio succeeded when the refresh of Nulavio's index failed: $(cat /tmp/update.out)"
+    fi
+    grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out ||
+        fail "update-nulavio did not fail on the refresh of Nulavio's index: $(cat /tmp/update.out)"
+    rm -f "$list"
+    after=$(dpkg-query -W -f='${Version}' nulavio)
+    [ "$before" = "$after" ] || fail "update-nulavio changed the package when the refresh of Nulavio's index failed"
+    refresh=" or when the refresh of its index fails"
+fi
 "$helper" on >/dev/null 2>&1
 "$@" >/dev/null 2>&1 || fail "removing the package failed"
 for f in $shipped; do
@@ -43,4 +60,4 @@ for f in $shipped; do
 done
 [ ! -L "$link" ] || fail "the timer's link is still there after removal"
 [ -f "$flag" ] || fail "$flag went with the package"
-echo "automatic updates: off after install, the helper turns them on and off$verified, update-nulavio refuses without Nulavio's repository; removal takes the units, leaves $flag"
+echo "automatic updates: off after install, the helper turns them on and off$verified, update-nulavio refuses without Nulavio's repository$refresh; removal takes the units, leaves $flag"

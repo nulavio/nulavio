@@ -811,10 +811,17 @@ class PackagingTest(unittest.TestCase):
             commands,
             [
                 'exec dnf -y --refresh "--setopt=nulavio.gpgkey=file://$key" upgrade --from-repo=nulavio nulavio',
-                'apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0',
+                'apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0'
+                " -o APT::Update::Error-Mode=any",
                 "exec apt-get -q -y --no-remove -o Dpkg::Options::=--force-confold install --only-upgrade nulavio",
             ],
         )
+        # A failed refresh of Nulavio's index fails the run (#713); the probe of a clean .deb install points the list at
+        # an address that refuses the connection and expects that failure, with the package unchanged.
+        probe = (ROOT / "scripts" / "release" / "updates_probe.sh").read_text(encoding="utf-8")
+        self.assertIn("URIs: http://127.0.0.1:9/apt", probe)
+        self.assertIn("fail \"update-nulavio succeeded when the refresh of Nulavio's index failed", probe)
+        self.assertIn('grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out', probe)
         self.assertNotRegex(update, r"(?m)^[^#]*\b(curl|wget)\b")
         for weaker in ("gpgcheck", "allowerasing", "AllowUnauthenticated", "allow-unauthenticated",
                        "allow-downgrades", "force-yes", "trusted=yes"):  # fmt: skip
