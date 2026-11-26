@@ -126,12 +126,12 @@ Each scenario lists: assets · adversary · preconditions · trust boundary · i
 | Assets | A2, A3, A4 |
 | Adversary | T-WEB |
 | Preconditions | User lands on a lookalike or deceptive login page |
-| Boundary | User perception; TB3 for autofill |
+| Boundary | User perception; TB3 for autofill; TB25 for the look-alike check's window actors |
 | Impact | Credential theft; MFA bypass via real-time proxy |
-| Preventive | **Now:** Safe Browsing (phishing/malware) kept ON (lists downloaded from Google and matched locally; only hash prefixes leave the device; verified end to end by `test_14`); IDN punycode display rules; password managers fill only on matching origins (vendor behaviour; to certify). **Planned:** "suspicious login" interstitial (flow D in [ux-flows](../brand/ux-flows.md)): confusables and edit distance against the user's own saved-site list, computed locally; passkeys preferred |
-| Detective | Safe Browsing warnings |
-| Limitations | Brand-new phishing domains; AiTM proxies on exact-match lookalikes |
-| Tests | Guard rule for Safe Browsing prefs; integration `test_12` (key present) and `test_14` (Google's test phishing page is blocked); planned unit tests for the lookalike heuristic |
+| Preventive | **Now:** Safe Browsing (phishing/malware) kept ON (lists downloaded from Google and matched locally; only hash prefixes leave the device; verified end to end by `test_14`); IDN punycode display rules; password managers fill only on matching origins (vendor behaviour; to certify); the look-alike login warning (flow D in [ux-flows](../brand/ux-flows.md), `NulavioPasswords`): when the person clicks, taps or types in a password field, the site is compared with the sites of the logins kept in the browser's own password manager, locally. It is suspicious when a part of its name reads like a saved site's name (confusable characters, "rn" for "m"), is one change away from it (a letter added, missing or replaced, or two letters swapped; two changes for a name of 8 letters or more), or joins it with a login word ("paypal-secure-login"). The same site is never warned, and a saved name shorter than 4 letters is not compared. A Nulavio page then asks before the person goes on; "Continue" is remembered for that pair. **Planned:** passkeys preferred |
+| Detective | Safe Browsing warnings; the look-alike warning page |
+| Limitations | Brand-new phishing domains; AiTM proxies on exact-match lookalikes; the look-alike warning sees only the browser's own password manager and its fixed rules ([R41](residual-risks.md)) |
+| Tests | Guard rule for Safe Browsing prefs; integration `test_12` (key present) and `test_14` (Google's test phishing page is blocked). Look-alike warning: the rules in integration `test_passwords` `test_01_lookalike_rules`, the warning and "Continue" in `test_02_lookalike_site_shows_the_warning_and_continue_is_remembered` and the cases after it; the window actors in unit `test_lookalike_actors`; the read of the saved logins (Primary Password, one look-alike pair) in unit `test_lookalike_logins`. No unit test checks the rules case by case |
 | Residual | **Medium-high** (largest real-world credential loss vector) |
 
 ### S7 — Malicious downloads
