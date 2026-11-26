@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -12,13 +13,15 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import doctor, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import cli, doctor, guard, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import engine as engine_mod  # noqa: E402
 
 
 def mode(path: Path) -> int:
@@ -513,6 +516,69 @@ class ProfileTest(TempHome):
         profile.delete(prof)
         self.assertFalse(prof.path.exists())
         self.assertTrue(paths.profiles_root().exists())
+
+
+class GuardAtLaunchTest(TempHome):
+    """#704: `nulavio run` audits the prefs the engine loads, after the launcher has written prefs.js and user.js."""
+
+    WEAK = 'user_pref("security.sandbox.content.level", 0);\n'  # critical for the Guard; no baseline pref
+    PROTECTIVE = 'user_pref("security.sandbox.content.level", 4);\n'
+
+    def setUp(self):
+        super().setUp()
+        self.prof = profile.create("work")
+        self.prof.path.joinpath("prefs.js").write_text(self.WEAK)
+        self.prof.path.joinpath("user.js").write_text(self.PROTECTIVE)
+
+    def run_cli(self, *extra: str) -> tuple[int, str]:
+        eng = engine_mod.Engine(path=self.home / "engine" / "nulavio", version="160.0.1", vendor="Nulavio")
+        err = io.StringIO()
+        with (
+            mock.patch.object(engine_mod, "find_engine", return_value=eng),
+            mock.patch.object(engine_mod, "check_supported"),
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(err),
+        ):
+            code = cli.main(["run", "--dry-run", "--profile", "work", *extra])
+        return code, err.getvalue()
+
+    def test_a_protective_user_js_line_the_launcher_replaces_does_not_hide_a_weakened_value(self):
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+        self.assertIn("refusing to start", said)
+        # The line the audit would have counted is gone: the engine is given the value from prefs.js.
+        self.assertNotIn("security.sandbox.content.level", prefs.read_user_prefs(self.prof.path / "user.js"))
+
+    def test_the_audited_value_is_the_one_the_engine_is_given(self):
+        code, said = self.run_cli("--allow-weakened")
+        self.assertEqual(code, 0, said)
+        loaded = prefs.effective_user_prefs(self.prof.path)  # prefs.js with user.js over it, as the engine reads them
+        self.assertEqual(loaded["security.sandbox.content.level"], 0)
+        self.assertIn(f"security.sandbox.content.level={loaded['security.sandbox.content.level']!r}", said)
+        self.assertEqual(
+            [(f.pref, f.actual) for f in guard.audit(self.prof.path) if f.severity == "critical"],
+            [("security.sandbox.content.level", 0)],
+        )
+
+    def test_a_pref_the_launcher_appends_to_prefs_js_is_audited(self):
+        self.prof.path.joinpath("prefs.js").write_text("")
+        settings = self.prof.load_settings()
+        settings["pending_prefs"] = {"xpinstall.signatures.required": False}
+        self.prof.save_settings(settings)
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("guard [critical] xpinstall.signatures.required=False", said)
+
+    def test_an_open_profile_is_audited_as_it_is_and_not_prepared(self):
+        os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+        code, said = self.run_cli()
+        self.assertEqual(code, 0, said)  # the running engine loaded user.js as it is
+        self.assertEqual(self.prof.path.joinpath("user.js").read_text(), self.PROTECTIVE)
+        self.prof.path.joinpath("user.js").write_text('user_pref("marionette.port", 2828);\n')
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("marionette.port", said)
 
 
 class OnePasswordDoctorTest(unittest.TestCase):

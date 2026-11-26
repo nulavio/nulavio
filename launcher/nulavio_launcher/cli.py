@@ -174,10 +174,8 @@ def _run_temporary(args: argparse.Namespace, eng) -> int:
         temp.release()
 
 
-def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
-    if not prof.exists():
-        _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
-        return 1
+def _guard_allows(args: argparse.Namespace, prof) -> bool:
+    """Report the Guard's findings on the profile's prefs; False when a critical one refuses the start."""
     findings = guard.audit(prof.path)
     for finding in findings:
         if finding.severity != "info":
@@ -186,9 +184,19 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
     if critical and not args.allow_weakened:
         _err("refusing to start a profile with critical findings; fix them or pass --allow-weakened")
         log.event("launch.refused", profile=prof.name, critical=[f.pref for f in critical])
+        return False
+    return True
+
+
+def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
+    if not prof.exists():
+        _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
+        return 1
+    pid = prof.running_pid()
+    # An open profile is not prepared again: its files as they are now are audited before anything else.
+    if pid is not None and not _guard_allows(args, prof):
         return 3
     command = engine_mod.build_command(eng, prof.path, url=args.url, private=args.private)
-    pid = prof.running_pid()
     if getattr(args, "confined", False):
         if pid is not None:
             # The engine would hand this request to the running instance, which is not confined by this command.
@@ -204,6 +212,10 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
         if locale != "en":
             profile.sync_langpack(prof, engine_mod.langpack(eng, locale))
         applied = profile.prepare_for_launch(prof, {"engine": eng.label, **_filter_context(prof)})
+        # After the launcher has written prefs.js and replaced user.js: the Guard audits the prefs the engine is
+        # about to load, not a user.js line that is gone at start (#704). A refusal leaves the profile prepared.
+        if not _guard_allows(args, prof):
+            return 3
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
             confined=bool(getattr(args, "confined", False)),
