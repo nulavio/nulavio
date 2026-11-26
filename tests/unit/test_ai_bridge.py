@@ -1927,7 +1927,7 @@ class AuditTest(Home):
         # I7: the same calls with that permission on ask are asked what they were before, in the same order, and act.
         for tool, extra, info, level, grants, capability, _reason, target in self.ELEMENT_DECIDES:
             if capability == "local_resources":
-                continue  # an answer for this computer lets the workspace's requests through: test_ai_bridge (integration)
+                continue  # allowing this computer also sets up the engines' network (_sync_network); same order as navigate
             with self.subTest(tool=tool, info=info, capability=capability):
                 approver = Approve("once")
                 grants = tuple((name, "ask") for name, _mode in grants)
@@ -2037,6 +2037,22 @@ class AuditTest(Home):
                 result = bridge.call("click", {"tab": "t1", "element": "e1"})
                 self.assertIn("'Submit forms'", result["content"][0]["text"])
                 self.assertEqual(approver.asked, [])
+
+    def test_a_field_that_takes_no_text_is_refused_before_asking(self):
+        # Also known from the element before the question: a tool error, after what is blocked before it.
+        approver = Approve("session")
+        bridge, done, _page = self.element_page("restricted", approver, {"connected": True, "editable": False})
+        result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("that element does not take text", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [])
+        self.assertFalse({"inspect", "guard", "input.performActions"} & set(done), done)
+        # Enter while submit_forms is blocked: that refusal comes first, before anything is read (#730).
+        bridge, done, _page = self.element_page("restricted", approver, {"connected": True, "editable": False},
+                                                grants=(("submit_forms", "block"),))  # fmt: skip
+        result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x", "submit": True})
+        self.assert_refused_before_asking(result, approver, bridge, done, "submit_forms", "grant", "https://example.org")
+        self.assertNotIn("look", done)
 
     def test_a_look_that_fails_adds_nothing(self):
         # The element gone, or the engine not answering: said after the question, as before.
@@ -2756,6 +2772,24 @@ class OpenProfileTest(Home):
         self.assertEqual(approver.asked, [("execute_js", "https://mail.example")])
         self.assertNotIn("cookies_storage", registry.get(agent["id"]).get("session_grants", {}))
         self.assertFalse(self.ACTS & set(commands), commands)
+
+    def test_a_profiles_page_is_read_only_after_its_question_is_answered(self):
+        # #736: the look before interact reads the page (its held forms, the element) in a profile's tab only once
+        # the profile was entered: nothing is read there for a call the person did not let in.
+        for answer in ("deny", "once"):
+            with self.subTest(answer=answer):
+                _agent, bridge, approver, _target, commands = self.opened(level="assisted", answer=answer)
+                at_question: list[int] = []
+                approver.meanwhile = lambda seen=commands, at=at_question: at.append(len(seen))
+                with mock.patch.object(tools.Bridge, "_forms_where", return_value=[]) as where:
+                    where.side_effect = lambda *_a, seen=commands: seen.append("held?") or []
+                    bridge.call("click", {"tab": "w1", "element": "e1"})
+                self.assertEqual(approver.asked[0], ("authenticated_sessions", "https://mail.example"))
+                self.assertFalse({"look", "held?"} & set(commands[: at_question[0]]), commands)
+                if answer == "deny":
+                    self.assertFalse({"look", "held?"} & set(commands), commands)
+                else:
+                    self.assertLess(commands.index("held?"), commands.index("look"))
 
     def test_a_links_question_is_not_asked_after_the_tab_moved(self):
         # A submit button with a link: the link's question (navigate) is not asked for a page the tab left while the
