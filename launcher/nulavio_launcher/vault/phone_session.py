@@ -7,10 +7,19 @@ UNIX socket in the runtime folder (status, the user's answer to "do the 6
 digits match?", cancel). The helper's first line on stdout is what the
 browser shows: the QR payload, or an error. Nothing secret is written to disk;
 the pairing QR carries the invite's secret and is meant for that screen only.
+
+A profile has one pending phone unlock at a time, across helper processes
+(#669, U-T19): its folder of encrypted files (`P.vault/`) records the session id
+of the latest request (`phone-request`, 0600). A new request replaces that
+record and tells the earlier helper to stop; a helper opens the profile only
+while the record still names its own session, checked under the profile's
+state lock just before the volume is mounted.
 """
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import secrets
@@ -30,6 +39,7 @@ from .phone import DesktopIdentity, Pairing, PhoneUnlock, ProtocolError, add_pho
 REQUEST_LIMIT = 8192
 LINGER = 30  # seconds the final state stays readable
 CONTROL_LIMIT = 1024
+REQUEST_RECORD = "phone-request"  # in P.vault/: the session id of the profile's one pending phone unlock (#669)
 
 
 def sessions_dir() -> Path:
@@ -168,6 +178,60 @@ def control(session_id: str, request: dict, timeout: float = 5.0) -> dict:
         return {"error": "failed"}
 
 
+# -- one pending phone request per profile (#669) -----------------------------------------
+
+
+@contextlib.contextmanager
+def _request_lock(box: storage.Container):
+    """A lock of its own for the record, never the state lock: a rekey or a mount holds that one for long, and a
+    new request must show its QR before the browser gives up on the helper."""
+    fd = os.open(box.root / f"{REQUEST_RECORD}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # releases the lock
+
+
+def _recorded(box: storage.Container) -> str:
+    try:
+        return paths.read_private_file(box.root / REQUEST_RECORD).decode("ascii").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def claim_request(box: storage.Container, session_id: str) -> str:
+    """Record `session_id` as the profile's pending phone request; return the session it replaces ("" if none)."""
+    with _request_lock(box):
+        try:
+            previous = _recorded(box)
+        except (OSError, UnicodeDecodeError, paths.UnsafePathError):
+            previous = ""  # a damaged record names no session; it is replaced below
+        paths.write_private_file(box.root / REQUEST_RECORD, session_id)
+    return previous
+
+
+def is_current_request(box: storage.Container, session_id: str) -> bool:
+    """Whether the profile's record still names this session. Anything else (another session, no record, one that
+    cannot be read) means a later request took its place: the profile is not opened for this one."""
+    try:
+        with _request_lock(box):
+            return secrets.compare_digest(_recorded(box), session_id)
+    except (OSError, UnicodeDecodeError, paths.UnsafePathError):
+        return False
+
+
+def _end_replaced(previous: str, session_id: str) -> None:
+    """Tell the helper of the replaced request to stop now, so its page says so. Only a courtesy: that helper
+    cannot open the profile any more anyway (is_current_request)."""
+    if not previous or previous == session_id:
+        return
+    try:
+        control(previous, {"action": "cancel"}, timeout=2.0)
+    except VaultError:
+        pass  # not a session id: nothing to tell
+
+
 # -- the two operations ------------------------------------------------------------------
 
 
@@ -277,9 +341,20 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
         emit({"error": coordinator.error or "failed"})
         return
     req_id, expiry = signed["r"]["req_id"], signed["r"]["expiry"]
+    try:
+        previous = claim_request(box, session.id)  # this request is now the profile's only pending one
+    except (OSError, paths.UnsafePathError):
+        vault.lock()
+        emit({"error": "storage-failed"})
+        return
     emit({"session": session.id, "qr": canonical(signed).decode(), "expiry": expiry})
+    _end_replaced(previous, session.id)
     deadline = _deadline_for(expiry)
     name = link.instance_name("u", req_id)
+
+    def stopped() -> bool:
+        return session.cancelled.is_set() or not is_current_request(box, session.id)
+
     outcome = None
     try:
         while coordinator.state in (State.WAITING_FOR_PHONE, State.WAITING_FOR_BIOMETRIC):
@@ -302,8 +377,10 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
                 if state is State.UNLOCKED:
                     try:
                         # A cancel while the mount waits for the state lock (the auto-lock watcher closing the
-                        # profile, another unlock) opens nothing either (#783 review, round 3).
-                        box.mount(vault, request.get("idle_minutes"), cancelled=session.cancelled.is_set)
+                        # profile, another unlock) opens nothing either (#783 review, round 3). Nor does a request
+                        # that a later one replaced (#669): asked under the state lock, right before the mount, so
+                        # a request that starts after this check comes after an unlock that already happened.
+                        box.mount(vault, request.get("idle_minutes"), cancelled=stopped)
                     except storage.StorageError as exc:
                         if exc.code != "cancelled":
                             raise

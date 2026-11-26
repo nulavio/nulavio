@@ -14,6 +14,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -21,6 +22,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from fake_avahi import FAKE_BUSCTL
 from nulavio_launcher.vault import link, phone, phone_session, profiles, sodium, storage
 from nulavio_launcher.vault.core import b64e
 from phone_link_ref import LinkedPhone
@@ -432,6 +434,31 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
         self.assertFalse(profiles.container(self.prof).mounted())
 
+    def test_07_a_second_unlock_request_leaves_the_first_unable_to_open_the_profile(self):
+        # #669 (U-T19): one pending phone request per profile. These sessions serve no control socket, so the new
+        # request cannot tell the first one to stop: only the profile's record of its pending request does. The
+        # phone approves the first QR after the second was shown: the first helper opens nothing, says
+        # "cancelled" and tells the phone; the second still unlocks.
+        self.pair()
+        first_session, first, first_thread = self.start("unlock", {"autolock": False})
+        second_session, second, second_thread = self.start("unlock", {"autolock": False})
+        self.assertNotEqual(json.loads(first["qr"])["r"]["req_id"], json.loads(second["qr"])["r"]["req_id"])
+        phone = self.phone.unlock(first["qr"])
+        first_thread.join(20)
+        phone.join(20)
+        self.assertFalse(first_thread.is_alive())
+        self.assertEqual(first_session.state, "cancelled")
+        self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+        phone = self.phone.unlock(second["qr"])
+        second_thread.join(20)
+        phone.join(20)
+        self.assertEqual(second_session.state, "unlocked")
+        self.assertEqual(self.phone.result, {"t": "ok"})
+        self.assertTrue(profiles.container(self.prof).mounted())
+        profiles.lock(self.prof)
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):
@@ -443,7 +470,15 @@ class PhoneApiTest(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, {"NULAVIO_HOME": str(self.tmp / "home")})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.addCleanup(self._cleanup)
+
+    def _cleanup(self):
+        for mountpoint in sorted(storage.mounted_paths()):
+            if mountpoint.startswith(str(self.tmp)):
+                subprocess.run(["fusermount3", "-u", "-z", mountpoint], check=False, capture_output=True)
+        for dirpath, _dirs, _files in os.walk(self.tmp):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
     def api(self, request: dict) -> dict:
         result = subprocess.run([str(ROOT / "bin" / "nulavio"), "vault", "api"], input=json.dumps(request), env=self.env,
@@ -459,6 +494,51 @@ class PhoneApiTest(unittest.TestCase):
         prof, _code = profiles.create("cofre", password=PASSWORD, kdf=FAST, recovery_kdf=FAST)
         self.assertEqual(self.api({"op": "phone-pair-start", "path": str(prof.path), "current": "wrong"}),
                          {"error": "wrong-secret"})  # fmt: skip
+
+    def status(self, session: str) -> dict:
+        return self.api({"op": "phone-session", "session": session, "action": "status"})
+
+    def wait_status(self, session: str, *states: str, timeout: float = 30) -> dict:
+        deadline = time.monotonic() + timeout
+        status = self.status(session)
+        while status.get("state") not in states and time.monotonic() < deadline:
+            time.sleep(0.2)
+            status = self.status(session)
+        return status
+
+    def test_a_second_unlock_start_ends_the_first_helpers_request(self):
+        # #669 (U-T19): each `phone-unlock-start` starts a helper process of its own. The second one ends the
+        # first one's request for the same profile, and only the second QR can open the profile. The phone is found
+        # through a stand-in for Avahi (tests/lib/fake_avahi.py), as in test_vault_ui, so nothing is announced.
+        prof, _code = profiles.create("cofre", password=PASSWORD, kdf=FAST, recovery_kdf=FAST)
+        busctl, registry = self.tmp / "busctl", self.tmp / "avahi.json"
+        busctl.write_text(FAKE_BUSCTL.format(python=sys.executable))
+        busctl.chmod(0o700)
+        registry.write_text("{}")
+        self.env.update({"NULAVIO_BUSCTL": str(busctl), "NV_FAKE_AVAHI": str(registry)})
+        linked = LinkedPhone(ReferencePhone("Pixel de teste"), registry=registry)
+        self.addCleanup(linked.close)
+        started = self.api({"op": "phone-pair-start", "path": str(prof.path), "current": PASSWORD})
+        linked.pair(started["qr"])
+        self.assertEqual(self.wait_status(started["session"], "waiting-for-you", "failed")["sas"], linked.sas)
+        self.api({"op": "phone-session", "session": started["session"], "action": "confirm", "match": True})
+        self.assertEqual(self.wait_status(started["session"], "paired", "failed")["state"], "paired")
+
+        first = self.api({"op": "phone-unlock-start", "path": str(prof.path), "autolock": False})
+        self.assertEqual(self.status(first["session"])["state"], "waiting-for-phone")
+        second = self.api({"op": "phone-unlock-start", "path": str(prof.path), "autolock": False})
+        self.assertNotEqual(first["session"], second["session"])
+        # The first helper is told at once: its page shows "cancelled" without anyone pressing Cancel there.
+        self.assertEqual(self.wait_status(first["session"], "cancelled", "unlocked", "failed")["state"], "cancelled")
+        self.assertEqual(self.status(second["session"])["state"], "waiting-for-phone")
+        self.assertFalse(profiles.container(prof).mounted())
+
+        phone = linked.unlock(second["qr"])
+        self.assertEqual(self.wait_status(second["session"], "unlocked", "failed", "unreachable")["state"], "unlocked")
+        phone.join(20)
+        self.assertEqual(linked.result, {"t": "ok"})
+        self.assertTrue(profiles.container(prof).mounted())
+        profiles.lock(prof)
 
     @unittest.skipUnless(
         os.environ.get("NULAVIO_LAN_TESTS") == "1" and shutil.which("avahi-publish") and link.avahi_available(),
