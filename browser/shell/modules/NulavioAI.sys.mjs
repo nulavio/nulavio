@@ -174,6 +174,8 @@ class AI {
   // The assistant's context items, per window (UX5-B): what was read at "Incluir", kept in memory
   // only, until it is sent, removed, or the window closes. The panel gets sizes, never the text.
   #contexts = new WeakMap(); // window -> Map<chipId, {kind, tabId, url, title, text, chars, truncated}>
+  // How many times each window's items were taken (#678): an Include that began before a take keeps nothing.
+  #takes = new WeakMap(); // window -> count
   // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
   // only to the pages of the run's window (the panel there); a run never starts in a private window.
   #runs = new Map();
@@ -650,9 +652,14 @@ class AI {
       next message (the size shown is what goes: Q4). A later Send sends this copy, not the page then. */
   async assistantInclude(source, win) {
     this.#userWindow(win);
+    // A message that starts while this one reads takes the window's items: this page was not for it, nor for
+    // the next one, and no panel may be left to remove it (#678). It is kept only if no take came meanwhile.
+    const takes = this.#takes.get(win) ?? 0;
+    const current = () => (this.#takes.get(win) ?? 0) === takes || fail("page-changed");
     if (await this.workspaceAgent()) {
       fail("ai-workspace");
     }
+    current();
     if (source?.kind !== "page") {
       fail("bad-request");
     }
@@ -661,6 +668,7 @@ class AI {
     const extracted = await browser.browsingContext.currentWindowGlobal
       .getActor("PageExtractor")
       .getText({ sufficientLength: MAX_PAGE_CHARS + 1 });
+    current();
     this.#includedBrowser(source, win); // it navigated while being read: refuse rather than keep another page
     const [text, truncated] = cutCodePoints(String(extracted?.text ?? ""), MAX_PAGE_CHARS);
     const items = this.#contextOf(win);
@@ -685,18 +693,25 @@ class AI {
     return [...this.#contextOf(this.#userWindow(win))].map(([id, item]) => AI.#chipView(id, item));
   }
 
+  /** Every item waiting in the window's context leaves it now, whatever the message (#678): an Ask takes
+      the ones it names from what this returns, a Task or "Tentar de novo" takes none. The panel empties
+      its own list at Send, so no copy stays here to come back in a later message, sent or refused. */
+  #takeIncluded(win) {
+    this.#takes.set(win, (this.#takes.get(win) ?? 0) + 1); // an Include still reading keeps nothing either
+    const context = this.#contextOf(win);
+    const items = new Map(context);
+    context.clear();
+    return items;
+  }
+
   /** The tools' request for an Ask: the included items (each page only while its tab still shows that
-      address) and what the panel showed. The items leave the window's context: consent is per message. */
-  #askRequest(question, options, win) {
+      address) and what the panel showed. `items`: what #takeIncluded took; consent is per message. */
+  #askRequest(question, options, items, win) {
     const { chips = [], expected = null } = options ?? {};
     if (!expected || typeof expected.recipient !== "string" || !Number.isInteger(expected.chars)) {
       fail("bad-request");
     }
-    const items = this.#contextOf(win);
     const used = (chips ?? []).map(id => items.get(String(id)) ?? fail("page-changed"));
-    for (const id of chips ?? []) {
-      items.delete(String(id)); // consent is per message: the items go with this one only
-    }
     for (const item of used) {
       this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
     }
@@ -776,9 +791,10 @@ class AI {
   async assistantAsk(question, options, win) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
+      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
       fail("ai-workspace");
     }
-    return this.#assistant(this.#askRequest(question, options, win), 180000);
+    return this.#assistant(this.#askRequest(question, options, this.#takeIncluded(win), win), 180000);
   }
 
   // -- runs in stream mode (UX5-C2) ----------------------------------------------------------------
@@ -829,8 +845,11 @@ class AI {
   async assistantStart(kind, details, win, owner = null) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
+      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
       fail("ai-workspace");
     }
+    // Before anything else that can refuse the start: the panel's list is already empty (#678).
+    const included = this.#takeIncluded(win);
     let request;
     let turn = null;
     if (kind === "ask") {
@@ -854,7 +873,7 @@ class AI {
           fail("bad-request");
         }
       } else {
-        request = this.#askRequest(details?.question ?? "", details, win);
+        request = this.#askRequest(details?.question ?? "", details, included, win);
       }
       if (AI.#history(thread).length >= MAX_TURNS) {
         fail("too-large"); // the tools take up to MAX_TURNS earlier turns; the panel offers a new conversation
@@ -1139,6 +1158,7 @@ class AI {
   /** A task in the assistant's AI Workspace, under its agent permissions; never from a private window. */
   async assistantTask(task, expected, win) {
     this.#userWindow(win);
+    this.#takeIncluded(win); // a Task takes no item, and none waits for a later message (#678)
     try {
       return await this.#assistant({ op: "task", task: String(task), expected: expected ?? null }, 600000);
     } catch (e) {
