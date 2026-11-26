@@ -9,7 +9,7 @@ name: release
 #    source, build, unit and integration tests, RPM and .deb checked in clean
 #    containers, the signed-repository checks, SBOMs, manifest.json. The packages and
 #    the manifest get a GitHub build-provenance attestation. The package release is
-#    one above every tagged, published or served one (#656).
+#    one above every tagged, published or served one, in the APT or the dnf index (#656, #723).
 # 2. sign (GitHub-hosted, environment `release`: the maintainer approves, main only):
 #    checks the attestation, then scripts/release/publish_release.sh signs through AWS
 #    KMS (OIDC; ci/aws/), attests the signed files and hands them to publish as one
@@ -84,22 +84,53 @@ jobs:
       - name: Pinned Firefox release
         id: pin
         run: python3 -I -c 'import json; print("firefox=" + json.load(open("browser/build/engine.json"))["firefox"])' >> "$GITHUB_OUTPUT"
-      - name: The package release to build, above every tagged, published or served one
+      - name: The package release to build, above every tagged, published or served one (APT and dnf)
         id: revision
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
+          FINGERPRINT: 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 # site/keys/nulavio-packages.asc; verify-signed checks it
         run: |
           # A run that uploaded and stopped before its draft left neither a tag nor a draft, only what the bucket
           # serves: counting the served version keeps the next run off that revision (#656). As in the publish job.
+          # Every index read is bounded far above the real files (2026-11-25: Packages, Release, repomd.xml and the
+          # compressed primary file 1 to 1.6 kB each, the primary file 6.3 kB): curl stops at --max-filesize and
+          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job; each transfer
+          # stops after 60 s and its retries after 180 s, so a stalled server fails it too. Each index is read only
+          # once the release key's signature of its root file verifies (#729): the APT InRelease (one object, as apt
+          # reads it) gives the Release text, which names the Packages file by its SHA-256, fetched by that hash
+          # (by-hash/, never replaced); the dnf repomd.xml (repomd.xml.asc) names the primary file by its checksums,
+          # checked before zstd and after it. Files, not pipes, so a failed download or check stops the job here.
+          command -v gpg >/dev/null || scripts/ci/apt_install.sh gnupg
+          command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
           apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
-          served=$(curl -fsSL --proto '=https' --retry 3 "$apt/dists/stable/main/binary-amd64/Packages" |
-            awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
-          # Empty when curl failed (this shell has no pipefail) or nulavio is not listed: both stop the job.
+          get=(curl -fsSL --proto '=https' --retry 3 --max-time 60 --retry-max-time 180)
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/InRelease" "$apt/dists/stable/InRelease"
+          python3 -I scripts/release/release_manifest.py verify-clearsigned "$RUNNER_TEMP/InRelease" "$RUNNER_TEMP/Release" \
+            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
+          packages=$(python3 -I scripts/release/release_manifest.py apt-packages "$RUNNER_TEMP/Release")
+          "${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/Packages" "$apt/dists/stable/$packages"
+          served=$(python3 -I scripts/release/release_manifest.py apt-served "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Packages")
           if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
             echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
             exit 1
           fi
-          release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served")
+          # The dnf repository is uploaded first: when the APT upload then failed, only the dnf index serves that
+          # revision (#723).
+          rpm=$(sed -n 's/^baseurl=//p' site/rpm/nulavio.repo)
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
+          python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/repomd.xml.asc" \
+            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
+          primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")
+          "${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
+          python3 -I scripts/release/release_manifest.py dnf-compressed "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml.zst"
+          (ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")
+          dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml")
+          if ! [[ "$dnf" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::the bucket's dnf index lists no nulavio version in the <version>-<release> form"
+            exit 1
+          fi
+          release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served" --also "v$dnf")
           echo "release=$release" >> "$GITHUB_OUTPUT"
       - name: What is new in this version is written (packaging/whats-new/), before hours of building
         env:
