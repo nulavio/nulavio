@@ -27,6 +27,8 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioVault: "resource://builtin-addons/nulavio-shell/modules/NulavioVault.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  ROUTED_FLAG: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  ROUTE_BY_FLAG: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   normalizeHost: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   parseRules: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -913,9 +915,12 @@ class NulavioProfilesClass {
    * SelectableProfileService.launchInstance, which starts the engine on the profile's folder. From the Shell's
    * start, Nulavio's lock check stands in front of it in this instance: a locked protected profile, or one whose
    * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
-   * starts as the engine meant. The state is read at each launch, from the profile's files, as switchTo() and
-   * routing read it. Of several addresses meant for a locked profile, the unlock page carries the first. In an
-   * engine an agent drives, they start nothing (agent-window, as switchTo()).
+   * starts as the engine meant, except that the addresses it is sent carry the routed flag (#715): moving a tab to
+   * a profile is the person's explicit choice, which ADR 0003's precedence puts before any rule, so the other
+   * profile opens them and its rules do not send them back or ask; marked "explicit", its band does not credit them to
+   * a rule either. The state is read at each launch, from the
+   * profile's files, as switchTo() and routing read it. Of several addresses meant for a locked profile, the
+   * unlock page carries the first. In an engine an agent drives, they start nothing (agent-window, as switchTo()).
    */
   guardLaunches() {
     const service = this.#service;
@@ -949,7 +954,22 @@ class NulavioProfilesClass {
       console.error("Nulavio profiles: lock state", e); // not started: it may be a locked one
     }
     if (state === "plain" || state === "unlocked") {
-      engines.call(this.#service, profile, urls);
+      if (!urls?.length) {
+        engines.call(this.#service, profile, urls); // only its window: nothing for routing to look at
+        return;
+      }
+      // The engine's launchInstance with the routed flag in front of its "-new-tab <address>" pairs, as Nulavio's
+      // own "Open link in profile" sends them (NulavioRouting.openIn): to the running instance through the remote
+      // service, or to a new one started on the profile's folder with an argument list, no shell.
+      // "explicit": the band of the other profile does not credit the tab to a rule there (#785 review).
+      const args = [`--${lazy.ROUTED_FLAG}`, `--${lazy.ROUTE_BY_FLAG}`, "explicit", ...urls.flatMap(url => ["-new-tab", url])];
+      try {
+        this.#service.sendCommandLine(profile.path, args, true);
+        return;
+      } catch {
+        // No running instance of that profile: start one.
+      }
+      this.#service.execProcess(["--profile", profile.path, ...args]);
       return;
     }
     const url = (urls ?? []).find(u => /^https?:/i.test(u)) ?? null;
