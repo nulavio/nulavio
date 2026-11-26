@@ -1215,24 +1215,52 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(code.count("sendQuery("), 1)
         self.assertNotIn("sendAsyncMessage(", code)
         parent = module_text("NulavioLookalikeParent.sys.mjs")
-        self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
+        # The addresses come from the engine: each document's own address, or its principal's site.
+        code = re.sub(r"//.*", "", parent.rsplit("*/", 1)[1])
+        self.assertEqual(set(re.findall(r"global\??\.(document\w+)", code)), {"documentURI", "documentPrincipal"})
+        self.assertIn("for (let global = this.manager; global; global = global.browsingContext?.parentWindowContext)", code)
         self.assertNotIn("message.data", parent)
         self.assertNotIn("content_scripts", make_shell.manifest())
 
+    def test_lookalike_check_runs_in_every_frame_of_a_web_page(self):
+        """The child runs in the tab's page and in its frames, for the documents that have a site or take one from
+        the page that made them; never in an extension's page or a browser page."""
+        source = module_text("NulavioPasswords.sys.mjs")
+        options = source[source.index('registerWindowActor("NulavioLookalike"') :]
+        options = options[: options.index("});")]
+        matches = json.loads(re.search(r"matches: (\[[^\]]*\])", options).group(1))
+        self.assertEqual(matches, ["http://*/*", "https://*/*", "about:blank", "about:srcdoc", "blob:*", "data:*"])
+        self.assertIn("allFrames: true,", options)
+        # Only an actor that exists hears pageshow (a document shown again); none is made for it.
+        self.assertIn("pageshow: { createActor: false }", options)
+        self.assertIn('messageManagerGroups: ["browsers"],', options)
+        self.assertNotIn("moz-extension", "".join(matches))
+
     def test_the_warning_page_names_only_what_the_module_finds(self):
-        """The look-alike warning is opened with the site's address only; the passwords module finds the saved site
-        it imitates again, and "continue" remembers the pair the module finds, not one the page names."""
+        """The look-alike warning is opened with the site's address only, and a flag with no address when the field
+        was in a frame; the passwords module finds the saved site it imitates again from its origin, and "continue"
+        remembers the pair the module finds, not one the page names. "Continue" goes to that address or back in the
+        tab's history, never to an address of its own."""
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("new URLSearchParams({ url })", parent)
+        self.assertEqual(re.findall(r'query\.set\(("\w+", "\w+")\)', parent), ['"in", "frame"'])
         page = (SHELL / "passwords" / "lookalike.js").read_text(encoding="utf-8")
         self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url"])
-        self.assertIn("browser.nulavioPasswords.check(url.href)", page)
-        self.assertIn("browser.nulavioPasswords.dismiss(url.href)", page)
+        self.assertEqual(re.findall(r'params\.has\("(\w+)"\)', page), ["in"])
+        # The module needs only the host: the origin stays under the experiment API's length limit.
+        self.assertIn('const origin = url ? `${url.origin}/` : "";', page)
+        self.assertIn("browser.nulavioPasswords.check(origin)", page)
+        self.assertIn("browser.nulavioPasswords.dismiss(origin, back)", page)
+        # Back only when the engine's session history has an entry before the warning; the module checks it again.
+        self.assertIn("await browser.nulavioPasswords.canGoBack()", page)
+        self.assertNotIn("history.length", page)
+        self.assertEqual(re.findall(r"location\.replace\(([^)]*)\)", page), ["`https://${similar}/`", "url.href"])
+        self.assertEqual(page.count("history.back()"), 1)
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
-        self.assertEqual((params["check"], params["dismiss"]), (["url"], ["url"]))
+        self.assertEqual((params["check"], params["dismiss"], params["canGoBack"]), (["url"], ["url", "back"], []))
 
 
 class LayoutModuleTest(unittest.TestCase):

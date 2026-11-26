@@ -49,6 +49,10 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
   - a Downloads folder that holds the engine's folder (an engine unpacked in `~/Downloads`).
   Most of these could not save downloads or could put the home folder back writable before. Two started and worked before and are now refused: a Downloads that is an absolute link to another folder, inside a read-only put-back reached through a link (a linked `~/.fonts`, or `~/.local/share/fonts` with `~/.local/share` a link), and an engine unpacked in Downloads, which the browser could have changed. Move the folder (or the engine), or run without `--confined`. Nothing to do: it comes with the update. Files saved that way before the update are already lost. Not fixed yet: a home folder that is itself a link inside a hidden folder (for example `/home/u` linked to another disk) still loses downloads in confined mode (#722); the profile is fine there.
 
+**New protections and their limits**:
+
+- **Look-alike login warning in frames**: the check covers password fields in every frame of a tab's page, with the site of the field's document and of each document around it up to the tab's page; for a field in a frame, "continue" goes back to the tab's page. Its limits: [R41](residual-risks.md).
+
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
 A Nulavio release on the same engine ([release](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3), [run 45608565176](https://github.com/nulavio/nulavio/actions/runs/45608565176)), built from `main` at `20bfe393`, with Nulavio Companion 0.2.0.

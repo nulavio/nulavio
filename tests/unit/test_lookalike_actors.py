@@ -12,10 +12,13 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULES = ROOT / "browser" / "shell" / "modules"
 WARNING = "moz-extension://shell/passwords/lookalike.html?"
+REAL, FAKE = "https://paypal.example/account", "https://paypa1.example/login"
+SITE = "https://paypa1.example/"  # the origin of FAKE: what a site found below the tab's page gives
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
@@ -31,6 +34,21 @@ class LookalikeActorsTest(unittest.TestCase):
 
     def asked(self, name: str) -> int:
         return self.cases[name]["asked"]
+
+    def warned(self, name: str, url: str, frame: bool, asked: list[str]) -> None:
+        """The warning opened for `url`; with `frame`, "continue" goes back to the tab's page (`in=frame`, no address)."""
+        case = self.cases[name]
+        self.assertEqual((case["warned"], case["decided"]), (True, True), case)
+        self.assertTrue(case["warning"].startswith(WARNING), case["warning"])
+        self.assertEqual((case["url"], case["in"]), (url, "frame" if frame else None), case)
+        self.assertEqual(case["asked"], asked, case)
+        self.assertEqual(set(parse_qs(case["warning"].split("?", 1)[1])), {"url", "in"} if frame else {"url"}, case)
+
+    def not_warned(self, name: str, decided: bool, asked: list[str] | None = None) -> None:
+        case = self.cases[name]
+        self.assertEqual((case["warned"], case["decided"]), (False, decided), case)
+        if asked is not None:
+            self.assertEqual(case["asked"], asked, case)
 
     def test_a_focus_the_page_gives_itself_asks_nothing(self):
         self.assertEqual(self.asked("child_script_focus"), 0)
@@ -56,6 +74,14 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertEqual(self.asked("child_asks_again_when_not_decided"), 2)
         self.assertEqual(self.asked("child_not_again_when_the_query_fails"), 1)
 
+    def test_a_document_shown_again_from_the_back_forward_cache_asks_again(self):
+        # Back, or "continue" going back to the tab's page: the pairs confirmed since and the saved logins may differ.
+        self.assertEqual(self.asked("child_asks_again_after_a_restore"), 2)
+        self.assertEqual(self.asked("child_not_again_after_a_first_show"), 1)
+
+    def test_a_late_answer_to_an_earlier_query_changes_nothing(self):
+        self.assertEqual(self.asked("child_late_answer_of_an_earlier_query"), 2)
+
     def test_the_warning_opens_for_the_checked_address(self):
         case = self.cases["parent_warns"]
         self.assertEqual(case["checked"], "https://paypa1.example/login")
@@ -63,7 +89,7 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertTrue(case["warning"].startswith(WARNING), case["warning"])
         self.assertIn("url=https%3A%2F%2Fpaypa1.example%2Flogin", case["warning"])
         self.assertIs(case["decided"], True)
-        self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None})
+        self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None, "url": None})
 
     def test_a_locked_primary_password_decides_nothing_so_the_next_input_asks_again(self):
         # The module compared nothing rather than ask for the Primary Password (#708): the child asks again.
@@ -81,6 +107,100 @@ class LookalikeActorsTest(unittest.TestCase):
         for name in left:
             with self.subTest(name):
                 self.assertEqual((self.cases[name]["warned"], self.cases[name]["decided"]), (False, False), self.cases[name])
+
+    # Password fields in frames: each document from the field's up to the tab's page is checked, nearest first.
+
+    def test_a_lookalike_frame_in_another_sites_page_shows_the_warning_and_continue_goes_back_to_that_page(self):
+        self.warned("frame_lookalike_in_a_real_page", SITE, True, [FAKE])
+
+    def test_a_frame_without_an_address_of_its_own_is_checked_by_its_principals_site(self):
+        self.warned("frame_blank_with_a_lookalike_principal", SITE, True, [SITE])
+        self.warned("frame_blob_with_a_lookalike_principal", SITE, True, [SITE])
+        # One check per site: the srcdoc frame and the frame around it are the same site.
+        self.warned("frame_srcdoc_inside_a_lookalike_frame", SITE, True, [SITE])
+
+    def test_a_sandboxed_frame_is_checked_by_its_address(self):
+        self.warned("frame_sandboxed_on_the_lookalike_site", SITE, True, [FAKE])
+        # A sandboxed srcdoc has no site of its own; the page around it is checked.
+        self.not_warned("frame_sandboxed_srcdoc_in_a_real_page", True, [REAL])
+
+    def test_a_data_frame_is_checked_by_the_documents_around_it(self):
+        # The tab's page itself is the look-alike, for a field in a frame: its origin only, and "continue" goes back.
+        self.warned("frame_data_in_a_lookalike_page", SITE, True, [FAKE])
+        self.warned("frame_data_in_a_lookalike_frame", SITE, True, [FAKE])
+
+    def test_a_lookalike_frame_around_the_fields_frame_is_found(self):
+        self.warned("frame_nested_lookalike_in_the_middle", SITE, True, ["https://widgets.example/login", FAKE])
+        # The nearest look-alike decides, and nothing past it is checked.
+        nearest = "https://paypa1-login.example/form"
+        self.warned("frame_nearest_lookalike_decides", "https://paypa1-login.example/", True, [nearest])
+
+    def test_a_frame_of_another_site_on_a_real_page_is_not_warned(self):
+        self.not_warned("frame_real_in_a_real_page", True, ["https://widgets.example/login", REAL])
+
+    def test_documents_without_a_sites_address_are_never_checked(self):
+        # The system's, an expanded principal's or an extension's (Nulavio's unlock page): nothing to compare.
+        self.not_warned("frame_no_site_anywhere", True, [])
+
+    def test_a_locked_primary_password_decides_nothing_for_a_frame_either(self):
+        self.not_warned("frame_primary_password_locked", False, [FAKE, REAL])
+
+    def test_a_frame_of_a_page_the_tab_has_left_never_replaces_it(self):
+        left = (
+            "frame_tab_page_navigated",
+            "frame_tab_page_navigated_during_a_later_check",
+            "frame_tab_page_changed_only_at_the_top",
+            "frame_tab_shows_another_context",
+            "frame_actor_gone",
+            "frame_blank_other_site",
+        )
+        for name in left:
+            with self.subTest(name):
+                self.not_warned(name, False)
+
+    def test_a_frame_warning_is_bound_to_the_entry_it_takes_in_the_tabs_history(self):
+        # The tab's page is entry 2: the warning becomes entry 3, and only that entry's "continue" goes back.
+        case = self.cases["frame_lookalike_in_a_real_page"]
+        self.assertEqual(case["bound"], {"index": 3, "url": case["warning"]}, case)
+        # A full history keeps its length: the warning takes the last entry.
+        case = self.cases["frame_history_full"]
+        self.assertEqual(case["bound"], {"index": 49, "url": case["warning"]}, case)
+        # A max_entries below the engine's default: the engine keeps 50 entries, and the warning takes entry 21.
+        case = self.cases["frame_history_pref_below_the_default"]
+        self.assertEqual(case["bound"], {"index": 21, "url": case["warning"]}, case)
+        # A field in the tab's page goes on to its own address: nothing to bind.
+        self.assertIsNone(self.cases["parent_warns"]["bound"])
+
+    def test_two_documents_of_one_tab_open_one_warning(self):
+        case = self.cases["parent_two_frames_at_once"]
+        self.assertEqual(case["loads"], 1, case)
+        # The one held back is told nothing was decided: its next input asks again.
+        self.assertEqual(case["answers"], [True, False], case)
+        # Once that warning took its entry, the page shown again by Back warns again.
+        self.assertEqual(self.cases["parent_warns_again_after_back"], {"loads": 2, "answers": [True, True]})
+        case = self.cases["parent_warns_again_after_back_with_a_forward_entry"]
+        self.assertEqual(case, {"loads": 2, "answers": [True, True], "count": 4})
+
+    def test_a_document_held_back_by_a_warning_never_shown_asks_again_and_warns(self):
+        self.assertEqual(self.cases["parent_first_warning_never_shown"], {"loads": 2, "answers": [True, False, True]})
+
+    def test_a_frame_site_gives_only_its_origin_to_the_warnings_address(self):
+        # Its path, query and fragment stay out of the tab's address; the check itself had the whole address.
+        frame = "https://paypa1.example:8443/login?token=s3cret&state=x#frag"
+        self.warned("frame_address_with_a_query", "https://paypa1.example:8443/", True, [frame])
+
+    def test_a_frame_that_finds_the_tab_page_a_lookalike_goes_back_to_it(self):
+        # The tab's page moved inside its document while the check waited: its origin only, and going back returns
+        # to where it is now.
+        self.warned("frame_finds_the_tab_page_after_replace_state", SITE, True, ["https://widgets.example/login", FAKE])
+
+    def test_a_tab_page_without_a_sites_address_has_continue_go_back(self):
+        self.warned("frame_tab_page_without_a_site", SITE, True, [FAKE])
+
+    def test_a_field_in_the_tabs_page_opens_the_warning_as_before(self):
+        for name in ("parent_warns", "parent_replace_state"):
+            with self.subTest(name):
+                self.warned(name, FAKE, False, [FAKE])
 
 
 if __name__ == "__main__":
