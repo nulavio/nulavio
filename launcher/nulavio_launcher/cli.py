@@ -193,20 +193,19 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
         _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
         return 1
     pid = prof.running_pid()
-    # An open profile is not prepared again: its files as they are now are audited before anything else.
-    if pid is not None and not _guard_allows(args, prof):
-        return 3
+    if pid is not None:
+        # An open profile is not prepared again: its files as they are now are audited before anything else.
+        if not _guard_allows(args, prof):
+            return 3
+        # It may have closed during the audit: then it is started afresh, prepared and audited below.
+        pid = prof.running_pid()
     command = engine_mod.build_command(eng, prof.path, url=args.url, private=args.private)
-    if getattr(args, "confined", False):
-        if pid is not None:
-            # The engine would hand this request to the running instance, which is not confined by this command.
-            _err(f"profile '{prof.name}' is already open; close it, then start it again with --confined")
-            return 1
-        try:
-            command = confine.wrap(command, profile_dir=prof.path, engine_dir=eng.path.resolve().parent, supervised=supervise)
-        except confine.ConfineError as exc:
-            _err(str(exc))
-            return 1
+    confined = bool(getattr(args, "confined", False))
+    if confined and pid is not None:
+        # The engine would hand this request to the running instance, which is not confined by this command.
+        _err(f"profile '{prof.name}' is already open; close it, then start it again with --confined")
+        return 1
+    applied: list[str] = []
     if pid is None:
         try:
             # user.js is replaced below, before the audit: one the audit refused (a symlink, a FIFO, another
@@ -222,9 +221,17 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
         # about to load, not a user.js line that is gone at start (#704). A refusal leaves the profile prepared.
         if not _guard_allows(args, prof):
             return 3
+    if confined:
+        # Only once the Guard allows the start: setting up the confinement makes the Downloads folder.
+        try:
+            command = confine.wrap(command, profile_dir=prof.path, engine_dir=eng.path.resolve().parent, supervised=supervise)
+        except confine.ConfineError as exc:
+            _err(str(exc))
+            return 1
+    if pid is None:
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
-            confined=bool(getattr(args, "confined", False)),
+            confined=confined,
         )  # fmt: skip
     else:
         # The engine forwards the request to the instance already using this profile.

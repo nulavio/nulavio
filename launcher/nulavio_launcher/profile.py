@@ -115,6 +115,8 @@ class Profile:
             raise ProfileError(f"profile '{self.name}' has no Nulavio settings; run `nulavio setup`") from None
         except ValueError:  # not UTF-8, or not JSON
             raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}") from None
+        if not isinstance(data, dict):
+            raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}")
         if data.get("schema") != SETTINGS_SCHEMA:
             raise ProfileError(f"unsupported settings schema in {self.settings_path}")
         return data

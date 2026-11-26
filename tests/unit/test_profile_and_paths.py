@@ -20,7 +20,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import cli, doctor, guard, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import cli, confine, doctor, guard, log, paths, prefs, profile  # noqa: E402
 from nulavio_launcher import engine as engine_mod  # noqa: E402
 
 
@@ -596,16 +596,55 @@ class GuardAtLaunchTest(TempHome):
         code, said = self.run_cli()
         self.assertEqual(code, 1, said)
         self.assertIn("prefs.js", said)
-        paths.write_private_file(self.prof.settings_path, '{"schema": ')
-        code, said = self.run_cli()
-        self.assertEqual(code, 1, said)
-        self.assertIn("settings", said)
+        for broken in ('{"schema": ', "null", "[]", '"settings"'):
+            with self.subTest(broken):
+                paths.write_private_file(self.prof.settings_path, broken)
+                code, said = self.run_cli()
+                self.assertEqual(code, 1, said)
+                self.assertIn("settings", said)
 
-    def test_an_extension_registry_that_is_not_an_object_does_not_stop_the_audit(self):
-        self.prof.path.joinpath("extensions.json").write_text("[]")
-        code, said = self.run_cli()
-        self.assertEqual(code, 3, said)
+    def test_an_extension_registry_of_the_wrong_shape_does_not_stop_the_audit(self):
+        for registry in (
+            "[]",
+            '{"addons": null}',
+            '{"addons": {"id": "x"}}',
+            '{"addons": [null, 3, "x"]}',
+            '{"addons": [{"type": "extension", "location": "app-profile"}]}',
+            '{"addons": [{"id": 7, "type": "extension", "location": "app-profile"}]}',
+            '{"addons": [{"id": "x@y", "type": "extension", "location": "app-profile", "defaultLocale": "x"}]}',
+        ):
+            with self.subTest(registry):
+                self.prof.path.joinpath("extensions.json").write_text(registry)
+                code, said = self.run_cli()
+                self.assertEqual(code, 3, said)
+                self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+
+    def test_a_profile_that_closes_during_the_open_profile_audit_is_prepared_and_audited(self):
+        # The engine exits while its profile is being audited: the start is a fresh one, not a forward.
+        calls = iter([os.getpid()])
+        with mock.patch.object(profile.Profile, "running_pid", lambda _self: next(calls, None)):
+            code, said = self.run_cli()
+        self.assertEqual(code, 3, said)  # prepared: the protective user.js line is gone, the weakened value counts
         self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+
+    def test_confinement_is_set_up_only_after_the_guard_allows_the_start(self):
+        for effect in (lambda command, **_: command, confine.ConfineError("not starting: no bubblewrap")):
+            with self.subTest(effect), mock.patch.object(confine, "wrap", side_effect=effect) as wrap:
+                code, said = self.run_cli("--confined")
+                self.assertEqual(code, 3, said)
+                self.assertIn("refusing to start", said)
+                wrap.assert_not_called()
+        with mock.patch.object(confine, "wrap", side_effect=lambda command, **_: command) as wrap:
+            code, said = self.run_cli("--confined", "--allow-weakened")
+        self.assertEqual(code, 0, said)
+        wrap.assert_called_once()
+        self.prof.path.joinpath("user.js").write_text(self.PROTECTIVE)
+        os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+        with mock.patch.object(confine, "wrap") as wrap:
+            code, said = self.run_cli("--confined")
+        self.assertEqual(code, 1, said)  # an open profile: audited, then refused as already open
+        self.assertIn("already open", said)
+        wrap.assert_not_called()
 
     def test_an_open_profile_is_audited_as_it_is_and_not_prepared(self):
         os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")

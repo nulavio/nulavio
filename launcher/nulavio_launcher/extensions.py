@@ -182,14 +182,17 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
             data = json.loads(paths.read_private_file(registry).decode("utf-8"))
         except (OSError, ValueError, paths.UnsafePathError):
             data = {}
-        if not isinstance(data, dict):  # read as unreadable, like a registry that is not JSON
-            data = {}
-        for addon in data.get("addons", []):
+        # A registry, or an entry, of another shape is read as unreadable, like a registry that is not JSON.
+        addons = data.get("addons") if isinstance(data, dict) else None
+        for addon in addons if isinstance(addons, list) else []:
+            if not isinstance(addon, dict) or not isinstance(addon.get("id"), str):
+                continue
             if addon.get("type") != "extension" or addon.get("location") != "app-profile":
                 continue
+            locale = addon.get("defaultLocale")
             found[addon["id"]] = {
                 "id": addon["id"],
-                "name": (addon.get("defaultLocale") or {}).get("name", addon["id"]),
+                "name": locale.get("name", addon["id"]) if isinstance(locale, dict) else addon["id"],
                 "version": addon.get("version"),
                 "active": bool(addon.get("active")),
                 "registered": True,
