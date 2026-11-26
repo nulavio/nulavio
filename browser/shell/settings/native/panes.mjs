@@ -1536,7 +1536,7 @@
                 control: "moz-toggle",
                 slot: "actions",
                 below: msg("engineSuggestLabel"),
-                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${engine.name}`, "data-engine": engine.id },
+                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`, "data-engine": engine.id },
               },
             ],
           })),

@@ -129,7 +129,8 @@ class SettingsSearchTest(unittest.TestCase):
             self.assertEqual(row["says"], OFF.format(host=hosts[row["id"]]))
         engine = can[0]
         row = next(r for r in now["engines"] if r["id"] == engine["id"])
-        self.assertEqual(row["named"], f"Sugestões enquanto você digita: {engine['name']}")
+        # The engine's name isolated (#796), as in every sentence that carries it.
+        self.assertEqual(row["named"], f"Sugestões enquanto você digita: \u2068{engine['name']}\u2069")
         # On: the module's list has it, the engine's own switch follows, and the row says where typed text goes.
         self.assertTrue(self.m.chrome(TOGGLE, [engine["id"]]))
         on = self.seen(lambda n: next(r for r in n["engines"] if r["id"] == engine["id"])["on"] and n["said"])

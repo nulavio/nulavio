@@ -26,6 +26,10 @@ FSI, PDI = "⁨", "⁩"
 CONTROLS = re.compile("[؜‎‏‪-‮⁦-⁩]")
 NAME = "‮Mal Arquivo‬ Busca⁧"
 SHOWN = "Mal Arquivo Busca"
+# A paragraph separator ends the paragraph and the isolate with it: the Hebrew after it would sit outside the isolate.
+# Nulavio Search lets U+0085 through (it refuses only C0 and DEL), so each one becomes a space.
+SEPARATORS = "\n\r\x1c\x1d\x1e\x85\u2029"
+BROKEN = "Mal\x85\u05d0\u05e8\u05db\u05d9\u05d5\u2029Busca\nX"
 # The sentences that carry an engine's name, and where they are filled in.
 SENTENCES = {
     "chooseDone": "panes",
@@ -35,8 +39,12 @@ SENTENCES = {
     "searchWith": "newtab",
 }
 
+# names.js is read as a data: address, which is always a module, so a node that does not tell a .js file's kind by its
+# syntax (Node 18) runs it too.
 DRIVER = """
-const { inSentence } = await import(process.argv[1]);
+const { readFileSync } = await import("node:fs");
+const source = readFileSync(process.argv[1], "utf8");
+const { inSentence } = await import("data:text/javascript;charset=utf-8," + encodeURIComponent(source));
 const names = JSON.parse(process.argv[2]);
 console.log(JSON.stringify(names.map(name => inSentence(name))));
 """
@@ -74,9 +82,9 @@ def isolated(text: str) -> bool:
 class InSentenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        names = [NAME, "Mojeek", "", "‏؜‎"]
+        names = [NAME, "Mojeek", "", "‏؜‎", BROKEN]
         done = subprocess.run(
-            ["node", "--input-type=module", "-e", DRIVER, NAMES.as_uri(), json.dumps(names)],
+            ["node", "--input-type=module", "-e", DRIVER, str(NAMES), json.dumps(names)],
             capture_output=True,
             text=True,
             timeout=60,
@@ -89,6 +97,11 @@ class InSentenceTest(unittest.TestCase):
         self.assertEqual(self.out["Mojeek"], FSI + "Mojeek" + PDI)
         self.assertEqual(self.out[""], FSI + PDI)
         self.assertEqual(self.out["‏؜‎"], FSI + PDI)
+
+    def test_a_paragraph_separator_in_a_name_does_not_end_the_isolate(self):
+        value = self.out[BROKEN]
+        self.assertEqual(value, FSI + "Mal \u05d0\u05e8\u05db\u05d9\u05d5 Busca X" + PDI)
+        self.assertFalse(set(value) & set(SEPARATORS), ascii(value))
 
     def test_the_words_after_the_name_keep_their_order_in_every_sentence(self):
         for language in ("en", "pt_BR"):
@@ -118,6 +131,9 @@ class CallersIsolateTest(unittest.TestCase):
         self.assertIn('msg("chooseUseNamed", inSentence(row.name))', panes)
         self.assertIn('"chooseDoneBoth" : "chooseDone", inSentence(row.name))', panes)
         self.assertIn('msg("searchAliasReserved", releasedNow().map(name => `“${inSentence(name)}”`).join(", "))', panes)
+        # The suggestions switch's accessible name carries the engine's name too, after its label.
+        self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`', panes)
+        self.assertNotRegex(panes, r"\$\{(engine|row)\.name\}")
         for key in [key for key, where in SENTENCES.items() if where == "panes"]:
             with self.subTest(key=key):
                 for call in re.findall(rf'"{key}"[^\n]*', panes):
