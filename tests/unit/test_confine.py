@@ -295,9 +295,12 @@ class WrapTest(unittest.TestCase):
                 with self.assertRaises(confine.ConfineError) as refused:
                     self.wrap()
                 message = str(refused.exception)
-                self.assertIn(f"{self.home.resolve()}/.fonts/Downloads goes through {self.home.resolve()}/.fonts", message)
+                home = self.home.resolve()
+                self.assertIn(f"the Downloads folder {home}/.fonts/Downloads goes through a link into {home}/.fonts", message)
                 self.assertIn("puts back read-only", message)
-                self.assertIn("Point the folder at a path outside it, or run without --confined", message)
+                self.assertIn(
+                    f"Give the folder's own path (no link), or one outside {home}/.fonts, or run without --confined", message
+                )
 
     def test_a_writable_bind_over_a_hidden_or_put_back_folder_or_over_root_is_refused(self):
         # A writable bind over a folder hidden or put back before would undo it (the whole home folder writable, the
@@ -330,6 +333,82 @@ class WrapTest(unittest.TestCase):
                 self.assertIn("run without --confined", str(refused.exception))
             if link.is_symlink():
                 link.unlink()
+
+    def test_a_link_before_a_read_only_put_back_is_refused_too(self):
+        # A1 of the review of 3abd4851: ~/.local/share is a link, and Downloads is in fonts/ there, which is put back
+        # read-only. The walk ends at the hidden link, so the rest of the path is checked too.
+        disk = self.tmp / "disk"
+        (disk / "dl").mkdir(parents=True)
+        home = self.home.resolve()
+        parents = {".local/share": "fonts", ".local": "share/fonts", ".config": "fontconfig", ".mozilla":
+                   "native-messaging-hosts"}  # fmt: skip
+        for parent, put_back in parents.items():
+            for variant in ("a plain folder", "an absolute link", "a relative link"):
+                with self.subTest(parent=parent, variant=variant):
+                    shutil.rmtree(self.home, True)
+                    self.profile.mkdir(parents=True)
+                    shutil.rmtree(disk / parent, True)
+                    (disk / parent / put_back).mkdir(parents=True)
+                    if (self.home / parent).is_dir():
+                        shutil.rmtree(self.home / parent)
+                    (self.home / parent).parent.mkdir(parents=True, exist_ok=True)
+                    (self.home / parent).symlink_to(disk / parent)
+                    downloads = disk / parent / put_back / "Downloads"
+                    if variant == "a plain folder":
+                        downloads.mkdir()
+                    else:
+                        downloads.symlink_to(disk / "dl" if variant == "an absolute link" else "rel")
+                        (disk / parent / put_back / "rel").mkdir(exist_ok=True)
+                    (self.home / ".config").mkdir(exist_ok=True)
+                    (self.home / ".config/user-dirs.dirs").write_text(f'XDG_DOWNLOAD_DIR="$HOME/{parent}/{put_back}/Downloads"\n')
+                    if parent.startswith(".local"):  # the profile is under ~/.local/share too: put it elsewhere
+                        profile = self.tmp / "nulavio-home/data/profiles/p"
+                        profile.mkdir(parents=True, exist_ok=True)
+                    else:
+                        profile = self.profile
+                    with self.assertRaises(confine.ConfineError) as refused:
+                        confine.wrap(["/engine/nulavio"], profile_dir=profile, engine_dir=self.engine, home=self.home,
+                                     binary="/usr/bin/bwrap")  # fmt: skip
+                    self.assertIn(f"goes through a link into {home}/{parent}/{put_back}, which confined mode puts back "
+                                  "read-only", str(refused.exception))  # fmt: skip
+
+    def test_a_folder_with_no_link_in_a_read_only_put_back_is_bound_at_itself_as_before(self):
+        # A2: ~/.fonts is a plain folder and Downloads is ~/.fonts/Downloads. There is no link, so the folder is the
+        # same inside and is bound writable at itself over the read-only put-back, as on main.
+        (self.home / ".fonts/Downloads").mkdir(parents=True)
+        (self.home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
+        args = self.wrap()
+        real, profile = str(self.home.resolve() / ".fonts/Downloads"), str(self.profile.resolve())
+        self.assertIn(("--ro-bind", str(self.home.resolve() / ".fonts"), str(self.home.resolve() / ".fonts")), self.triples(args))
+        self.assertEqual(self.binds(args)[1:], [(profile, profile), (real, real)])
+        # The same for a profile in the engine's folder, an unpacked build kept with its profile.
+        inside = self.engine / "profile"
+        inside.mkdir()
+        args = confine.wrap(["/engine/nulavio"], profile_dir=inside, engine_dir=self.engine, home=self.home,
+                            binary="/usr/bin/bwrap")  # fmt: skip
+        self.assertEqual(self.binds(args)[1], (str(inside.resolve()),) * 2)
+
+    def test_an_engine_inside_downloads_is_refused_with_what_to_do(self):
+        # A3: the engine unpacked in ~/Downloads (NULAVIO_ENGINE): binding Downloads writable would make the engine
+        # writable from inside, and the next start would run what the browser wrote.
+        engine = self.home / "Downloads/nulavio-build"
+        engine.mkdir(parents=True)
+        with self.assertRaises(confine.ConfineError) as refused:
+            confine.wrap(["/engine/nulavio"], profile_dir=self.profile, engine_dir=engine, home=self.home,
+                         binary="/usr/bin/bwrap")  # fmt: skip
+        message = str(refused.exception)
+        self.assertIn(f"holds the engine's folder {engine.resolve()}", message)
+        self.assertIn(f"Move the engine out of {self.home / 'Downloads'}, or run without --confined", message)
+
+    def test_a_link_then_dots_names_the_folder_and_the_way_out(self):
+        # A4: ~/Downloads -> disk, then '..' in what follows the link.
+        (self.tmp / "disk/x").mkdir(parents=True)
+        (self.home / "Downloads").symlink_to(self.tmp / "disk")
+        with self.assertRaises(confine.ConfineError) as refused:
+            confine.seen_inside(self.home / "Downloads/x/../x", [self.home.resolve()], name="Downloads")
+        message = str(refused.exception)
+        self.assertIn(f"the Downloads folder {self.home}/Downloads/x/../x goes through a link and then '..'", message)
+        self.assertIn("or run without --confined", message)
 
     def test_layouts_that_keep_working_bind_the_folder_where_the_browser_looks(self):
         # Links in hidden folders, nested, relative and absolute; Downloads as the profile itself or inside it.
@@ -674,7 +753,7 @@ class RealBubblewrapTest(unittest.TestCase):
         (fonts / "Downloads").symlink_to(f"{up}/data/dl")
         (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
         message = self.refusal(home / ".local/share/nulavio/data/profiles/p", home, home / ".fonts/Downloads")
-        self.assertIn(f"goes through {home}/.fonts, which confined mode puts back read-only", message)
+        self.assertIn(f"goes through a link into {home}/.fonts, which confined mode puts back read-only", message)
         self.assertIn("run without --confined", message)
 
     def test_a_profile_that_would_cover_the_root_is_refused_not_started(self):
@@ -686,6 +765,44 @@ class RealBubblewrapTest(unittest.TestCase):
         message = self.refusal(home / ".icons/l2", home, home / "Downloads")
         self.assertIn(f"the profile folder {home}/.icons/l2 would be put back writable at {home}, over {home}", message)
         self.assertIn("confined mode hides or puts back on its own", message)
+
+    def test_a_link_before_a_read_only_put_back_is_refused_not_started(self):
+        # A1 with real bubblewrap: ~/.local/share is a link and Downloads is in its fonts/, put back read-only. A bind
+        # there failed the start ("Can't mount on symlink destination") or wrote into the read-only put-back.
+        for variant in ("an absolute link", "a relative link", "a plain folder"):
+            with self.subTest(variant):
+                tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+                self.addCleanup(shutil.rmtree, tmp, True)
+                home, disk = tmp / "home", tmp / "disk"
+                for folder in (home / "nv/data/profiles/p", home / ".config", disk / "share/fonts/rel", disk / "dl"):
+                    folder.mkdir(parents=True)
+                (home / ".local").mkdir()
+                (home / ".local/share").symlink_to(disk / "share")
+                downloads = disk / "share/fonts/Downloads"
+                if variant == "a plain folder":
+                    downloads.mkdir()
+                else:
+                    downloads.symlink_to(disk / "dl" if variant == "an absolute link" else "rel")
+                (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.local/share/fonts/Downloads"\n')
+                message = self.refusal(home / "nv/data/profiles/p", home, home / ".local/share/fonts/Downloads")
+                self.assertIn(f"goes through a link into {home}/.local/share/fonts, which confined mode puts back", message)
+
+    def test_a_downloads_folder_with_no_link_in_a_read_only_put_back_starts_and_writes(self):
+        # A2 with real bubblewrap: ~/.fonts a plain folder, Downloads in it; this works on main and keeps working.
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home = tmp / "home"
+        profile = home / "nv/data/profiles/p"
+        for folder in (profile, home / ".config", home / ".fonts/Downloads"):
+            folder.mkdir(parents=True)
+        (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
+        write = [sys.executable, "-I", "-c", WRITE, "fonts", str(home / ".fonts"), "downloads", str(home / ".fonts/Downloads")]
+        args = confine.wrap(write, profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent, home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.split(), ["fonts-EROFS", "downloads-ok"], "the put-back stays read-only")
+        self.assertTrue((home / ".fonts/Downloads/written").exists())
 
     def test_layouts_that_keep_working_start_and_write_to_the_real_folder(self):
         # ~/Downloads as a relative link, as a link to a link, and Downloads as the profile itself or inside it.

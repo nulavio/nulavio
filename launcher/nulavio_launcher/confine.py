@@ -8,8 +8,9 @@ folder names, registered native-messaging hosts). The profile and Downloads
 are put back at the paths the browser is given too, when those go through a
 symlink in a hidden folder (a `~/Downloads` link to another disk, a data
 folder reached through a link), since that link is not there inside (#711).
-Refused instead: such a path through a folder put back read-only (a linked ~/.fonts), and a profile or Downloads
-folder that is / or would cover a folder hidden or put back (the home folder, a Downloads folder above the profiles).
+Refused instead: a path with a link that goes into a folder put back read-only (a linked ~/.fonts holding Downloads),
+a profile or Downloads folder that is / or would cover a folder hidden or put back (the home folder, a Downloads
+folder above the profiles), and a Downloads folder that holds the engine's folder.
 A home folder that is itself such a link is not handled yet: Downloads and the
 read-only settings are bound under the resolved home only (#722).
 The rest of the system is
@@ -187,64 +188,81 @@ def _inside_hidden(path: Path, hidden: list[Path]) -> bool:
     return any(path != folder and path.is_relative_to(folder) for folder in folders)
 
 
-def seen_inside(path: Path, hidden: list[Path], read_only: list[Path] = (), writable: list[Path] = ()) -> Path | None:
+def seen_inside(path: Path, hidden: list[Path], read_only: list[Path] = (), writable: list[Path] = (),
+                name: str = "") -> Path | None:  # fmt: skip
     """Where a folder must also be bound so that `path` reaches it inside, or None when its resolved path does.
 
-    A hidden folder is empty inside, so a symlink in it is not there (#711). `path` is followed as the kernel would
-    follow it inside, given the folders already bound writable (`writable`):
+    A path with no link in it is the same inside, so its resolved path, bound at itself, is enough (even inside a
+    folder put back read-only, as before #711). Otherwise a hidden folder is empty inside, so a symlink in it is not
+    there (#711), and `path` is followed as the kernel would follow it inside, given the folders already bound
+    writable (`writable`):
     - a link that is still visible, or inside one of those folders, is followed;
     - a hidden link above one of them is the plain folder bubblewrap made there on the way to it;
     - the first other link met in a hidden folder ends the walk, and the path from there on is returned (bubblewrap
       makes plain folders for it in the empty one).
-    Refused: a path through a folder put back read-only (`read_only`, such as ~/.fonts), a link and then '..', and a
-    walk that does not end in a folder bound writable. What the browser finds there inside is not the folder, and
-    putting it back would mean emulating more of bubblewrap's mounts than this checks.
+    Refused: a path with a link that goes into a folder put back read-only (`read_only`, such as ~/.fonts), a link and
+    then '..', and a walk that does not end in a folder bound writable. What the browser finds there inside is not
+    the folder, and putting it back would mean emulating more of bubblewrap's mounts than this checks.
     """
+    folder = f"the {name} folder {path}" if name else str(path)
     if not path.is_absolute():
-        raise ConfineError(f"not starting: {path} is not an absolute path")
+        raise ConfineError(f"not starting: {folder} is not an absolute path")
+    if Path(os.path.realpath(path)) == path:
+        return None  # no link on the way
+
+    def through_read_only(at: Path) -> None:
+        through = next((f for f in read_only if at.is_relative_to(f)), None)
+        if through is not None:
+            raise ConfineError(
+                f"not starting: {folder} goes through a link into {through}, which confined mode puts back read-only, "
+                "so the browser could not keep files there. Give the folder's own path (no link), or one outside "
+                f"{through}, or run without --confined"
+            )
+
     pending = list(reversed(path.parts[1:]))
     current, links = Path("/"), 0
     while pending:
-        name = pending.pop()
-        if name in ("", "."):
+        part = pending.pop()
+        if part in ("", "."):
             continue
-        if name == "..":
+        if part == "..":
             current = current.parent
             continue
-        candidate = current / name
-        through = next((folder for folder in read_only if candidate.is_relative_to(folder)), None)
-        if through is not None:
-            raise ConfineError(
-                f"not starting: {path} goes through {through}, which confined mode puts back read-only, so the browser "
-                "could not keep files there. Point the folder at a path outside it, or run without --confined"
-            )
+        candidate = current / part
+        through_read_only(candidate)
         if candidate in writable:
             current = candidate  # a mount point: a folder inside, whatever the host has at that path
             continue
         if _inside_hidden(candidate, hidden) and not any(candidate.is_relative_to(f) for f in writable):
-            if any(folder.is_relative_to(candidate) for folder in writable):
+            if any(f.is_relative_to(candidate) for f in writable):
                 current = candidate  # a folder bubblewrap made on the way to an earlier bind
                 continue
             # A link, or anything in such a made folder (`current` then still goes through the link outside).
             if candidate.is_symlink() or current.resolve() != current:
                 rest = list(reversed(pending))
                 if ".." in rest:
-                    raise ConfineError(f"not starting: {path} goes through a link and then '..'; give a plain path")
-                return candidate.joinpath(*rest)
+                    raise ConfineError(
+                        f"not starting: {folder} goes through a link and then '..', which confined mode does not "
+                        "follow. Give the folder's own path (no link), or run without --confined"
+                    )
+                seen = candidate.joinpath(*rest)
+                through_read_only(seen)  # the rest may go into a put-back (~/.local/share linked, then fonts/...)
+                return seen
         if not candidate.is_symlink():
             current = candidate
             continue
         links += 1
         if links > 40:  # the kernel's own limit
-            raise ConfineError(f"not starting: too many levels of symbolic links in {path}")
+            raise ConfineError(f"not starting: too many levels of symbolic links in {folder}")
         target = Path(os.readlink(candidate))
         if target.is_absolute():
             current = Path("/")
         pending.extend(reversed(target.parts[1:] if target.is_absolute() else target.parts))
-    if not any(current.is_relative_to(folder) for folder in writable):
+    if not any(current.is_relative_to(f) for f in writable):
         raise ConfineError(
-            f"not starting: inside confinement {path} would lead to {current}, not to the folder put back writable, so "
-            "the browser could not keep files there. Give the folder's own path (no link), or run without --confined"
+            f"not starting: inside confinement {folder} would lead to {current}, not to the folder put back writable, "
+            "so the browser could not keep files there. Give the folder's own path (no link), or run without "
+            "--confined"
         )
     return None
 
@@ -323,10 +341,17 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
         if bound.get(at) == real:
             return  # Downloads is the profile folder, or reached the same way
         covered = Path("/") if at == Path("/") else next((f for f in [*earlier, *bound] if f.is_relative_to(at)), None)
+        if covered == engine_dir:
+            raise ConfineError(
+                f"not starting: the {name} folder {path} holds the engine's folder {engine_dir}, which confined mode "
+                f"puts back read-only, so the browser could change the engine. Move the engine out of {path}, or run "
+                "without --confined"
+            )
         if covered is not None:
             raise ConfineError(
                 f"not starting: the {name} folder {path} would be put back writable at {at}, over {covered}, which "
-                "confined mode hides or puts back on its own. Use a folder of its own there, or run without --confined"
+                "confined mode hides or puts back on its own. Choose a folder that is not / and does not hold "
+                f"{covered}, or run without --confined"
             )
         args.extend(["--bind", str(real), str(at)])
         bound[at] = real
@@ -334,7 +359,7 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     for name, path in (("profile", profile_dir), ("Downloads", downloads)):
         real = path.resolve()
         put_back(name, path, real, real)
-        seen = seen_inside(path, emptied, read_only, list(bound))
+        seen = seen_inside(path, emptied, read_only, list(bound), name)
         if seen is not None and seen != real:
             put_back(name, path, real, seen)
     for name in UNSET_ENV:
