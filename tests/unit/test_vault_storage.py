@@ -485,6 +485,25 @@ class OverlappingUnlockTest(StorageCase):
         box.unmount()
         self.assertEqual(mode(box.mountpoint), 0o500)
 
+    def test_a_repair_that_cannot_be_made_does_not_keep_the_profile_locked(self):
+        # A link at P.vault/cipher, or a file system that refuses the chmod: the profile opened before #620's repair.
+        box, vault = self.new_container()
+        box.mount(vault)
+        box.unmount()
+        os.chmod(box.cipher, 0o750)
+        real_open = os.open
+
+        def refused(path, *args, **kwargs):
+            if Path(path) == box.cipher:
+                raise OSError(40, "Too many levels of symbolic links")
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch.object(storage.os, "open", refused):
+            box.mount(vault)
+        self.assertTrue(box.mounted())
+        self.assertEqual(mode(box.cipher), 0o750)  # not repaired, and said so in the log
+        box.unmount()
+
     def test_securing_a_locked_folder_never_reaches_a_volume_mounted_meanwhile(self):
         box, vault = self.new_container()
         box.mount(vault)
