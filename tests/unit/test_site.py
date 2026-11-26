@@ -1472,6 +1472,24 @@ class DownloadPagesTest(unittest.TestCase):
             throwaway_key(other_home)
         other = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--armor", "--export"],
                                capture_output=True, text=True, check=True).stdout  # fmt: skip
+        other_secret = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--pinentry-mode",
+                                       "loopback", "--passphrase", "", "--armor", "--export-secret-keys"],
+                                      capture_output=True, text=True, check=True).stdout  # fmt: skip
+        self.assertIn("PRIVATE KEY BLOCK", other_secret)
+        # The release key, then a block holding it and three bytes that are no OpenPGP packet.
+        binary = subprocess.run(["gpg", "--homedir", str(self.tmp / "gnupg"), "--batch", "--export", self.fpr],
+                                capture_output=True, check=True).stdout  # fmt: skip
+        enarmored = subprocess.run(["gpg", "--batch", "--enarmor"], input=binary + b"\x01\x02\x03", env={
+            "PATH": os.environ.get("PATH", os.defpath), "GNUPGHOME": str(self.tmp / "gnupg")},
+            capture_output=True, check=True).stdout.decode("ascii")  # fmt: skip
+        unreadable = self.armored + enarmored.replace("PGP ARMORED FILE", "PGP PUBLIC KEY BLOCK")
+        # The case's precondition: gpg lists the release key alone, and then exits non-zero.
+        listed = subprocess.run(["gpg", "--batch", "--show-keys", "--with-colons", "-"], input=unreadable,
+                                capture_output=True, text=True, env={"PATH": os.environ.get("PATH", os.defpath),
+                                "GNUPGHOME": str(self.tmp / "gnupg"), "LC_ALL": "C"})  # fmt: skip
+        self.assertNotEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual([line.split(":")[0] for line in listed.stdout.splitlines() if line[:4] in ("pub:", "sec:")],
+                         ["pub"], listed.stdout)  # fmt: skip
 
         def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
                 built: Path = out, extra_sig: bool = False, shell: str = "bash") -> str:  # fmt: skip
@@ -1540,6 +1558,16 @@ class DownloadPagesTest(unittest.TestCase):
                 # #744: the release key with another key beside it in the file: the block stops before the import.
                 self.assertNotIn("nulavio.rpm", run(page, "bundled", ours, self.armored + other, shell=sh))
                 self.assertEqual(keyrings["bundled", page, sh], ([], []))
+                # Review of #752: a secret key beside the release key is listed as "sec", not "pub"; in either order
+                # it stops the block, and neither key reaches the keyring.
+                secret_cases = (("bundled-secret", self.armored + other_secret), ("secret-first", other_secret + self.armored))
+                for case, key in secret_cases:
+                    self.assertNotIn("nulavio.rpm", run(page, case, ours, key, shell=sh))
+                    self.assertEqual(keyrings[case, page, sh], ([], []))
+                # Review of #752: gpg lists the release key, then fails on the rest of the file. The listing's exit
+                # status stops the block too, as it did before #744; awk alone would have passed it.
+                self.assertNotIn("nulavio.rpm", run(page, "unreadable", ours, unreadable, shell=sh))
+                self.assertEqual(keyrings["unreadable", page, sh], ([], []))
                 # The list changed after it was signed.
                 self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True, shell=sh))
                 # gpg found our valid signature but failed on another one, and exited non-zero.
