@@ -275,8 +275,8 @@ public final class Json {
             while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
                 pos++;
             }
-            if (pos == digits || (s.charAt(digits) == '0' && pos - digits > 1) || pos - digits > 18) {
-                throw new PhoneRejected("bad-message"); // no digit, a leading zero, or more than nv1's small integers
+            if (pos == digits || (s.charAt(digits) == '0' && pos - digits > 1) || pos - start > 18) {
+                throw new PhoneRejected("bad-message"); // no digit, a leading zero, or over 18 characters with the sign
             }
             return Long.parseLong(s.substring(start, pos));
         }

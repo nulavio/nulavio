@@ -48,4 +48,21 @@ public class JsonTest {
         assertEquals(907L, obj.get("d"));
         assertEquals("\u00e9", obj.get("e"));
     }
+
+    @Test
+    public void theLengthLimitCountsTheMinusSign() {
+        // A number is at most 18 characters, sign included, as before the grammar check.
+        String digits18 = "9".repeat(18);
+        for (String bad : new String[] {"{\"v\":-" + digits18 + "}", "{\"v\":1" + digits18 + "}"}) {
+            try {
+                Json.parseObject(bad);
+                fail("accepted: " + bad);
+            } catch (PhoneRejected e) {
+                assertEquals("bad-message", e.code);
+            }
+        }
+        Map<String, Object> obj = Json.parseObject("{\"a\":" + digits18 + ",\"b\":-" + "9".repeat(17) + "}");
+        assertEquals(999999999999999999L, obj.get("a"));
+        assertEquals(-99999999999999999L, obj.get("b"));
+    }
 }
