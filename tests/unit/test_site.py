@@ -993,7 +993,7 @@ TRACE_HOOK = """import json as _json, os as _os, sys as _sys
 def _nulavio_trace(event, args, _log=open({log!r}, "a", encoding="utf-8", buffering=1)):
     try:
         if event == "open" and isinstance(args[0], (str, bytes)):
-            _log.write("open\\t" + _os.path.abspath(_os.fsdecode(args[0])) + "\\n")
+            _log.write("open\\t" + _json.dumps(_os.path.abspath(_os.fsdecode(args[0]))) + "\\n")
         elif event == "subprocess.Popen":
             cwd = _os.path.abspath(_os.fsdecode(args[2])) if args[2] is not None else _os.getcwd()
             _log.write("run\\t" + _json.dumps([cwd, [_os.fsdecode(a) for a in args[1]]]) + "\\n")
@@ -1036,47 +1036,69 @@ def traced_build_inputs(test: unittest.TestCase) -> set[str]:
         )  # fmt: skip
         test.assertEqual(result.returncode, 0, result.stderr[-2000:])
         lines = log.read_text(encoding="utf-8").splitlines()
+    return trace_inputs(test, lines)
+
+
+def trace_inputs(test: unittest.TestCase, lines: list[str], root: Path = ROOT) -> set[str]:
+    """The files under root that a TRACE_HOOK log says were read, relative to root."""
     read, other = set(), []
     for line in lines:
         kind, _, value = line.partition("\t")
         if kind == "open":
-            read.add(value)
+            read.add(json.loads(value))
         elif kind == "run":
             cwd, argv = json.loads(value)
             name = Path(argv[0]).name
-            if name.startswith("python") and not ("-c" in argv and "_nulavio_trace" in argv[argv.index("-c") + 1]):
-                other.append(f"untraced python: {argv[:4]}")
-            elif not name.startswith("python") and name not in ("git", "gpg"):
+            if name.startswith("python"):
+                # A traced python logs its own opens; its arguments are code and options, not files.
+                if not ("-c" in argv and "_nulavio_trace" in argv[argv.index("-c") + 1]):
+                    other.append(f"untraced python: {argv[:4]}")
+            elif name in ("git", "gpg"):
+                read.update(os.path.abspath(os.path.join(cwd, arg)) for arg in argv[1:])
+            else:
                 other.append(f"unknown program: {argv[0]}")
-            read.update(str(Path(cwd, arg)) for arg in argv[1:] if "\n" not in arg)
         else:
             other.append(value)
     test.assertEqual(other, [], "the build starts a process this trace does not follow: teach traced_build_inputs about it")
     inputs = set()
-    for name in read:
-        path = Path(os.path.realpath(name))
+    for path in {Path(p) for name in read for p in (name, os.path.realpath(name))}:  # a symlink and its target
         if path.parent.name == "__pycache__" and path.suffix == ".pyc":
             path = path.parent.parent / (path.name.split(".", 1)[0] + ".py")  # x.cpython-312.pyc is x.py
-        if not path.is_relative_to(ROOT) or not path.is_file():
+        if not path.is_relative_to(root) or not path.is_file():
             continue
-        relative = path.relative_to(ROOT).as_posix()
+        relative = path.relative_to(root).as_posix()
         if not relative.startswith(".git/"):
             inputs.add(relative)
     return inputs
 
 
-def path_filter_matches(patterns: list[str], path: str) -> bool:
-    """GitHub's paths filter: * and ? stop at "/", ** crosses it; the last matching pattern decides, "!" excludes.
+def hooked_trace(test: unittest.TestCase, root: Path, code: str) -> set[str]:
+    """What trace_inputs makes of a python3 child that runs code in root under TRACE_HOOK."""
+    log = root / "trace.log"
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", TRACE_HOOK.format(log=str(log)) + code],
+        capture_output=True, text=True, timeout=60, cwd=root,
+    )  # fmt: skip
+    test.assertEqual(result.returncode, 0, result.stderr[-2000:])
+    return trace_inputs(test, log.read_text(encoding="utf-8").splitlines(), root)
 
-    The same reading as test_ai_review.github_path_filter_matches; fnmatch would let * cross "/".
+
+def path_filter_matches(patterns: list[str], path: str) -> bool:
+    """GitHub's paths filter: * stops at "/", ** crosses it, **/ also matches at the root; the last
+    matching pattern decides, "!" excludes (fnmatch would let * cross "/").
+
+    GitHub reads ?, + and [] its own way (? makes the character before it optional), so a pattern
+    with one is refused, not guessed at.
     """
     included = False
     for pattern in patterns:
         negative = pattern.startswith("!")
         glob = pattern[1:] if negative else pattern
+        if re.search(r"[?+\[\]]", glob):
+            raise ValueError(f"{pattern!r}: teach path_filter_matches GitHub's ?, + and [] first")
         regex = "".join(
-            ".*" if token == "**" else "[^/]*" if token == "*" else "[^/]" if token == "?" else re.escape(token)
-            for token in re.findall(r"\*\*|\*|\?|[^*?]+", glob)
+            "(?:.*/)?" if token == "**/" else ".*" if token == "**" else "[^/]*" if token == "*" else re.escape(token)
+            for token in re.findall(r"\*\*/|\*\*|\*|[^*]+", glob)
         )
         if re.fullmatch(regex, path):
             included = not negative
@@ -1124,7 +1146,8 @@ class SiteWorkflowTest(unittest.TestCase):
 
     def push_paths(self):
         paths = self.block(self.block(self.block(self.lines, "on:"), "push:"), "paths:")
-        return [line.strip().removeprefix("- ").strip('"') for line in paths]
+        entries = [line.strip().removeprefix("- ").strip() for line in paths]
+        return [e[1:-1] if len(e) > 1 and e[0] == e[-1] and e[0] in "'\"" else e for e in entries]
 
     def test_a_push_that_changes_anything_the_build_reads_runs_it(self):
         # #661: the build counted the defaults in browser/config/prefs/baseline.js and ran the
@@ -1134,8 +1157,54 @@ class SiteWorkflowTest(unittest.TestCase):
             self.assertIn(known, inputs, "the trace no longer sees what the build reads")
         self.assertEqual(unwatched(inputs, self.push_paths()), [], "add these to the push paths of site.yml")
 
+    def test_the_trace_counts_a_symlink_the_build_reads_and_its_target(self):
+        # A push that only points the link elsewhere changes the site too.
+        with tempfile.TemporaryDirectory(prefix="nulavio-site-trace-") as tmp:
+            root = Path(os.path.realpath(tmp))
+            (root / "site").mkdir()
+            (root / "site/logo.svg").write_text("<svg/>", encoding="utf-8")
+            (root / "docs").mkdir()
+            (root / "docs/logo.svg").symlink_to("../site/logo.svg")
+            inputs = hooked_trace(self, root, "open('docs/logo.svg').close()")
+        self.assertEqual(inputs, {"docs/logo.svg", "site/logo.svg"})
+
+    def test_the_trace_does_not_take_a_traced_pythons_arguments_for_files(self):
+        # prefs explain runs in the root with --category tracking: a scratch file named tracking
+        # there is not read. A traced python logs its own opens; gpg is handed its file.
+        with tempfile.TemporaryDirectory(prefix="nulavio-site-trace-") as tmp:
+            root = Path(os.path.realpath(tmp))
+            (root / "tracking").write_text("", encoding="utf-8")
+            (root / "key.asc").write_text("", encoding="utf-8")
+            argv = ["python3", "-I", "-B", "-c", "_nulavio_trace", "prefs", "explain", "--category", "tracking"]
+            code = f"import sys\nsys.audit('subprocess.Popen', 'python3', {argv!r}, None, None)\n"
+            code += "sys.audit('subprocess.Popen', 'gpg', ['gpg', '--show-keys', 'key.asc'], None, None)\n"
+            self.assertEqual(hooked_trace(self, root, code), {"key.asc"})
+
+    def test_the_trace_reads_a_file_name_with_a_line_break(self):
+        with tempfile.TemporaryDirectory(prefix="nulavio-site-trace-") as tmp:
+            root = Path(os.path.realpath(tmp))
+            (root / "a\nb").mkdir()
+            (root / "a\nb/x.txt").write_text("", encoding="utf-8")
+            self.assertEqual(hooked_trace(self, root, "open('a\\nb/x.txt').close()"), {"a\nb/x.txt"})
+
+    def test_the_matcher_refuses_the_characters_github_reads_its_own_way(self):
+        # GitHub: ? makes the character before it optional, + repeats it, [] is a class of one
+        # character. Read as fnmatch would, baselin?.js would count baseline.js as watched.
+        for pattern in ("browser/config/prefs/baselin?.js", "browser/config/prefs/baselin+.js", "browser/[bc]onfig/**"):
+            with self.subTest(pattern=pattern), self.assertRaises(ValueError):
+                path_filter_matches([pattern], "browser/config/prefs/baseline.js")
+        self.assertTrue(path_filter_matches(["**/README.md"], "README.md"), "**/ matches at the root too")
+
+    def test_the_push_paths_are_read_single_or_double_quoted(self):
+        self.lines = [
+            "on:", "  push:", "    branches: [main]", "    paths:",
+            '      - "site/**"', "      - 'browser/config/prefs/**'", "      - launcher/**",
+            "  workflow_dispatch:",
+        ]  # fmt: skip
+        self.assertEqual(self.push_paths(), ["site/**", "browser/config/prefs/**", "launcher/**"])
+
     def test_the_paths_check_finds_an_input_the_workflow_does_not_watch(self):
-        patterns = [p for p in self.push_paths() if not p.startswith("browser/config/")]
+        patterns = ["site/**", "launcher/**", "scripts/site/**"]  # its own list: site.yml may watch browser/**
         inputs = {"browser/config/prefs/baseline.js", "launcher/nulavio_launcher/cli.py", "site/en/index.html"}
         self.assertEqual(unwatched(inputs, patterns), ["browser/config/prefs/baseline.js"])
         self.assertFalse(path_filter_matches(["site/*"], "site/en/index.html"), "* stops at /")
