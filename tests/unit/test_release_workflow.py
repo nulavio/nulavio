@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -37,6 +38,8 @@ FAKE_AWS = """#!/bin/sh
   printf '%s ' "$@"
   printf '\\n'
 } >> "$FAKE_AWS_LOG"
+# The same call with its argument boundaries, one JSON list a line: what the order assertions read.
+python3 -I -c 'import json, sys; print(json.dumps(sys.argv[1:]))' "$@" >> "$FAKE_AWS_LOG.json"
 # A write that fails (a network error, a cancelled run): FAKE_AWS_FAIL_ON is a destination the call names.
 case " $* " in
   *" ${FAKE_AWS_FAIL_ON:-no such destination} "*) exit 1 ;;
@@ -80,7 +83,7 @@ PAIR_THEN_SERVED = [
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
 class UploadRepoTest(unittest.TestCase):
     def setUp(self):
-        self.tmp = Path(tempfile.mkdtemp())
+        self.tmp = Path(tempfile.mkdtemp(prefix="upload repo "))  # a space: the argument boundaries must hold
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = self.tmp / "rpm"
         (self.repo / "repodata").mkdir(parents=True)
@@ -131,11 +134,10 @@ class UploadRepoTest(unittest.TestCase):
         """The writes to the bucket in order, as (staged file, key); a sync is ("sync", its prefix)."""
         found = []
         for call in self.uploads():
-            words = call.split()
-            if "sync" in words:
-                found.append(("sync", words[words.index("sync") + 2].removeprefix("s3://nulavio-packages/")))
+            if "sync" in call:
+                found.append(("sync", call[call.index("sync") + 2].removeprefix("s3://nulavio-packages/")))
             else:
-                source, destination = words[words.index("cp") + 1 : words.index("cp") + 3]
+                source, destination = call[call.index("cp") + 1 : call.index("cp") + 3]
                 found.append((Path(source).relative_to(self.repo).as_posix(),
                               destination.removeprefix("s3://nulavio-packages/")))  # fmt: skip
         return found
@@ -195,10 +197,13 @@ class UploadRepoTest(unittest.TestCase):
         self.assertIn("not a signed repository", out.stderr)
         self.assertFalse(self.log.exists())
 
-    def uploads(self) -> list[str]:
-        """The calls that write to the bucket."""
-        calls = self.log.read_text().splitlines() if self.log.exists() else []
-        return [call for call in calls if " sync " in call or f" cp {self.repo}" in call]
+    def uploads(self) -> list[list[str]]:
+        """The calls that write to the bucket, each as its argument list."""
+        log = self.log.with_name(self.log.name + ".json")
+        calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        return [
+            call for call in calls if "sync" in call or ("cp" in call and call[call.index("cp") + 1].startswith(f"{self.repo}/"))
+        ]
 
     def test_a_package_the_bucket_holds_with_other_bytes_is_never_overwritten(self):
         # #656: a run that uploaded 160.0-0.3 and stopped before its draft left no tag and no draft; a fresh run that
@@ -246,6 +251,156 @@ class UploadRepoTest(unittest.TestCase):
         out = self.run_upload()
         self.assertNotEqual(out.returncode, 0)
         self.assertEqual(self.uploads(), [])
+
+
+RUNBOOK_CURL = """#!/bin/sh
+# Stand-in for curl -fsS --proto '=https' -o <file> <url>: the URL's path from FAKE_BUCKET, or curl's 22 (a 404).
+while [ $# -gt 1 ]; do
+  case $1 in -o) out=$2; shift 2 ;; *) shift ;; esac
+done
+src="$FAKE_BUCKET/${1#https://packages.nulavio.net/}"
+[ -f "$src" ] || exit 22
+cp "$src" "$out"
+"""
+RUNBOOK_AWS = """#!/bin/sh
+python3 -I -c 'import json, os, sys
+names = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE",
+         "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_REQUEST_CHECKSUM_CALCULATION")
+print(json.dumps({"args": sys.argv[1:], "env": {name: os.environ.get(name) for name in names}}))' "$@" >> "$FAKE_AWS_LOG"
+shift 2
+[ "$1 $2" = "s3 cp" ] || exit 9
+if [ -n "${FAKE_AWS_CORRUPT:-}" ]; then echo corrupt > "$FAKE_BUCKET/${4#s3://nulavio-packages/}"; exit 0; fi
+cp "$FAKE_BUCKET/${3#s3://nulavio-packages/}" "$FAKE_BUCKET/${4#s3://nulavio-packages/}"
+"""
+# Stand-in for release_manifest.py verify-signed: a "signature" is "signed:" and the file's SHA-256.
+RUNBOOK_VERIFY = """import hashlib, sys
+args = sys.argv[1:]
+assert args[0] == "verify-signed" and args[3:] == ["--key", "site/keys/nulavio-packages.asc", "--fingerprint",
+                                                 "298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"], args
+with open(args[1], "rb") as f, open(args[2], "rb") as g:
+    good = g.read() == b"signed:" + hashlib.sha256(f.read()).hexdigest().encode()
+sys.exit(0 if good else 1)
+"""
+
+
+def signed(text: str) -> tuple[bytes, bytes]:
+    data = text.encode()
+    return data, b"signed:" + hashlib.sha256(data).hexdigest().encode()
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash not available")
+class FailedPublishRunbookTest(unittest.TestCase):
+    """build.md, "After a failed publish", state 4 (#740): the block copies the revision's pair onto the served keys
+    only once every check before it passed, takes the upload token at a prompt into the environment, and fails
+    when the served pair does not verify afterwards."""
+
+    REVISION = "160.0.1-0.4"
+
+    @classmethod
+    def setUpClass(cls):
+        text = (ROOT / "docs" / "architecture" / "build.md").read_text(encoding="utf-8")
+        state = text[text.index("4. **The build job stops at the signature of `repomd.xml`**") :]
+        block = state[state.index("   ```sh\n") + len("   ```sh\n") : state.index("\n   ```\n")]
+        cls.block = "\n".join(line.removeprefix("   ") for line in block.splitlines()) + "\n"
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="runbook "))
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.repo = self.tmp / "repo"
+        (self.repo / "scripts" / "release").mkdir(parents=True)
+        (self.repo / "scripts" / "release" / "release_manifest.py").write_text(RUNBOOK_VERIFY)
+        (self.repo / "site" / "keys").mkdir(parents=True)
+        (self.repo / "site" / "keys" / "nulavio-packages.asc").write_text("the release key")
+        self.bucket = self.tmp / "bucket"
+        self.served = self.bucket / "rpm" / "repodata"
+        (self.served / self.REVISION).mkdir(parents=True)
+        new, new_sig = signed("<repomd>the failed run's</repomd>")
+        old, _ = signed("<repomd>the run before</repomd>")
+        (self.served / self.REVISION / "repomd.xml").write_bytes(new)
+        (self.served / self.REVISION / "repomd.xml.asc").write_bytes(new_sig)
+        (self.served / "repomd.xml.asc").write_bytes(new_sig)  # the publish stopped here
+        (self.served / "repomd.xml").write_bytes(old)
+        bin_dir = self.tmp / "bin"
+        bin_dir.mkdir()
+        for name, body in (("curl", RUNBOOK_CURL), ("aws", RUNBOOK_AWS)):
+            (bin_dir / name).write_text(body)
+            (bin_dir / name).chmod(stat.S_IRWXU)
+        self.log = self.tmp / "aws.json"
+        self.scratch = self.tmp / "scratch"
+        self.scratch.mkdir()
+        script = self.block.replace("<firefox>-<release>", self.REVISION).replace("<account id>", "acct")
+        (self.tmp / "block.sh").write_text(script)
+        self.env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_BUCKET": str(self.bucket),
+                    "FAKE_AWS_LOG": str(self.log), "TMPDIR": str(self.scratch),
+                    # What the maintainer's shell may hold: never used for the copy.
+                    "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin"}  # fmt: skip
+
+    def run_block(self):
+        return subprocess.run(["bash", str(self.tmp / "block.sh")], cwd=self.repo, env=self.env, capture_output=True,
+                              text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
+
+    def calls(self) -> list[dict]:
+        return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
+
+    def test_the_pair_is_copied_in_the_upload_order_and_verifies(self):
+        out = self.run_block()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn(f"restored: the served pair is {self.REVISION}'s and verifies", out.stdout)
+        calls = self.calls()
+        self.assertEqual([call["args"][4:] for call in calls], [
+            [f"s3://nulavio-packages/rpm/repodata/{self.REVISION}/repomd.xml.asc",
+             "s3://nulavio-packages/rpm/repodata/repomd.xml.asc"],
+            [f"s3://nulavio-packages/rpm/repodata/{self.REVISION}/repomd.xml",
+             "s3://nulavio-packages/rpm/repodata/repomd.xml"],
+        ])  # fmt: skip
+        for call in calls:
+            self.assertEqual(call["args"][:4], ["--endpoint-url", "https://acct.r2.cloudflarestorage.com", "s3", "cp"])
+            # I3: the token reaches aws through the environment, from the prompt; never as an argument.
+            self.assertEqual(call["env"]["AWS_ACCESS_KEY_ID"], "r2-key-id")
+            self.assertEqual(call["env"]["AWS_SECRET_ACCESS_KEY"], "r2-secret")
+            self.assertNotIn("r2-secret", json.dumps(call["args"]))
+            for inherited in ("AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
+                self.assertIsNone(call["env"][inherited])
+            self.assertEqual(call["env"]["AWS_CONFIG_FILE"], "/dev/null")
+            self.assertEqual(call["env"]["AWS_SHARED_CREDENTIALS_FILE"], "/dev/null")
+            self.assertEqual(call["env"]["AWS_REQUEST_CHECKSUM_CALCULATION"], "when_required")
+        self.assertEqual((self.served / "repomd.xml").read_bytes(),
+                         (self.served / self.REVISION / "repomd.xml").read_bytes())  # fmt: skip
+        self.assertEqual(list(self.scratch.iterdir()), [])  # its temporary directory is gone
+
+    def test_no_credential_is_written_on_a_command_line(self):
+        self.assertNotRegex(self.block, r"AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
+        self.assertNotRegex(self.block, r"R2_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
+        self.assertIn("read -rsp", self.block)
+        self.assertTrue(self.block.startswith("(\nset -euo pipefail\n"), self.block[:40])
+
+    def assert_stopped_before_any_copy(self, out):
+        self.assertNotEqual(out.returncode, 0)
+        self.assertNotIn("restored", out.stdout)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), signed("<repomd>the run before</repomd>")[0])
+        self.assertEqual(list(self.scratch.iterdir()), [])
+
+    def test_another_served_signature_stops_it_before_any_copy(self):
+        # A pair of another revision would roll dnf back: cmp stops the block.
+        (self.served / "repomd.xml.asc").write_bytes(signed("<repomd>another run's</repomd>")[1])
+        self.assert_stopped_before_any_copy(self.run_block())
+
+    def test_a_revision_pair_that_does_not_verify_stops_it_before_any_copy(self):
+        (self.served / self.REVISION / "repomd.xml").write_bytes(b"<repomd>changed</repomd>")
+        self.assert_stopped_before_any_copy(self.run_block())
+
+    def test_a_missing_revision_pair_stops_it_before_any_copy(self):
+        # A run made before #740 left none.
+        shutil.rmtree(self.served / self.REVISION)
+        self.assert_stopped_before_any_copy(self.run_block())
+
+    def test_a_served_pair_that_does_not_verify_after_the_copy_fails_it(self):
+        self.env["FAKE_AWS_CORRUPT"] = "1"
+        out = self.run_block()
+        self.assertNotEqual(out.returncode, 0)  # the cleanup does not hide it
+        self.assertNotIn("restored", out.stdout)
+        self.assertEqual(list(self.scratch.iterdir()), [])
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
