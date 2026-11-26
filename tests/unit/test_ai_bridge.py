@@ -2463,6 +2463,8 @@ def _node(shared: str) -> dict:
 
 
 NUMBER = {"type": "number", "value": 7}
+# A BigInt arrives as its digits; past Python's limit for converting digits to an int (4300), int() raises.
+BIGINT = {"type": "bigint", "value": "9" * 5000}
 
 
 class PageResultsTest(Home):
@@ -2505,6 +2507,7 @@ class PageResultsTest(Home):
             ("text is an object", _obj(**{**good, "text": _obj(a=_s("SECRET"))})),
             ("title is an object", _obj(**{**good, "title": _obj(a=_s("SECRET"))})),
             ("title is a number", _obj(**{**good, "title": NUMBER})),
+            ("title is a BigInt too long for an int", _obj(**{**good, "title": BIGINT})),
             ("url is missing", _obj(title=good["title"], text=good["text"])),
             ("not an object", _arr(_s("SECRET"))),
             ("a string", _s("SECRET")),
@@ -2523,6 +2526,7 @@ class PageResultsTest(Home):
             ("a node without its id", _arr(_arr({"type": "node", "value": {"localName": "a"}}, info))),
             ("a node that is null", _arr(_arr({"type": "null"}, info))),
             ("a node id that is not a string", _arr(_arr(_obj(sharedId=NUMBER), info))),
+            ("an object that has a node's id", _arr(_arr(_obj(sharedId=_s("n-1"), localName=_s("a")), info))),
             ("info that is a string", _arr(_arr(_node("n-1"), _s("SECRET")))),
             ("a pair of three", _arr(_arr(_node("n-1"), info, info))),
             ("a pair that is an object", _arr(_obj(a=_node("n-1"), b=info))),
@@ -2552,6 +2556,17 @@ class PageResultsTest(Home):
         # An empty page is a snapshot with no elements.
         empty = self.reading(_arr()).call("page_snapshot", {"tab": "t1"})
         self.assertEqual(empty["structuredContent"]["elements"], [])
+
+    def test_a_bigint_too_long_for_an_int_is_no_value(self):
+        # BiDi sends a BigInt as its digits, which Python turns into an int only up to 4300 of them. One the page
+        # puts in what it lists is no value, not an exception that ends the call; nor in the title it reads.
+        title = tools.Bridge._title  # the real one: reading() puts a fixed title in its place
+        bridge = self.reading(_arr(_arr(_node("n-1"), _obj(role=BIGINT, name=_s("Home")))))
+        listed = bridge.call("page_snapshot", {"tab": "t1"})
+        self.assertFalse(listed["isError"], listed)
+        self.assertEqual(listed["structuredContent"]["elements"], [{"element": "e1", "role": None, "name": "Home"}])
+        self.assertEqual(title(self.reading(BIGINT), "t1", None), "")
+        self.assertEqual(bidi_mod.deserialize(_arr(BIGINT, {"type": "bigint", "value": "-12"})), [None, -12])
 
 
 class OpenProfileTest(Home):

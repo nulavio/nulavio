@@ -141,8 +141,12 @@ class Bidi:
         self.ws.close()
 
 
+class Node(dict):
+    """A node's {"sharedId", "localName"} handle: its own type, since a page's object can have the same keys."""
+
+
 def deserialize(value: dict):
-    """A BiDi RemoteValue as plain data; nodes become {"sharedId", "localName"} handles."""
+    """A BiDi RemoteValue as plain data; nodes become {"sharedId", "localName"} handles (Node)."""
     kind = value.get("type")
     if kind in ("string", "boolean"):
         return value["value"]
@@ -152,7 +156,10 @@ def deserialize(value: dict):
     if kind in ("undefined", "null"):
         return None
     if kind == "bigint":
-        return int(value["value"])
+        try:
+            return int(value["value"])
+        except ValueError:  # past Python's limit on the digits of an int (4300); the page chooses them
+            return None
     if kind in ("array", "set", "nodelist", "htmlcollection"):
         return [deserialize(v) for v in value.get("value", [])]
     if kind in ("object", "map"):
@@ -161,7 +168,7 @@ def deserialize(value: dict):
             out[key if isinstance(key, str) else str(deserialize(key))] = deserialize(item)
         return out
     if kind == "node":
-        return {"sharedId": value.get("sharedId"), "localName": value.get("value", {}).get("localName")}
+        return Node(sharedId=value.get("sharedId"), localName=value.get("value", {}).get("localName"))
     return {"type": kind}
 
 

@@ -25,7 +25,7 @@ from pathlib import Path
 from .. import paths
 from ..engine import EngineError
 from . import audit, policy, registry
-from .bidi import Bidi, BidiError, Cancelled, script_result
+from .bidi import Bidi, BidiError, Cancelled, Node, script_result
 from .workspace import ProfileTarget, TargetError, Workspace
 
 TAB = {"type": "string", "pattern": "^[A-Za-z0-9-]{1,64}$", "description": "Tab id from tabs_list or tab_new"}
@@ -258,11 +258,12 @@ _UNEXPECTED = "%s came back in an unexpected shape, which the page can cause; no
 
 
 def _element_pair(pair: object) -> bool:
-    """One entry of SNAPSHOT_FN's result: [node handle, info object]."""
+    """One entry of SNAPSHOT_FN's result: [node handle, info object]. The node is one BiDi sent as a node, not a
+    page's object with the same keys."""
     if not isinstance(pair, list) or len(pair) != 2:
         return False
     node, info = pair
-    return isinstance(node, dict) and isinstance(node.get("sharedId"), str) and bool(node["sharedId"]) and isinstance(info, dict)
+    return isinstance(node, Node) and isinstance(node.get("sharedId"), str) and bool(node["sharedId"]) and isinstance(info, dict)
 
 
 @dataclass(frozen=True)
