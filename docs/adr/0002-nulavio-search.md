@@ -36,7 +36,10 @@ The engine's Search Service (`moz-src:///toolkit/components/search/SearchService
    - a host is required, with no credentials in the URL;
    - `{searchTerms}` (or `%s`, normalised) is required in the search URL;
    - suggestion URLs follow the same rules and must stay on the search URL's host;
-   - aliases match `^@?[a-z0-9][a-z0-9_-]{0,19}$` and must be unique.
+   - aliases match `^@?[a-z0-9][a-z0-9_-]{0,19}$` and must be unique;
+   - no engine takes a keyword of Nulavio's own (`RESERVED_ALIASES`: the assistant's `@ia`, in any case), refused as
+     `alias-reserved`. The engine's own Settings dialogs write an alias themselves, so an engine that has one loses it
+     at start-up and right after a change, and Settings names that engine (#663).
 
 ## Interfaces
 

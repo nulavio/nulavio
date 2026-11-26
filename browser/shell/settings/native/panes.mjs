@@ -1467,7 +1467,11 @@
     // the engines Nulavio knows how to add. Default engine, aliases and removal are the engine's own controls. --
     // The sign-in state (#151) is read here, by the settings page, and is not part of state(): Shell pages that ask the
     // search experiment for its state do not get anything read from cookies.
-    const search = source(async () => ({ ...(await shell.NulavioSearch.state()), accounts: shell.NulavioSearch.accounts() }));
+    const search = source(async () => ({
+      ...(await shell.NulavioSearch.state()),
+      accounts: shell.NulavioSearch.accounts(),
+      releasedAliases: await shell.NulavioSearch.releasedAliases(), // #663: engines that lost the assistant's "@ia"
+    }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
     const searchSetup = (emitChange, stops) => {
@@ -1815,6 +1819,15 @@
         placeholder: "https://example.org/opensearch.xml",
       }),
     ];
+    // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
+    // Each name quoted: a name may hold ", " itself (review of #772).
+    const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
+    const searchAliasBar = searchBench.bar(
+      "nulavio-search-alias-reserved",
+      "warning",
+      () => msg("searchAliasReserved", releasedNow().map(name => `“${name}”`).join(", ")),
+      () => releasedNow().length > 0
+    );
     const searchBars = [
       searchBench.bar("nulavio-search-error", "error", () => searchBench.state.error, () => Boolean(searchBench.state.error)),
       searchBench.bar("nulavio-search-said", "success", () => searchBench.state.said, () => Boolean(searchBench.state.said)),
@@ -2759,7 +2772,8 @@
       nulavioSearchAdd: {
         l10nId: "nulavio-search-add-group",
         headingLevel: 2,
-        items: [...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
+        // First, right under the engine's Search Shortcuts list, where the alias it names is given (#663).
+        items: [searchAliasBar, ...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
       },
       nulavioTranslate: {
         l10nId: "nulavio-translate-group",

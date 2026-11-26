@@ -256,7 +256,10 @@ class SearchPrivacyTest(unittest.TestCase):
         """UX5-H gate: with remote suggestions allowed for the default engine, what follows "@ia" (the
         Nulavio Assistant's keyword) never reaches a suggestion service or any other request. The engine
         skips suggestions for "@" text that names no engine (bug 1551049); this pins it. The same setup
-        does send ordinary typing, which proves the measurement sees it."""
+        does send ordinary typing, which proves the measurement sees it.
+
+        #663: nor once an engine is given "@ia" as its alias, which would make "@ia" name that engine. Nulavio
+        Search refuses it, and the engine's own dialogs, which write the alias themselves (as here), lose it at once."""
         self.require_nulavio()
         fixture = self.search(
             "return S.addCustom({name: 'Fixture', url: args[0], suggestUrl: args[1], alias: '@fixture'});",
@@ -279,6 +282,28 @@ class SearchPrivacyTest(unittest.TestCase):
             self.assertEqual(typed, "@ia nvassistantsecret")
             self.assertFalse([h for h in self.server.requests_to("/suggest") if "nvassistantsecret" in h])
             self.assert_nothing_about(seen, "nvassistantsecret")
+            # #663: the same engine, with its consent, given the assistant's keyword.
+            self.assertEqual(self.search_error("return S.setAlias(args[0], 'ia');", fixture), "alias-reserved")
+            self.search(
+                "const {SearchService} = ChromeUtils.importESModule("
+                "'moz-src:///toolkit/components/search/SearchService.sys.mjs');"
+                "SearchService.getEngineById(args[0]).alias = '@IA'; return true;",
+                fixture,
+            )
+            alias_now = "return (await S.list()).find(e => e.id === args[0]).alias;"
+            self.assertTrue(harness.wait_until(lambda: self.search(alias_now, fixture) == "", 10), "the engine kept @ia")
+            self.assertEqual(self.search("return S.releasedAliases();"), ["Fixture"])
+            self.m.chrome(NET_START)
+            try:
+                self.type_keys("@ia nvcollisionsecret")
+                time.sleep(2.0)
+                typed = self.m.chrome("return gURLBar.value;")
+            finally:
+                seen = self.m.chrome(NET_STOP)
+                self.m.chrome("gURLBar.view.close(); gURLBar.handleRevert(); gURLBar.blur();")
+            self.assertEqual(typed, "@ia nvcollisionsecret")
+            self.assertFalse([h for h in self.server.requests_to("/suggest") if "nvcollisionsecret" in h])
+            self.assert_nothing_about(seen, "nvcollisionsecret")
             self.type_in_urlbar("nvcontrolafteria")  # the positive control, with the same consent
             self.assertTrue(any("nvcontrolafteria" in h for h in self.server.requests_to("/suggest")))
         finally:
@@ -442,6 +467,7 @@ class SearchPrivacyTest(unittest.TestCase):
             "missing-terms": "return S.addCustom({name: 'X', url: 'https://example.org/search'});",
             "suggest-other-host": "return S.addCustom({name: 'X', url: 'https://example.org/?q=%s', suggestUrl: 'https://other.example/?q=%s'});",
             "alias-taken": "return S.addCustom({name: 'X', url: 'https://example.org/?q=%s', alias: '@brave'});",
+            "alias-reserved": "return S.addCustom({name: 'X', url: 'https://example.org/?q=%s', alias: 'IA'});",
             "invalid-alias": "return S.addCustom({name: 'X', url: 'https://example.org/?q=%s', alias: '@no spaces'});",
             "name-taken": "return S.addCustom({name: 'Mojeek', url: 'https://example.org/?q=%s'});",
             "no-suggestions": "return S.setSuggestOptIn((await S.list()).find(e => e.alias === '@mojeek').id, true);",
