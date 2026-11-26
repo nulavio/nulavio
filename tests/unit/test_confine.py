@@ -311,7 +311,11 @@ class WrapTest(unittest.TestCase):
             "Downloads is /": (self.profile, "/", "put back writable at /, over /"),
             "Downloads is a link to the home folder": (self.profile, "link-home", "over "),
             "Downloads is a link above the home folder": (self.profile, "link-up", "over "),
+            # #712: values of the desktop's folder names above the home folder.
+            "Downloads is above the home folder": (self.profile, "$HOME/..", f"put back writable at {self.tmp.resolve()}"),
         }
+        if Path("/home").is_dir() and not Path("/home").is_symlink():  # hidden, so covered, only where it is a folder
+            cases["Downloads is /home"] = (self.profile, "/home", "put back writable at /home, over /home")
         for case, (profile, downloads, expected) in cases.items():
             with self.subTest(case):
                 link = self.home / "Downloads"
@@ -399,6 +403,34 @@ class WrapTest(unittest.TestCase):
         message = str(refused.exception)
         self.assertIn(f"holds the engine's folder {engine.resolve()}", message)
         self.assertIn(f"Move the engine out of {self.home / 'Downloads'}, or run without --confined", message)
+
+    def test_an_engine_folder_that_is_or_holds_a_hidden_folder_is_refused_with_what_to_do(self):
+        # #712: the engine's folder is put back read-only after the home folder is hidden; the home folder itself (an
+        # engine straight in it, NULAVIO_ENGINE=~/nulavio), a folder above it or / would show the hidden files again.
+        (self.home / ".ssh").mkdir()
+        cases = {
+            "the home folder": (self.home, f"over {self.home.resolve()}"),
+            "above the home folder": (self.tmp, "over "),
+            "/": (Path("/"), "would be put back read-only over /,"),
+            "a folder that holds a read-only put-back": (self.home / ".config", f"over {self.home.resolve()}/.config/fontconfig"),
+        }  # fmt: skip
+        for case, (engine, expected) in cases.items():
+            with self.subTest(case), self.assertRaises(confine.ConfineError) as refused:
+                confine.wrap(["/engine/nulavio"], profile_dir=self.profile, engine_dir=engine, home=self.home,
+                             binary="/usr/bin/bwrap")  # fmt: skip
+            message = str(refused.exception)
+            self.assertIn(f"the engine's folder {engine.resolve()} would be put back read-only", message)
+            self.assertIn(expected, message)
+            self.assertIn("confined mode hides or puts back on its own", message)
+            self.assertIn("(not the home folder itself), or run without --confined", message)
+
+    def test_an_engine_folder_inside_the_home_folder_is_put_back_read_only(self):
+        engine = self.home / "nulavio"
+        engine.mkdir()
+        args = confine.wrap(["/engine/nulavio"], profile_dir=self.profile, engine_dir=engine, home=self.home,
+                            binary="/usr/bin/bwrap")  # fmt: skip
+        self.assertIn(str(engine.resolve()), self.pairs(args, "--ro-bind"))
+        self.assertNotIn(str(self.home.resolve()), self.pairs(args, "--ro-bind"))
 
     def test_a_link_then_dots_names_the_folder_and_the_way_out(self):
         # A4: ~/Downloads -> disk, then '..' in what follows the link.
@@ -720,12 +752,12 @@ class RealBubblewrapTest(unittest.TestCase):
                 self.assertTrue((profile.resolve() / "written").exists())
                 self.assertTrue((disk / "Downloads/written").exists())
 
-    def refusal(self, profile: Path, home: Path, downloads: Path) -> str:
+    def refusal(self, profile: Path, home: Path, downloads: Path, engine: Path | None = None) -> str:
         """The refusal's message; a start that bubblewrap runs instead fails the test with what bubblewrap said."""
         write = [sys.executable, "-I", "-c", WRITE, "downloads", str(downloads)]
+        engine = engine or Path(sys.executable).resolve().parent
         try:
-            args = confine.wrap(write, profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent,
-                                home=home, binary=confine.bwrap())  # fmt: skip
+            args = confine.wrap(write, profile_dir=profile, engine_dir=engine, home=home, binary=confine.bwrap())
         except confine.ConfineError as refused:
             return str(refused)
         run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
@@ -765,6 +797,44 @@ class RealBubblewrapTest(unittest.TestCase):
         message = self.refusal(home / ".icons/l2", home, home / "Downloads")
         self.assertIn(f"the profile folder {home}/.icons/l2 would be put back writable at {home}, over {home}", message)
         self.assertIn("confined mode hides or puts back on its own", message)
+
+    def test_an_engine_in_the_home_folder_or_above_it_is_refused_not_started(self):
+        # #712: with the engine's folder put back read-only at the home folder or above it, a confined program read
+        # the hidden home folder's files.
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home = tmp / "home"
+        profile = home / ".local/share/nulavio/data/profiles/p"
+        for folder in (profile, home / ".config", home / ".ssh"):
+            folder.mkdir(parents=True)
+        (home / ".ssh/id_fake").write_text("artificial, not a key\n")
+        for engine in (home, tmp):
+            with self.subTest(engine=engine):
+                message = self.refusal(profile, home, home / "Downloads", engine=engine)
+                self.assertIn(f"the engine's folder {engine.resolve()} would be put back read-only", message)
+                self.assertIn("run without --confined", message)
+
+    def test_an_engine_folder_inside_the_home_folder_starts_read_only_and_hides_the_rest(self):
+        # What keeps working beside #712: an engine unpacked in a folder of its own in the home folder.
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home = tmp / "home"
+        profile, engine = home / ".local/share/nulavio/data/profiles/p", home / "nulavio"
+        for folder in (profile, engine, home / ".config", home / ".ssh"):
+            folder.mkdir(parents=True)
+        (engine / "nulavio").write_text("artificial engine\n")
+        (home / ".ssh/id_fake").write_text("artificial, not a key\n")
+        script = (
+            f"test -e {engine}/nulavio && echo engine-visible;"
+            f"touch {engine}/written 2>/dev/null && echo engine-writable;"
+            f"test -e {home}/.ssh/id_fake && echo secret-visible; true"
+        )
+        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=profile, engine_dir=engine, home=home,
+                            binary=confine.bwrap())  # fmt: skip
+        run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.split(), ["engine-visible"])
+        self.assertFalse((engine / "written").exists())
 
     def test_a_link_before_a_read_only_put_back_is_refused_not_started(self):
         # A1 with real bubblewrap: ~/.local/share is a link and Downloads is in its fonts/, put back read-only. A bind

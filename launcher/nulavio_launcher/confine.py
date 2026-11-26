@@ -10,7 +10,9 @@ symlink in a hidden folder (a `~/Downloads` link to another disk, a data
 folder reached through a link), since that link is not there inside (#711).
 Refused instead: a path with a link that goes into a folder put back read-only (a linked ~/.fonts holding Downloads),
 a profile or Downloads folder that is / or would cover a folder hidden or put back (the home folder, a Downloads
-folder above the profiles), and a Downloads folder that holds the engine's folder.
+folder above the profiles, a `~/Downloads` link to the home folder or above it), a Downloads folder that holds the
+engine's folder, and an engine's folder that is / or would cover a folder hidden or put back (the engine straight in
+the home folder, #712).
 A home folder that is itself such a link is not handled yet: Downloads and the
 read-only settings are bound under the resolved home only (#722).
 The rest of the system is
@@ -325,8 +327,20 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
         if path.exists():
             args += ["--ro-bind", str(path), str(path)]
             read_only.append(path)
+    # The engine's folder may live under a hidden folder. Refused: / or a folder that holds one hidden or put back
+    # before, such as the home folder (an engine straight in it, NULAVIO_ENGINE=~/nulavio) or a folder above it: put
+    # back read-only there, it would show the browser what is hidden (#712).
     engine_dir = Path(engine_dir).resolve()
-    args += ["--ro-bind", str(engine_dir), str(engine_dir)]  # it may live under a hidden folder
+    earlier = [Path("/proc"), Path("/dev"), *nodes, *emptied, *read_only]
+    covered = Path("/") if engine_dir == Path("/") else next((f for f in earlier if f.is_relative_to(engine_dir)), None)
+    if covered is not None:
+        raise ConfineError(
+            f"not starting: the engine's folder {engine_dir} would be put back read-only over {covered}, which "
+            "confined mode hides or puts back on its own, so the browser could read what is hidden there. Put the "
+            f"engine in a folder of its own that is not / and does not hold {covered} (not the home folder itself), "
+            "or run without --confined"
+        )
+    args += ["--ro-bind", str(engine_dir), str(engine_dir)]
     read_only.append(engine_dir)
     # Writable: the profile and Downloads, at their resolved paths, and also at the paths the browser is given when
     # those go through a link that is hidden inside: otherwise the engine would make an empty folder there, in
@@ -334,7 +348,7 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     # writable before (a Downloads link inside the profile) is there inside and needs nothing more. Refused: a path
     # through a folder put back read-only, and a bind over a folder hidden or put back before, or over /. Downloads
     # is found from the resolved home, so a home folder that is itself such a link still loses it (#722).
-    earlier = [Path("/proc"), Path("/dev"), *nodes, *emptied, *read_only]
+    earlier.append(engine_dir)
     bound: dict[Path, Path] = {}  # destination: source
 
     def put_back(name: str, path: Path, real: Path, at: Path) -> None:
