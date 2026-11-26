@@ -1001,6 +1001,19 @@ const out = {};
   await asked.catch(() => {}); // no tools here: only what it took matters
   workspaceEnv = "";
 }
+{  // An entry point's event says whether it changed the window's items: only then does a list read on its way in the
+   // panel read again (#813, OpenCodeReview round 1).
+  const [win, page] = newWindow("https://g.example/oferta", "Oferta texto");
+  win.SidebarController = { show: async () => {} };
+  const offers = [];
+  const stop = ai.subscribeAssistant((at, event) => at === win && event.type === "offer" && offers.push(event.items));
+  const selection = { kind: "selection", pageUrl: page.url, text: "Trecho" };
+  for (const offer of [{ kind: "composer" }, { kind: "draft", text: "E?" }, selection, { kind: "page" }]) {
+    await ai.assistantOffer(offer, page.tabId);
+  }
+  stop();
+  out.offerItems = offers;
+}
 console.log(JSON.stringify(out));
 """
 
@@ -1058,6 +1071,10 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["late_task"], [])
         self.assertEqual(out["late_ask"], [])
         self.assertEqual(out["lateNext"], ["Lenta"])  # a later Include still counts
+
+    def test_an_entry_point_says_whether_it_changed_the_items(self):
+        # The shortcut and "@ia" change none; a selection and the address bar's page add one (#813).
+        self.assertEqual(self._run()["offerItems"], [False, False, True, True])
 
 
 # The panel itself (browser/shell/assistant/panel.js) on a fake DOM, with a fake browser whose item-list replies the
@@ -1140,6 +1157,7 @@ const removed = []; // the items the panel asked the browser to drop (assistantR
 let kept = [];
 let offer = null;
 let hold = false; // the next item-list replies wait for release(): the browser read its list, the panel gets it later
+let lateRead = false; // and the browser reads its list only when a held reply is released, not when it was asked
 let reads = 0;
 const held = [];
 let holdThread = false; // the same for the conversation's reply (assistantThread)
@@ -1167,7 +1185,7 @@ globalThis.browser = {
     assistantChips() {
       ++reads;
       const list = [...kept]; // as the browser has it now
-      return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
+      return hold ? new Promise(resolve => held.push(() => resolve(lateRead ? [...kept] : list))) : Promise.resolve(list);
     },
     assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
     // The selected tab: the panel keeps the items that came from it.
@@ -1635,7 +1653,7 @@ $("allow-profile").fire("click");
 await idle();
 kept = [selection("c27", "Vigésima sétima")];
 offer = { chipId: "c27" };
-await emit({ type: "offer" });
+await emit({ type: "offer", items: true });
 out.replacedSeen = [];
 for (let step = 0; step < 4; step++) {
   await release(true); // one reply at a time, the opening one first
@@ -1668,6 +1686,44 @@ out.twiceDropRemoved = times(removed, "c28");
 out.twiceDropAnnounced = announced.filter(([, text]) => text === "assistantDriftTab|Vigésima oitava").length;
 await send("Pergunta 22");
 out.twiceDropSent = starts.at(-1).chips;
+await finish();
+// An Include that a mode change cancelled while it was reading (#813, OpenCodeReview round 1). The browser stores its
+// item, an entry point's list read reads it then, and the panel removes it before that reply arrives.
+selected = tab;
+kept = [];
+holdInclude = true;
+$("include-page").fire("click");
+await idle();
+$("ask").fire("change", { target: { name: "mode" } });
+hold = true;
+lateRead = true;
+offer = { focus: true, chipId: null };
+await emit({ type: "offer", items: false }); // the shortcut: its list read is on its way
+holdInclude = false;
+hold = false;
+includeHeld.splice(0).forEach(answer => answer()); // the browser stores the Include's item
+held.splice(0).forEach(answer => answer()); // the list read reads it, before the panel's removal
+await idle();
+lateRead = false;
+out.cancelledKept = kept.map(c => c.chipId);
+out.cancelledShown = shown();
+await send("Pergunta 23");
+out.cancelledSent = starts.at(-1).chips;
+await finish();
+// A delivery that changes no item (the shortcut, "@ia" in the address bar) while the opening list read is on its way:
+// that reply is drawn, not read again (#813, OpenCodeReview round 1).
+kept = [item("c29", "Vigésima nona")];
+hold = true;
+reads = 0;
+$("allow-profile").fire("click");
+await idle();
+offer = { focus: true, chipId: null };
+await emit({ type: "offer", items: false });
+await release();
+out.focusOfferReads = reads;
+out.focusOfferShown = shown();
+await send("Pergunta 24");
+out.focusOfferSent = starts.at(-1).chips;
 await finish();
 console.log(JSON.stringify(out));
 """
@@ -1860,6 +1916,18 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["twiceDropRemoved"], 1)
         self.assertEqual(out["twiceDropAnnounced"], 1)
         self.assertEqual(out["twiceDropSent"], [])
+
+    def test_a_list_reply_does_not_bring_back_an_item_of_a_cancelled_include(self):
+        out = self._run()  # #813, OpenCodeReview round 1
+        self.assertEqual(out["cancelledKept"], [])  # the browser dropped it
+        self.assertEqual(out["cancelledShown"], [])
+        self.assertEqual(out["cancelledSent"], [])
+
+    def test_a_delivery_that_changes_no_item_does_not_make_the_list_read_again(self):
+        out = self._run()  # #813, OpenCodeReview round 1
+        self.assertEqual(out["focusOfferReads"], 2)  # the opening read and the delivery's own, no third
+        self.assertEqual(out["focusOfferShown"], ["c29"])
+        self.assertEqual(out["focusOfferSent"], ["c29"])
 
 
 if __name__ == "__main__":

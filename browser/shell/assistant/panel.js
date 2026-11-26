@@ -27,8 +27,8 @@ let thread = null;
 let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
-// The list's revision (#759): every write of `chips` moves it, and so do every move of `contextVersion` and an entry
-// point's delivery. An item-list reply is drawn only when it did not move while that reply was on its way
+// The list's revision (#759): every write of `chips` moves it, and so do every move of `contextVersion`, an entry
+// point's delivery that changed the items and the removal of a cancelled Include's item. An item-list reply is drawn only when it did not move while that reply was on its way
 // (checkedChips); otherwise the list is read again. So a reply never puts back an item removed, dropped or replaced
 // meanwhile, nor writes over one included.
 let revision = 0;
@@ -329,7 +329,9 @@ async function includeCurrent() {
     return false;
   }
   if (version !== contextVersion || document.body.dataset.state !== "ready") {
-    ai.assistantRemove(chip.chipId).catch(() => {}); // a Send or a change came first: it is not for that one
+    // A Send or a change came first: it is not for that one. A list read after the browser stored it is read again.
+    ++revision;
+    ai.assistantRemove(chip.chipId).catch(() => {});
     return false;
   }
   setChips([...chips.filter(c => c.kind !== "page"), chip]); // a list read before the browser stored it is read again
@@ -750,7 +752,10 @@ async function takeOffer() {
 function onRunEvent(event) {
   if (event.type === "offer") {
     // The browser changed the list (an item added, or a selection replaced): a list read before this is read again (#759).
-    ++revision;
+    // The shortcut and "@ia" change no item (`items` false): a list read on its way is drawn as it is.
+    if (event.items !== false) {
+      ++revision;
+    }
     takeOffer();
     return;
   }
