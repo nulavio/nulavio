@@ -33,6 +33,7 @@ import {
   IN_PAGE_PREF,
   MAX_RULES,
   ROUTED_FLAG,
+  ROUTE_BY_FLAG,
   RULES_PREF,
   RoutingError,
   decide,
@@ -53,8 +54,6 @@ ChromeUtils.defineESModuleGetters(lazy, {
 });
 
 const SHELL_ID = "shell@nulavio.net";
-// UX6: a link the default destination sent says so in the target's band ("Aberto pelo destino padrão").
-const ROUTE_BY_FLAG = "nulavio-route-by";
 const GROUPED_PREF = "browser.profiles.created";
 const GESTURE_PREF = "dom.user_activation.transient.timeout";
 
@@ -415,8 +414,11 @@ class NulavioRoutingClass {
       try {
         by = cmdLine.handleFlagWithParam(ROUTE_BY_FLAG, false);
       } catch {}
-      this.#expectArrivals(cmdLine, by === "default" ? "default" : null);
-      return; // sent by routing or by an explicit choice: open here
+      if (by !== "explicit") {
+        // UX6: a link the default destination sent says so in the target's band ("Aberto pelo destino padrão").
+        this.#expectArrivals(cmdLine, by === "default" ? "default" : null);
+      }
+      return; // sent by routing or by an explicit choice (no notice: the person put it here): open here
     }
     if (!this.enabled() || !Services.prefs.getBoolPref(GROUPED_PREF, false)) {
       return; // routing off, or a single profile: nothing to route to
