@@ -191,10 +191,11 @@ class PasswordsTest(unittest.TestCase):
         except MarionetteError:
             return False  # the tab was changing documents: try again
 
-    def click_in_frame(self, page: str, setup: str) -> None:
-        """Opens `page`, adds a frame to it (`setup`, in the page's script, sets up `f`) and clicks the frame's
-        password field (#password), as the person would."""
-        self.m.navigate(page)
+    def click_in_frame(self, page: str | None, setup: str) -> None:
+        """Opens `page` (None: the page already open), adds a frame to it (`setup`, in the page's script, sets up
+        `f`) and clicks the frame's password field (#password), as the person would."""
+        if page:
+            self.m.navigate(page)
         self.m.execute(
             "const f = document.createElement('iframe'); f.id = 'f';"
             "f.addEventListener('load', () => { document.documentElement.dataset.framed = 'yes'; }, { once: true });"
@@ -210,29 +211,36 @@ class PasswordsTest(unittest.TestCase):
             self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
 
     def warning_params(self) -> dict:
-        return self.m.execute(
-            "const p = new URLSearchParams(location.search);"
-            "return { url: p.get('url'), page: p.has('page') ? p.get('page') : null };"
-        )
+        return self.m.execute("return Object.fromEntries(new URLSearchParams(location.search));")
+
+    def warning_ready(self) -> None:
+        ready = "return document.documentElement?.dataset.ready === 'true';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
 
     def test_01f_a_lookalike_frame_in_another_sites_page_shows_the_warning_and_continue_goes_back_to_that_page(self):
         home = self.real + "/page/home"
-        self.click_in_frame(home, f"f.src = {self.fake + '/login'!r};")
+        self.m.navigate(home)
+        self.m.execute("history.replaceState(null, '', '/page/home?route=2#r');")  # the page's own route
+        route = self.real + "/page/home?route=2#r"
+        self.click_in_frame(None, f"f.src = {self.fake + '/login?token=artificial#x'!r};")
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
-        ready = "return document.documentElement?.dataset.ready === 'true';"
-        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
-        self.assertEqual(self.warning_params(), {"url": self.fake + "/login", "page": home})
+        self.warning_ready()
+        # The frame's site by its origin only, and a flag with no address: "continue" goes back.
+        self.assertEqual(self.warning_params(), {"url": self.fake + "/", "in": "frame"})
         shown = self.m.execute(
             "return { address: document.getElementById('address').textContent,"
             " text: document.querySelector('main').textContent, onward: document.getElementById('continue').checkVisibility() };"
         )
-        self.assertEqual(shown["address"], self.fake + "/login")  # the frame's site is the one named
+        self.assertEqual(shown["address"], self.fake + "/")
         self.assertIn(REAL, shown["text"])
         self.assertTrue(shown["onward"])
         forget = f"{PASSWORDS}.NulavioPasswords.removeConfirmed(args[0], args[1]); return true;"
         self.addCleanup(chrome_async, self.m, forget, [FAKE, REAL])  # test_02 and test_06 expect no pair before them
         self.m.execute("document.getElementById('continue').click();")
-        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == home, 10), self.m.current_url())
+        # Back to the embedding page, at the route it had taken; its frame is not warned again for this pair.
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == route, 10), self.m.current_url())
+        time.sleep(1.5)  # as long as focus_password gives the check; nothing may happen in it
+        self.assertEqual(self.m.current_url(), route)
 
     def test_01g_password_fields_in_srcdoc_data_and_blob_frames_of_a_lookalike_page_are_checked(self):
         field = "<!doctype html><input id=password type=password>"
@@ -247,6 +255,7 @@ class PasswordsTest(unittest.TestCase):
                 self.assertTrue(harness.wait_until(self.on_warning, 10), f"{kind}: {self.m.current_url()}")
                 params = self.warning_params()
                 self.assertTrue(params["url"].startswith(self.fake + "/"), params)
+                self.assertEqual(params.get("in"), "frame", params)
 
     def test_01h_a_frame_of_another_site_in_the_real_sites_page_is_not_warned(self):
         home = self.real + "/page/home"
@@ -254,17 +263,33 @@ class PasswordsTest(unittest.TestCase):
         time.sleep(1.5)  # as long as focus_password gives the check; nothing may happen in it
         self.assertEqual(self.m.current_url(), home)
 
-    def test_01i_a_tab_page_without_a_sites_address_leaves_only_the_real_site(self):
-        """The field's frame was in a page with no http or https address (`page` empty): the warning shows, and
-        offers no "continue" rather than open the frame's document as the tab's page."""
-        query = urllib.parse.urlencode({"url": self.fake + "/login", "page": ""})
-        self.m.navigate(self.base + "passwords/lookalike.html?" + query)
+    def test_01i_with_no_page_to_go_back_to_only_the_real_site_is_offered(self):
+        """Opened for a field in a frame (`in=frame`) in a tab with no earlier entry, "continue" has nowhere to go
+        back to: it is not offered, rather than do nothing."""
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        self.m.switch_to(self.m.new_tab())
+        try:
+            query = urllib.parse.urlencode({"url": self.fake + "/", "in": "frame"})
+            self.m.navigate(self.base + "passwords/lookalike.html?" + query)
+            self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
+            shown = self.m.execute(
+                "const seen = s => document.querySelector(s).checkVisibility();"
+                "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note'),"
+                " entries: history.length };"
+            )
+            self.assertEqual(shown, {"real": True, "onward": False, "note": False, "entries": 1})
+        finally:
+            self.m.send("WebDriver:CloseWindow")
+            self.m.switch_to(main)
+
+    def test_01j_a_lookalike_address_longer_than_the_pages_api_takes_still_shows_the_warning(self):
+        """The passwords API takes strings of 8192 characters at most; the page asks it by the site's origin."""
+        long = self.fake + "/login?state=" + "a" * 9000
+        self.m.navigate(long)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url()[:200])
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
-        shown = self.m.execute(
-            "const seen = s => document.querySelector(s).checkVisibility();"
-            "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note') };"
-        )
-        self.assertEqual(shown, {"real": True, "onward": False, "note": False})
+        self.assertEqual(self.m.execute("return document.getElementById('address').textContent;"), long)
 
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)

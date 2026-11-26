@@ -13,9 +13,10 @@
 
    The check can wait (the first read of the saved logins in a session). When it ends, the warning
    opens only if this document is still current, the tab still shows the page it was part of, and the
-   document that was found still has the site that was checked. A change of address inside a document
-   (history.replaceState, a new fragment) keeps the site, so it does not cancel the warning; a page the
-   tab has left (another page, or this one kept in the back-forward cache) is never replaced. The
+   document that was found still has the site that was checked; for a field in a frame, its "continue"
+   goes back to the tab's page. A change of address inside a document (history.replaceState, a new
+   fragment) keeps the site, so it does not cancel the warning; a page the tab has left (another page,
+   or this one kept in the back-forward cache) is never replaced. The
    answer to the child says whether a decision was made for this document: false when it was not, so
    the child asks again. Nothing is decided either while a Primary Password is set and not yet entered:
    the module compares nothing rather than ask for it, and the person's next input in a password field
@@ -48,6 +49,7 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     }
     const top = this.browsingContext.top;
     const page = top.currentWindowGlobal;
+    const fieldInPage = this.manager === page;
     // The field's document first, then each document around it, up to the tab's page; one check per host.
     const sites = [];
     for (let global = this.manager; global; global = global.browsingContext?.parentWindowContext) {
@@ -82,13 +84,16 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!shell) {
       return true;
     }
-    // Only addresses: the page asks the module again which saved site `url` imitates. When the site found is
-    // not the tab's page itself, "continue" goes back to the tab's page (`page`), never to the frame's document;
-    // to nowhere when the tab's page has no site's address.
-    const url = found.address.spec;
+    // Only an address: the page asks the module again which saved site `url` imitates. The tab's page found
+    // on its own input gives its address, as it is; any other site gives only its origin (a frame's path,
+    // query and fragment stay out of the tab's address). For a field in a frame, or a page without a site's
+    // address of its own, a flag without an address (`in=frame`): "continue" goes back to the tab's page in
+    // its history, never to an address, and never opens the frame's document as the tab's page.
+    const own = found.global === page && web(page.documentURI);
+    const url = own ? found.address.spec : `${found.address.scheme}://${found.address.hostPort}/`;
     const query = new URLSearchParams({ url });
-    if (found.global !== page || !web(page.documentURI)) {
-      query.set("page", web(page.documentURI) ? page.documentURI.spec : "");
+    if (!own || !fieldInPage) {
+      query.set("in", "frame");
     }
     browser.loadURI(Services.io.newURI(shell.getURL(`passwords/lookalike.html?${query}`)), {
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),

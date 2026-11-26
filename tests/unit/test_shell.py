@@ -967,20 +967,22 @@ class PasswordsTest(unittest.TestCase):
         self.assertNotIn("moz-extension", "".join(matches))
 
     def test_the_warning_page_names_only_what_the_module_finds(self):
-        """The look-alike warning is opened with the site's address, and the tab's page's when the field was in a
-        frame; the passwords module finds the saved site `url` imitates again, and "continue" remembers the pair the
-        module finds, not one the page names. The tab's page's address is only where "continue" goes."""
+        """The look-alike warning is opened with the site's address only, and a flag with no address when the field
+        was in a frame; the passwords module finds the saved site it imitates again from its origin, and "continue"
+        remembers the pair the module finds, not one the page names. "Continue" goes to that address or back in the
+        tab's history, never to an address of its own."""
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("new URLSearchParams({ url })", parent)
-        self.assertEqual(re.findall(r'query\.set\("(\w+)"', parent), ["page"])
+        self.assertEqual(re.findall(r'query\.set\(("\w+", "\w+")\)', parent), ['"in", "frame"'])
         page = (SHELL / "passwords" / "lookalike.js").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url", "page"])
-        self.assertIn("browser.nulavioPasswords.check(url.href)", page)
-        self.assertIn("browser.nulavioPasswords.dismiss(url.href)", page)
-        # `page` is not shown and names nothing: it is used only as where "continue" goes.
-        self.assertEqual(re.findall(r"\bonwardTo\b[.\w]*", page.rsplit("*/", 1)[1]).count("onwardTo.href"), 1)
-        self.assertIn("location.replace(onwardTo.href)", page)
-        self.assertNotIn("textContent = onwardTo", page)
+        self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url"])
+        self.assertEqual(re.findall(r'params\.has\("(\w+)"\)', page), ["in"])
+        # The module needs only the host: the origin stays under the experiment API's length limit.
+        self.assertIn('const origin = url ? `${url.origin}/` : "";', page)
+        self.assertIn("browser.nulavioPasswords.check(origin)", page)
+        self.assertIn("browser.nulavioPasswords.dismiss(origin)", page)
+        self.assertEqual(re.findall(r"location\.replace\(([^)]*)\)", page), ["`https://${similar}/`", "url.href"])
+        self.assertEqual(page.count("history.back()"), 1)
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]

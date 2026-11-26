@@ -32,6 +32,7 @@ class URI {
     this.spec = url.href;
     this.scheme = url.protocol.slice(0, -1);
     this.host = url.hostname;
+    this.hostPort = url.host;
     // nsIURI: a host-based address's scheme://host:port; about:, data: and blob: have none of their own.
     this.prePath = url.host ? `${url.protocol}//${url.host}` : url.protocol;
   }
@@ -206,7 +207,7 @@ async function parent({
     warned: loads.length === 1,
     warning,
     url: query?.get("url") ?? null,
-    page: query?.has("page") ? query.get("page") : null,
+    in: query?.get("in") ?? null,
     decided: decided ?? null,
   };
 }
@@ -329,14 +330,19 @@ const cases = {
       docs: [doc(REAL), doc("about:blank", `content ${FAKE}`)],
       during: ({ context }) => (context.currentWindowGlobal.documentPrincipal = principal(`content ${REAL}`)),
     }),
-  // The tab's page has no site's address (a sandboxed about:blank page): the warning opens with no page to go on to.
+  // The tab's page has no site's address (a sandboxed about:blank page).
   frame_tab_page_without_a_site: () => parent({ docs: [doc("about:blank", "null"), doc(FAKE)] }),
-  // The tab's page changes its address inside the document while the check waits: "continue" goes to where it is.
-  frame_tab_page_replace_state: () =>
+  // A field in a frame finds the tab's page a look-alike, and the page changes its address inside the document while
+  // the check waits: the page's address as checked, and "continue" goes back (to where the page is now).
+  frame_finds_the_tab_page_after_replace_state: () =>
     parent({
-      docs: [doc(REAL), doc(FAKE)],
-      during: ({ contexts }) => (contexts[0].currentWindowGlobal.documentURI = new URI(`${REAL}?tab=2#top`)),
+      docs: [doc(FAKE), doc("https://widgets.example/login")],
+      duringAt: 1,
+      during: ({ contexts }) => (contexts[0].currentWindowGlobal.documentURI = new URI(`${FAKE}?step=2#top`)),
     }),
+  // A frame's address with a port, a query and a fragment: only its origin goes in the warning's address.
+  frame_address_with_a_query: () =>
+    parent({ docs: [doc(REAL), doc("https://paypa1.example:8443/login?token=s3cret&state=x#frag")] }),
 };
 
 const results = {};

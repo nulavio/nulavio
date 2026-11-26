@@ -3,10 +3,12 @@
    to the button, and can be undone in Settings › Passwords.
 
    The page's address carries the site's address (`url`) and, when the password field was in a frame of
-   the tab's page, that page's address (`page`): "continue" goes back to it, not to the frame's document.
-   `page` is never shown. Which saved site `url` looks like is asked of the passwords module, which
-   compares it with this profile's saved logins again: another extension can open this page with
-   parameters of its own, and the page names no site the module did not. */
+   the tab's page, a flag with no address (`in=frame`): "continue" then goes back to the tab's page in the
+   tab's history, not to the frame's document; with no page to go back to, it is not offered. Which saved
+   site `url` looks like is asked of the passwords module, which compares its origin (the module needs
+   only the host) with this profile's saved logins again: another extension can open this page with
+   parameters of its own, and the page names no site the module did not and goes to no address but
+   `url`, or back. */
 
 import { localize, t } from "../lib/i18n.js";
 import { closeOwnTab } from "../lib/tabs.js";
@@ -26,10 +28,12 @@ function webAddress(value) {
 
 localize();
 const url = webAddress(params.get("url"));
-// Where "continue" goes: the tab's page when the field was in one of its frames, else the site itself. A `page`
-// that is not a site's address (the tab's page had none) leaves no way on but the real site.
-const onwardTo = params.has("page") ? webAddress(params.get("page")) : url;
-const verdict = url ? await browser.nulavioPasswords.check(url.href).catch(() => null) : null;
+// "continue" goes back to the tab's page when the field was in one of its frames (the warning is the entry after
+// it), else to the site itself. With no entry to go back to, there is no way on but the real site.
+const back = params.has("in");
+const onward = back ? history.length > 1 : true;
+const origin = url ? `${url.origin}/` : "";
+const verdict = url ? await browser.nulavioPasswords.check(origin).catch(() => null) : null;
 const site = verdict?.suspicious ? String(verdict.site ?? "") : "";
 const similar = verdict?.suspicious ? String(verdict.similar ?? "") : "";
 if (url && HOST.test(similar) && site) {
@@ -38,22 +42,26 @@ if (url && HOST.test(similar) && site) {
   const real = document.getElementById("go-real");
   real.textContent = t("lookalikeGoReal", [similar]);
   real.addEventListener("click", () => location.replace(`https://${similar}/`));
-  const onward = document.getElementById("continue");
+  const button = document.getElementById("continue");
   const note = document.getElementById("continue-note");
   note.textContent = t("lookalikeContinueNote", [site, similar]);
-  onward.hidden = note.hidden = !onwardTo;
-  onward.addEventListener("click", async () => {
-    onward.disabled = true;
+  button.hidden = note.hidden = !onward;
+  button.addEventListener("click", async () => {
+    button.disabled = true;
     try {
-      await browser.nulavioPasswords.dismiss(url.href);
+      await browser.nulavioPasswords.dismiss(origin);
     } catch (e) {
       // Not remembered: do not open the site as if it were (the warning would silently differ next time).
       console.error("look-alike: could not remember the choice", e);
-      onward.disabled = false;
+      button.disabled = false;
       announce(t("lookalikeDismissFailed"), "error");
       return;
     }
-    location.replace(onwardTo.href);
+    if (back) {
+      history.back();
+    } else {
+      location.replace(url.href);
+    }
   });
   document.body.dataset.state = "ready";
   real.focus();
