@@ -106,7 +106,7 @@ gpg --import nulavio-packages.asc
 gpg --status-fd 1 --verify SHA256SUMS.asc SHA256SUMS |
   grep -q '^\[GNUPG:\] VALIDSIG {{key_fpr_plain}} ' &amp;&amp;
   sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
-<p class="prose">The last command checks the files only if the list was signed by the key <code class="mono" translate="no">{{key_fpr}}</code>. gpg's <code translate="no">Good signature</code> is not enough: it prints that for a signature by any key you already have. Use only the files marked <code translate="no">OK</code>; if none appear, do not use the download.</p>
+<p class="prose">The last command checks the files only if the list was signed by the key <code class="mono" translate="no">{{key_fpr}}</code>. gpg reporting a good signature (<code translate="no">Good signature</code> in English) is not enough: it reports that for a signature by any key you already have. Use only the files the last command confirms (<code translate="no">OK</code> in English); if it confirms none, do not use the download.</p>
 </section>
 
 <section id="known" aria-labelledby="known-h">
