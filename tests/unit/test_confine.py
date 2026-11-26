@@ -424,6 +424,26 @@ class WrapTest(unittest.TestCase):
             self.assertIn("confined mode hides or puts back on its own", message)
             self.assertIn("(not the home folder itself), or run without --confined", message)
 
+    def test_a_bind_over_a_hidden_folder_reached_through_a_linked_parent_is_refused(self):
+        # OCR on #779: a hidden folder under a linked parent (/var/tmp with /var a link) is emptied where the link
+        # leads, since the link is still there inside. An engine or Downloads folder bound over that real place
+        # would show it again, though it does not hold the folder as spelled.
+        real, link = self.tmp / "var-real", self.tmp / "var-link"
+        (real / "tmp").mkdir(parents=True)
+        link.symlink_to(real)
+        dirs = self.home / ".config/user-dirs.dirs"
+        self.addCleanup(dirs.unlink, missing_ok=True)
+        for case, engine, downloads in (("the engine", real, None), ("Downloads", self.engine, real)):
+            with self.subTest(case), mock.patch.object(confine, "EMPTY_DIRS", (str(link / "tmp"),)):
+                dirs.unlink(missing_ok=True)
+                if downloads is not None:
+                    dirs.write_text(f'XDG_DOWNLOAD_DIR="{downloads}"\n')
+                with self.assertRaises(confine.ConfineError) as refused:
+                    confine.wrap(["/engine/nulavio"], profile_dir=self.profile, engine_dir=engine, home=self.home,
+                                 binary="/usr/bin/bwrap")  # fmt: skip
+                self.assertIn(f"over {real.resolve() / 'tmp'}", str(refused.exception))
+                self.assertIn("confined mode hides or puts back on its own", str(refused.exception))
+
     def test_an_engine_folder_inside_the_home_folder_is_put_back_read_only(self):
         engine = self.home / "nulavio"
         engine.mkdir()
@@ -824,13 +844,14 @@ class RealBubblewrapTest(unittest.TestCase):
             folder.mkdir(parents=True)
         (engine / "nulavio").write_text("artificial engine\n")
         (home / ".ssh/id_fake").write_text("artificial, not a key\n")
+        # The paths go as arguments, quoted: a space in $TMPDIR must not turn a check into a shell error (OCR on #779).
         script = (
-            f"test -e {engine}/nulavio && echo engine-visible;"
-            f"touch {engine}/written 2>/dev/null && echo engine-writable;"
-            f"test -e {home}/.ssh/id_fake && echo secret-visible; true"
+            'test -e "$1/nulavio" && echo engine-visible;'
+            'touch "$1/written" 2>/dev/null && echo engine-writable;'
+            'test -e "$2/.ssh/id_fake" && echo secret-visible; true'
         )
-        args = confine.wrap(["/bin/sh", "-c", script], profile_dir=profile, engine_dir=engine, home=home,
-                            binary=confine.bwrap())  # fmt: skip
+        args = confine.wrap(["/bin/sh", "-c", script, "sh", str(engine), str(home)], profile_dir=profile,
+                            engine_dir=engine, home=home, binary=confine.bwrap())  # fmt: skip
         run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(run.stdout.split(), ["engine-visible"])

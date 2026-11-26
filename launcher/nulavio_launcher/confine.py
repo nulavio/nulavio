@@ -330,8 +330,11 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     # The engine's folder may live under a hidden folder. Refused: / or a folder that holds one hidden or put back
     # before, such as the home folder (an engine straight in it, NULAVIO_ENGINE=~/nulavio) or a folder above it: put
     # back read-only there, it would show the browser what is hidden (#712).
+    # A folder hidden under a linked parent (/var/tmp, /var a link) is emptied where the link leads, as the link is
+    # still there inside: that place counts too (none of them is under another hidden folder).
     engine_dir = Path(engine_dir).resolve()
-    earlier = [Path("/proc"), Path("/dev"), *nodes, *emptied, *read_only]
+    linked = [f.resolve() for f in emptied if f.resolve() != f]
+    earlier = [Path("/proc"), Path("/dev"), *nodes, *emptied, *linked, *read_only]
     covered = Path("/") if engine_dir == Path("/") else next((f for f in earlier if f.is_relative_to(engine_dir)), None)
     if covered is not None:
         raise ConfineError(
