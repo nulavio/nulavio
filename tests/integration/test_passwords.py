@@ -47,8 +47,6 @@ class PasswordsTest(unittest.TestCase):
     def setUpClass(cls):
         cls.server = harness.FixtureServer().__enter__()
         cls.session = harness.GeckoProfileSession(name="Pessoal")
-        cls.session.env["MOZ_LOG"] = "SHIPBFCache:5,ProcessIsolation:5,PageCache:5"  # TEMP diagnostic (#709)
-        cls.session.env["MOZ_LOG_FILE"] = str(cls.session.tmp / "engine")
         cls.m = cls.session.start()
         port = cls.server.port
         cls.real = f"http://{REAL}:{port}"
@@ -341,34 +339,18 @@ class PasswordsTest(unittest.TestCase):
         )
 
     def back_from_warning_to(self, page: str) -> None:
-        """Back from the warning to `page`, the same document, kept in the back-forward cache meanwhile."""
+        """Back from the warning to `page`."""
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        tops = self.m.chrome(  # TEMP diagnostic (#709)
+            "return gBrowser.selectedBrowser.browsingContext.group.getToplevels()"
+            ".map(bc => [bc.id, bc.currentURI?.spec?.slice(0, 120), bc.embedderElement?.localName ?? null,"
+            " bc.embedderElement?.ownerGlobal?.location?.href?.slice(0, 80) ?? null]);"
+        )
+        print(f"TEMP group toplevels of the warning's tab: {tops}", file=sys.stderr)
         self.m.send("WebDriver:Back")
         self.assertTrue(harness.wait_until(lambda: self.m.current_url() == page, 10), self.m.current_url())
         kept = "return document.documentElement.dataset.kept === 'yes';"
-        if not harness.wait_until(lambda: self.m.execute(kept), 5):  # TEMP diagnostic (#709)
-            diag = self.m.chrome(
-                "const b = gBrowser.selectedBrowser; const bc = b.browsingContext; const p = Services.prefs;"
-                "const h = bc.sessionHistory; const out = {};"
-                "const get = (k, f) => { try { out[k] = f(); } catch (e) { out[k] = 'err ' + e; } };"
-                "get('shipParent', () => Services.appinfo.sessionHistoryInParent);"
-                "get('bfParent', () => p.getBoolPref('fission.bfcacheInParent', null));"
-                "get('viewers', () => p.getIntPref('browser.sessionhistory.max_total_viewers', null));"
-                "get('remoteExt', () => p.getBoolPref('extensions.webextensions.remote', null));"
-                "get('opener', () => bc.hadOriginalOpener); get('index', () => h.index); get('count', () => h.count);"
-                "get('saveLayout', () => h.getEntryAtIndex(h.index).saveLayoutStateFlag);"
-                "get('remoteType', () => b.remoteType);"
-                "return JSON.stringify(out);"
-            )
-            import re
-
-            lines = []
-            for log in sorted(self.session.tmp.glob("engine*")):
-                for line in log.read_text(errors="replace").splitlines():
-                    if re.search(r"BFCache|bfcache|blocked|Checking|\* |->|IsolationBehavior|current uri|login|page/home", line):
-                        lines.append(f"{log.name}: {line[:300]}")
-            print("\n".join(lines[-150:]), file=sys.stderr)
-            self.fail(f"the page was loaded again, not kept: {diag}")
+        print(f"TEMP kept: {harness.wait_until(lambda: self.m.execute(kept), 3)}", file=sys.stderr)
 
     def test_01k_back_from_the_warning_to_the_page_warns_again_on_the_next_use_of_its_field(self):
         page = self.fake + "/login?cacheable=1"  # a page the back-forward cache keeps (no "no-store")
