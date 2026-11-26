@@ -1122,10 +1122,12 @@ let refuse = null;
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
+const activated = []; // the panel's tabs.onActivated listener: another tab selected in this window
+let recipient = "Provedor"; // where the assistant sends now (assistantState)
 globalThis.browser = {
   nulavioAI: {
     assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked: null,
-      recipient: "Provedor", provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
+      recipient, provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
     assistantChips() {
       ++reads;
       const list = [...kept]; // as the browser has it now
@@ -1160,8 +1162,8 @@ globalThis.browser = {
     onAssistantEvent: { addListener: listener => events.push(listener) },
   },
   i18n: { getMessage: (key, subs) => [key, ...[subs ?? []].flat()].join("|"), getUILanguage: () => "pt-BR" },
-  tabs: { onActivated: noEvent, onUpdated: noEvent, onRemoved: noEvent, getCurrent: async () => ({ id: 1 }),
-    create: async () => {} },
+  tabs: { onActivated: { addListener: listener => activated.push(listener) }, onUpdated: noEvent, onRemoved: noEvent,
+    getCurrent: async () => ({ id: 1 }), create: async () => {} },
   windows: { getCurrent: async () => ({ id: 1 }) },
   runtime: { getURL: path => path },
 };
@@ -1412,6 +1414,61 @@ $("allow-profile").fire("click");
 $("allow-profile").fire("click");
 await idle();
 out.twiceShown = shown();
+// #773: an entry point's item from a tab the person left while it was read (the address bar's action on tab 1, tab 2
+// selected since), with the panel already open: checked against the selected tab before it is drawn, and the panel
+// says why it left.
+selected = otherTab;
+kept = [item("c17", "Décima sétima")];
+offer = { chipId: "c17" };
+await emit({ type: "offer" });
+out.leftTabOfferShown = shown();
+out.leftTabOfferRemoved = removed.includes("c17");
+out.leftTabOfferDrift = $("drift").hidden ? null : $("drift-text").textContent;
+out.leftTabOfferAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Décima sétima");
+await send("Pergunta 16");
+out.leftTabOfferSent = starts.at(-1).chips;
+await finish();
+// The same while the delivery's reads are on their way: another tab is selected and its reply arrives first. The
+// delivery's reply, read before that, is read again; it does not draw the item against the tab that was selected.
+selected = tab;
+kept = [item("c18", "Décima oitava")];
+offer = { chipId: "c18" };
+holdPage = true;
+await emit({ type: "offer" });
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+holdPage = false;
+pageHeld.pop()(); // the selected tab's reply for the tab event
+await idle();
+pageHeld.splice(0).forEach(answer => answer()); // then the delivery's, read while tab 1 was selected
+await idle();
+out.switchOfferShown = shown();
+out.switchOfferRemoved = removed.includes("c18");
+// The panel opens with an item from another tab and an entry point delivers one from the selected tab: the drift
+// notice of the item that left stays while the new one is shown.
+kept = [item("c19", "Décima nona"), item("c20", "Vigésima", otherTab)];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+offer = { chipId: "c20" };
+await emit({ type: "offer" });
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.keptDriftShown = shown();
+out.keptDrift = $("drift").hidden ? null : $("drift-text").textContent;
+// The recipient changed in Settings (a refusal renders the panel again): while the conversation is on its way, the line
+// above Send and the items' heading already name the recipient a Send would use.
+recipient = "Outro";
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.recipientLine = $("send-line").textContent;
+out.recipientHeading = $("attached-heading").textContent;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
 console.log(JSON.stringify(out));
 """
 
@@ -1507,6 +1564,29 @@ class PanelChipsTest(unittest.TestCase):
 
     def test_two_renders_at_once_both_end(self):
         self.assertEqual(self._run()["twiceShown"], ["c15"])
+
+    def test_an_entry_point_item_from_a_tab_left_meanwhile_is_not_drawn(self):
+        out = self._run()  # #773 (OpenCodeReview): the delivery's list is checked against the selected tab too
+        self.assertEqual(out["leftTabOfferShown"], [])
+        self.assertTrue(out["leftTabOfferRemoved"])
+        self.assertEqual(out["leftTabOfferDrift"], "assistantDriftTab|Décima sétima")  # the panel says why
+        self.assertFalse(out["leftTabOfferAnnounced"])
+        self.assertEqual(out["leftTabOfferSent"], [])
+
+    def test_an_entry_point_reply_read_before_a_tab_change_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["switchOfferShown"], [])
+        self.assertTrue(out["switchOfferRemoved"])
+
+    def test_an_entry_point_delivery_keeps_the_reason_an_item_left(self):
+        out = self._run()
+        self.assertEqual(out["keptDriftShown"], ["c20"])
+        self.assertEqual(out["keptDrift"], "assistantDriftTab|Décima nona")
+
+    def test_a_render_names_the_new_recipient_before_it_reads_the_conversation(self):
+        out = self._run()
+        self.assertEqual(out["recipientLine"].split("|")[:2], ["assistantSendLine", "Outro"])
+        self.assertEqual(out["recipientHeading"], "assistantAttachedHeading|Outro")
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
         out = self._run()

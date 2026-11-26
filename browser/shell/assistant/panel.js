@@ -322,18 +322,6 @@ async function includeCurrent() {
   return true;
 }
 
-/** The items the browser keeps for this window's next message. A list read before a Send can arrive after
-    it, with an item that Send took (#739): that reply is not about the next message, so it is read again. */
-async function keptChips(fallback) {
-  for (;;) {
-    const sent = sends;
-    const list = await ai.assistantChips().catch(fallback);
-    if (sends === sent) {
-      return list;
-    }
-  }
-}
-
 /** Every item is bound to the tab it came from (a page, or a selection in it): one that `page`, the selected tab,
     does not hold leaves the message. `changedTab`: the tab an update or removal was about. */
 function bindToPage(page, changedTab = null) {
@@ -359,26 +347,29 @@ async function refreshPage(changedTab = null) {
   showContext();
 }
 
-/** The items the browser kept while the panel was closed, checked against the tab selected now before they are drawn
-    (#758): the list and that tab are read together, and what the tab does not hold leaves with no await in between,
-    so Send carries only items the panel shows and the selected tab holds. A Send, a tab event or another change while
-    they are on their way (#739) means both are read again, without cancelling what came meanwhile. */
-async function restoreChips() {
-  let version = ++contextVersion;
+/** The items the browser keeps for this window's next message, checked against the tab selected now before they are
+    drawn (#758): the list and that tab are read together, and what the tab does not hold leaves with no await in
+    between, so Send carries only items the panel shows and the selected tab holds. A Send, a tab event or another
+    change of `version` while they are on their way (#739) means both are read again, without cancelling what came
+    meanwhile. `fallback`: the list when it cannot be read. False when the panel went to another state meanwhile. */
+async function checkedChips(version, fallback) {
   for (;;) {
-    const [list, page] = await Promise.all([ai.assistantChips().catch(() => []), ai.assistantPage().catch(() => null)]);
+    const [list, page] = await Promise.all([ai.assistantChips().catch(fallback), ai.assistantPage().catch(() => null)]);
     if (document.body.dataset.state !== "ready") {
-      return; // the panel went to another state meanwhile (paused, private): no items there
+      return false; // paused, private: no items there
     }
     if (version === contextVersion) {
       chips = list;
       bindToPage(page);
       showContext();
-      return;
+      return true;
     }
     version = contextVersion;
   }
 }
+
+/** The items the browser kept while the panel was closed (a new revision: what was on its way is not for them). */
+const restoreChips = () => checkedChips(++contextVersion, () => []);
 
 function syncMode() {
   const task = mode() === "task";
@@ -426,6 +417,8 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
+    // The line above Send and the items' heading name the recipient Send would use now, before any await (#773).
+    syncMode();
     // Set before any await: an entry point's delivery meanwhile waits for these items to be checked (takeOffer).
     restoring = (async () => {
       thread = await ai.assistantThread().catch(() => null);
@@ -709,9 +702,11 @@ async function takeOffer() {
     }
   }
   await restoring.catch(() => {}); // the items the panel opens with are checked against the selected tab first (#758)
-  chips = await keptChips(() => chips);
-  $("drift").hidden = true;
-  showContext();
+  // Its item too, against the tab selected now: one from a tab the person left while it was read does not go (#773).
+  // The revision is not bumped, so an Include on its way stays; the drift notice of an item dropped stays too.
+  if (!(await checkedChips(contextVersion, () => chips))) {
+    return;
+  }
   const added = chips.find(c => c.chipId === delivery.chipId);
   if (added) {
     announce(t(added.kind === "selection" ? "assistantSelectionAdded" : "assistantPageAdded", [added.title]));
