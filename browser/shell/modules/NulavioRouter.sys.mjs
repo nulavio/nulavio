@@ -19,6 +19,9 @@ export const RULES_PREF = "nulavio.routing.rules";
 export const ENABLED_PREF = "nulavio.routing.enabled";
 /** Marks a command line sent by routing or by an explicit choice: it is never routed again. */
 export const ROUTED_FLAG = "nulavio-routed";
+/** With ROUTED_FLAG, who sent it: "default" (UX6, the default destination) or "explicit" (the person chose that profile,
+ * as the engine's "Move tab to profile" does, #715): the band's notice credits neither to a rule. */
+export const ROUTE_BY_FLAG = "nulavio-route-by";
 /** Opt-in, shared by the group: rules also apply to links clicked in pages (M5). Default off. */
 export const IN_PAGE_PREF = "nulavio.routing.inPage";
 /** UX6, shared by the group: where links from other apps with no rule open (0: the last profile used). */
