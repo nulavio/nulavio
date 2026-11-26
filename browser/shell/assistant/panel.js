@@ -28,6 +28,8 @@ let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
+let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
+let drawn = false; // a ready render read the conversation and the items since the panel was last in another state
 
 const $ = id => document.getElementById(id);
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
@@ -321,26 +323,9 @@ async function includeCurrent() {
   return true;
 }
 
-/** The items the browser keeps for this window's next message. A list read before a Send can arrive after
-    it, with an item that Send took (#739): that reply is not about the next message, so it is read again. */
-async function keptChips(fallback) {
-  for (;;) {
-    const sent = sends;
-    const list = await ai.assistantChips().catch(fallback);
-    if (sends === sent) {
-      return list;
-    }
-  }
-}
-
-/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
-async function refreshPage(changedTab = null) {
-  const version = ++contextVersion;
-  const page = await ai.assistantPage().catch(() => null);
-  if (version !== contextVersion) {
-    return;
-  }
-  // Every item is bound to the tab it came from (a page, or a selection in it).
+/** Every item is bound to the tab it came from (a page, or a selection in it): one that `page`, the selected tab,
+    does not hold leaves the message. `changedTab`: the tab an update or removal was about. */
+function bindToPage(page, changedTab = null) {
   for (const attached of [...chips]) {
     const sameTab = page?.tabId === attached.tabId;
     if (!sameTab && changedTab !== attached.tabId) {
@@ -350,8 +335,43 @@ async function refreshPage(changedTab = null) {
     }
   }
   current = page;
+}
+
+/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
+async function refreshPage(changedTab = null) {
+  const version = ++contextVersion;
+  const page = await ai.assistantPage().catch(() => null);
+  if (version !== contextVersion) {
+    return;
+  }
+  bindToPage(page, changedTab);
   showContext();
 }
+
+/** The items the browser keeps for this window's next message, checked against the tab selected now before they are
+    drawn (#758): the list and that tab are read together, and what the tab does not hold leaves with no await in
+    between, so Send carries only items the panel shows and the selected tab holds. A Send, a tab event or another
+    change of `version` while they are on their way (#739) means both are read again, without cancelling what came
+    meanwhile. `fallback`: the list when it cannot be read. False when the panel went to another state meanwhile. */
+async function checkedChips(version, fallback) {
+  for (;;) {
+    const [list, page] = await Promise.all([ai.assistantChips().catch(fallback), ai.assistantPage().catch(() => null)]);
+    if (document.body.dataset.state !== "ready") {
+      return false; // paused, private: no items there
+    }
+    if (version === contextVersion) {
+      chips = list;
+      bindToPage(page);
+      showContext();
+      return true;
+    }
+    version = contextVersion;
+  }
+}
+
+/** The items the browser kept while the panel was closed. The revision is not bumped: a tab event's check on its way
+    still drops what the tab it read does not hold, before these reads come back (#773). */
+const restoreChips = () => checkedChips(contextVersion, () => []);
 
 function syncMode() {
   const task = mode() === "task";
@@ -399,10 +419,19 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    thread = await ai.assistantThread().catch(() => null);
-    chips = await keptChips(() => []); // kept by the browser while the panel was closed
-    showContext(); // drawn before any other await: Send carries only what the panel shows
-    await refreshPage();
+    // A render while the composer shows: the line above Send and the items' heading name the recipient Send would use
+    // now, before any await (#773). When the panel opens, or after another state, they wait for the reads: until then
+    // it knows neither the conversation's size nor the selected tab, so it draws no size and no "no page" hint.
+    if (drawn) {
+      syncMode();
+    }
+    // Set before any await: an entry point's delivery meanwhile waits for these items to be checked (takeOffer).
+    restoring = (async () => {
+      thread = await ai.assistantThread().catch(() => null);
+      await restoreChips();
+    })();
+    await restoring;
+    drawn = document.body.dataset.state === "ready";
     syncMode();
     renderThread();
     await takeOffer();
@@ -410,6 +439,14 @@ async function render() {
   } else {
     ++contextVersion;
     chips = [];
+    drawn = false;
+    // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
+    // carry, no offer of a page, no hint, no size.
+    $("chips").replaceChildren();
+    $("attached").hidden = true;
+    $("include-page").hidden = true;
+    $("no-page").hidden = true;
+    $("send-line").textContent = "";
   }
 }
 
@@ -679,9 +716,12 @@ async function takeOffer() {
       showSendLine(); // its size counts the draft while the list is on its way
     }
   }
-  chips = await keptChips(() => chips);
-  $("drift").hidden = true;
-  showContext();
+  await restoring.catch(() => {}); // the items the panel opens with are checked against the selected tab first (#758)
+  // Its item too, against the tab selected now: one from a tab the person left while it was read does not go (#773).
+  // The revision is not bumped, so an Include on its way stays; the drift notice of an item dropped stays too.
+  if (!(await checkedChips(contextVersion, () => chips))) {
+    return;
+  }
   const added = chips.find(c => c.chipId === delivery.chipId);
   if (added) {
     announce(t(added.kind === "selection" ? "assistantSelectionAdded" : "assistantPageAdded", [added.title]));
