@@ -1,4 +1,5 @@
-/* Closing a Shell page's own tab, for every page that has a Close or Cancel (#700).
+/* Closing a Shell page's own tab, for every page that has a Close or Cancel (#700), and the held-link
+   pages (#720).
 
    When the page is its window's only tab, removing that tab would close the window, and maybe the
    browser. The page opens a new tab in the same window first, which shows the new-tab page, and then
@@ -11,19 +12,31 @@ import { announce } from "./ui.js";
 
 const say = text => announce(text, "error", { control: null });
 
+// Set while this page closes its tab, so a second click (or a timer) does not open a second new tab.
+let closing = false;
+
 /** Close this page's tab, leaving its window open on a new tab when it is the only one.
-    `failed` shows the message when the tab could not be closed (default: the page's status line). */
+    Only visible tabs count, as in the engine's own last-tab check: a window whose other tabs are all
+    hidden closes with its last visible one. `failed` shows the message when the tab could not be
+    closed (default: the page's status line). Returns whether the tab is going away. */
 export async function closeOwnTab(failed = say) {
+  if (closing) {
+    return true;
+  }
+  closing = true;
   try {
     const tab = await browser.tabs.getCurrent();
-    const siblings = await browser.tabs.query({ windowId: tab.windowId });
-    if (siblings.length < 2) {
+    const visible = await browser.tabs.query({ windowId: tab.windowId, hidden: false });
+    if (!visible.some(other => other.id !== tab.id)) {
       await browser.tabs.create({ windowId: tab.windowId });
     }
     await browser.tabs.remove(tab.id);
+    return true;
   } catch (e) {
+    closing = false; // the page stays: its buttons may try again
     console.error("could not close the tab", e);
     failed(t("tabCloseFailed"));
+    return false;
   }
 }
 
