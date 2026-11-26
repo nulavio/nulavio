@@ -1452,6 +1452,17 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("$(", block)
                 self.assertNotIn("`", block)
 
+    def test_the_key_recovery_keeps_a_secret_key_the_reader_had(self):
+        # Review of #752 (round 3): an old key file could hold only the public part of a key whose secret part
+        # the reader already had, and `--delete-secret-and-public-key` deletes that secret part as well. The
+        # recovery deletes public keys first, says how to tell whether the file brought a secret part, and keeps
+        # a secret part when in doubt.
+        changelog = (ROOT / "docs/security/changelog.md").read_text(encoding="utf-8")
+        entry = next(line for line in changelog.splitlines() if "the key before the import** (#744)" in line)
+        self.assertIn("gpg --show-keys nulavio-packages.asc", entry)
+        self.assertLess(entry.index("gpg --delete-key <fingerprint>"), entry.index("--delete-secret-and-public-key"))
+        self.assertIn("leave it in place", entry)
+
     def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
         # #651: pasted as a block, the check must print no checksum result after a failed signature or one
         # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
