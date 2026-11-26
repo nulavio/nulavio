@@ -404,8 +404,8 @@ class Passwords {
   }
 
   /**
-   * "Continue anyway" on the warning page, for the pair it showed (`shown`: the `site` and `similar` that
-   * checkLogin() gave it). That pair is remembered only if the module still finds it for the address from this
+   * "Continue anyway" on the warning page, for the pair it showed (the `site` and `similar` that checkLogin()
+   * gave it). That pair is remembered only if the module still finds it for the address from this
    * profile's saved logins: the saved logins can change while the warning is open, and the person confirmed the
    * pair they read, not another one. Otherwise nothing is remembered (`dismissed: false`), and the page says so.
    * What is saved is the module's own pair, never a site the page names.
