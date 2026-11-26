@@ -1437,6 +1437,19 @@ class DownloadPagesTest(unittest.TestCase):
         for attrs in tags:
             self.assertIn('lang="en"', attrs)
 
+    def test_the_manual_check_is_plain_commands(self):
+        # #651 (review of PR #733): the four lines before #651 also ran in Fish, and a shell variable
+        # (`sig=$(...)`) made Fish 3 refuse the whole paste ("Unsupported use of '='"). Commands joined by `&&`
+        # and `|` run in bash, zsh and Fish 3; no assignment, no command substitution.
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                html = (ROOT / "site" / page).read_text(encoding="utf-8")
+                block = html_module.unescape(re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1))
+                for line in block.splitlines():
+                    self.assertNotRegex(line, r"(^|&&|\||;)\s*[A-Za-z_][A-Za-z0-9_]*=", "a shell variable")
+                self.assertNotIn("$(", block)
+                self.assertNotIn("`", block)
+
     def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
         # #651: pasted as a block, the check must print no checksum result after a failed signature or one
         # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
@@ -1459,8 +1472,8 @@ class DownloadPagesTest(unittest.TestCase):
                                capture_output=True, text=True, check=True).stdout  # fmt: skip
 
         def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
-                built: Path = out, extra_sig: bool = False) -> str:  # fmt: skip
-            work = self.tmp / f"check-{case}-{page.split('/')[0]}"
+                built: Path = out, extra_sig: bool = False, shell: str = "bash") -> str:  # fmt: skip
+            work = self.tmp / f"check-{case}-{page.split('/')[0]}-{shell}"
             home = work / "gnupg"
             home.mkdir(parents=True, mode=0o700)
             if key:
@@ -1488,25 +1501,27 @@ class DownloadPagesTest(unittest.TestCase):
             html = (built / page).read_text(encoding="utf-8")
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
             blocks.add(block)
-            ran = subprocess.run(["bash"], input=html_module.unescape(block) + "\n", cwd=work, env=env,
+            ran = subprocess.run([shell], input=html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
             return ran.stdout
 
         blocks: set[str] = set()
-        for page in build_site.DOWNLOAD_PAGES:
-            with self.subTest(page=page):
+        # The block is pasted into bash, and into Fish where it is installed (test_the_manual_check_is_plain_commands).
+        shells = ["bash", *(["fish"] if shutil.which("fish") else [])]
+        for page, sh in itertools.product(build_site.DOWNLOAD_PAGES, shells):
+            with self.subTest(page=page, shell=sh):
                 ours = self.tmp / "gnupg"
-                self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored))
+                self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored, shell=sh))
                 # Signed by a key the reader already has: gpg says "Good signature", the list is still not ours.
-                self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other))
+                self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other, shell=sh))
                 # The key file swapped for another one, with that key's signature.
-                self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other))
+                self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other, shell=sh))
                 # The list changed after it was signed.
-                self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True))
+                self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True, shell=sh))
                 # gpg found our valid signature but failed on another one, and exited non-zero.
-                self.assertNotIn("nulavio.rpm", run(page, "gpg-failed", ours, self.armored, extra_sig=True))
+                self.assertNotIn("nulavio.rpm", run(page, "gpg-failed", ours, self.armored, extra_sig=True, shell=sh))
                 # No key file: the key setup fails, and the block stops there, even with the key already in the keyring.
-                self.assertNotIn("nulavio.rpm", run(page, "no-key-file", ours, "", keyring=self.armored))
+                self.assertNotIn("nulavio.rpm", run(page, "no-key-file", ours, "", keyring=self.armored, shell=sh))
         self.assertEqual(len(blocks), 1, "both languages give the same commands")
 
         # A key that signs with a subkey: VALIDSIG names the subkey first and the pinned primary key last.
