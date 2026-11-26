@@ -251,7 +251,7 @@ public final class MainActivity extends Activity {
         Map<String, Object> qr;
         try {
             qr = Json.parseObject(contents);
-        } catch (PhoneRejected e) {
+        } catch (RuntimeException e) { // PhoneRejected, or a parser bug: never crash on what a camera read (#676)
             showProblem(getString(R.string.not_a_nulavio_code));
             return;
         }
@@ -271,8 +271,8 @@ public final class MainActivity extends Activity {
         Map<String, Object> hello;
         try {
             hello = phone.scan(qr);
-        } catch (PhoneRejected e) {
-            showProblem(errorText(e.code));
+        } catch (RuntimeException e) {
+            showProblem(scannedCodeProblem(e));
             return;
         }
         long deadline = ((Long) qr.get("e")) * 1000;
@@ -359,8 +359,8 @@ public final class MainActivity extends Activity {
         Map<String, Object> request;
         try {
             request = phone.check(signed);
-        } catch (PhoneRejected e) {
-            showProblem(errorText(e.code));
+        } catch (RuntimeException e) {
+            showProblem(scannedCodeProblem(e));
             return;
         }
         String profile = String.valueOf(request.get("profile_name"));
@@ -499,6 +499,21 @@ public final class MainActivity extends Activity {
         String code = e instanceof PhoneRejected ? ((PhoneRejected) e).code
                 : e.getCause() instanceof PhoneRejected ? ((PhoneRejected) e.getCause()).code : e.getClass().getSimpleName();
         main.post(() -> showProblem(errorText(code)));
+    }
+
+    /**
+     * What to show when the code just scanned is refused: a malformed one (bad-message, a key of the wrong
+     * size, or anything else the checks threw) is "not a Nulavio code", so a camera read never crashes the
+     * app (#676).
+     */
+    private String scannedCodeProblem(RuntimeException e) {
+        if (e instanceof PhoneRejected) {
+            String code = ((PhoneRejected) e).code;
+            if (!"bad-message".equals(code) && !"bad-key".equals(code)) {
+                return errorText(code);
+            }
+        }
+        return getString(R.string.not_a_nulavio_code);
     }
 
     private String errorText(String code) {

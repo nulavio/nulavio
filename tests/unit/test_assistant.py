@@ -489,6 +489,38 @@ class AssistantTest(unittest.TestCase):
             assistant.run_task("Again", PROFILE, bridge=FakeBridge(state["agent"]["id"]))
         self.assertEqual(caught.exception.code, "assistant-revoked")
 
+    def test_a_page_read_of_another_shape_is_a_failed_step_and_the_task_goes_on(self):
+        # #674: a page that redefines what page_read's helper uses made it return a number for the text; the
+        # TypeError ended the Task. It is a tool error now, and the model gets its next turn.
+        from nulavio_launcher.ai import tools
+
+        state = self.configure(key="")
+        assistant.allow_profile(PROFILE, True)
+        call = {"id": "c1", "type": "function", "function": {"name": "page_read", "arguments": '{"tab": "t1"}'}}
+        self.provider.replies[:] = [
+            {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+            {"choices": [{"message": {"content": "The page could not be read."}}]},
+        ]
+        title, url = {"type": "string", "value": "t"}, {"type": "string", "value": "https://example.org/"}
+        page = {"type": "object", "value": [["title", title], ["url", url], ["text", {"type": "number", "value": 7}]]}
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.side_effect = lambda method, *_a, **_k: (
+            {"type": "success", "realm": "r-1", "result": page} if method == "script.evaluate" else {}
+        )
+        bridge = tools.Bridge(state["agent"]["id"], "s", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            result = assistant.run_task("Read the page", PROFILE, bridge=bridge)
+        self.assertEqual(result["answer"], "The page could not be read.")
+        self.assertEqual(result["steps"], [{"tool": "page_read", "error": True, "state": "error"}])
+        reply = self.provider.requests[1][2]["messages"][-1]
+        self.assertEqual(reply["role"], "tool")
+        self.assertIn("came back in an unexpected shape", reply["content"])
+
     def test_stop_switch_blocks_questions_page_text_and_tasks(self):
         # D-UX5: "stop all agents" silences the built-in assistant too; nothing leaves the computer.
         state = self.configure()
@@ -1100,8 +1132,11 @@ globalThis.CSS = { escape: String };
 
 // The browser's side: the items it keeps for this window's next message, and what each start was given.
 const tab = { tabId: 1, url: "https://a.example/doc", title: "Doc" };
-const item = (chipId, title) => ({ chipId, kind: "page", tabId: tab.tabId, url: tab.url, title, host: "a.example",
-  address: tab.url, chars: 10, truncated: false, blockChars: 40 });
+const otherTab = { tabId: 2, url: "https://b.example/", title: "Outra" };
+let selected = tab; // the tab this window shows now (assistantPage)
+const item = (chipId, title, at = tab) => ({ chipId, kind: "page", tabId: at.tabId, url: at.url, title,
+  host: new URL(at.url).host, address: at.url, chars: 10, truncated: false, blockChars: 40 });
+const removed = []; // the items the panel asked the browser to drop (assistantRemove)
 let kept = [];
 let offer = null;
 let hold = false; // the next item-list replies wait for release(): the browser read its list, the panel gets it later
@@ -1119,19 +1154,24 @@ let refuse = null;
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
+const activated = []; // the panel's tabs.onActivated listener: another tab selected in this window
+let recipient = "Provedor"; // where the assistant sends now (assistantState)
+let blocked = null; // why the assistant is stopped, if it is (assistantState)
 globalThis.browser = {
   nulavioAI: {
-    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked: null,
-      recipient: "Provedor", provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
+    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked,
+      recipient, provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
     assistantChips() {
       ++reads;
       const list = [...kept]; // as the browser has it now
       return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
     },
     assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
-    // The tab the items came from: the panel keeps them.
-    assistantPage: () => (holdPage ? new Promise(resolve => pageHeld.push(() => resolve({ ...tab })))
-      : Promise.resolve({ ...tab })),
+    // The selected tab: the panel keeps the items that came from it.
+    assistantPage() {
+      const page = { ...selected };
+      return holdPage ? new Promise(resolve => pageHeld.push(() => resolve(page))) : Promise.resolve(page);
+    },
     assistantTakeOffer() {
       const delivery = offer;
       offer = null;
@@ -1147,13 +1187,16 @@ globalThis.browser = {
       return holdStart ? new Promise((resolve, reject) => startHeld.push(() => answer().then(resolve, reject))) : answer();
     },
     assistantAllow: async () => {},
-    assistantRemove: async () => {},
+    assistantRemove: async chipId => {
+      removed.push(chipId);
+      kept = kept.filter(c => c.chipId !== chipId);
+    },
     assistantCancel: async () => {},
     onAssistantEvent: { addListener: listener => events.push(listener) },
   },
   i18n: { getMessage: (key, subs) => [key, ...[subs ?? []].flat()].join("|"), getUILanguage: () => "pt-BR" },
-  tabs: { onActivated: noEvent, onUpdated: noEvent, onRemoved: noEvent, getCurrent: async () => ({ id: 1 }),
-    create: async () => {} },
+  tabs: { onActivated: { addListener: listener => activated.push(listener) }, onUpdated: noEvent, onRemoved: noEvent,
+    getCurrent: async () => ({ id: 1 }), create: async () => {} },
   windows: { getCurrent: async () => ({ id: 1 }) },
   runtime: { getURL: path => path },
 };
@@ -1184,7 +1227,16 @@ const out = {};
 
 // The panel opens with an item the browser kept: it shows it, and Send takes it (the fakes work).
 kept = [item("c1", "Primeira")];
+// #773 (OpenCodeReview, round 2): while it first reads the conversation, the panel draws neither the line above Send
+// nor the "no page" hint: it knows neither the conversation's size nor the selected tab yet. As in panel.html:
+$("no-page").hidden = true;
+holdThread = true;
 await import(process.argv[1]);
+await idle();
+out.firstNoPageHidden = $("no-page").hidden;
+out.firstLine = $("send-line").textContent;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
 await idle();
 out.openShown = shown();
 await send("Pergunta 1");
@@ -1249,7 +1301,7 @@ holdThread = false;
 threadHeld.splice(0).forEach(answer => answer());
 await idle();
 await finish();
-// The same while it reads the selected tab, after the list.
+// The same while it reads the selected tab: the list is drawn only once it is checked against that tab (#758).
 kept = [item("c8", "Oitava")];
 holdPage = true;
 $("allow-profile").fire("click");
@@ -1343,6 +1395,170 @@ threadHeld.splice(0).forEach(answer => answer());
 await idle();
 await release();
 out.secondDraftPrompt = $("prompt").value;
+
+// #758: the panel opens with an item kept from tab 1 while tab 2 is selected. It is checked against the selected tab
+// before it is drawn: a Send while that tab's reply is on its way carries no item, and the item never comes back.
+selected = otherTab;
+kept = [item("c10", "Décima")];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+out.otherTabShown = shown();
+await send("Pergunta 13");
+out.otherTabSent = starts.at(-1).chips;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.otherTabAfter = shown();
+await finish();
+// With no Send in between, it leaves the message as soon as the panel opens, and the panel says why.
+kept = [item("c11", "Décima primeira")];
+$("allow-profile").fire("click");
+await idle();
+out.otherTabOpenShown = shown();
+out.otherTabOpenRemoved = removed.includes("c11");
+out.otherTabOpenAnnounced = announced.some(([, text]) => text === "assistantDriftTab|Décima primeira");
+// An item from the selected tab, while that tab's reply is on its way: drawn once it arrives, and it goes with Send.
+selected = tab;
+kept = [item("c12", "Décima segunda")];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+out.sameTabHeldShown = shown();
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.sameTabShown = shown();
+await send("Pergunta 14");
+out.sameTabSent = starts.at(-1).chips;
+await finish();
+// An entry point delivers an item while the panel still checks the ones it opened with: the list it reads then does
+// not bring back, unchecked, an item from another tab.
+selected = otherTab;
+kept = [item("c13", "Décima terceira"), item("c14", "Décima quarta", otherTab)];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+offer = { chipId: "c14" };
+await emit({ type: "offer" });
+out.offerOpenShown = shown();
+await send("Pergunta 15");
+out.offerOpenSent = starts.at(-1).chips;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.offerOpenAfter = shown();
+await finish();
+// Two renders at once (a state change while the panel opens) both end, with the list checked once more.
+selected = tab;
+kept = [item("c15", "Décima quinta"), item("c16", "Décima sexta", otherTab)];
+$("allow-profile").fire("click");
+$("allow-profile").fire("click");
+await idle();
+out.twiceShown = shown();
+// #773: an entry point's item from a tab the person left while it was read (the address bar's action on tab 1, tab 2
+// selected since), with the panel already open: checked against the selected tab before it is drawn, and the panel
+// says why it left.
+selected = otherTab;
+kept = [item("c17", "Décima sétima")];
+offer = { chipId: "c17" };
+await emit({ type: "offer" });
+out.leftTabOfferShown = shown();
+out.leftTabOfferRemoved = removed.includes("c17");
+out.leftTabOfferDrift = $("drift").hidden ? null : $("drift-text").textContent;
+out.leftTabOfferAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Décima sétima");
+await send("Pergunta 16");
+out.leftTabOfferSent = starts.at(-1).chips;
+await finish();
+// The same while the delivery's reads are on their way: another tab is selected and its reply arrives first. The
+// delivery's reply, read before that, is read again; it does not draw the item against the tab that was selected.
+selected = tab;
+kept = [item("c18", "Décima oitava")];
+offer = { chipId: "c18" };
+holdPage = true;
+await emit({ type: "offer" });
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+holdPage = false;
+pageHeld.pop()(); // the selected tab's reply for the tab event
+await idle();
+pageHeld.splice(0).forEach(answer => answer()); // then the delivery's, read while tab 1 was selected
+await idle();
+out.switchOfferShown = shown();
+out.switchOfferRemoved = removed.includes("c18");
+// The panel opens with an item from another tab and an entry point delivers one from the selected tab: the drift
+// notice of the item that left stays while the new one is shown.
+kept = [item("c19", "Décima nona"), item("c20", "Vigésima", otherTab)];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+offer = { chipId: "c20" };
+await emit({ type: "offer" });
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.keptDriftShown = shown();
+out.keptDrift = $("drift").hidden ? null : $("drift-text").textContent;
+// The recipient changed in Settings (a refusal renders the panel again): while the conversation is on its way, the line
+// above Send and the items' heading already name the recipient a Send would use.
+recipient = "Outro";
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.recipientLine = $("send-line").textContent;
+out.recipientHeading = $("attached-heading").textContent;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+// After a pause the composer shows again: while the conversation is read, its line names no recipient from before.
+blocked = "assistant-paused";
+$("allow-profile").fire("click");
+await idle();
+blocked = null;
+recipient = "Terceiro";
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.resumedLine = $("send-line").textContent;
+out.resumedShown = shown(); // "c20" was drawn before the pause; Send would not carry it now
+out.resumedAttachedHidden = $("attached").hidden;
+out.resumedIncludeHidden = $("include-page").hidden;
+out.resumedNoPageHidden = $("no-page").hidden;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+out.resumedAfter = $("send-line").textContent.split("|").slice(0, 2);
+// #773 (OpenCodeReview, round 3): an item from the selected tab is shown. The panel renders again, another tab is
+// selected while it reads the conversation, and the tab event's reply arrives before the render's own reads: the item
+// leaves then, so a Send before those reads come back carries nothing from the tab the person left.
+selected = tab;
+kept = [item("c21", "Vigésima primeira")];
+$("allow-profile").fire("click");
+await idle();
+out.tabEventBefore = shown();
+holdThread = true;
+holdPage = true;
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+pageHeld.shift()(); // the tab event's reply first
+await idle();
+out.tabEventShown = shown();
+out.tabEventRemoved = removed.includes("c21");
+holdPage = false;
+await send("Pergunta 17");
+out.tabEventSent = starts.at(-1).chips;
+pageHeld.splice(0).forEach(answer => answer());
+await release();
+out.tabEventAfter = shown();
+await finish();
 console.log(JSON.stringify(out));
 """
 
@@ -1408,8 +1624,82 @@ class PanelChipsTest(unittest.TestCase):
     def test_a_send_carries_only_items_the_panel_shows(self):
         out = self._run()
         self.assertEqual(out["gapSent"], out["gapShown"])
-        self.assertEqual(out["pageGapShown"], ["c8"])
+        self.assertEqual(out["pageGapShown"], [])  # not drawn before it is checked against the selected tab (#758)
         self.assertEqual(out["pageGapSent"], out["pageGapShown"])
+
+    def test_a_kept_item_is_checked_against_the_selected_tab_before_a_send_can_carry_it(self):
+        out = self._run()  # #758: kept from tab 1, tab 2 selected, Send while tab 2's reply is held
+        self.assertEqual(out["otherTabShown"], [])
+        self.assertEqual(out["otherTabSent"], [])
+        self.assertEqual(out["otherTabAfter"], [])
+
+    def test_a_kept_item_from_another_tab_leaves_when_the_panel_opens(self):
+        out = self._run()
+        self.assertEqual(out["otherTabOpenShown"], [])
+        self.assertTrue(out["otherTabOpenRemoved"])  # the browser drops it too
+        self.assertTrue(out["otherTabOpenAnnounced"])  # and the panel says why
+
+    def test_a_kept_item_from_the_selected_tab_is_shown_once_checked(self):
+        out = self._run()
+        self.assertEqual(out["sameTabHeldShown"], [])
+        self.assertEqual(out["sameTabShown"], ["c12"])
+        self.assertEqual(out["sameTabSent"], ["c12"])
+
+    def test_an_entry_point_does_not_bring_back_an_unchecked_item(self):
+        out = self._run()
+        self.assertNotIn("c13", out["offerOpenShown"])
+        self.assertEqual(out["offerOpenSent"], out["offerOpenShown"])
+        self.assertNotIn("c13", out["offerOpenSent"])
+        self.assertEqual(out["offerOpenAfter"], [])
+
+    def test_two_renders_at_once_both_end(self):
+        self.assertEqual(self._run()["twiceShown"], ["c15"])
+
+    def test_an_entry_point_item_from_a_tab_left_meanwhile_is_not_drawn(self):
+        out = self._run()  # #773 (OpenCodeReview): the delivery's list is checked against the selected tab too
+        self.assertEqual(out["leftTabOfferShown"], [])
+        self.assertTrue(out["leftTabOfferRemoved"])
+        self.assertEqual(out["leftTabOfferDrift"], "assistantDriftTab|Décima sétima")  # the panel says why
+        self.assertFalse(out["leftTabOfferAnnounced"])
+        self.assertEqual(out["leftTabOfferSent"], [])
+
+    def test_an_entry_point_reply_read_before_a_tab_change_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["switchOfferShown"], [])
+        self.assertTrue(out["switchOfferRemoved"])
+
+    def test_an_entry_point_delivery_keeps_the_reason_an_item_left(self):
+        out = self._run()
+        self.assertEqual(out["keptDriftShown"], ["c20"])
+        self.assertEqual(out["keptDrift"], "assistantDriftTab|Décima nona")
+
+    def test_a_render_names_the_new_recipient_before_it_reads_the_conversation(self):
+        out = self._run()
+        self.assertEqual(out["recipientLine"].split("|")[:2], ["assistantSendLine", "Outro"])
+        self.assertEqual(out["recipientHeading"], "assistantAttachedHeading|Outro")
+
+    def test_the_first_open_draws_no_size_or_page_hint_before_the_reads(self):
+        out = self._run()  # #773 (OpenCodeReview, round 2): neither the conversation's size nor the tab is known yet
+        self.assertTrue(out["firstNoPageHidden"])
+        self.assertEqual(out["firstLine"], "")
+        self.assertEqual(out["openShown"], ["c1"])
+
+    def test_after_a_pause_the_line_waits_for_the_reads(self):
+        out = self._run()  # neither the recipient, the items nor a size from before the pause
+        self.assertEqual(out["resumedLine"], "")
+        self.assertEqual(out["resumedShown"], [])  # nor an item from before it, which Send would not carry
+        self.assertTrue(out["resumedAttachedHidden"])
+        self.assertTrue(out["resumedIncludeHidden"])
+        self.assertTrue(out["resumedNoPageHidden"])
+        self.assertEqual(out["resumedAfter"], ["assistantSendLine", "Terceiro"])
+
+    def test_a_render_does_not_cancel_a_tab_event_check_on_its_way(self):
+        out = self._run()  # #773 (OpenCodeReview, round 3): the tab event's reply drops the item it does not hold
+        self.assertEqual(out["tabEventBefore"], ["c21"])
+        self.assertEqual(out["tabEventShown"], [])
+        self.assertTrue(out["tabEventRemoved"])
+        self.assertEqual(out["tabEventSent"], [])
+        self.assertEqual(out["tabEventAfter"], [])
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
         out = self._run()
