@@ -27,7 +27,11 @@ UNIT = ROOT / "tests" / "unit"
 
 
 def _runs_node(tree: ast.AST) -> bool:
-    """A literal argument list that starts with "node", as subprocess.run(["node", ...]) takes it."""
+    """A literal argument list that starts with "node", as subprocess.run(["node", ...]) takes it.
+
+    Any such list counts, not only one written inside the call: a data literal like ["node", "edge"] is flagged too,
+    on purpose. That over-match fails loudly and names the class; matching only at the call site would miss
+    `argv = ["node", ...]; subprocess.run(argv)`, a silent skip, which is what #788 guards against."""
     return any(
         isinstance(n, (ast.List, ast.Tuple)) and n.elts and isinstance(n.elts[0], ast.Constant) and n.elts[0].value == "node"
         for n in ast.walk(tree)
@@ -58,7 +62,8 @@ def node_classes(source: str) -> dict[str, bool]:
 
 def _which_node(source: str) -> bool:
     for n in ast.walk(ast.parse(source)):
-        if isinstance(n, ast.Call) and n.args and isinstance(n.args[0], ast.Constant) and n.args[0].value == "node":
+        first = n.args[:1] + [k.value for k in n.keywords if k.arg == "cmd"] if isinstance(n, ast.Call) else []
+        if any(isinstance(a, ast.Constant) and a.value == "node" for a in first):
             func = n.func
             if (isinstance(func, ast.Attribute) and func.attr == "which") or (isinstance(func, ast.Name) and func.id == "which"):
                 return True
@@ -76,7 +81,7 @@ class EveryNodeClassUsesTheHelperTest(unittest.TestCase):
         self.assertEqual([name for name, gated in self.found.items() if not gated], [])
 
     def test_the_detector_finds_the_eleven_classes_of_788(self):
-        """Not vacuous: the eleven classes the issue lists, three of them only through drive()."""
+        """Not vacuous: the eleven classes the issue lists, three of them only through drive(), and #808's one."""
         per_file = {}
         for name in self.found:
             per_file[name.split(":")[0]] = per_file.get(name.split(":")[0], 0) + 1
@@ -88,6 +93,7 @@ class EveryNodeClassUsesTheHelperTest(unittest.TestCase):
             "test_shell.py": 1,
             "test_site.py": 1,
             "test_search_alias.py": 1,
+            "test_routing_open_in.py": 1,
         }
         for module, count in known.items():
             with self.subTest(module):
@@ -111,6 +117,7 @@ class EveryNodeClassUsesTheHelperTest(unittest.TestCase):
         )
         self.assertEqual(node_classes(source), {"Direct": False, "Indirect": False, "Gated": True})
         self.assertTrue(_which_node('import shutil\nshutil.which("node")\n'))
+        self.assertTrue(_which_node('import shutil\nNODE = shutil.which(cmd="node")\n'))
         self.assertFalse(_which_node('import shutil\nshutil.which("gpg")\n'))
 
 
