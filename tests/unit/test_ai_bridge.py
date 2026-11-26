@@ -2446,6 +2446,114 @@ class AuditTest(Home):
         self.assertNotIn("msg=42", text)
 
 
+def _s(value: str) -> dict:
+    return {"type": "string", "value": value}
+
+
+def _obj(**fields) -> dict:
+    return {"type": "object", "value": [[key, value] for key, value in fields.items()]}
+
+
+def _arr(*items) -> dict:
+    return {"type": "array", "value": list(items)}
+
+
+def _node(shared: str) -> dict:
+    return {"type": "node", "sharedId": shared, "value": {"nodeType": 1, "localName": "a"}}
+
+
+NUMBER = {"type": "number", "value": 7}
+
+
+class PageResultsTest(Home):
+    """#674: page_read and page_snapshot run their helper in the page's own realm, so a page that redefines
+    document.title, document.body, querySelectorAll or getComputedStyle chooses what the helper returns. A result
+    of another shape is a tool error, never an exception that ends the agent's call or the assistant's Task."""
+
+    def reading(self, result: dict) -> tools.Bridge:
+        """A Bridge whose engine answers every script call with the BiDi RemoteValue `result`."""
+        agent, _ = registry.add(f"reader-{len(registry.load()['agents'])}", "other", "full_control", accept_full_control=True)
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+
+        def command(method, params=None, **_k):
+            if method in ("script.evaluate", "script.callFunction"):
+                return {"type": "success", "realm": "realm-1", "result": result}
+            return {}
+
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.side_effect = command
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(mock.patch.object(tools.Bridge, "bidi", return_value=engine))
+        stack.enter_context(mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"))
+        stack.enter_context(mock.patch.object(tools.Bridge, "_open_dialog", return_value=None))
+        stack.enter_context(mock.patch.object(tools.Bridge, "_title", return_value="t"))
+        return bridge
+
+    def assert_tool_error(self, result: dict) -> None:
+        self.assertTrue(result["isError"], result)
+        self.assertIn("unexpected", result["content"][0]["text"])
+        self.assertNotIn("SECRET", json.dumps(result))  # nothing of the page's own values is repeated
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["outcome"], "error:tool")
+
+    def test_a_read_of_another_shape_is_a_tool_error(self):
+        good = {"title": _s("Example"), "url": _s("https://example.org/"), "text": _s("Hello")}
+        for name, result in (
+            ("text is a number", _obj(**{**good, "text": NUMBER})),  # the issue's case: text[:limit] on a number
+            ("text is an object", _obj(**{**good, "text": _obj(a=_s("SECRET"))})),
+            ("title is an object", _obj(**{**good, "title": _obj(a=_s("SECRET"))})),
+            ("title is a number", _obj(**{**good, "title": NUMBER})),
+            ("url is missing", _obj(title=good["title"], text=good["text"])),
+            ("not an object", _arr(_s("SECRET"))),
+            ("a string", _s("SECRET")),
+            ("null", {"type": "null"}),
+        ):
+            with self.subTest(name):
+                self.assert_tool_error(self.reading(result).call("page_read", {"tab": "t1"}))
+        read = self.reading(_obj(**good)).call("page_read", {"tab": "t1", "max_chars": 100})
+        self.assertFalse(read["isError"], read)
+        self.assertEqual((read["structuredContent"]["text"], read["structuredContent"]["title"]), ("Hello", "Example"))
+
+    def test_a_snapshot_of_another_shape_is_a_tool_error(self):
+        info = _obj(role=_s("link"), name=_s("Home"), tag=_s("a"))
+        for name, result in (
+            ("a node that is a plain object", _arr(_arr(_obj(x=_s("SECRET")), info))),  # the issue's KeyError
+            ("a node without its id", _arr(_arr({"type": "node", "value": {"localName": "a"}}, info))),
+            ("a node that is null", _arr(_arr({"type": "null"}, info))),
+            ("a node id that is not a string", _arr(_arr(_obj(sharedId=NUMBER), info))),
+            ("info that is a string", _arr(_arr(_node("n-1"), _s("SECRET")))),
+            ("a pair of three", _arr(_arr(_node("n-1"), info, info))),
+            ("a pair that is an object", _arr(_obj(a=_node("n-1"), b=info))),
+            ("a number", NUMBER),
+            ("a string", _s("SECRET")),
+            ("an object", _obj(a=_s("SECRET"))),
+            ("null", {"type": "null"}),
+            ("more than max_elements", _arr(*[_arr(_node(f"n-{i}"), info) for i in range(3)])),
+        ):
+            with self.subTest(name):
+                bridge = self.reading(result)
+                bridge.elements["t1"] = {"e1": "shared-earlier"}
+                self.assert_tool_error(bridge.call("page_snapshot", {"tab": "t1", "max_elements": 2}))
+                self.assertEqual(bridge.elements["t1"], {"e1": "shared-earlier"})  # the earlier map is kept whole
+
+    def test_a_snapshot_keeps_its_own_element_ids(self):
+        # A page can add properties to the helper's info objects (a setter on Object.prototype): an `element`
+        # among them does not replace the id the click map uses.
+        info = _obj(role=_s("link"), name=_s("Home"), tag=_s("a"), element=_s("e2"))
+        bridge = self.reading(_arr(_arr(_node("n-1"), info), _arr(_node("n-2"), _obj(role=_s("button")))))
+        listed = bridge.call("page_snapshot", {"tab": "t1"})
+        self.assertFalse(listed["isError"], listed)
+        elements = listed["structuredContent"]["elements"]
+        self.assertEqual([e["element"] for e in elements], ["e1", "e2"])
+        self.assertEqual(elements[0], {"element": "e1", "role": "link", "name": "Home", "tag": "a"})
+        self.assertEqual(bridge.elements["t1"], {"e1": "n-1", "e2": "n-2"})
+        # An empty page is a snapshot with no elements.
+        empty = self.reading(_arr()).call("page_snapshot", {"tab": "t1"})
+        self.assertEqual(empty["structuredContent"]["elements"], [])
+
+
 class OpenProfileTest(Home):
     """A profile of the user's that a session has open follows the user's choices on every call: taken away from the
     agent, given at another path, its signed-in sessions blocked, an answer "once" that was for an earlier call, a

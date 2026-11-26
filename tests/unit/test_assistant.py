@@ -489,6 +489,38 @@ class AssistantTest(unittest.TestCase):
             assistant.run_task("Again", PROFILE, bridge=FakeBridge(state["agent"]["id"]))
         self.assertEqual(caught.exception.code, "assistant-revoked")
 
+    def test_a_page_read_of_another_shape_is_a_failed_step_and_the_task_goes_on(self):
+        # #674: a page that redefines what page_read's helper uses made it return a number for the text; the
+        # TypeError ended the Task. It is a tool error now, and the model gets its next turn.
+        from nulavio_launcher.ai import tools
+
+        state = self.configure(key="")
+        assistant.allow_profile(PROFILE, True)
+        call = {"id": "c1", "type": "function", "function": {"name": "page_read", "arguments": '{"tab": "t1"}'}}
+        self.provider.replies[:] = [
+            {"choices": [{"message": {"content": None, "tool_calls": [call]}}]},
+            {"choices": [{"message": {"content": "The page could not be read."}}]},
+        ]
+        title, url = {"type": "string", "value": "t"}, {"type": "string", "value": "https://example.org/"}
+        page = {"type": "object", "value": [["title", title], ["url", url], ["text", {"type": "number", "value": 7}]]}
+        engine = mock.Mock()
+        engine.mark.return_value = 0
+        engine.command.side_effect = lambda method, *_a, **_k: (
+            {"type": "success", "realm": "r-1", "result": page} if method == "script.evaluate" else {}
+        )
+        bridge = tools.Bridge(state["agent"]["id"], "s", approver=registry.Approver())
+        with (
+            mock.patch.object(tools.Bridge, "bidi", return_value=engine),
+            mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+            mock.patch.object(tools.Bridge, "_open_dialog", return_value=None),
+        ):
+            result = assistant.run_task("Read the page", PROFILE, bridge=bridge)
+        self.assertEqual(result["answer"], "The page could not be read.")
+        self.assertEqual(result["steps"], [{"tool": "page_read", "error": True, "state": "error"}])
+        reply = self.provider.requests[1][2]["messages"][-1]
+        self.assertEqual(reply["role"], "tool")
+        self.assertIn("came back in an unexpected shape", reply["content"])
+
     def test_stop_switch_blocks_questions_page_text_and_tasks(self):
         # D-UX5: "stop all agents" silences the built-in assistant too; nothing leaves the computer.
         state = self.configure()
