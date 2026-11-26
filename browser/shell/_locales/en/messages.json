@@ -578,7 +578,7 @@
   "aiLevelBadge": {"message": "Level: $LEVEL$", "placeholders": {"level": {"content": "$1"}}},
   "aiLevelHint_restricted": {"message": "For agents you do not know: reads and moves around; asks before clicking or typing."},
   "aiLevelHint_assisted": {"message": "Clicks and types for you; asks before submitting forms, using files and using your signed-in sessions."},
-  "aiLevelHint_autonomous": {"message": "Completes tasks without asking, forms included, even one that pays or changes an account, and uses your signed-in sessions in the profiles you give it; working in two places at once (a profile beside its AI Workspace, or two profiles) and the local network still ask, and scripts stay off until you allow them."},
+  "aiLevelHint_autonomous": {"message": "Completes tasks without asking, forms included, even one that pays or changes an account, and uses your signed-in sessions in the profiles you give it; working in two places at once (a profile beside its AI Workspace, or two profiles) and the local network still ask, and scripts stay off until you allow both running JavaScript and cookies and site storage."},
   "aiLevelHint_full_control": {"message": "Everything without asking, including scripts, cookies and the profiles you give it; the browser's internal pages are left out. A compromised or mistaken agent could act on your behalf."},
   "err_expired": {"message": "This request is no longer waiting."},
   "err_workspace": {"message": "Not from the AI Workspace: answer in your own Nulavio window."},

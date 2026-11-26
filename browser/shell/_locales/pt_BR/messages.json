@@ -578,7 +578,7 @@
   "aiLevelBadge": {"message": "Nível: $LEVEL$", "placeholders": {"level": {"content": "$1"}}},
   "aiLevelHint_restricted": {"message": "Para agentes que você não conhece: lê e navega; pergunta antes de clicar ou digitar."},
   "aiLevelHint_assisted": {"message": "Clica e digita por você; pergunta antes de enviar formulários, usar arquivos e usar as suas sessões com login."},
-  "aiLevelHint_autonomous": {"message": "Conclui tarefas sem perguntar, formulários inclusive, mesmo um que pague ou mude uma conta, e usa as suas sessões com login nos perfis que você der a ele; trabalhar em dois lugares ao mesmo tempo (um perfil ao lado da Área de IA dele, ou dois perfis) e a rede local ainda perguntam, e scripts ficam desligados até você permitir."},
+  "aiLevelHint_autonomous": {"message": "Conclui tarefas sem perguntar, formulários inclusive, mesmo um que pague ou mude uma conta, e usa as suas sessões com login nos perfis que você der a ele; trabalhar em dois lugares ao mesmo tempo (um perfil ao lado da Área de IA dele, ou dois perfis) e a rede local ainda perguntam, e scripts ficam desligados até você permitir tanto executar JavaScript quanto cookies e dados de sites."},
   "aiLevelHint_full_control": {"message": "Tudo sem perguntar, inclusive scripts, cookies e os perfis que você der a ele; as páginas internas do navegador ficam de fora. Um agente comprometido ou que erre poderia agir em seu nome."},
   "err_expired": {"message": "Este pedido não está mais aguardando."},
   "err_workspace": {"message": "Não pela Área de IA: responda na sua própria janela do Nulavio."},

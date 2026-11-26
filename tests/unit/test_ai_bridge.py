@@ -600,6 +600,9 @@ class PolicyTest(Home):
                     and node.func.attr in ("require", "require_here", "_refuse_if_held")
                     and isinstance(node.args[0], ast.Constant)):  # fmt: skip
                 checked.add(node.args[0].value)
+                for keyword in node.keywords:  # require_here(..., also=(...)): asked after the tool's own (#725)
+                    if keyword.arg == "also" and isinstance(keyword.value, ast.Tuple):
+                        checked |= {e.value for e in keyword.value.elts if isinstance(e, ast.Constant)}
         # The rest come from what an address needs (classify_url), which require_needs asks for.
         checked |= set(policy.classify_url("http://127.0.0.1/").needs) | set(policy.classify_url("about:config").needs)
         offered = set(policy.CAPABILITIES)
@@ -830,6 +833,61 @@ class AuditTest(Home):
             result = bridge.call("evaluate", {"tab": "t1", "expression": "document.cookie"})
         self.assertTrue(result["isError"])
         self.assertIn("cookies_storage", audit.audit_path().read_text().splitlines()[-1])
+
+    def test_a_script_is_not_asked_for_while_cookies_and_storage_are_blocked(self):
+        # #725: Autonomous asked for execute_js (and, on the local network, local_resources), then refused the call
+        # for cookies_storage whatever the answer, and a "for this session" answer stayed for nothing.
+        for name, url, block_cookies in (("preset", "https://example.org/", False),
+                                         ("local", "http://localhost:8080/", False),
+                                         ("grant", "https://example.org/", True)):  # fmt: skip
+            agent, _ = registry.add(f"js-{name}", "other", "autonomous")
+            if block_cookies:
+                registry.grant(agent["id"], "cookies_storage", "block")
+            asks = Approve("session")
+            with (
+                self.subTest(name=name),
+                mock.patch.object(tools.Bridge, "_url_of", return_value=url),
+                mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
+            ):
+                result = tools.Bridge(agent["id"], "s-1", approver=asks).call("evaluate", {"tab": "t1", "expression": "1"})
+                self.assertTrue(result["isError"])
+                self.assertIn("Read or change cookies and site storage", result["content"][0]["text"])
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["capability"], entry["reason"]),
+                                 ("cookies_storage", "grant" if block_cookies else "preset:autonomous"))  # fmt: skip
+                self.assertEqual(asks.asked, [])
+                self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+
+    def test_a_script_is_asked_for_when_cookies_and_storage_can_be_allowed(self):
+        # #725 refuses only what no answer could allow: cookies_storage allowed or asking still lets a script run.
+        target = "https://example.org"
+        for cookies, asked in (("allow", [("execute_js", target)]),
+                               ("ask", [("execute_js", target), ("cookies_storage", target)])):  # fmt: skip
+            agent, _ = registry.add(f"js-{cookies}", "other", "autonomous")
+            registry.grant(agent["id"], "cookies_storage", cookies)
+            asks = Approve("once")
+            with (
+                self.subTest(cookies=cookies),
+                mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"),
+                mock.patch.object(tools.Bridge, "_eval", return_value=42) as ran,
+            ):
+                result = tools.Bridge(agent["id"], "s-1", approver=asks).call("evaluate", {"tab": "t1", "expression": "6*7"})
+                self.assertFalse(result["isError"])
+                self.assertEqual(result["structuredContent"]["value"], 42)
+                self.assertEqual(asks.asked, asked)
+                ran.assert_called_once()
+
+    def test_a_script_blocked_by_its_own_permission_is_refused_for_it(self):
+        # #725 keeps the refusal on execute_js where that is blocked too (Restricted, Assisted).
+        for level in ("restricted", "assisted"):
+            agent, _ = registry.add(f"js-{level}", "other", level)
+            asks = Approve("session")
+            with self.subTest(level=level), mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"):
+                result = tools.Bridge(agent["id"], "s-1", approver=asks).call("evaluate", {"tab": "t1", "expression": "1"})
+                self.assertIn("Run JavaScript in pages", result["content"][0]["text"])
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["capability"], entry["reason"]), ("execute_js", f"preset:{level}"))
+                self.assertEqual(asks.asked, [])
 
     def test_a_burst_of_calls_does_not_hide_earlier_actions(self):
         # Audit A7: ~10 000 cheap calls rotated the log twice and Activity read only the current file.
