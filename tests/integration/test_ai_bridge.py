@@ -1426,6 +1426,39 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(kept, sorted(row[:5] for row in saved))
         self.assertFalse(reached, hits)
 
+    def test_34_what_a_click_or_typing_will_need_is_refused_before_interact_is_asked(self):
+        # #736: what the element decides (a submit button, Enter in a single-line field, a link) was known only after
+        # interact had been asked. Nobody can be asked here (NULAVIO_AI_APPROVER=none), so a question shows in the
+        # activity as interact refused with "no-approver"; a refusal before it names what the element needs. The
+        # element is read in the forms guard's sandbox before the question: this shows the engine reads it there.
+        agent, env = self.agent("restricted")
+        registry.grant(agent["id"], "submit_forms", "block")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-task"))["structuredContent"]["tab"]
+        snap = c.call("page_snapshot", tab=tab)
+
+        def last() -> tuple[str, str]:
+            entries = [json.loads(line) for line in audit.audit_path().read_text().splitlines()]
+            entry = [e for e in entries if "tool" in e][-1]
+            return entry["capability"], entry["reason"]
+
+        for result in (c.call("click", tab=tab, element=self.element(snap, name="Send")),
+                       c.call("type", tab=tab, element=self.element(snap, role="textbox"), text="x\n")):  # fmt: skip
+            self.assertTrue(result["isError"], result)
+            self.assertIn("'Submit forms'", result["content"][0]["text"])
+            self.assertEqual(last(), ("submit_forms", "grant"))
+        registry.grant(agent["id"], "navigate", "block")
+        result = c.call("click", tab=tab, element=self.element(snap, role="link"))
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(last(), ("navigate", "grant"))
+        # A click that needs nothing blocked is still asked about, as before (and refused here, where nobody answers).
+        result = c.call("click", tab=tab, element=self.element(snap, name="Toggle"))
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(last(), ("interact", "no-approver"))
+        self.assertIn("\noff\n", c.call("page_read", tab=tab)["structuredContent"]["text"])  # nothing happened
+        self.assertFalse([hit for hit in self.fx.hits if hit.startswith(("/agent-result", "/page/linked"))], self.fx.hits)
+        self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+
 
 if __name__ == "__main__":
     unittest.main()
