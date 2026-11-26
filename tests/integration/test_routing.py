@@ -459,6 +459,39 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.hits("/page/private"), timeout=20))
         self.assertFalse(any(u.endswith("/page/private") for u in self.tabs(self.others["Bancos"])))
 
+    def test_06b_a_tab_moved_with_the_engines_menu_stays_in_the_chosen_profile(self):
+        """#715: the engine's own "Move tab to profile" is the person's explicit choice, first in ADR 0003's
+        precedence (R21). Its launch goes through the Shell's check in front of SelectableProfileService.launchInstance,
+        which sends the address with the routed flag: a site whose rule names Bancos stays in Trabalho, where the
+        person moved it, whether Trabalho runs or starts for it."""
+        move = (
+            "gProfiles.openTabsInProfile({target: {getAttribute: () => String(arguments[0])}},"
+            " [{linkedBrowser: {currentURI: {spec: arguments[1]}}}]);"
+        )
+        bank = self.others["Bancos"]
+        work = self.others["Trabalho"]
+        # Running: localhost has the bank rule (open in Bancos).
+        self.assertEqual(self.call("return R.ruleFor(args[0]);", self.local("/page/moved-running"))["rule"]["id"], self.bank_rule)
+        self.m.chrome(move, [self.ids["Trabalho"], self.local("/page/moved-running")])
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/moved-running") for u in self.tabs(work)), timeout=20),
+            self.tabs(work),
+        )
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/moved-running"), 1, "the moved tab was requested more than once")
+        self.assertFalse(any("/page/moved-running" in u for u in self.tabs(bank)), "the rule moved it back to Bancos")
+        # Cold: Trabalho is not running, so the engine starts it with the address.
+        self.stop("Trabalho")
+        self.m.chrome(move, [self.ids["Trabalho"], self.local("/page/moved-cold")])
+        work = self.instance("Trabalho")
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/moved-cold") for u in self.tabs(work)), timeout=30),
+            self.tabs(work),
+        )
+        time.sleep(1)
+        self.assertEqual(self.hits("/page/moved-cold"), 1, "the moved tab was requested more than once")
+        self.assertFalse(any("/page/moved-cold" in u for u in self.tabs(bank)), "the rule moved it back to Bancos")
+
     def test_07_routing_off_opens_links_where_they_arrive(self):
         self.call("await R.setEnabled(false);")
         try:
@@ -1036,7 +1069,8 @@ class RoutingTest(unittest.TestCase):
         )
         self.assertTrue(harness.wait_until(lambda: any(u.endswith("/page/sent-to-pessoal") for u in self.own_tabs()), timeout=20))
         self.assertFalse(any("/page/sent-to-pessoal" in u for u in self.tabs(self.instance("Destino"))))
-        # Cold: a new profile starts with --profile and the link, as "Move tab to" does (the default is Trabalho).
+        # Cold: a new profile starts with --profile and the link (the default is Trabalho). Since #715 "Move tab to"
+        # also sends the routed flag (test_06b); this is the plain command line, which only the default ignores.
         self.call("await R.setFallback(args[0]);", self.ids["Trabalho"])
         self.wait_shared(work, self.ids["Trabalho"])
         cold = self.call("return P.create({name: 'Frio'});")

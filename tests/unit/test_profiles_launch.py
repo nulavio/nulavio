@@ -2,8 +2,9 @@
 
 The engine's app menu and menu bar Profiles lists and "Move tab to profile" start another profile through
 SelectableProfileService.launchInstance, which NulavioProfiles.guardLaunches wraps: a locked protected profile gets
-the unlock page instead, and an engine an agent drives starts no other profile at all. The real engine runs the
-same menus in tests/integration/test_vault_profiles.py.
+the unlock page instead, an engine an agent drives starts no other profile at all, and the addresses a tab is moved
+with carry the routed flag, so the other profile's rules do not send them back (#715). The real engine runs the
+same menus in tests/integration/test_vault_profiles.py and tests/integration/test_routing.py.
 
 In an engine an agent drives, the engine's other ways of starting a profile are closed too: the chooser opened from
 such a window (patch 0011 asks chooser.mjs before every launch) refuses before it reads or unlocks anything
@@ -15,6 +16,7 @@ the engine is ready (tests/lib/agent_engine_driver.mjs).
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import unittest
@@ -24,11 +26,18 @@ ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "browser" / "shell" / "modules" / "NulavioProfiles.sys.mjs"
 CHOOSER = ROOT / "browser" / "shell" / "chooser" / "chooser.mjs"
 AGENT_NETWORK = ROOT / "browser" / "shell" / "modules" / "NulavioAgentNetwork.sys.mjs"
+ROUTER = ROOT / "browser" / "shell" / "modules" / "NulavioRouter.sys.mjs"
+# The flag NulavioRouting.handleCommandLine takes as "sent by routing or by an explicit choice: open here".
+ROUTED_FLAG = re.search(r'export const ROUTED_FLAG = "([^"]+)";', ROUTER.read_text(encoding="utf-8")).group(1)
 
 
-def drive(driver: str, module: Path) -> dict:
+def drive(driver: str, module: Path, *extra: str) -> dict:
     done = subprocess.run(
-        ["node", str(ROOT / "tests" / "lib" / driver), str(module)], capture_output=True, text=True, timeout=60, check=True
+        ["node", str(ROOT / "tests" / "lib" / driver), str(module), *extra],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=True,
     )
     return json.loads(done.stdout)
 
@@ -37,15 +46,42 @@ def drive(driver: str, module: Path) -> dict:
 class ProfilesLaunchGuardTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cases = drive("profiles_launch_driver.mjs", MODULE)
+        cls.cases = drive("profiles_launch_driver.mjs", MODULE, ROUTED_FLAG)
 
     def test_a_profile_without_a_password_starts_as_the_engine_meant(self):
-        self.assertEqual(self.cases["plain"], {"launched": 1, "unlockPages": 0, "logged": []})
+        self.assertEqual(self.cases["plain"], {"launched": 1, "sent": [], "started": [], "unlockPages": 0, "logged": []})
+
+    def test_a_moved_tab_reaches_the_running_profile_with_the_routed_flag(self):
+        """#715: "Move tab to profile" is the person's explicit choice, first in ADR 0003's precedence (R21). The
+        addresses go to the running instance as the engine sends them, behind the flag that routing never moves."""
+        case = self.cases["moved_running"]
+        self.assertEqual(case["launched"], 0, case)
+        self.assertEqual(case["started"], [], case)
+        self.assertEqual(case["unlockPages"], 0, case)
+        self.assertEqual(case["logged"], [], case)
+        args = [f"--{ROUTED_FLAG}", "-new-tab", "https://example.org/a", "-new-tab", "https://example.org/b"]
+        self.assertEqual(case["sent"], [{"path": "/profiles/other", "args": args, "activate": True}], case)
+
+    def test_a_moved_tab_starts_a_profile_that_is_not_running_with_the_routed_flag(self):
+        """No running instance: a new engine on the profile's folder, an argument list with the same flag."""
+        case = self.cases["moved_cold"]
+        self.assertEqual(case["launched"], 0, case)
+        self.assertEqual(case["sent"], [], case)
+        args = ["--profile", "/profiles/other", f"--{ROUTED_FLAG}", "-new-tab", "https://example.org/moved"]
+        self.assertEqual(case["started"], [args], case)
+
+    def test_a_moved_tab_to_an_unlocked_protected_profile_carries_the_flag_too(self):
+        case = self.cases["moved_unlocked"]
+        self.assertEqual(case["launched"], 0, case)
+        self.assertEqual(case["unlockPages"], 0, case)
+        self.assertEqual([s["args"][0] for s in case["sent"]], [f"--{ROUTED_FLAG}"], case)
 
     def test_a_locked_or_unreadable_profile_gets_the_unlock_page_and_no_engine(self):
         for name in ("locked", "unreadable"):
             with self.subTest(name):
                 self.assertEqual(self.cases[name]["launched"], 0)
+                self.assertEqual(self.cases[name]["sent"], [])
+                self.assertEqual(self.cases[name]["started"], [])
                 self.assertEqual(self.cases[name]["unlockPages"], 1)
 
     def test_an_engine_an_agent_drives_starts_no_other_profile_from_the_engines_menus(self):
@@ -55,6 +91,8 @@ class ProfilesLaunchGuardTest(unittest.TestCase):
             with self.subTest(name):
                 case = self.cases[name]
                 self.assertEqual(case["launched"], 0, case)
+                self.assertEqual(case["sent"], [], case)
+                self.assertEqual(case["started"], [], case)
                 self.assertEqual(case["unlockPages"], 0, case)
                 self.assertEqual(case["logged"], ["Nulavio profiles: launch agent-window"], case)
 
