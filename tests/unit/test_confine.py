@@ -836,7 +836,8 @@ class RealBubblewrapTest(unittest.TestCase):
 
     def test_an_engine_folder_inside_the_home_folder_starts_read_only_and_hides_the_rest(self):
         # What keeps working beside #712: an engine unpacked in a folder of its own in the home folder.
-        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        # Resolved: a $TMPDIR that is a link under /home is not there inside, and the shell gets these paths (OCR on #779).
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-")).resolve()
         self.addCleanup(shutil.rmtree, tmp, True)
         home = tmp / "home"
         profile, engine = home / ".local/share/nulavio/data/profiles/p", home / "nulavio"
