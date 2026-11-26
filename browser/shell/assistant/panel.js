@@ -28,6 +28,7 @@ let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
+let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
 
 const $ = id => document.getElementById(id);
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
@@ -333,14 +334,9 @@ async function keptChips(fallback) {
   }
 }
 
-/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
-async function refreshPage(changedTab = null) {
-  const version = ++contextVersion;
-  const page = await ai.assistantPage().catch(() => null);
-  if (version !== contextVersion) {
-    return;
-  }
-  // Every item is bound to the tab it came from (a page, or a selection in it).
+/** Every item is bound to the tab it came from (a page, or a selection in it): one that `page`, the selected tab,
+    does not hold leaves the message. `changedTab`: the tab an update or removal was about. */
+function bindToPage(page, changedTab = null) {
   for (const attached of [...chips]) {
     const sameTab = page?.tabId === attached.tabId;
     if (!sameTab && changedTab !== attached.tabId) {
@@ -350,7 +346,38 @@ async function refreshPage(changedTab = null) {
     }
   }
   current = page;
+}
+
+/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
+async function refreshPage(changedTab = null) {
+  const version = ++contextVersion;
+  const page = await ai.assistantPage().catch(() => null);
+  if (version !== contextVersion) {
+    return;
+  }
+  bindToPage(page, changedTab);
   showContext();
+}
+
+/** The items the browser kept while the panel was closed, checked against the tab selected now before they are drawn
+    (#758): the list and that tab are read together, and what the tab does not hold leaves with no await in between,
+    so Send carries only items the panel shows and the selected tab holds. A Send, a tab event or another change while
+    they are on their way (#739) means both are read again, without cancelling what came meanwhile. */
+async function restoreChips() {
+  let version = ++contextVersion;
+  for (;;) {
+    const [list, page] = await Promise.all([ai.assistantChips().catch(() => []), ai.assistantPage().catch(() => null)]);
+    if (document.body.dataset.state !== "ready") {
+      return; // the panel went to another state meanwhile (paused, private): no items there
+    }
+    if (version === contextVersion) {
+      chips = list;
+      bindToPage(page);
+      showContext();
+      return;
+    }
+    version = contextVersion;
+  }
 }
 
 function syncMode() {
@@ -399,10 +426,12 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    thread = await ai.assistantThread().catch(() => null);
-    chips = await keptChips(() => []); // kept by the browser while the panel was closed
-    showContext(); // drawn before any other await: Send carries only what the panel shows
-    await refreshPage();
+    // Set before any await: an entry point's delivery meanwhile waits for these items to be checked (takeOffer).
+    restoring = (async () => {
+      thread = await ai.assistantThread().catch(() => null);
+      await restoreChips();
+    })();
+    await restoring;
     syncMode();
     renderThread();
     await takeOffer();
@@ -679,6 +708,7 @@ async function takeOffer() {
       showSendLine(); // its size counts the draft while the list is on its way
     }
   }
+  await restoring.catch(() => {}); // the items the panel opens with are checked against the selected tab first (#758)
   chips = await keptChips(() => chips);
   $("drift").hidden = true;
   showContext();
