@@ -706,6 +706,70 @@ class GuardTest(unittest.TestCase):
         self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", older.id)
         self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())
 
+    def test_07_the_shells_own_start_up_update_of_the_fingerprinting_set_is_not_reported(self):
+        """#654: with "let sites see my motion and contrast preferences" on, the Shell writes the engine's set again
+        from the build's default at each start (NulavioFingerprinting's applyAccessibility). After a build whose
+        default changed, that is Nulavio's own change, not one made outside the browser. A set changed while the
+        browser was closed is still reported, also when the Shell then takes the three entries out of it."""
+        share, overrides, written = (
+            "nulavio.fingerprinting.shareAccessibility",
+            "privacy.fingerprintingProtection.overrides",
+            "nulavio.fingerprinting.overridesWritten",
+        )
+        finding = f"pref-changed:{overrides}"
+        record = self.profile / "nulavio-guard.json"
+        in_record = lambda: json.loads(record.read_text())["snapshot"]["prefs"].get(overrides)  # noqa: E731
+        user_set = f"return Services.prefs.prefHasUserValue('{overrides}') ? Services.prefs.getStringPref('{overrides}') : null;"
+        reported = lambda: {f["id"]: f for f in self.guard("return (await G.check()).findings;")}.get(finding)  # noqa: E731
+
+        def clean_up():
+            self.m.chrome("for (const pref of arguments) Services.prefs.clearUserPref(pref);", [share, overrides, written])
+            if any(f["id"] == finding for f in self.guard("return G.findings();")):
+                self.guard("await G.resolve(args[0], 'keep');", finding)
+
+        self.addCleanup(clean_up)
+        # The setting on, in the browser: the Shell writes the set from this build's default.
+        self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [share])
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is not None, 5), "the Shell wrote no set")
+        current = self.m.chrome(user_set)
+        items = current.split(",")
+        self.assertGreaterEqual(len(items), 3, current)
+        # As an earlier build left it: the Shell's own set, made from a default with one entry fewer. Written in the
+        # browser, so the record follows it (a change made in the browser is not reported).
+        earlier = ",".join(items[:-1])
+        self.m.chrome(
+            "Services.prefs.setStringPref(arguments[0], arguments[2]); Services.prefs.setStringPref(arguments[1], arguments[2]);",
+            [written, overrides, earlier],
+        )
+        self.assertTrue(harness.wait_until(lambda: in_record() == earlier, timeout=20), in_record())
+
+        # -- the next start, as with a build whose default changed: the Shell writes the set again, and says so --
+        self.m = type(self).m = self.session.restart()
+        self.assertEqual(self.m.chrome(user_set), current, "the Shell did not write the set again: nothing was tested")
+        self.assertIsNone(reported())
+        self.assertTrue(harness.wait_until(lambda: in_record() == current, timeout=20), in_record())
+
+        # -- a set written into the closed profile, as a program does: reported --
+        def start_with(value: str) -> None:
+            self.session.stop()
+            with open(self.profile / "prefs.js", "a", encoding="utf-8") as prefs_js:
+                prefs_js.write(f"user_pref({json.dumps(overrides)}, {json.dumps(value)});\n")
+            self.m = type(self).m = self.session.restart()
+
+        outside = ",".join(items[1:])
+        start_with(outside)
+        self.assertEqual(self.m.chrome(user_set), outside)
+        self.assertEqual((reported() or {}).get("after"), outside, self.guard("return G.findings();"))
+        self.guard("await G.resolve(args[0], 'keep');", finding)
+        self.assertTrue(harness.wait_until(lambda: in_record() == outside, timeout=20), in_record())
+
+        # -- and one the Shell then writes again (it takes out an accessibility entry put in it): still reported --
+        start_with(earlier + ",+CSSPrefersContrast")
+        self.assertEqual(self.m.chrome(user_set), earlier, "the Shell did not take the entry out: nothing was tested")
+        found = reported()
+        self.assertIsNotNone(found, self.guard("return G.findings();"))
+        self.assertEqual((found["before"], found["after"]), (outside, earlier))
+
 
 def tearDownModule():
     shutil.rmtree(FETCHED, ignore_errors=True)
