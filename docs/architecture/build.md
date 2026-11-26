@@ -325,8 +325,9 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    cmp "$tmp/repomd.xml.asc" "$tmp/served.asc"
    # Onto the served keys, in the upload's order: the signature, then repomd.xml.
    r2() {
-       env -u AWS_SESSION_TOKEN -u AWS_PROFILE AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null \
-           AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… AWS_REGION=auto \
+       env -u AWS_SESSION_TOKEN -u AWS_PROFILE -u AWS_DEFAULT_PROFILE \
+           AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_PAGER= \
+           AWS_ACCESS_KEY_ID=… AWS_SECRET_ACCESS_KEY=… AWS_REGION=auto AWS_DEFAULT_REGION=auto \
            AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
            aws --endpoint-url "https://<account id>.r2.cloudflarestorage.com" "$@"
    }

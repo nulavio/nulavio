@@ -125,6 +125,7 @@ class UploadRepoTest(unittest.TestCase):
         self.assertIn("sync", calls[0])
         self.assertIn("--exclude repodata/repomd.xml --exclude repodata/repomd.xml.asc", calls[0])
         self.assertEqual(self.writes()[1:], PAIR_THEN_SERVED)
+        self.assertTrue(calls[-1].rstrip().endswith("s3://nulavio-packages/rpm/repodata/repomd.xml --only-show-errors"))
 
     def writes(self) -> list[tuple[str, str]]:
         """The writes to the bucket in order, as (staged file, key); a sync is ("sync", its prefix)."""
@@ -160,6 +161,16 @@ class UploadRepoTest(unittest.TestCase):
                 self.assertNotEqual(out.returncode, 0)
                 self.assertEqual(self.writes()[-1][1], key)
                 self.assertNotIn("rpm/repodata/repomd.xml.asc", [written for _, written in self.writes()])
+
+    def test_a_three_part_firefox_version_names_its_revision(self):
+        # The bucket's real package on 2026-11-26.
+        (self.repo / "x86_64" / "nulavio-160.0-0.3.fc44.x86_64.rpm").rename(
+            self.repo / "x86_64" / "nulavio-160.0.1-0.3.fc44.x86_64.rpm"
+        )
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual([key for _, key in self.writes()[1:3]],
+                         ["rpm/repodata/160.0.1-0.3/repomd.xml.asc", "rpm/repodata/160.0.1-0.3/repomd.xml"])  # fmt: skip
 
     def test_the_staged_packages_name_one_revision(self):
         # The revision goes into the keys: the packages' names must give one, in the form of the tag.
