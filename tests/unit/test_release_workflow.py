@@ -360,19 +360,33 @@ class ReleaseWorkflowTest(unittest.TestCase):
         step = self.build[self.build.index("id: revision") : self.build.index("- name: What is new in this version")]
         script = step.split("run: |", 1)[1]
         self.assertIn("sed -n 's/^URIs: //p' site/apt/nulavio.sources", step)
-        # #729: the APT version only from the Packages file that the Release file names by SHA-256 (apt-served), and
-        # only once the release key's detached signature of that Release file verifies.
-        for name, url in (("Release", "$apt/dists/stable/Release"), ("Release.gpg", "$apt/dists/stable/Release.gpg"),
-                          ("repomd.xml.asc", "$rpm/repodata/repomd.xml.asc")):  # fmt: skip
-            self.assertIn(f"""curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/{name}" "{url}\"""", step)
-        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/Packages" """
-                      '"$apt/dists/stable/main/binary-amd64/Packages"', step)  # fmt: skip
-        verify = ('python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/{0}" "$RUNNER_TEMP/{1}" \\\n'
-                  '            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"')  # fmt: skip
-        apt_check, dnf_check = verify.format("Release", "Release.gpg"), verify.format("repomd.xml", "repomd.xml.asc")
+        # #729: the APT version only from the Packages file that the Release text names by SHA-256 (apt-served),
+        # fetched by that hash, and only once the release key's signature of InRelease verifies: one object, as apt
+        # reads it, so a publish stopped mid-upload (plain Packages, Release or Release.gpg replaced, InRelease not
+        # yet) leaves the build a consistent snapshot (the review of e665e9f7).
+        # Every transfer is bounded in time as in size (the review of e665e9f7): 60 s each, 180 s with the retries.
+        get = "get=(curl -fsSL --proto '=https' --retry 3 --max-time 60 --retry-max-time 180)"
+        self.assertIn(get, step)
+        for name, url in (("InRelease", "$apt/dists/stable/InRelease"), ("repomd.xml.asc", "$rpm/repodata/repomd.xml.asc")):
+            self.assertIn(f"""\"${{get[@]}}" --max-filesize 1M -o "$RUNNER_TEMP/{name}" "{url}\"""", step)
+        packages = 'packages=$(python3 -I scripts/release/release_manifest.py apt-packages "$RUNNER_TEMP/Release")'
+        fetch_packages = '"${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/Packages" "$apt/dists/stable/$packages"'
+        self.assertIn(packages, step)
+        self.assertIn(fetch_packages, step)
+        key = ' \\\n            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"'
+        apt_check = ('python3 -I scripts/release/release_manifest.py verify-clearsigned "$RUNNER_TEMP/InRelease" '
+                     '"$RUNNER_TEMP/Release"' + key)  # fmt: skip
+        dnf_check = ('python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/repomd.xml" '
+                     '"$RUNNER_TEMP/repomd.xml.asc"' + key)  # fmt: skip
         self.assertIn(apt_check, step)
         self.assertIn(dnf_check, step)
-        self.assertEqual(step.count("release_manifest.py verify-signed"), 2)
+        self.assertEqual(step.count("release_manifest.py verify-signed"), 1)
+        self.assertEqual(step.count("release_manifest.py verify-clearsigned"), 1)
+        # Neither the plain Packages object nor Release and Release.gpg as a pair: the ones an upload replaces first.
+        self.assertNotIn("Release.gpg", script)
+        self.assertNotIn("binary-amd64/Packages", script)
+        self.assertLess(step.index(apt_check), step.index(packages))
+        self.assertLess(step.index(packages), step.index(fetch_packages))
         self.assertIn("FINGERPRINT: 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 # site/keys/nulavio-packages.asc", step)
         self.assertIn("command -v gpg >/dev/null || scripts/ci/apt_install.sh gnupg", step)
         served = (
@@ -388,18 +402,24 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # #723: and the dnf index, which is uploaded first and so may serve a revision the APT index does not: the
         # primary file its repomd.xml names, read from files so that a failed download or decompression stops the job.
         self.assertIn("sed -n 's/^baseurl=//p' site/rpm/nulavio.repo", step)
-        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" """
-                      '"$rpm/repodata/repomd.xml"', step)  # fmt: skip
+        self.assertIn('"${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"', step)
         self.assertIn(dnf_primary, step)
-        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" """
-                      '"$rpm/$primary"', step)  # fmt: skip
+        self.assertIn('"${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"', step)
+        # The compressed file is checked against repomd.xml's checksum before zstd reads it (the review of e665e9f7).
+        compressed = ('python3 -I scripts/release/release_manifest.py dnf-compressed "$RUNNER_TEMP/repomd.xml" '
+                      '"$RUNNER_TEMP/primary.xml.zst"')  # fmt: skip
+        self.assertIn(compressed, step)
+        self.assertLess(step.index('primary.xml.zst" "$rpm/$primary"'), step.index(compressed))
+        self.assertLess(step.index(compressed), step.index("zstd -q -d"))
         # Bounded (the review of f2a6c211), far above the real files of 2026-11-25 (1.5 to 6.3 kB): every download
         # stops at --max-filesize, and the decompression at the shell's file-size limit (blocks of 1 KiB), whose
         # failure stops this bash -e step.
         self.assertIn('(ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")',
                       step)  # fmt: skip
-        self.assertEqual(step.count("curl -fsSL"), 6)
-        self.assertEqual(len(re.findall(r"curl -fsSL --proto '=https' --retry 3 --max-filesize [0-9]+M -o ", step)), 6)
+        commands = "\n".join(line for line in script.splitlines() if not line.lstrip().startswith("#"))
+        self.assertEqual(commands.count("curl"), 1)  # the one bounded command line, in get
+        self.assertEqual(step.count('"${get[@]}"'), 5)
+        self.assertEqual(len(re.findall(r'"\$\{get\[@\]\}" --max-filesize [0-9]+M -o ', step)), 5)
         self.assertEqual(step.count("zstd -q -d"), 1)
         self.assertIn('dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" '
                       '"$RUNNER_TEMP/primary.xml")', step)  # fmt: skip

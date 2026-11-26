@@ -6,8 +6,11 @@
     python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR] [--also TAG ...]
     python3 -I scripts/release/release_manifest.py not-older <tag> [--repo DIR] [--also TAG ...]
     python3 -I scripts/release/release_manifest.py dnf-primary <repomd.xml>
+    python3 -I scripts/release/release_manifest.py dnf-compressed <repomd.xml> <primary.xml.zst>
     python3 -I scripts/release/release_manifest.py dnf-served <repomd.xml> <primary.xml>
     python3 -I scripts/release/release_manifest.py verify-signed <file> <signature> --fingerprint FPR [--key FILE]
+    python3 -I scripts/release/release_manifest.py verify-clearsigned <InRelease> <out> --fingerprint FPR [--key FILE]
+    python3 -I scripts/release/release_manifest.py apt-packages <Release>
     python3 -I scripts/release/release_manifest.py apt-served <Release> <Packages>
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
@@ -40,18 +43,26 @@ not hand its revision to the next run (#656), even when only its dnf upload fini
 (#723); upload_repo.sh refuses to overwrite a package with other bytes in any case.
 
 ``dnf-primary`` prints where the bucket's repomd.xml says the primary metadata is
-(``repodata/<sha256>-primary.xml.zst``, nothing else). ``dnf-served`` prints the
+(``repodata/<sha256>-primary.xml.zst``, nothing else). ``dnf-compressed`` refuses
+that file, as downloaded, unless its SHA-256 is the checksum repomd.xml gives: it is
+checked before zstd reads it. ``dnf-served`` prints the
 highest ``<version>-<release>`` of nulavio that this primary file lists, without the
 distribution (``0.3.fc44`` is ``0.3``), once its SHA-256 is the one repomd.xml gives.
-Both read only UTF-8 XML without a DTD or an entity, as createrepo_c writes it.
+They read only UTF-8 XML (whatever it declares) without a DTD or an entity, as
+createrepo_c writes it.
 Anything else stops it: the build job then fails closed.
 
 ``verify-signed`` refuses a file unless its detached signature is good and made by
 the release key (site/keys/nulavio-packages.asc, by default) or one of its subkeys:
 a throwaway GNUPGHOME holds that key alone, the key file must be the fingerprint given,
 and gpg's status lines must show one signature, valid, by that key. The build job runs
-it on repomd.xml (repomd.xml.asc, sign_repo.sh) and on the APT Release file
-(Release.gpg, sign_apt_repo.sh) before it reads them (#729). ``apt-served`` prints the
+it on repomd.xml (repomd.xml.asc, sign_repo.sh) before it reads it (#729).
+``verify-clearsigned`` does the same for a cleartext-signed file, the APT InRelease
+(sign_apt_repo.sh), and only then writes its text, the Release file, to <out>: one
+object, so an upload stopped between Release and Release.gpg cannot pair one run's
+text with another run's signature. ``apt-packages`` prints where the Packages file
+that Release names is, by its SHA-256 (``by-hash/``: never replaced, while the plain
+Packages object is replaced before InRelease). ``apt-served`` prints the
 highest ``<version>-<release>`` of nulavio in a Packages file, once its SHA-256 and
 size are the ones that Release file gives.
 
@@ -95,6 +106,10 @@ FINGERPRINT = re.compile(r"[0-9A-F]{40}")
 # gpg status lines that mean the signature is not one good detached signature of the file: a bad, unchecked,
 # expired or revoked one, or a signed message (PLAINTEXT) in place of a detached signature.
 REFUSED_STATUS = ("BADSIG", "ERRSIG", "EXPSIG", "EXPKEYSIG", "REVKEYSIG", "NO_PUBKEY", "NODATA", "PLAINTEXT")
+# A cleartext-signed message's framing lines (RFC 9580, section 7), as openpgp_sign.py --clearsign and gpg write them.
+CLEARTEXT_BEGIN = b"-----BEGIN PGP SIGNED MESSAGE-----"
+CLEARTEXT_SIGNATURE = b"-----BEGIN PGP SIGNATURE-----"
+CLEARTEXT_END = b"-----END PGP SIGNATURE-----"
 APT_VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)+-[0-9]+(?:\.[0-9]+)*")
 # The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
 NETWORKING_RECORD = "browser/build/networking-check.json"
@@ -357,16 +372,26 @@ def next_release(firefox: str, repo: Path, others: list[str] | tuple[str, ...] =
 
 def _xml(data: bytes, what: str) -> ET.Element:
     # Downloaded from the bucket: createrepo_c writes UTF-8 and no DTD, and without one no entity can expand (S314).
-    # Checked on what expat reads, not on the bytes, which another encoding (UTF-16) hides from a byte search.
+    # Checked on what expat reads, not on the bytes, which another encoding (UTF-16) hides from a byte search. expat
+    # takes a document whose first bytes look like UTF-16 as UTF-16, even when told UTF-8; without a byte order mark
+    # such a document is valid UTF-8 bytes (ASCII with NULs), and XML allows no NUL character, so a NUL refuses it.
+    # A declaration of another encoding is refused too.
     try:
         data.decode("utf-8")
     except UnicodeDecodeError:
         raise ManifestError(f"{what} is not UTF-8, which createrepo_c always writes") from None
+    if b"\0" in data:
+        raise ManifestError(f"{what} holds a NUL byte: not UTF-8 XML, which createrepo_c always writes")
 
     def refuse(*_args: object) -> None:
         raise ManifestError(f"{what} declares a DTD or an entity, which createrepo_c never writes")
 
+    def declared(_version: str | None, encoding: str | None, _standalone: int) -> None:
+        if encoding is not None and encoding.lower() not in ("utf-8", "utf8"):
+            raise ManifestError(f"{what} declares the encoding {encoding!r}, not UTF-8")
+
     scan = expat.ParserCreate()
+    scan.XmlDeclHandler = declared
     scan.StartDoctypeDeclHandler = refuse
     scan.EntityDeclHandler = refuse
     try:
@@ -391,6 +416,14 @@ def dnf_primary(repomd: bytes) -> str:
     if not PRIMARY_HREF.fullmatch(href):
         raise ManifestError(f"repomd.xml names the primary file {href!r}, not repodata/<sha256>-primary.xml.zst")
     return href
+
+
+def dnf_compressed(repomd: bytes, compressed: bytes) -> None:
+    """Refuse the compressed primary file unless its SHA-256 is the checksum repomd.xml gives, before anything
+    decompresses it (#729)."""
+    checksum = _primary_entry(repomd).find(f"{REPOMD_NS}checksum")
+    if checksum is None or checksum.get("type") != "sha256" or checksum.text != hashlib.sha256(compressed).hexdigest():
+        raise ManifestError("the compressed primary file is not the one repomd.xml names (checksum)")
 
 
 def dnf_served(repomd: bytes, primary: bytes) -> str:
@@ -425,11 +458,33 @@ def _gpg(home: str, *args: str) -> subprocess.CompletedProcess:
 def verify_signature(data: Path, signature: Path, key: Path, fingerprint: str) -> None:
     """Refuse data unless signature is one good detached signature of it by the key whose fingerprint is given, or
     by one of that key's subkeys (#729). Only that key is in the throwaway GNUPGHOME gpg checks against."""
+    if not signature.is_file():
+        raise ManifestError(f"{data.name} has no signature ({signature} is missing)")
+    _verify(key, fingerprint, signature, data)
+
+
+def verify_clearsigned(message: Path, out: Path, key: Path, fingerprint: str) -> None:
+    """Write to out the text of message, a cleartext-signed file such as InRelease, once it is one good signature
+    by the key whose fingerprint is given (or a subkey), framed as openpgp_sign.py --clearsign and gpg write it:
+    one signed message, nothing before or after (#729). InRelease is one object in the bucket, so it never pairs
+    one run's text with another run's signature, as Release and Release.gpg do while an upload is between them."""
+    lines = message.read_bytes().split(b"\n")
+    if (
+        lines[0] != CLEARTEXT_BEGIN
+        or lines[-2:] != [CLEARTEXT_END, b""]
+        or [lines.count(marker) for marker in (CLEARTEXT_BEGIN, CLEARTEXT_SIGNATURE, CLEARTEXT_END)] != [1, 1, 1]
+    ):
+        raise ManifestError(f"{message.name} is not one cleartext-signed message and nothing else")
+    _verify(key, fingerprint, message, out=out)
+
+
+def _verify(key: Path, fingerprint: str, *files: Path, out: Path | None = None) -> None:
+    # A detached signature and its data (out None), or a cleartext-signed message whose text goes to out. gpg
+    # writes that text before it judges the signature, so it stays in the throwaway home until the checks pass.
     fingerprint = fingerprint.upper()
     if not FINGERPRINT.fullmatch(fingerprint):
         raise ManifestError(f"{fingerprint!r} is not a full key fingerprint (40 hex digits)")
-    if not signature.is_file():
-        raise ManifestError(f"{data.name} has no signature ({signature} is missing)")
+    name = files[-1].name
     with tempfile.TemporaryDirectory(prefix="nulavio-verify-") as home:
         try:
             if _gpg(home, "--quiet", "--import", str(key)).returncode != 0:
@@ -447,29 +502,35 @@ def verify_signature(data: Path, signature: Path, key: Path, fingerprint: str) -
                     kind = ""
             if primaries != [fingerprint]:
                 raise ManifestError(f"{key} holds {primaries}, not the key {fingerprint} alone")
-            checked = _gpg(home, "--status-fd", "1", "--verify", str(signature), str(data))
+            signed = Path(home) / "signed"
+            output = ("--output", str(signed)) if out else ()
+            checked = _gpg(home, "--status-fd", "1", *output, "--verify", *map(str, files))
         finally:
             subprocess.run(["gpgconf", "--homedir", home, "--kill", "all"], capture_output=True, check=False)
-    status = [line.split()[1:] for line in checked.stdout.splitlines() if line.startswith("[GNUPG:] ")]
-    names = [fields[0] for fields in status if fields]
-    valid = [fields[1:] for fields in status if fields and fields[0] == "VALIDSIG"]
-    refused = sorted(set(names) & set(REFUSED_STATUS))
-    if (
-        checked.returncode != 0
-        or refused
-        or names.count("NEWSIG") != 1
-        or names.count("GOODSIG") != 1
-        or len(valid) != 1
-        or valid[0][0] not in signers
-        or valid[0][-1] != fingerprint
-    ):
-        why = ", ".join(refused) or f"gpg exit {checked.returncode}, {names.count('VALIDSIG')} valid signatures"
-        raise ManifestError(f"{signature.name} is not a good signature of {data.name} by {fingerprint} ({why})")
+        status = [line.split()[1:] for line in checked.stdout.splitlines() if line.startswith("[GNUPG:] ")]
+        names = [fields[0] for fields in status if fields]
+        valid = [fields[1:] for fields in status if fields and fields[0] == "VALIDSIG"]
+        # A cleartext-signed message gives one PLAINTEXT line; a detached signature none (REFUSED_STATUS).
+        refused = sorted(set(names) & set(REFUSED_STATUS) - ({"PLAINTEXT"} if out else set()))
+        if (
+            checked.returncode != 0
+            or refused
+            or names.count("NEWSIG") != 1
+            or names.count("GOODSIG") != 1
+            or names.count("PLAINTEXT") != (1 if out else 0)
+            or len(valid) != 1
+            or valid[0][0] not in signers
+            or valid[0][-1] != fingerprint
+        ):
+            why = ", ".join(refused) or f"gpg exit {checked.returncode}, {names.count('VALIDSIG')} valid signatures"
+            what = f"{files[0].name} is not a good signature" + ("" if out else f" of {name}")
+            raise ManifestError(f"{what} by {fingerprint} ({why})")
+        if out:
+            out.write_bytes(signed.read_bytes())
 
 
-def apt_served(release: bytes, packages: bytes) -> str:
-    """The highest <version>-<release> of nulavio in the APT Packages file, once the signed Release file names its
-    SHA-256 and size (#729)."""
+def _apt_named(release: bytes) -> list[str]:
+    # The SHA-256 and size that the Release file gives main/binary-amd64/Packages.
     try:
         text = release.decode("utf-8")
     except UnicodeDecodeError:
@@ -484,7 +545,21 @@ def apt_served(release: bytes, packages: bytes) -> str:
             named.append(fields[:2])
     if len(named) != 1:
         raise ManifestError(f"the Release file names {len(named)} SHA-256 sums of main/binary-amd64/Packages, not one")
-    if named[0] != [hashlib.sha256(packages).hexdigest(), str(len(packages))]:
+    if not re.fullmatch(r"[0-9a-f]{64}", named[0][0]) or not named[0][1].isdigit():
+        raise ManifestError(f"the Release file gives main/binary-amd64/Packages {named[0]}, not a SHA-256 and a size")
+    return named[0]
+
+
+def apt_packages(release: bytes) -> str:
+    """Where the Packages file that the Release file names is, by its SHA-256 (Acquire-By-Hash, sign_apt_repo.sh):
+    the plain Packages object is replaced before InRelease during an upload, the hash-named one never (#729)."""
+    return f"main/binary-amd64/by-hash/SHA256/{_apt_named(release)[0]}"
+
+
+def apt_served(release: bytes, packages: bytes) -> str:
+    """The highest <version>-<release> of nulavio in the APT Packages file, once the signed Release file names its
+    SHA-256 and size (#729)."""
+    if _apt_named(release) != [hashlib.sha256(packages).hexdigest(), str(len(packages))]:
         raise ManifestError("the Packages file is not the one the Release file names (SHA256)")
     try:
         stanzas = packages.decode("utf-8").split("\n\n")
@@ -579,6 +654,9 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--also", action="append", default=[], help="another release's tag, such as a draft's")
     d = sub.add_parser("dnf-primary", help="where the dnf repository's repomd.xml says its primary metadata is")
     d.add_argument("repomd", type=Path)
+    dc = sub.add_parser("dnf-compressed", help="refuse the compressed primary file unless repomd.xml gives its SHA-256")
+    dc.add_argument("repomd", type=Path)
+    dc.add_argument("compressed", type=Path, help="the primary file dnf-primary named, as downloaded")
     ds = sub.add_parser("dnf-served", help="the highest nulavio version the dnf repository's primary metadata lists")
     ds.add_argument("repomd", type=Path)
     ds.add_argument("primary", type=Path, help="the primary file dnf-primary named, decompressed")
@@ -587,8 +665,15 @@ def main(argv: list[str] | None = None) -> int:
     vs.add_argument("signature", type=Path)
     vs.add_argument("--fingerprint", required=True, help="the release key's full fingerprint")
     vs.add_argument("--key", type=Path, default=RELEASE_KEY, help="the release key's public key file")
+    vc = sub.add_parser("verify-clearsigned", help="the text of a cleartext-signed file (InRelease) the release key signed")
+    vc.add_argument("message", type=Path)
+    vc.add_argument("out", type=Path, help="where the signed text goes, once it verifies")
+    vc.add_argument("--fingerprint", required=True, help="the release key's full fingerprint")
+    vc.add_argument("--key", type=Path, default=RELEASE_KEY, help="the release key's public key file")
+    pk = sub.add_parser("apt-packages", help="where the Packages file a Release file names is, by its SHA-256")
+    pk.add_argument("release", type=Path, help="the Release file, its signature checked (verify-clearsigned)")
     ap = sub.add_parser("apt-served", help="the highest nulavio version a Packages file that Release names lists")
-    ap.add_argument("release", type=Path, help="the Release file, its signature checked (verify-signed)")
+    ap.add_argument("release", type=Path, help="the Release file, its signature checked (verify-clearsigned)")
     ap.add_argument("packages", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -602,10 +687,16 @@ def main(argv: list[str] | None = None) -> int:
             print(next_release(args.firefox, args.repo, args.also))
         elif args.command == "dnf-primary":
             print(dnf_primary(args.repomd.read_bytes()))
+        elif args.command == "dnf-compressed":
+            dnf_compressed(args.repomd.read_bytes(), args.compressed.read_bytes())
         elif args.command == "dnf-served":
             print(dnf_served(args.repomd.read_bytes(), args.primary.read_bytes()))
         elif args.command == "verify-signed":
             verify_signature(args.file, args.signature, args.key, args.fingerprint)
+        elif args.command == "verify-clearsigned":
+            verify_clearsigned(args.message, args.out, args.key, args.fingerprint)
+        elif args.command == "apt-packages":
+            print(apt_packages(args.release.read_bytes()))
         elif args.command == "apt-served":
             print(apt_served(args.release.read_bytes(), args.packages.read_bytes()))
         else:

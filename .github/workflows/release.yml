@@ -94,18 +94,21 @@ jobs:
           # serves: counting the served version keeps the next run off that revision (#656). As in the publish job.
           # Every index read is bounded far above the real files (2026-11-25: Packages, Release, repomd.xml and the
           # compressed primary file 1 to 1.6 kB each, the primary file 6.3 kB): curl stops at --max-filesize and
-          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job. Each index is
-          # read only once the release key's signature of its root file verifies (#729): the APT Release file
-          # (Release.gpg) names the Packages file by its SHA-256, the dnf repomd.xml (repomd.xml.asc) names the
-          # primary file by its own. Files, not pipes, so a failed download or check stops the job here.
+          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job; each transfer
+          # stops after 60 s and its retries after 180 s, so a stalled server fails it too. Each index is read only
+          # once the release key's signature of its root file verifies (#729): the APT InRelease (one object, as apt
+          # reads it) gives the Release text, which names the Packages file by its SHA-256, fetched by that hash
+          # (by-hash/, never replaced); the dnf repomd.xml (repomd.xml.asc) names the primary file by its checksums,
+          # checked before zstd and after it. Files, not pipes, so a failed download or check stops the job here.
           command -v gpg >/dev/null || scripts/ci/apt_install.sh gnupg
           command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
           apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/Release" "$apt/dists/stable/Release"
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/Release.gpg" "$apt/dists/stable/Release.gpg"
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/Packages" "$apt/dists/stable/main/binary-amd64/Packages"
-          python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Release.gpg" \
+          get=(curl -fsSL --proto '=https' --retry 3 --max-time 60 --retry-max-time 180)
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/InRelease" "$apt/dists/stable/InRelease"
+          python3 -I scripts/release/release_manifest.py verify-clearsigned "$RUNNER_TEMP/InRelease" "$RUNNER_TEMP/Release" \
             --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
+          packages=$(python3 -I scripts/release/release_manifest.py apt-packages "$RUNNER_TEMP/Release")
+          "${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/Packages" "$apt/dists/stable/$packages"
           served=$(python3 -I scripts/release/release_manifest.py apt-served "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Packages")
           if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
             echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
@@ -114,12 +117,13 @@ jobs:
           # The dnf repository is uploaded first: when the APT upload then failed, only the dnf index serves that
           # revision (#723).
           rpm=$(sed -n 's/^baseurl=//p' site/rpm/nulavio.repo)
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
+          "${get[@]}" --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
           python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/repomd.xml.asc" \
             --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
           primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")
-          curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
+          "${get[@]}" --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
+          python3 -I scripts/release/release_manifest.py dnf-compressed "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml.zst"
           (ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")
           dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml")
           if ! [[ "$dnf" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then

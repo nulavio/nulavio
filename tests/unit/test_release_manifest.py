@@ -53,11 +53,12 @@ def dnf_primary_xml(*packages: tuple[str, str, str]) -> bytes:
     ).encode()
 
 
-def dnf_repomd(primary: bytes, href: str = PRIMARY_HREF) -> bytes:
+def dnf_repomd(primary: bytes, href: str = PRIMARY_HREF, compressed: bytes = b"") -> bytes:
+    checksum = hashlib.sha256(compressed).hexdigest() if compressed else "8f064b7e"
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n<repomd xmlns="http://linux.duke.edu/metadata/repo" '
         'xmlns:rpm="http://linux.duke.edu/metadata/rpm">\n  <revision>1795642880</revision>\n'
-        '  <data type="primary">\n    <checksum type="sha256">8f064b7e</checksum>\n'
+        f'  <data type="primary">\n    <checksum type="sha256">{checksum}</checksum>\n'
         f'    <open-checksum type="sha256">{hashlib.sha256(primary).hexdigest()}</open-checksum>\n'
         f'    <location href="{href}"/>\n  </data>\n'
         '  <data type="other">\n    <location href="repodata/0-other.xml.zst"/>\n  </data>\n</repomd>\n'
@@ -449,14 +450,81 @@ class ReleaseManifestTest(unittest.TestCase):
         with self.assertRaises(release_manifest.ManifestError) as caught:
             release_manifest.dnf_primary(repomd.encode("utf-16"))
         self.assertIn("repomd.xml is not UTF-8", str(caught.exception))
+        # The review of e665e9f7: without a byte order mark, an ASCII-only UTF-16 document is valid UTF-8 bytes, and
+        # expat reads it as UTF-16 even when told UTF-8. XML allows no NUL character: a NUL byte refuses it. So does
+        # UTF-8 text that declares another encoding.
+        plain = dnf_repomd(primary).decode()
+        for encoding in ("utf-16-le", "utf-16-be"):
+            with self.subTest(encoding), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.dnf_primary(plain.replace('encoding="UTF-8"', 'encoding="UTF-16"').encode(encoding))
+            self.assertIn("repomd.xml holds a NUL byte", str(caught.exception))
+            with self.subTest(encoding), self.assertRaises(release_manifest.ManifestError) as caught:
+                bare = utf8.replace('encoding="UTF-8"', 'encoding="UTF-16"').encode(encoding)
+                release_manifest.dnf_served(dnf_repomd(bare), bare)
+            self.assertIn("the primary file holds a NUL byte", str(caught.exception))
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.dnf_primary(plain.replace('encoding="UTF-8"', 'encoding="ISO-8859-1"').encode())
+        self.assertIn("declares the encoding 'ISO-8859-1', not UTF-8", str(caught.exception))
+        self.assertEqual(release_manifest.dnf_primary(plain.replace('encoding="UTF-8"', 'encoding="utf-8"').encode()),
+                         PRIMARY_HREF)  # fmt: skip
         # A DTD with no entity, which expat reads in any encoding, is refused as well.
         doctype = b'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE repomd SYSTEM "x.dtd">' + dnf_repomd(primary)[39:]
         with self.assertRaises(release_manifest.ManifestError) as caught:
             release_manifest.dnf_primary(doctype)
         self.assertIn("declares a DTD", str(caught.exception))
 
+    def test_the_compressed_primary_file_is_checked_before_it_is_decompressed(self):
+        # The review of e665e9f7: zstd reads only the bytes whose SHA-256 the signed repomd.xml gives (checksum).
+        compressed = b"(\xb5/\xfd compressed primary"
+        primary = dnf_primary_xml(("nulavio", "159.0.1", "0.3.fc44"))
+        repomd = dnf_repomd(primary, compressed=compressed)
+        release_manifest.dnf_compressed(repomd, compressed)
+        (self.tmp / "repomd.xml").write_bytes(repomd)
+        (self.tmp / "primary.xml.zst").write_bytes(compressed)
+        self.assertEqual(release_manifest.main(["dnf-compressed", str(self.tmp / "repomd.xml"),
+                                                str(self.tmp / "primary.xml.zst")]), 0)  # fmt: skip
+        cases = [
+            ("checksum", repomd, compressed + b"\0"),
+            ("checksum", dnf_repomd(primary), compressed),  # the checksum of other bytes
+            ("checksum", repomd.replace(b'<checksum type="sha256">', b'<checksum type="sha512">'), compressed),
+            ("checksum", re.sub(rb"\s*<checksum[^>]*>[0-9a-f]+</checksum>", b"", repomd), compressed),
+            ("2 primary files", repomd.replace(b'type="other"', b'type="primary"'), compressed),
+        ]
+        for fragment, index, data in cases:
+            with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.dnf_compressed(index, data)
+            self.assertIn(fragment, str(caught.exception))
+        (self.tmp / "primary.xml.zst").write_bytes(compressed + b"\0")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(release_manifest.main(["dnf-compressed", str(self.tmp / "repomd.xml"),
+                                                    str(self.tmp / "primary.xml.zst")]), 1)  # fmt: skip
+
+    def test_the_packages_file_is_fetched_by_the_hash_the_release_text_gives(self):
+        # The review of e665e9f7: an upload replaces the plain Packages object long before InRelease; the one under
+        # by-hash/ is never replaced, so the Packages file of whichever InRelease is served is always there.
+        one = apt_packages(("nulavio", "159.0.1-0.3"))
+        digest = hashlib.sha256(one).hexdigest()
+        self.assertEqual(release_manifest.apt_packages(apt_release(one)), f"main/binary-amd64/by-hash/SHA256/{digest}")
+        (self.tmp / "Release").write_bytes(apt_release(one))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(release_manifest.main(["apt-packages", str(self.tmp / "Release")]), 0)
+        self.assertEqual(out.getvalue(), f"main/binary-amd64/by-hash/SHA256/{digest}\n")
+        # It goes into a URL: only a SHA-256 and a size, and only one.
+        line = f" {digest} {len(one)} main/binary-amd64/Packages\n"
+        cases = [
+            ("not a SHA-256 and a size", apt_release(one, digest="../../../x" + "0" * 54)),
+            ("not a SHA-256 and a size", apt_release(one, digest=digest.upper())),
+            ("names 2 SHA-256 sums", apt_release(one, extra=line)),
+            ("names 0 SHA-256 sums", apt_release(one).replace(b"SHA256:", b"MD5Sum:")),
+        ]
+        for fragment, release in cases:
+            with self.subTest(release), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.apt_packages(release)
+            self.assertIn(fragment, str(caught.exception))
+
     def test_the_apt_version_comes_from_the_packages_file_the_signed_release_names(self):
-        # #729: Release (its signature checked by verify-signed) names Packages by SHA-256 and size; the build job
+        # #729: Release (InRelease's text, verify-clearsigned) names Packages by SHA-256 and size; the build job
         # reads the version only from a Packages file that is that one.
         packages = apt_packages(("nulavio", "159.0.1-0.3"), ("other", "999.0-1"), ("nulavio", "159.0.1-0.10"))
         self.assertEqual(release_manifest.apt_served(apt_release(packages), packages), "159.0.1-0.10")
@@ -635,6 +703,9 @@ class VerifySignedTest(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp(prefix="nulavio-verify-test-"))
         cls.homes = []
+        # Before any key is made: unittest skips tearDownClass when setUpClass fails, not a class cleanup (the review
+        # of e665e9f7).
+        cls.addClassCleanup(cls.cleanup)
         # The release key's shape (a primary key that signs), another key, and a key that signs with a subkey.
         cls.release = cls.make_key("release", "sign")
         cls.other = cls.make_key("other", "sign")
@@ -643,7 +714,7 @@ class VerifySignedTest(unittest.TestCase):
         cls.data.write_bytes(b"<repomd/>\n")
 
     @classmethod
-    def tearDownClass(cls):
+    def cleanup(cls):
         for home in cls.homes:
             subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "all"], capture_output=True, check=False)
         shutil.rmtree(cls.tmp, ignore_errors=True)
@@ -711,6 +782,57 @@ class VerifySignedTest(unittest.TestCase):
         self.refused("is not a good signature", self.sign(release, "--clearsign"), release["key"], release["fpr"])
         self.refused("not a full key fingerprint", signature, release["key"], release["fpr"][-16:])
         self.refused("not an OpenPGP key", signature, self.data, release["fpr"])
+
+    def clearsign(self, key: dict, text: bytes) -> Path:
+        release = self.tmp / "Release"
+        release.write_bytes(text)
+        message = self.tmp / f"InRelease-{key['fpr'][:8]}"
+        message.unlink(missing_ok=True)
+        self.gpg(key["home"], "--digest-algo", "SHA256", "--clearsign", "-o", str(message), str(release))
+        release.unlink()
+        return message
+
+    def test_the_apt_release_text_comes_only_from_a_good_inrelease(self):
+        # The review of e665e9f7: InRelease is one object, so a publish that stopped between Release and Release.gpg
+        # cannot pair one run's text with another run's signature. Its text is written out only once it verifies.
+        release, other = self.release, self.other
+        text = b"Origin: Nulavio\nSuite: stable\nSHA256:\n " + b"a" * 64 + b" 1526 main/binary-amd64/Packages\n"
+        message = self.clearsign(release, text)
+        out = self.tmp / "Release.out"
+        release_manifest.verify_clearsigned(message, out, release["key"], release["fpr"].lower())
+        self.assertEqual(out.read_bytes(), text)
+        out.unlink()
+        argv = ["verify-clearsigned", str(message), str(out), "--key", str(release["key"]), "--fingerprint", release["fpr"]]
+        self.assertEqual(release_manifest.main(argv), 0)
+        self.assertEqual(out.read_bytes(), text)
+        out.unlink()
+        # A signing subkey too.
+        release_manifest.verify_clearsigned(self.clearsign(self.withsub, text), out, self.withsub["key"], self.withsub["fpr"])
+        out.unlink()
+
+        def refused(fragment: str, crafted: bytes | Path, key: Path = release["key"]) -> None:
+            path = crafted if isinstance(crafted, Path) else self.tmp / "crafted"
+            if not isinstance(crafted, Path):
+                path.write_bytes(crafted)
+            with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.verify_clearsigned(path, out, key, release["fpr"])
+            self.assertIn(fragment, str(caught.exception))
+            self.assertFalse(out.exists())  # gpg writes the text before it judges it: never here
+
+        good = message.read_bytes()
+        refused("BADSIG", good.replace(b"Suite: stable", b"Suite: stab1e"))
+        refused("is not a good signature", self.clearsign(other, text))
+        refused("not the key", message, other["key"])
+        # Only one signed message and nothing else: gpg would ignore text around it, and take the first of two.
+        refused("not one cleartext-signed message", good + b"Suite: unstable\n")
+        refused("not one cleartext-signed message", b"Suite: unstable\n" + good)
+        refused("not one cleartext-signed message", good + good)
+        refused("not one cleartext-signed message", good.rstrip(b"\n"))
+        refused("not one cleartext-signed message", self.sign(release))  # a detached signature
+        refused("not one cleartext-signed message", self.sign(release, "--sign"))  # a signed message, not cleartext
+        with contextlib.redirect_stderr(io.StringIO()):
+            argv = ["verify-clearsigned", str(self.tmp / "none"), str(out), "--fingerprint", release["fpr"]]
+            self.assertEqual(release_manifest.main(argv), 1)
 
     def test_the_committed_release_key_is_the_one_the_workflow_names(self):
         # The build job names this fingerprint; the key file in the repository must be that key alone.
