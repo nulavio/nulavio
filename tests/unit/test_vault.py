@@ -461,6 +461,17 @@ class UnpairedDeviceTest(VaultTestCase):
         self.assert_locked(self.vault)
         self.assertEqual(c.receive(real), State.UNLOCKED)  # the paired phone still gets through
 
+    def test_a_box_too_deep_to_encode_is_ignored(self):
+        # #755: Python 3.11's JSON encoder gives up one level before its decoder, so a box the link accepted can
+        # raise RecursionError while the signature is checked. Ignored like a wrongly signed answer (U-T29).
+        c = self.coordinator(self.vault)
+        real = self.phone.handle(c.start_phone(self.env.id, "Work"))
+        deep = dict(real, box={"c": [[[]]]})
+        with mock.patch("nulavio_launcher.vault.phone.canonical", side_effect=RecursionError):
+            self.assertEqual(c.receive(deep), State.WAITING_FOR_PHONE)
+        self.assert_locked(self.vault)
+        self.assertEqual(c.receive(real), State.UNLOCKED)  # the request stayed pending
+
     def test_phone_ignores_unpaired_desktop(self):
         other = DesktopIdentity.generate()
         vault, _, _ = self.new_vault("other.json")

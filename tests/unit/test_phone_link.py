@@ -69,6 +69,42 @@ class LinkTest(unittest.TestCase):
             channel.recv(time.monotonic() + 0.3)
         self.assertEqual(caught.exception.code, "timeout")
 
+    def received(self, data: bytes, count: int = 1) -> list:
+        """What recv makes of `data`, sent at once: each message or the LinkError's code, `count` times."""
+        channel, peer = self.channel_pair()
+        peer.sendall(data)
+        results = []
+        for _ in range(count):
+            try:
+                results.append(channel.recv(time.monotonic() + 2))
+            except link.LinkError as exc:
+                results.append(exc.code)
+        return results
+
+    def test_every_line_is_held_to_the_cap(self):
+        # #687: the cap was checked only while no newline had arrived, so the chunk that ends a line could carry it
+        # up to 4 KiB past MAX_LINE (a 19 400-byte line was accepted).
+        def line(size: int) -> bytes:
+            prefix = b'{"p":"'
+            suffix = b'","t":"x"}'
+            return prefix + b"x" * (size - len(prefix) - len(suffix)) + suffix + b"\n"
+
+        self.assertEqual(len(line(link.MAX_LINE)), link.MAX_LINE + 1)
+        self.assertEqual(self.received(line(link.MAX_LINE))[0]["t"], "x")
+        self.assertEqual(self.received(line(link.MAX_LINE + 1)), ["too-large"])
+        self.assertEqual(self.received(line(19_400)), ["too-large"])
+        # A good message, then an oversized one behind it in the same stream.
+        self.assertEqual(self.received(b'{"t":"ok"}\n' + line(19_400), 2), [{"t": "ok"}, "too-large"])
+
+    def test_a_line_the_parser_chokes_on_is_a_bad_message(self):
+        # #687: an error of the JSON decoder other than ValueError left recv and ended the unlock helper (U-T29).
+        # Python 3.12 gives up at a depth of about 10 000 (a 20 000-byte line, which only the cap refuses now);
+        # 3.14 parses it. A deep line under the cap is refused as a bad message on both.
+        self.assertEqual(self.received(b"[" * 9_998 + b"]" * 9_998 + b"\n"), ["too-large"])
+        self.assertEqual(self.received(b"[" * 8_000 + b"]" * 8_000 + b"\n"), ["bad-message"])
+        with mock.patch.object(link.json, "loads", side_effect=RecursionError):
+            self.assertEqual(self.received(b'{"t":"ok"}\n'), ["bad-message"])
+
     def test_connect_waits_for_the_announcement_and_gives_up_at_the_deadline(self):
         server = socket.socket()
         server.bind(("127.0.0.1", 0))
@@ -284,6 +320,47 @@ class PhoneSessionTest(unittest.TestCase):
         conn.close()
         self.phone.unlock(first["qr"])
         thread.join(20)
+        self.assertEqual(session.state, "unlocked")
+        profiles.lock(self.prof)
+
+    def test_04a_lines_past_the_cap_or_the_parser_are_skipped(self):
+        # #687 (U-T29): a stranger's oversized answer, and a line the JSON decoder raises on, end that connection
+        # only. The desktop answers neither and keeps resolving; the phone then unlocks in the same helper.
+        self.pair()
+        stranger = socket.socket()
+        stranger.bind(("127.0.0.1", 0))
+        stranger.listen(3)
+        stranger.settimeout(10)  # a helper that died does not connect again
+        self.addCleanup(stranger.close)
+        answers = iter([("127.0.0.1", stranger.getsockname()[1])] * 3)
+        real_loads = json.loads
+
+        def loads(data, *args, **kwargs):
+            if isinstance(data, bytes) and data.startswith(b"[[["):
+                raise RecursionError("maximum recursion depth exceeded")  # what Python 3.12 does with a deep line
+            return real_loads(data, *args, **kwargs)
+
+        with mock.patch.object(link.json, "loads", side_effect=loads):
+            session, first, thread = self.start("unlock", {"autolock": False},
+                                                lambda name: next(answers, None) or self.phone.resolver(name))  # fmt: skip
+            req = json.loads(first["qr"])["r"]
+            oversized = {"t": "response", "req_id": req["req_id"], "phone_id": req["phone_id"], "sig": b64e(b"\0" * 64),
+                         "box": {"n": b64e(b"\0" * 24), "c": b64e(b"\0" * 48)}, "pad": "x" * 19_400}  # fmt: skip
+            for line in (json.dumps(oversized).encode(), b"[" * 9_998 + b"]" * 9_998, b"[" * 100 + b"]" * 100):
+                conn, _ = stranger.accept()
+                with conn:
+                    conn.settimeout(10)
+                    try:
+                        conn.sendall(line + b"\n")
+                        reply = conn.recv(200)
+                    except ConnectionError:
+                        # The desktop may close past the cap while the tail is still being written: a reset or
+                        # a broken pipe on either call. A timeout still fails the test.
+                        reply = b""
+                with self.subTest(line=line[:12]):
+                    self.assertEqual(reply, b"")  # no answer, not even "bad-signature": the line was never read
+            self.phone.unlock(first["qr"])
+            thread.join(20)
         self.assertEqual(session.state, "unlocked")
         profiles.lock(self.prof)
 
