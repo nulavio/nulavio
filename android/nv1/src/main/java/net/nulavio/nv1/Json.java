@@ -239,15 +239,12 @@ public final class Json {
                     case 'r': out.append('\r'); break;
                     case 't': out.append('\t'); break;
                     case 'u':
-                        if (pos + 4 > s.length()) {
-                            throw new PhoneRejected("bad-message");
+                        int unit = 0;
+                        for (int i = 0; i < 4; i++) { // four ASCII hex digits: Integer.parseInt would take a sign
+                            unit = unit * 16 + hexDigit(peek());
+                            pos++;
                         }
-                        try {
-                            out.append((char) Integer.parseInt(s.substring(pos, pos + 4), 16));
-                        } catch (NumberFormatException ex) {
-                            throw new PhoneRejected("bad-message");
-                        }
-                        pos += 4;
+                        out.append((char) unit);
                         break;
                     default:
                         throw new PhoneRejected("bad-message");
@@ -255,16 +252,31 @@ public final class Json {
             }
         }
 
+        static int hexDigit(char c) {
+            if (c >= '0' && c <= '9') {
+                return c - '0';
+            }
+            if (c >= 'a' && c <= 'f') {
+                return c - 'a' + 10;
+            }
+            if (c >= 'A' && c <= 'F') {
+                return c - 'A' + 10;
+            }
+            throw new PhoneRejected("bad-message");
+        }
+
+        /** JSON's integer grammar only, {@code -?(0|[1-9][0-9]*)}: a lone minus sign once crashed the scan (#676). */
         Long number() {
             int start = pos;
             if (pos < s.length() && s.charAt(pos) == '-') {
                 pos++;
             }
-            while (pos < s.length() && Character.isDigit(s.charAt(pos))) {
+            int digits = pos;
+            while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
                 pos++;
             }
-            if (start == pos || pos - start > 18) {
-                throw new PhoneRejected("bad-message"); // nv1 has only small integers
+            if (pos == digits || (s.charAt(digits) == '0' && pos - digits > 1) || pos - digits > 18) {
+                throw new PhoneRejected("bad-message"); // no digit, a leading zero, or more than nv1's small integers
             }
             return Long.parseLong(s.substring(start, pos));
         }

@@ -150,6 +150,9 @@ public final class Phone {
         String invite = str(qr, "i");
         byte[] dePk = B64.decode(str(qr, "k"));
         byte[] secret = B64.decode(str(qr, "s"));
+        if (secret.length != 32) {
+            throw new PhoneRejected("bad-message"); // the desktop sends 32 bytes; BLAKE2b refuses a key over 64
+        }
         byte[][] pe = Crypto.x25519Keypair();
         byte[] shared = Crypto.x25519(pe[0], dePk);
         Crypto.wipe(pe[0]);
@@ -272,7 +275,7 @@ public final class Phone {
             throw new PhoneRejected("bad-message");
         }
         Map<String, Object> r = (Map<String, Object>) signed.get("r");
-        Map<String, Object> desktop = desktops.get(r.get("desktop_id"));
+        Map<String, Object> desktop = desktops.get(str(r, "desktop_id")); // a TreeMap lookup throws on null or a non-String
         if (desktop == null) {
             throw new PhoneRejected("unpaired-desktop");
         }

@@ -55,6 +55,53 @@ public class PhoneTest {
         assertEquals(null, Phone.kindOf(Json.parseObject("{\"v\":2}")));
     }
 
+    @Test
+    public void unlockRequestsWithoutAStringDesktopIdAreRefused() {
+        // #676: a missing or non-String desktop_id reached the TreeMap lookup and crashed the scan.
+        Secrets secrets = Secrets.generate();
+        Map<String, Object> state = Phone.create("Pixel", secrets, () -> 0L).toState();
+        Map<String, Object> paired = new TreeMap<>();
+        paired.put("dsig_pk", B64.encode(Crypto.ed25519Keypair()[1]));
+        paired.put("name", "Desktop");
+        Map<String, Object> desktops = new TreeMap<>();
+        desktops.put("some-desktop", paired);
+        state.put("desktops", desktops);
+        Phone phone = Phone.fromState(state, () -> 0L);
+        for (String text : new String[] {"{\"r\":{},\"sig\":\"x\"}", "{\"r\":{\"desktop_id\":1},\"sig\":\"x\"}",
+                "{\"r\":{\"desktop_id\":null},\"sig\":\"x\"}", "{\"r\":{\"desktop_id\":[\"a\"]},\"sig\":\"x\"}"}) {
+            Map<String, Object> request = Json.parseObject(text);
+            assertEquals("unlock", Phone.kindOf(request));
+            try {
+                phone.check(request);
+                fail("check accepted: " + text);
+            } catch (PhoneRejected e) {
+                assertEquals("bad-message", e.code);
+            }
+            try {
+                phone.answer(request, Phone.Answer.DECLINE, secrets);
+                fail("answer accepted: " + text);
+            } catch (PhoneRejected e) {
+                assertEquals("bad-message", e.code);
+            }
+        }
+    }
+
+    @Test
+    public void anInviteWithASecretOfTheWrongSizeIsRefused() {
+        Desktop desktop = new Desktop();
+        Phone phone = Phone.create("Pixel", Secrets.generate(), () -> desktop.now);
+        for (int size : new int[] {0, 31, 33, 65}) {
+            Map<String, Object> qr = desktop.qr(2);
+            qr.put("s", B64.encode(new byte[size]));
+            try {
+                phone.scan(qr);
+                fail("a secret of " + size + " bytes must be refused");
+            } catch (PhoneRejected e) {
+                assertEquals("bad-message", e.code);
+            }
+        }
+    }
+
     /** A desktop of pairing version 2, in Java, enough to answer one hello (the real one: test_companion_protocol.py). */
     private static final class Desktop {
         final long now = 1_000;
