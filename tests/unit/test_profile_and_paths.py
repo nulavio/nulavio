@@ -646,6 +646,25 @@ class GuardAtLaunchTest(TempHome):
         self.assertIn("already open", said)
         wrap.assert_not_called()
 
+    def test_a_profile_opened_while_the_start_is_checked_is_not_started_again(self):
+        # Preparing checked the lock; the audit and the confinement come after it. A profile another start opened
+        # meanwhile is refused as in use, as preparing refused it when it came last.
+        self.prof.path.joinpath("prefs.js").write_text("")
+
+        def open_it(command, **_):
+            os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+            return command
+
+        for extra, patch in ((("--confined",), mock.patch.object(confine, "wrap", side_effect=open_it)),
+                             ((), mock.patch.object(cli, "_guard_allows", side_effect=lambda *_: open_it(True)))):  # fmt: skip
+            with self.subTest(extra), patch:
+                try:
+                    code, said = self.run_cli(*extra)
+                finally:
+                    (self.prof.path / "lock").unlink(missing_ok=True)
+                self.assertEqual(code, 1, said)  # with --dry-run, 0 is the command printed for a start
+                self.assertIn("is open", said)
+
     def test_an_open_profile_is_audited_as_it_is_and_not_prepared(self):
         os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
         code, said = self.run_cli()

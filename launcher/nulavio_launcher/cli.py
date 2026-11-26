@@ -229,6 +229,9 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
             _err(str(exc))
             return 1
     if pid is None:
+        # Preparing checked the lock, and the audit and the confinement came after it: a profile another start
+        # opened meanwhile is refused as in use, as it was when preparing came last.
+        prof.require_not_running()
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
             confined=confined,
