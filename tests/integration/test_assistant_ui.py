@@ -308,6 +308,18 @@ class AssistantUiTest(unittest.TestCase):
     def assistant_agent(self) -> str:
         return chrome_async(self.m, f"return (await {AI}.assistantState(window)).agent.id;")["ok"]
 
+    def grant(self, agent: str, capability: str, mode: str) -> None:
+        """Set one of the agent's permissions for this test only: a grant or its cleanup that fails fails the test, so a
+        permission left behind cannot change what a later test sees (#778). The cleanup is registered first: a grant
+        whose answer is lost may still have been written, and clear-grant of a permission not set changes nothing."""
+
+        def change(op: str, details: dict) -> None:
+            result = chrome_async(self.m, f"return await {AI}.change(args[0], args[1], args[2]);", [agent, op, details])
+            self.assertNotIn("error", result, f"{op} {capability}")
+
+        self.addCleanup(change, "clear-grant", {"capability": capability})
+        change("grant", {"capability": capability, "mode": mode})
+
     # -- settings and the module ------------------------------------------------------------
 
     def test_01_settings_store_the_key_in_the_keyring_only(self):
@@ -988,12 +1000,11 @@ class AssistantUiTest(unittest.TestCase):
     def test_16_a_stopped_task_waiting_for_permission_ends_and_its_request_goes(self):
         self.close_other_tabs()
         agent = self.assistant_agent()
-        chrome_async(self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'navigate', mode: 'ask'}});", [agent])
-        self.addCleanup(
-            chrome_async, self.m, f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'navigate'}});", [agent]
-        )
-        call = {"id": "c1", "type": "function",
-                "function": {"name": "tab_new", "arguments": json.dumps({"url": "https://example.invalid/"})}}  # fmt: skip
+        self.grant(agent, "navigate", "ask")
+        # No address: an address needs more than navigate (one that does not resolve counts as local), and a call is
+        # refused before its first question while one of those is blocked (#730, #737). Without one, navigate alone is
+        # asked, and no other permission of the class's agent changes (#746).
+        call = {"id": "c1", "type": "function", "function": {"name": "tab_new", "arguments": "{}"}}
         self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
         self.show_sidebar(reload=True)
         self.wait_view(lambda v: v["state"] == "ready")
