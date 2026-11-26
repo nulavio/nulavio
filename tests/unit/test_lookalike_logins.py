@@ -79,6 +79,24 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["first"], case["again"]), ({"dismissed": True}, {"dismissed": True}), case)
         self.assertEqual(case["confirmed"], [{"site": FOUND["site"], "similar": FOUND["similar"]}])
 
+    def test_continue_on_a_pair_already_confirmed_keeps_the_list_order(self):
+        case = self.cases["dismiss_already_confirmed_keeps_order"]
+        self.assertEqual((case["first"], case["other"], case["again"]), ({"dismissed": True},) * 3, case)
+        newest_first = [
+            {"site": "examp1e.example", "similar": "example.example"},
+            {"site": FOUND["site"], "similar": FOUND["similar"]},
+        ]
+        self.assertEqual(case["confirmed"], newest_first)
+
+    def test_continue_remembers_nothing_from_a_read_the_saved_logins_changed_after(self):
+        case = self.cases["dismiss_after_a_burst_of_changes"]
+        self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": False}, []), case)
+        self.assertEqual(case["after"], {"suspicious": False}, case)  # the saved logins give no pair now
+
+    def test_continue_back_says_no_way_back_first_when_the_tab_left_and_the_pair_changed(self):
+        case = self.cases["dismiss_back_left_and_pair_changed"]
+        self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)
+
     def test_checks_at_once_share_one_read_of_the_saved_logins(self):
         case = self.cases["concurrent_checks"]
         self.assertEqual((case["first"], case["second"]), (FOUND, FOUND))

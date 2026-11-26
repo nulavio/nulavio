@@ -316,7 +316,8 @@ class Passwords {
   }
 
   /**
-   * The site of `url` and the saved site it imitates, confirmed or not; otherwise null.
+   * The site of `url` and the saved site it imitates, confirmed or not; otherwise null. `current` says the
+   * saved logins did not change after they were read (a burst of changes answers with an outdated read).
    * `{ locked: true }` when the saved logins cannot be read without asking for the Primary Password.
    */
   async #pairFor(url) {
@@ -334,7 +335,13 @@ class Passwords {
       return { locked: true };
     }
     const similar = lookalikeOf(parsed.hostname, saved);
-    return similar ? { site: siteOf(parsed.hostname), similar } : null;
+    return similar ? { site: siteOf(parsed.hostname), similar, current: saved === this.#savedSites } : null;
+  }
+
+  /** Whether the pair of `site` and `similar` was confirmed. */
+  #confirmed(site, similar) {
+    const pair = pairEntry(site, similar);
+    return this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair);
   }
 
   /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null (or locked). */
@@ -343,8 +350,7 @@ class Passwords {
     if (!found || found.locked) {
       return found;
     }
-    const pair = pairEntry(found.site, found.similar);
-    return this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair) ? null : found;
+    return this.#confirmed(found.site, found.similar) ? null : found;
   }
 
   /**
@@ -419,15 +425,19 @@ class Passwords {
     if (back && !this.canGoBack(browser)) {
       fail("no-way-back");
     }
-    // A pair already confirmed (in another tab with the same warning) is still the pair shown: saved again, no change.
     const found = await this.#pairFor(url);
-    if (!found || found.locked || pairEntry(found.site, found.similar) !== pairEntry(site, similar)) {
-      return { dismissed: false };
-    }
     if (back && !this.canGoBack(browser)) {
       fail("no-way-back"); // the tab left the warning while the saved logins were read
     }
-    this.dismiss(found.site, found.similar);
+    // Only from a read of the saved logins as they are now.
+    if (!found || found.locked || !found.current || pairEntry(found.site, found.similar) !== pairEntry(site, similar)) {
+      return { dismissed: false };
+    }
+    // A pair already confirmed (in another tab with the same warning) is still the pair shown: kept as it is, in its
+    // place in the list.
+    if (!this.#confirmed(found.site, found.similar)) {
+      this.dismiss(found.site, found.similar);
+    }
     return { dismissed: true };
   }
 
