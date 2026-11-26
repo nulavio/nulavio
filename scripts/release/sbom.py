@@ -12,10 +12,12 @@ With --package, the SBOM of a Nulavio package (RPM or .deb) instead: the
 engine is then redistributed, built from Mozilla's source release with the
 patches in browser/patches (each listed in the pedigree, with its SHA-256 as
 a "nulavio:patch-sha256:<patch>" property of the engine), and the package
-file's own SHA-256 identifies what it describes.
+file's own SHA-256 identifies what it describes. The package is named by its
+release (<Firefox version>-<Nulavio revision>, as its own version field and
+packaging/release.json name it), the engine by the Firefox version:
 
     python3 -I scripts/release/sbom.py --package dist/packages/x86_64/nulavio-158.0.1-0.1.fc44.x86_64.rpm \
-        --engine-version 158.0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
+        --engine-version 158.0.1 --release-version 158.0.1-0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
 
 With --companion, the SBOM of the Android Companion app: every library in its
 release build, each with a Maven purl and the SHA-256 that
@@ -298,7 +300,10 @@ def companion_bom(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--package", type=Path, help="describe this RPM or .deb instead of the preview")
-    parser.add_argument("--engine-version", help="engine version inside the package")
+    parser.add_argument("--engine-version", help="with --package: the Firefox version of the engine inside the package")
+    parser.add_argument(
+        "--release-version", help="with --package: the package's release, <engine version>-<Nulavio revision> (e.g. 160.0.1-0.3)"
+    )
     parser.add_argument("--companion", action="store_true", help="describe the Android Companion app instead")
     parser.add_argument(
         "--gradle-dependencies", type=Path, help="with --companion: Gradle's report of releaseRuntimeClasspath, for the graph"
@@ -307,6 +312,11 @@ def main() -> int:
     args = parser.parse_args()
     if args.package and not args.engine_version:
         parser.error("--package needs --engine-version")
+    # Two revisions on one Firefox are two releases: the root component must tell them apart (#637).
+    if args.package and not re.fullmatch(re.escape(args.engine_version) + r"-[0-9]+(?:\.[0-9]+)*", args.release_version or ""):
+        parser.error(f"--package needs --release-version {args.engine_version}-<Nulavio revision>")
+    if args.release_version and not args.package:
+        parser.error("--release-version needs --package")
     if args.companion:
         if args.package:
             parser.error("--companion takes no --package")
@@ -391,7 +401,7 @@ def main() -> int:
             "type": "application",
             "bom-ref": "nulavio-preview",
             "name": "nulavio",
-            "version": args.engine_version,
+            "version": args.release_version,
             "licenses": package_licences,
             "hashes": [{"alg": "SHA-256", "content": sha256(args.package)}],
             "properties": [

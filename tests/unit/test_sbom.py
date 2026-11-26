@@ -75,7 +75,10 @@ class IdentifiersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "nulavio-158.0.1-1.x86_64.rpm"
             package.write_bytes(b"package")
-            boms = {"preview": run(), "package": run("--package", str(package), "--engine-version", "158.0.1")}
+            boms = {
+                "preview": run(),
+                "package": run("--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-1"),
+            }
         for mode, bom in boms.items():
             for component in bom["components"]:
                 with self.subTest(mode=mode, component=component["bom-ref"]):
@@ -86,12 +89,60 @@ class IdentifiersTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "nulavio-158.0.1-1.x86_64.rpm"
             package.write_bytes(b"package")
-            packaged = run("--package", str(package), "--engine-version", "158.0.1")
+            packaged = run("--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-1")
             # The package itself is described with the licences its own field names (issue #137).
             self.assertEqual(packaged["metadata"]["component"]["licenses"], [{"expression": "MPL-2.0 AND GPL-3.0-only"}])
             engine = packaged["components"][0]
         self.assertEqual(engine["cpe"], "cpe:2.3:a:mozilla:firefox:158.0.1:*:*:*:*:*:*:*")
         self.assertEqual(engine["purl"], "pkg:generic/mozilla/firefox@158.0.1")
+
+    def test_the_package_is_named_by_its_release_and_the_engine_by_firefox(self):
+        """Two revisions on one Firefox are two releases: the root names the release, the engine Firefox (#637)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "nulavio-158.0.1-0.1.fc44.x86_64.rpm"
+            package.write_bytes(b"package")
+            boms = {
+                release: run("--package", str(package), "--engine-version", "158.0.1", "--release-version", release)
+                for release in ("158.0.1-0.1", "158.0.1-0.2")
+            }
+        for release, bom in boms.items():
+            with self.subTest(release=release):
+                self.assertEqual(bom["metadata"]["component"]["name"], "nulavio")
+                self.assertEqual(bom["metadata"]["component"]["version"], release)
+                engine = bom["components"][0]
+                self.assertEqual(engine["bom-ref"], "engine:firefox")
+                self.assertEqual(engine["version"], "158.0.1")
+                self.assertEqual(engine["purl"], "pkg:generic/mozilla/firefox@158.0.1")
+                self.assertEqual(engine["cpe"], "cpe:2.3:a:mozilla:firefox:158.0.1:*:*:*:*:*:*:*")
+        self.assertNotEqual(*(bom["metadata"]["component"]["version"] for bom in boms.values()))
+
+    def test_a_package_needs_its_release_on_that_firefox(self):
+        """Without the release, or with one on another Firefox, there is no package SBOM: never a silent fallback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "nulavio-158.0.1-0.1.fc44.x86_64.rpm"
+            package.write_bytes(b"package")
+            for extra in (
+                [],
+                ["--release-version", "158.0.2-0.1"],
+                ["--release-version", "158.0.1"],
+                ["--release-version", "158.0.1-"],
+            ):
+                with self.subTest(extra=extra):
+                    result = subprocess.run(
+                        [sys.executable, "-I", str(SCRIPT), "--package", str(package), "--engine-version", "158.0.1", *extra],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn("--release-version", result.stderr)
+                    self.assertEqual(result.stdout, "")
+        for mode in ([], ["--companion"]):  # only a package has a release of its own here
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [sys.executable, "-I", str(SCRIPT), *mode, "--release-version", "158.0.1-0.1"], capture_output=True, text=True
+                )
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("--release-version needs --package", result.stderr)
 
 
 # The keys the CycloneDX 1.6 JSON schema (bom-1.6.schema.json) allows in the objects the engine's
@@ -113,7 +164,9 @@ class PackagePedigreeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             package = Path(tmp) / "nulavio-158.0.1-1.x86_64.rpm"
             package.write_bytes(b"package")
-            cls.engine = run("--package", str(package), "--engine-version", "158.0.1")["components"][0]
+            cls.engine = run("--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-1")[
+                "components"
+            ][0]
         cls.series = [
             line.strip()
             for line in (ROOT / "browser" / "patches" / "series").read_text().splitlines()

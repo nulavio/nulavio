@@ -91,7 +91,8 @@ install_tree() {
 sbom() {
     local file
     for file in "$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb; do
-        python3 -I "$repo/scripts/release/sbom.py" --package "$file" --engine-version "$version" > "$file.cdx.json"
+        python3 -I "$repo/scripts/release/sbom.py" --package "$file" --engine-version "$version" \
+            --release-version "$version-$NULAVIO_RELEASE" > "$file.cdx.json"
     done
 }
 
