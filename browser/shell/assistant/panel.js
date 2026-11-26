@@ -15,7 +15,7 @@ const ai = browser.nulavioAI;
 let state = null;
 let windowId = null; // the browser window this panel lives in
 let current = null; // what "Incluir esta página" would include now: {tabId, url, title}
-let chips = []; // the items of the next message, as the browser keeps them: {chipId, kind, tabId, url, title, host, chars, truncated, blockChars}
+let chips = []; // the items of the next message, as the browser keeps them: {chipId, kind, tabId, url, title, host, address, chars, truncated, blockChars}
 let busy = false;
 // The run this panel shows (UX5-C2): {runId, kind, text, stopping, steps}. Its events arrive through
 // onAssistantEvent; ones that come before assistantStart answers wait in `early`.
@@ -178,8 +178,8 @@ function turnItem(turn) {
     "li",
     { class: "assistant__turn", "data-state": turn.state },
     h("p", { class: "assistant__turn-question", text: turn.question }),
-    turn.page ? h("p", { class: "hint", text: t("assistantTurnPage", [turn.page.title, turn.page.host]) }) : null,
-    turn.selection ? h("p", { class: "hint", text: t("assistantTurnSelection", [turn.selection.title, turn.selection.host]) }) : null,
+    turn.page ? h("p", { class: "hint", text: t("assistantTurnPage", [turn.page.title, turn.page.address]) }) : null,
+    turn.selection ? h("p", { class: "hint", text: t("assistantTurnSelection", [turn.selection.title, turn.selection.address]) }) : null,
     turnAnswer(turn.state === "done" ? said : "", turn.state === "done" ? "" : said),
     h("p", { class: "hint", text: receipt }),
     turn.state === "done" && turn.answer
@@ -230,8 +230,9 @@ function chipItem(chip) {
       "span",
       { class: "assistant__chip-text" },
       h("span", { text: t(selection ? "assistantAttachedSelection" : "assistantAttachedPage") }),
-      h("span", { class: "hint", "data-part": "binding", text: t("assistantAttachedBinding", [chip.title, chip.host]) }),
-      chip.frameHost ? h("span", { class: "hint", "data-part": "frame", text: t("assistantSelectionFrame", [chip.frameHost]) }) : null,
+      // The address as it goes with the text (#653): origin and path, without its query or fragment.
+      h("span", { class: "hint", "data-part": "binding", text: t("assistantAttachedBinding", [chip.title, chip.address]) }),
+      chip.frameAddress ? h("span", { class: "hint", "data-part": "frame", text: t("assistantSelectionFrame", [chip.frameAddress]) }) : null,
       h("span", { class: "hint", "data-part": "size", text: size })
     ),
     h(
@@ -395,7 +396,7 @@ async function render() {
 }
 
 /** Passages the answer quoted word for word from a page that went (UX5-E): the label says where
-    from; "Mostrar a aba" only selects that tab while it still shows that address (no scrolling in v1). */
+    from; "Mostrar a aba" only selects that tab while it still shows that address, as it went: origin and path (#653; no scrolling in v1). */
 function showSources(list) {
   $("sources").replaceChildren(
     ...(list ?? []).map(source =>

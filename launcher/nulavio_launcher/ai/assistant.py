@@ -569,19 +569,34 @@ def _stream_event(kind: str, name: str | None, event: dict, stop):
     return str((choice.get("delta") or {}).get("content") or ""), choice.get("finish_reason") or stop, False
 
 
+def sent_address(url) -> str:
+    """The part of a page's address that goes to the provider (#653): its origin and path. Never the user
+    part (`user:password@`), the `?query` or the `#fragment`, which can carry a sign-in or reset token, a
+    signed download or a key the browser itself never sends to a server. Anything but http(s) gives "".
+
+    The Shell sends this form already (NulavioAI.sys.mjs, sentAddress: the WHATWG URL's origin and
+    pathname) and counts the request with it, so reducing it again here must return it unchanged: the
+    user part is cut from the netloc as a string, never rebuilt from the host and port."""
+    parts = urllib.parse.urlsplit(str(url or ""))
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return ""
+    return f"{parts.scheme}://{parts.netloc.rpartition('@')[2]}{parts.path}"
+
+
 def _page_block(page: dict) -> str:
     """The page as the model gets it. The Shell counts the same text (NulavioAI.sys.mjs, pageBlockChars):
     keep the two in step, or every Send is refused as size-changed."""
     text = str(page.get("text") or "")[:MAX_PAGE_CHARS]
-    return f'Page content (untrusted, from {page.get("url", "")}, title "{page.get("title", "")}"):\n<<<PAGE\n{text}\nPAGE>>>'
+    where = sent_address(page.get("url"))
+    return f'Page content (untrusted, from {where}, title "{page.get("title", "")}"):\n<<<PAGE\n{text}\nPAGE>>>'
 
 
 def _selection_block(selection: dict) -> str:
     """Text the person selected (from the selection menu, UX5-G), marked untrusted like a page. Counted the
     same way by the Shell (NulavioAI.sys.mjs, selectionBlockChars)."""
     text = str(selection.get("text") or "")[:MAX_SELECTION_CHARS]
-    where = str(selection.get("url", ""))
-    frame = str(selection.get("frameUrl") or "")
+    where = sent_address(selection.get("url"))
+    frame = sent_address(selection.get("frameUrl"))
     if frame and frame != where:
         where = f"{where}, in a frame from {frame}"
     return f'Selected text (untrusted, from {where}, title "{selection.get("title", "")}"):\n<<<SELECTION\n{text}\nSELECTION>>>'
@@ -833,7 +848,7 @@ def sources(answer: str, pages: list[dict]) -> list[dict]:
                 continue
             heading = next((h for start, h in reversed(starts) if start <= at), None)
             entry = {"quote": wanted, "heading": heading, "title": str(page.get("title") or ""),
-                     "url": str(page.get("url") or "")}  # fmt: skip
+                     "url": sent_address(page.get("url"))}  # fmt: skip
             if entry not in out:
                 out.append(entry)
             break
@@ -843,8 +858,9 @@ def sources(answer: str, pages: list[dict]) -> list[dict]:
 
 
 def _origin(url: str | None) -> str | None:
+    """The activity's target: scheme, host and port, never a user part."""
     parts = urllib.parse.urlsplit(url or "")
-    return f"{parts.scheme}://{parts.netloc}" if parts.scheme in ("http", "https") else None
+    return f"{parts.scheme}://{parts.netloc.rpartition('@')[2]}" if parts.scheme in ("http", "https") else None
 
 
 def _tool_text(result: dict) -> str:

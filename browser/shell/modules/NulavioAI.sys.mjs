@@ -130,24 +130,38 @@ function cutCodePoints(text, max) {
   return [text, false];
 }
 
+/** The part of a page's address that goes to the provider and that the panel shows (#653): its origin
+    and path. Never the user part (`user:password@`), the `?query` or the `#fragment`, which can carry a
+    sign-in or reset token, a signed download or a key the browser itself never sends to a server.
+    Anything but http(s) gives "". assistant.py sent_address reduces the same way and leaves this form as
+    it is. The full address stays in the browser, for the check that the tab still shows that page.
+    Exported, with the two counts below, for tests/unit/test_assistant.py (the same count on both sides). */
+export function sentAddress(url) {
+  const parsed = URL.parse(String(url ?? ""));
+  return parsed && (parsed.protocol === "https:" || parsed.protocol === "http:") ? parsed.origin + parsed.pathname : "";
+}
+
 /** What a page adds to the request, in code points: its block and the blank line after it.
     Mirrors assistant.py _page_block and _content; the tools refuse a Send whose size differs. */
-function pageBlockChars({ url, title, chars }) {
-  return codePoints(`Page content (untrusted, from ${url}, title "${title}"):\n<<<PAGE\n`) + chars + codePoints("\nPAGE>>>\n\n");
+export function pageBlockChars({ url, title, chars }) {
+  return codePoints(`Page content (untrusted, from ${sentAddress(url)}, title "${title}"):\n<<<PAGE\n`) + chars + codePoints("\nPAGE>>>\n\n");
 }
 
 /** What a selection adds: its block (assistant.py _selection_block) and the blank line after it. */
-function selectionBlockChars({ url, frameUrl, title, chars }) {
-  const where = frameUrl && frameUrl !== url ? `${url}, in a frame from ${frameUrl}` : url;
+export function selectionBlockChars({ url, frameUrl, title, chars }) {
+  const page = sentAddress(url);
+  const frame = sentAddress(frameUrl);
+  const where = frame && frame !== page ? `${page}, in a frame from ${frame}` : page;
   return codePoints(`Selected text (untrusted, from ${where}, title "${title}"):\n<<<SELECTION\n`) + chars + codePoints("\nSELECTION>>>\n\n");
 }
 
 const blockChars = item => (item.kind === "selection" ? selectionBlockChars(item) : pageBlockChars(item));
 
-/** A web page a tab shows (address and title only), or null for anything else. */
+/** A web page a tab shows (address and title only), or null for anything else. A page without a title
+    goes by the address that would be sent, never the full one: the title goes to the provider too. */
 function pageOf(browser) {
   const url = browser?.currentURI?.spec ?? "";
-  return /^https?:/.test(url) ? { url, title: browser.contentTitle || url } : null;
+  return /^https?:/.test(url) ? { url, title: browser.contentTitle || sentAddress(url) } : null;
 }
 
 class AI {
@@ -567,8 +581,11 @@ class AI {
         truncated: Boolean(turn.truncated),
         code: turn.code ?? null,
         sent: Boolean(turn.sent),
-        page: turn.page ? { title: turn.page.title, host: URL.parse(turn.page.url)?.host ?? "" } : null,
-        selection: turn.selection ? { title: turn.selection.title, host: URL.parse(turn.selection.url)?.host ?? "" } : null,
+        // What went: the turns keep the address as it was sent (#askRequest).
+        page: turn.page ? { title: turn.page.title, host: URL.parse(turn.page.url)?.host ?? "", address: sentAddress(turn.page.url) } : null,
+        selection: turn.selection
+          ? { title: turn.selection.title, host: URL.parse(turn.selection.url)?.host ?? "", address: sentAddress(turn.selection.url) }
+          : null,
       })),
       recipient: thread.recipient,
       model: thread.model,
@@ -587,10 +604,12 @@ class AI {
     };
   }
 
-  /** "Mostrar a aba" for a source: selects the tab of this window that shows exactly that address, if any. */
+  /** "Mostrar a aba" for a source: selects the tab of this window that shows that page, if any. A source
+      names the address as it was sent (origin and path, #653), so a tab matches on that part of its address. */
   assistantShowSource(url, win) {
     this.#userWindow(win);
-    const tab = [...win.gBrowser.tabs].find(t => pageOf(t.linkedBrowser)?.url === String(url));
+    const wanted = String(url);
+    const tab = wanted ? [...win.gBrowser.tabs].find(t => sentAddress(pageOf(t.linkedBrowser)?.url) === wanted) : undefined;
     if (tab) {
       win.gBrowser.selectedTab = tab;
     }
@@ -615,11 +634,16 @@ class AI {
     thread.pageLeftOut = true;
   }
 
+  /** An item as the panel shows it. `url` is the full address, for the panel's check that the tab still
+      shows it; `address` and `frameAddress` are what goes to the provider with the text (#653). */
   static #chipView(chipId, item) {
     const { kind, tabId, url, title, chars, truncated } = item;
     const frameHost = item.frameUrl ? (URL.parse(item.frameUrl)?.host ?? "") : "";
     const host = URL.parse(url)?.host ?? "";
-    return { chipId, kind, tabId, url, title, host, frameHost: frameHost !== host ? frameHost : "", chars, truncated, blockChars: blockChars(item) };
+    const address = sentAddress(url);
+    const frameAddress = item.frameUrl ? sentAddress(item.frameUrl) : "";
+    return { chipId, kind, tabId, url, title, host, frameHost: frameHost !== host ? frameHost : "", address,
+      frameAddress: frameAddress !== address ? frameAddress : "", chars, truncated, blockChars: blockChars(item) };
   }
 
   /** "Incluir esta página": read the visible text of the tab the user named, now, and keep it for the
@@ -646,7 +670,8 @@ class AI {
       }
     }
     const chipId = Services.uuid.generateUUID().toString().slice(1, -1);
-    const item = { kind: "page", tabId: source.tabId, url: source.url, title: browser.contentTitle || source.url, text, chars: codePoints(text), truncated };
+    const item = { kind: "page", tabId: source.tabId, url: source.url, title: browser.contentTitle || sentAddress(source.url), text,
+      chars: codePoints(text), truncated };
     items.set(chipId, item);
     return AI.#chipView(chipId, item);
   }
@@ -677,8 +702,12 @@ class AI {
     }
     const page = used.find(item => item.kind === "page");
     const selected = used.find(item => item.kind === "selection");
-    const sent = page ? { url: page.url, title: page.title, text: page.text } : null;
-    const selection = selected ? { url: selected.url, frameUrl: selected.frameUrl, title: selected.title, text: selected.text } : null;
+    // The address goes as the panel showed it: origin and path, never its user part, query or fragment (#653).
+    const sent = page ? { url: sentAddress(page.url), title: page.title, text: page.text } : null;
+    const selection = selected
+      ? { url: sentAddress(selected.url), frameUrl: selected.frameUrl ? sentAddress(selected.frameUrl) : null, title: selected.title,
+        text: selected.text }
+      : null;
     return { op: "ask", question: String(question), page: sent, selection, expected };
   }
 
