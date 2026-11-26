@@ -8,6 +8,7 @@ import itertools
 import html as html_module
 import io
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -1431,21 +1432,26 @@ class DownloadPagesTest(unittest.TestCase):
     def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
         # #651: pasted as a block, the check must print no checksum result after a failed signature or one
         # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
-        values = build_site.release_values(self.source("manual-check", "159.0.1-0.1", self.fpr, self.armored))
-        out = self.tmp / "manual-check-site"
-        real = build_site.release_values
-        build_site.release_values = lambda src: values
-        try:
-            build_site.build(out)
-        finally:
-            build_site.release_values = real
+        def site(name: str, fpr: str, key: str) -> Path:
+            values = build_site.release_values(self.source(name, "159.0.1-0.1", fpr, key))
+            built = self.tmp / f"{name}-site"
+            real = build_site.release_values
+            build_site.release_values = lambda src: values
+            try:
+                build_site.build(built)
+            finally:
+                build_site.release_values = real
+            return built
+
+        out = site("manual-check", self.fpr, self.armored)
         other_home = self.tmp / "gnupg-other"
         if not other_home.exists():
             throwaway_key(other_home)
         other = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--armor", "--export"],
                                capture_output=True, text=True, check=True).stdout  # fmt: skip
 
-        def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "") -> str:
+        def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
+                built: Path = out) -> str:  # fmt: skip
             work = self.tmp / f"check-{case}-{page.split('/')[0]}"
             home = work / "gnupg"
             home.mkdir(parents=True, mode=0o700)
@@ -1461,10 +1467,10 @@ class DownloadPagesTest(unittest.TestCase):
             subprocess.run([*gpg, "--armor", "--detach-sign", "-o", str(work / "SHA256SUMS.asc"), str(sums)], check=True)
             if tamper:  # another package, and the list changed to match it, under the old signature
                 package(b"another package\n")
-            env = {"PATH": "/usr/bin:/bin", "HOME": str(work), "GNUPGHOME": str(home), "LC_ALL": "C"}
+            env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(work), "GNUPGHOME": str(home), "LC_ALL": "C"}
             if keyring:
                 subprocess.run(["gpg", "--batch", "--quiet", "--import"], input=keyring, text=True, env=env, check=True)
-            html = (out / page).read_text(encoding="utf-8")
+            html = (built / page).read_text(encoding="utf-8")
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
             ran = subprocess.run(["bash"], input=html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
@@ -1480,6 +1486,20 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other))
                 # The list changed after it was signed.
                 self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True))
+
+        # A key that signs with a subkey: VALIDSIG names the subkey first and the pinned primary key last.
+        sub_home = self.tmp / "gnupg-subkey"
+        sub_home.mkdir(mode=0o700)
+        gpg = ["gpg", "--homedir", str(sub_home), "--batch", "--quiet", "--passphrase", ""]
+        subprocess.run([*gpg, "--quick-generate-key", "Throwaway <s@example.invalid>", "ed25519", "cert", "1d"], check=True)
+        listing = subprocess.run([*gpg, "--with-colons", "--list-keys"], capture_output=True, text=True, check=True).stdout
+        primary = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+        subprocess.run([*gpg, "--quick-add-key", primary, "ed25519", "sign", "1d"], check=True)
+        sub_key = subprocess.run([*gpg, "--armor", "--export", primary], capture_output=True, text=True, check=True).stdout
+        sub_site = site("manual-check-subkey", primary, sub_key)
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page, signer="subkey"):
+                self.assertIn("nulavio.rpm: OK", run(page, "subkey", sub_home, sub_key, built=sub_site))
 
 
 if __name__ == "__main__":
