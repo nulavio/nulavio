@@ -348,13 +348,15 @@ class PhoneSessionTest(unittest.TestCase):
                          "box": {"n": b64e(b"\0" * 24), "c": b64e(b"\0" * 48)}, "pad": "x" * 19_400}  # fmt: skip
             for line in (json.dumps(oversized).encode(), b"[" * 9_998 + b"]" * 9_998, b"[" * 100 + b"]" * 100):
                 conn, _ = stranger.accept()
-                conn.settimeout(10)
-                conn.sendall(line + b"\n")
-                try:
-                    reply = conn.recv(200)
-                except ConnectionResetError:
-                    reply = b""  # closed with the rest of the line unread
-                conn.close()
+                with conn:
+                    conn.settimeout(10)
+                    try:
+                        conn.sendall(line + b"\n")
+                        reply = conn.recv(200)
+                    except ConnectionError:
+                        # The desktop may close past the cap while the tail is still being written: a reset or
+                        # a broken pipe on either call. A timeout still fails the test.
+                        reply = b""
                 with self.subTest(line=line[:12]):
                     self.assertEqual(reply, b"")  # no answer, not even "bad-signature": the line was never read
             self.phone.unlock(first["qr"])
