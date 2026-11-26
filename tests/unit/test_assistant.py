@@ -828,6 +828,7 @@ const requests = [];
 const ends = [];
 let ids = 0;
 let workspace = ""; // nulavio.ai.workspace: an agent's id while the test says an agent drives the windows
+let workspaceEnv = ""; // NULAVIO_AI_WORKSPACE, as a bridge sets it for the engine it starts ("agent:pid")
 const tabs = new Map();
 const fakes = {
   PrivateBrowsingUtils: { isWindowPrivate: () => false, isBrowserPrivate: () => false },
@@ -844,7 +845,7 @@ const fakes = {
 };
 globalThis.ChromeUtils = { defineESModuleGetters(lazy) { Object.assign(lazy, fakes); } };
 globalThis.Services = {
-  env: { get: () => "" },
+  env: { get: name => (name === "NULAVIO_AI_WORKSPACE" ? workspaceEnv : "") },
   prefs: {
     getStringPref: (name, value) => (name === "nulavio.ai.workspace" ? workspace : value),
     getIntPref: (_name, value) => value,
@@ -951,6 +952,23 @@ const out = {};
   await ai.assistantInclude(show(win, "https://e.example/lenta", "Lenta texto"), win);
   out.lateNext = left(win);
 }
+{  // An engine a bridge started for an agent and that outlived it ("agent:pid", that PID gone): the start looks for
+   // the PID on disk first. The items leave before that look, so a list the panel reads meanwhile is empty (#739).
+  const [win, page] = newWindow("https://f.example/sobra", "Sobra texto");
+  workspaceEnv = "agente:4242"; // IOUtils.exists answers false: the bridge ended, an ordinary window again
+  let chip = await ai.assistantInclude(page, win);
+  const started = ai.assistantStart("ask", { question: "E?", chips: [chip.chipId], expected }, win);
+  out.pidStartDuring = left(win); // read while the start looks for the PID
+  out.pidStart = await started.then(() => "started", e => e.code);
+  out.pidStartPage = last().page?.title ?? null;
+  ends.at(-1)({ type: "done", answer: "Diz.", chars: 1, recipient: "Provedor", model: "modelo" });
+  await settle();
+  chip = await ai.assistantInclude(page, win);
+  const asked = ai.assistantAsk("E?", { chips: [chip.chipId], expected }, win);
+  out.pidAskDuring = left(win);
+  await asked.catch(() => {}); // no tools here: only what it took matters
+  workspaceEnv = "";
+}
 console.log(JSON.stringify(out));
 """
 
@@ -994,6 +1012,13 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["workspaceAsk"], "ai-workspace")
         self.assertEqual(out["workspaceAskAfter"], [])
 
+    def test_the_items_leave_before_the_start_looks_for_an_agent(self):
+        out = self._run()
+        self.assertEqual(out["pidStart"], "started")  # the bridge ended: an ordinary window, the page goes
+        self.assertEqual(out["pidStartPage"], "Sobra")
+        self.assertEqual(out["pidStartDuring"], [])  # a list read during the look no longer has it (#739)
+        self.assertEqual(out["pidAskDuring"], [])
+
     def test_an_include_that_ends_after_the_start_keeps_nothing(self):
         out = self._run()
         self.assertEqual(out["lateInclude_task"], "page-changed")  # refused: it was for no message
@@ -1001,6 +1026,407 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["late_task"], [])
         self.assertEqual(out["late_ask"], [])
         self.assertEqual(out["lateNext"], ["Lenta"])  # a later Include still counts
+
+
+# The panel itself (browser/shell/assistant/panel.js) on a fake DOM, with a fake browser whose item-list replies the
+# script can hold back: a reply the browser read before a Send reaches the panel after it (#739).
+PANEL_CHIPS = """
+// The assistant panel (browser/shell/assistant/panel.js) on a fake DOM just big enough for it, with a fake
+// browser whose item-list replies (assistantChips) the script can hold back until after a Send.
+process.on("unhandledRejection", e => {
+  console.error(e);
+  process.exit(3);
+});
+const announced = []; // [level, text] of every status-line announcement
+class Node {} // ui.js h() appends a Node as it is and anything else as text
+class El extends Node {
+  constructor(tag, id = "") {
+    super();
+    Object.assign(this, { tagName: tag.toUpperCase(), id, hidden: false, disabled: false, readOnly: false, value: "",
+      className: "", dataset: {}, children: [], isConnected: true });
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.text = "";
+    const names = new Set();
+    this.classList = {
+      toggle: (name, on = !names.has(name)) => (on ? names.add(name) : names.delete(name), on),
+      add: (...list) => list.forEach(name => names.add(name)),
+      remove: (...list) => list.forEach(name => names.delete(name)),
+      contains: name => names.has(name),
+    };
+  }
+  get textContent() {
+    return this.text + this.children.map(c => (c instanceof El ? c.textContent : String(c))).join("");
+  }
+  set textContent(text) {
+    this.text = String(text);
+    this.children = [];
+    if (this.id === "status") {
+      announced.push([this.dataset.level, this.text]);
+    }
+  }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  hasAttribute(name) { return this.attributes.has(name); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  toggleAttribute(name, on) { on ? this.attributes.set(name, "") : this.attributes.delete(name); }
+  addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
+  removeEventListener() {}
+  fire(type, event = {}) {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ preventDefault() {}, target: this, currentTarget: this, ...event });
+    }
+  }
+  append(...nodes) { this.children.push(...nodes); }
+  prepend(...nodes) { this.children.unshift(...nodes); }
+  replaceChildren(...nodes) { this.text = ""; this.children = nodes; }
+  focus() { document.activeElement = this; }
+  closest() { return null; }
+  querySelector() { return null; }
+  querySelectorAll() { return []; }
+  requestSubmit() { this.fire("submit"); }
+}
+const elements = new Map();
+const $ = id => elements.get(id) ?? elements.set(id, new El("div", id)).get(id);
+$("ask").elements = { mode: { value: "ask" } };
+globalThis.Node = Node;
+globalThis.document = { getElementById: $, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag),
+  createTextNode: String, querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
+  body: new El("body"), documentElement: new El("html"), activeElement: null };
+globalThis.window = { addEventListener() {} };
+globalThis.requestAnimationFrame = () => 1;
+globalThis.cancelAnimationFrame = () => {};
+globalThis.CSS = { escape: String };
+
+// The browser's side: the items it keeps for this window's next message, and what each start was given.
+const tab = { tabId: 1, url: "https://a.example/doc", title: "Doc" };
+const item = (chipId, title) => ({ chipId, kind: "page", tabId: tab.tabId, url: tab.url, title, host: "a.example",
+  address: tab.url, chars: 10, truncated: false, blockChars: 40 });
+let kept = [];
+let offer = null;
+let hold = false; // the next item-list replies wait for release(): the browser read its list, the panel gets it later
+let reads = 0;
+const held = [];
+let holdThread = false; // the same for the conversation's reply (assistantThread)
+const threadHeld = [];
+let holdPage = false; // and for the selected tab's (assistantPage)
+const pageHeld = [];
+let holdOffer = false; // and for an entry point's delivery (assistantTakeOffer)
+const offerHeld = [];
+let holdStart = false; // and for a start's answer (assistantStart), which refuses with `refuse` when set
+const startHeld = [];
+let refuse = null;
+const starts = [];
+const events = [];
+const noEvent = { addListener() {} };
+globalThis.browser = {
+  nulavioAI: {
+    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked: null,
+      recipient: "Provedor", provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
+    assistantChips() {
+      ++reads;
+      const list = [...kept]; // as the browser has it now
+      return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
+    },
+    assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
+    // The tab the items came from: the panel keeps them.
+    assistantPage: () => (holdPage ? new Promise(resolve => pageHeld.push(() => resolve({ ...tab })))
+      : Promise.resolve({ ...tab })),
+    assistantTakeOffer() {
+      const delivery = offer;
+      offer = null;
+      return holdOffer ? new Promise(resolve => offerHeld.push(() => resolve(delivery))) : Promise.resolve(delivery);
+    },
+    assistantRuns: async () => [],
+    assistantStart(kind, details) {
+      starts.push({ kind, chips: details.chips ?? null });
+      kept = []; // every start empties the window's items (#678), refused or not
+      const runId = `run-${starts.length}`;
+      const code = refuse;
+      const answer = () => (code ? Promise.reject(new Error(code)) : Promise.resolve({ runId }));
+      return holdStart ? new Promise((resolve, reject) => startHeld.push(() => answer().then(resolve, reject))) : answer();
+    },
+    assistantAllow: async () => {},
+    assistantRemove: async () => {},
+    assistantCancel: async () => {},
+    onAssistantEvent: { addListener: listener => events.push(listener) },
+  },
+  i18n: { getMessage: (key, subs) => [key, ...[subs ?? []].flat()].join("|"), getUILanguage: () => "pt-BR" },
+  tabs: { onActivated: noEvent, onUpdated: noEvent, onRemoved: noEvent, getCurrent: async () => ({ id: 1 }),
+    create: async () => {} },
+  windows: { getCurrent: async () => ({ id: 1 }) },
+  runtime: { getURL: path => path },
+};
+
+const idle = async () => {
+  for (let i = 0; i < 50; i++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+};
+const release = async (keepHolding = false) => {
+  hold = keepHolding; // true: the replies held now arrive, and the next ones wait again
+  held.splice(0).forEach(answer => answer());
+  await idle();
+};
+const shown = () => $("chips").children.map(li => li.getAttribute("data-chip-id"));
+const emit = async event => {
+  events.forEach(listener => listener(event));
+  await idle();
+};
+const send = async (question, mode = "ask") => {
+  $("ask").elements.mode.value = mode;
+  $("prompt").value = question;
+  $("ask").fire("submit");
+  await idle();
+};
+const finish = () => emit({ type: "done", runId: `run-${starts.length}`, answer: "Ok.", chars: 1, recipient: "Provedor" });
+const out = {};
+
+// The panel opens with an item the browser kept: it shows it, and Send takes it (the fakes work).
+kept = [item("c1", "Primeira")];
+await import(process.argv[1]);
+await idle();
+out.openShown = shown();
+await send("Pergunta 1");
+out.openSent = starts.at(-1).chips;
+out.openAfter = shown();
+await finish();
+
+// A render whose item-list reply was read before a Send and arrives after it.
+kept = [item("c2", "Segunda")];
+hold = true;
+reads = 0;
+$("allow-profile").fire("click"); // renders the panel again
+await idle();
+out.renderHeld = held.length;
+await send("Pergunta 2");
+kept = [item("c3", "Terceira")]; // an entry point left an item after the Send: the list read again has it
+await release();
+out.renderReads = reads;
+out.renderShown = shown();
+await finish();
+await send("Pergunta 3");
+out.renderNextSent = starts.at(-1).chips;
+await finish();
+
+// An entry point's item (the selection menu) with no Send in between: shown and announced.
+kept = [item("c4", "Quarta")];
+offer = { chipId: "c4" };
+await emit({ type: "offer" });
+out.offerShown = shown();
+out.offerAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Quarta");
+await send("Pergunta 4");
+await finish();
+
+// takeOffer whose item-list reply was read before a Task started and arrives after it.
+kept = [item("c5", "Quinta")];
+offer = { chipId: "c5" };
+hold = true;
+reads = 0;
+await emit({ type: "offer" });
+out.offerHeld = held.length;
+await send("Abra algo", "task");
+out.taskSent = starts.at(-1);
+await release();
+out.offerReads = reads;
+out.offerRaceShown = shown();
+out.offerRaceAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Quinta");
+await finish();
+await send("Pergunta 5");
+out.offerNextSent = starts.at(-1).chips;
+await finish();
+
+// A render whose item list arrived while it still reads the conversation: what a Send carries then is what the
+// panel shows, never an item it has not drawn yet.
+kept = [item("c6", "Sexta")];
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.gapShown = shown();
+await send("Pergunta 6");
+out.gapSent = starts.at(-1).chips;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await finish();
+// The same while it reads the selected tab, after the list.
+kept = [item("c8", "Oitava")];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+out.pageGapShown = shown();
+await send("Pergunta 8");
+out.pageGapSent = starts.at(-1).chips;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+await finish();
+
+// An "@ia" draft whose item-list reply spans a Send: it waits for the run's end, and once the person types the
+// next question, a list read again later does not write the draft over it.
+kept = [];
+offer = { draft: "Texto do ia" };
+hold = true;
+reads = 0;
+await emit({ type: "offer" });
+out.draftLine = $("send-line").textContent; // the list is still on its way: the size already counts the draft
+await send("Pergunta 7");
+await release(true); // the list read before the Send arrives during the run; it is read again
+await finish();
+$("prompt").value = "Pergunta nova";
+await release();
+out.draftReads = reads;
+out.draftPrompt = $("prompt").value;
+out.errors = announced.filter(([level]) => level === "error"); // before the refused start below, which says one
+
+// An "@ia" draft delivered while an Ask ends, before the conversation's reply: the end empties the question it
+// sent, never the draft written since. The replies arrive in the order the panel asked for them.
+await send("Pergunta 9");
+offer = { draft: "Rascunho do ia" };
+holdOffer = true;
+hold = true;
+holdThread = true;
+await emit({ type: "offer" }); // its delivery is on its way while the run goes on
+await finish(); // the run ends; the conversation is asked for
+holdOffer = false;
+offerHeld.splice(0).forEach(answer => answer());
+await idle();
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await release();
+out.endDraftPrompt = $("prompt").value;
+
+// An "@ia" draft that came while a start was on its way, and the start is refused: the draft is written in, as
+// after a run that ends with an error, and does not wait for some later run.
+holdStart = true;
+refuse = "page-changed";
+await send("Pergunta 10");
+offer = { draft: "Outro rascunho" };
+await emit({ type: "offer" }); // the run has no id yet: the draft waits for its end
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle();
+refuse = null;
+out.refusedDraftPrompt = $("prompt").value;
+
+// The same refusal, and the person types in the question while the panel still reads the conversation: the waiting
+// draft was written in when the run ended, so it never lands over what was typed after.
+holdStart = true;
+refuse = "page-changed";
+await send("Pergunta 11");
+offer = { draft: "Rascunho tardio" };
+await emit({ type: "offer" });
+holdThread = true;
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle(); // the start is refused; the composer is editable, the conversation on its way
+refuse = null;
+$("prompt").value = "Digitado depois";
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+out.refusedTypedPrompt = $("prompt").value;
+
+// An "@ia" draft that waited for an Ask's end, and a second "@ia" delivered while the end reads the conversation:
+// the newer one stays, even when the conversation arrives before the second delivery's item list.
+await send("Pergunta 12");
+offer = { draft: "Rascunho antigo" };
+await emit({ type: "offer" }); // during the run: it waits for the end
+holdThread = true;
+hold = true;
+await finish(); // the run ends; the conversation is asked for
+offer = { draft: "Rascunho novo" };
+await emit({ type: "offer" }); // its item list is on its way
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await release();
+out.secondDraftPrompt = $("prompt").value;
+console.log(JSON.stringify(out));
+"""
+
+
+def shell_package(tmp: Path) -> Path:
+    """A copy of the Shell's panel files in a package that says they are ES modules, as the browser loads them. A
+    node without module syntax detection (before 22.7 and 20.19) reads a `.js` file with no package.json saying so
+    as CommonJS; with this one, every node the unit job may use imports panel.js and its lib/ files. Copied, not
+    linked: node looks for the package.json beside a file's real path."""
+    shell = ROOT / "browser" / "shell"
+    (tmp / "package.json").write_text('{"type": "module"}\n')
+    for part in ("assistant", "lib"):
+        shutil.copytree(shell / part, tmp / part)
+    (tmp / "modules").mkdir()
+    shutil.copy2(shell / "modules" / "NulavioAvatars.sys.mjs", tmp / "modules")  # ui.js imports it
+    return tmp / "assistant" / "panel.js"
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class PanelChipsTest(unittest.TestCase):
+    """#739: an item-list reply that spans a Send never puts back in the panel an item that Send took. The ready-state
+    render and takeOffer (the selection menu's delivery) discard such a reply and read the list again."""
+
+    _out = None
+
+    @classmethod
+    def _run(cls):
+        if cls._out is None:
+            with tempfile.TemporaryDirectory() as tmp:
+                panel = shell_package(Path(tmp)).as_uri()
+                done = subprocess.run(["node", "--input-type=module", "-e", PANEL_CHIPS, panel],
+                                      capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+            if done.returncode:
+                raise AssertionError(f"the panel script failed ({done.returncode}): {done.stderr[-2000:]}")
+            cls._out = json.loads(done.stdout)
+        return cls._out
+
+    def test_the_fakes_drive_the_panel(self):
+        out = self._run()
+        self.assertEqual(out["openShown"], ["c1"])  # an item the browser kept is shown when the panel opens
+        self.assertEqual(out["openSent"], ["c1"])  # and goes with the Send
+        self.assertEqual(out["openAfter"], [])
+        self.assertEqual(out["offerShown"], ["c4"])  # an entry point's item with no Send in between
+        self.assertTrue(out["offerAnnounced"])
+        self.assertEqual(out["errors"], [])
+
+    def test_a_render_reply_that_spans_a_send_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["renderHeld"], 1)  # the reply was waiting when Send came
+        self.assertEqual(out["renderShown"], ["c3"])  # what the browser has after the Send, never "c2"
+        self.assertEqual(out["renderReads"], 2)
+        self.assertEqual(out["renderNextSent"], ["c3"])
+
+    def test_a_take_offer_reply_that_spans_a_task_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["offerHeld"], 1)
+        self.assertEqual(out["taskSent"], {"kind": "task", "chips": None})
+        self.assertEqual(out["offerRaceShown"], [])
+        self.assertEqual(out["offerReads"], 2)
+        self.assertFalse(out["offerRaceAnnounced"])  # nor announced as added
+        self.assertEqual(out["offerNextSent"], [])
+
+    def test_a_send_carries_only_items_the_panel_shows(self):
+        out = self._run()
+        self.assertEqual(out["gapSent"], out["gapShown"])
+        self.assertEqual(out["pageGapShown"], ["c8"])
+        self.assertEqual(out["pageGapSent"], out["pageGapShown"])
+
+    def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
+        out = self._run()
+        self.assertEqual(out["draftPrompt"], "Pergunta nova")
+        self.assertEqual(out["draftLine"], "assistantSendLine|Provedor|modelo|111")  # 100 + "Texto do ia"
+        self.assertEqual(out["draftReads"], 2)  # the list was read again: the case the review found
+
+    def test_the_end_of_an_ask_does_not_empty_a_draft_written_since(self):
+        self.assertEqual(self._run()["endDraftPrompt"], "Rascunho do ia")
+
+    def test_a_refused_start_writes_in_the_draft_that_waited_for_it(self):
+        self.assertEqual(self._run()["refusedDraftPrompt"], "Outro rascunho")
+
+    def test_a_waiting_draft_never_lands_over_text_written_after_the_run_ends(self):
+        out = self._run()
+        self.assertEqual(out["refusedTypedPrompt"], "Digitado depois")  # typed during a refused start's error
+        self.assertEqual(out["secondDraftPrompt"], "Rascunho novo")  # a second "@ia" during an Ask's end
 
 
 if __name__ == "__main__":

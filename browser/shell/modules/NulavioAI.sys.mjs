@@ -790,11 +790,13 @@ class AI {
       selected tab at Send is never read. The panel streams instead (assistantStart). */
   async assistantAsk(question, options, win) {
     this.#userWindow(win);
+    // Before the first await: a list the panel reads meanwhile no longer has them (#739). Refused or
+    // not, the items go (#678).
+    const included = this.#takeIncluded(win);
     if (await this.workspaceAgent()) {
-      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
       fail("ai-workspace");
     }
-    return this.#assistant(this.#askRequest(question, options, this.#takeIncluded(win), win), 180000);
+    return this.#assistant(this.#askRequest(question, options, included, win), 180000);
   }
 
   // -- runs in stream mode (UX5-C2) ----------------------------------------------------------------
@@ -844,12 +846,12 @@ class AI {
       ends with it (Q18), a Task goes on and the panel finds it again with assistantRuns. */
   async assistantStart(kind, details, win, owner = null) {
     this.#userWindow(win);
-    if (await this.workspaceAgent()) {
-      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
-      fail("ai-workspace");
-    }
-    // Before anything else that can refuse the start: the panel's list is already empty (#678).
+    // Before the first await and anything else that can refuse the start: the panel's list is already empty
+    // (#678), and a list it reads meanwhile, even while an "agent:pid" is looked for on disk, is too (#739).
     const included = this.#takeIncluded(win);
+    if (await this.workspaceAgent()) {
+      fail("ai-workspace"); // refused, and the items went all the same
+    }
     let request;
     let turn = null;
     if (kind === "ask") {
