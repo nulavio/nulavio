@@ -5,8 +5,9 @@
   the Gradle wrapper, and every artifact in android/gradle/verification-metadata.xml (direct,
   transitive and build-time; the ones in android/app/gradle.lockfile ship in the APK). GitHub raises
   no Dependabot alerts for SHA-pinned actions or Gradle, so this is their vulnerability signal.
-* The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced file for the
-  pinned version, and how long the lock has lagged behind AMO's current version.
+* The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced or removed file for the
+  pinned version (read on every run, also once a newer version is out), and how long the lock has lagged
+  behind AMO: since the first version AMO published after the pin, however many came after it.
 * The pinned extensions against the security advisories their repositories publish on GitHub (the table in
   docs/security/extension-advisory-sources.json): an advisory whose range covers the pinned version fails at once.
 * The base images' tag@digest pins against their registries (a newer build is reported, not failed).
@@ -18,8 +19,8 @@ for one package version, with a reason and an expiry (docs/security/dependency-u
     python3 -I scripts/release/watch_dependencies.py --list     # the inventory only, no network
 
 Exit status: 0 nothing to act on, 1 action needed (a known vulnerability without a valid exception,
-a blocked or replaced extension, a published advisory that covers a pinned extension, a lock more
-than 30 days behind AMO), 2 some data was unavailable and
+a blocked, replaced or removed extension, a published advisory that covers a pinned extension, a pin that
+AMO first superseded more than 30 days ago), 2 some data was unavailable and
 nothing else needs action. The four checks run independently: one source being down does not hide
 what the others found.
 Sends only public package names and versions to api.osv.dev, addons.mozilla.org, api.github.com (a GET of a
@@ -52,7 +53,9 @@ GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step 
 WATCH_BUDGET = 360  # seconds for the whole watch (every request of every check); the step's timeout-minutes is 8 (480 s)
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
-EXTENSION_LAG_DAYS = 30
+EXTENSION_LAG_DAYS = 30  # counted from the first version AMO published after the pin, not from its newest
+VERSIONS_PAGE_SIZE = 50  # AMO's largest page
+VERSIONS_PAGES = 4  # versions pages read to find the first one after the pin (newest first)
 EXTENSION_ECOSYSTEM = "Browser extension"  # in vulnerability-exceptions.json: package = the lock's key, version = the pin
 UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
@@ -372,21 +375,90 @@ def vulnerability_rows(findings: list[tuple[Dep, str]], details: dict[str, dict]
 
 
 def parse_time(text: str) -> _dt.datetime:
+    if not isinstance(text, str):
+        raise TypeError(f"not a date: {text!r}")  # in UNAVAILABLE, as a malformed reply
     return _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
-def extension_verdict(entry: dict, current: dict, block: dict | None, now: _dt.datetime) -> tuple[str, str]:
+def amo_file(version: dict) -> dict:
+    """What the watch reads of an AMO version object: its number and its file's SHA-256, size and date."""
+    file = version["file"]
+    if not isinstance(version["version"], str) or not isinstance(file["hash"], str):
+        raise TypeError("AMO returned a version or hash that is not text")
+    algorithm, _, digest = file["hash"].partition(":")
+    if algorithm != "sha256" or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise ValueError(f"AMO returned a {algorithm} hash for {version['version']}")
+    if not isinstance(file["size"], int) or isinstance(file["size"], bool):
+        raise ValueError(f"AMO returned a size that is not a number for {version['version']}")
+    parse_time(file["created"])  # a ValueError or TypeError when it is not a date
+    return {"version": version["version"], "sha256": digest, "size": file["size"], "created": file["created"]}
+
+
+def first_newer(net: Net, guid: str, pinned: dict) -> tuple[dict | None, bool]:
+    """The earliest listed, public version newer than the pin, and whether the list was read back to the pin.
+
+    AMO lists versions newest first. The pages are read until the pinned version (or one made before it) shows up,
+    for at most VERSIONS_PAGES pages; the URLs are built here, a reply's "next" only says whether there is more.
+    """
+    since = parse_time(pinned["created"])
+    floor = version_key(pinned["version"])
+    newer: list[dict] = []
+    for page in range(1, VERSIONS_PAGES + 1):
+        data = net.json(f"{AMO}addons/addon/{guid}/versions/?page={page}&page_size={VERSIONS_PAGE_SIZE}")
+        results = data["results"]
+        if not isinstance(results, list):
+            raise ValueError("AMO's versions list is not a list")
+        reached = False
+        for item in results:
+            if not isinstance(item, dict) or not isinstance(item.get("file"), dict) or not isinstance(item.get("version"), str):
+                raise ValueError("AMO's versions list holds an element that is not a version")
+            created = parse_time(item["file"]["created"])
+            if item["version"] == pinned["version"] or created <= since:
+                reached = True
+                continue
+            listed = item.get("channel") == "listed" and item["file"].get("status") == "public"
+            if listed and version_key(item["version"]) > floor:
+                newer.append({"version": item["version"], "created": item["file"]["created"]})
+        if reached or not data.get("next"):
+            return min(newer, key=lambda v: parse_time(v["created"]), default=None), True
+    return min(newer, key=lambda v: parse_time(v["created"]), default=None), False
+
+
+def extension_verdict(
+    entry: dict,
+    served: dict | None,
+    current: dict,
+    newer: dict | None,
+    block: dict | None,
+    now: _dt.datetime,
+    complete: bool = True,
+) -> tuple[str, str]:
+    """The extension row's state and text.
+
+    served: AMO's file for the pinned version (None: AMO no longer has it); current: AMO's current version;
+    newer: the first version AMO published after the pin (None when there is none, or the pin is current);
+    complete: whether the versions list was read back to the pin (otherwise the lag is a lower bound).
+    """
     pinned = entry["version"]
     if block and (block.get("is_all_versions") or pinned in block.get("blocked", []) + block.get("soft_blocked", [])):
         return "fail", f"{entry['key']} {pinned} is on Mozilla's blocklist: refresh the lock now"
+    if served is None:
+        return "fail", f"{entry['key']} {pinned}: AMO no longer serves the pinned version: refresh the lock now"
+    if served["sha256"] != entry["sha256"] or served["size"] != entry["size"]:
+        return "fail", f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256 and size"
     if current["version"] == pinned:
         if current["sha256"] != entry["sha256"]:
             return "fail", f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256"
         return "ok", f"{entry['key']} {pinned} is AMO's current version"
-    days = (now - parse_time(current["created"])).days
-    text = f"{entry['key']} pinned {pinned}, AMO has had {current['version']} for {days} days"
+    since = newer or current  # no newer version in the list (it should have one): count from the current one
+    days = (now - parse_time(since["created"])).days
+    text = f"{entry['key']} pinned {pinned}, AMO has had {since['version']} for {'at least ' if not complete else ''}{days} days"
+    if since["version"] != current["version"]:
+        text += f" (current {current['version']})"
     if days > EXTENSION_LAG_DAYS:
         return "fail", f"{text}: run scripts/upstream/refresh_extensions_lock.py and review"
+    if not complete:
+        return "error", f"{text}: AMO's versions list was not read back to the pin"
     return "warn", text
 
 
@@ -395,20 +467,28 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
     rows = []
     for entry in lock["extensions"]:
         guid = urllib.parse.quote(entry["id"], safe="")
+        version = urllib.parse.quote(entry["version"], safe="")
         try:
-            data = net.json(f"{AMO}addons/addon/{guid}/")["current_version"]
-            algorithm, _, digest = data["file"]["hash"].partition(":")
-            if algorithm != "sha256":
-                raise ValueError(f"AMO returned a {algorithm} hash")
-            current = {"version": data["version"], "sha256": digest, "created": data["file"]["created"]}
+            current = amo_file(net.json(f"{AMO}addons/addon/{guid}/")["current_version"])
+            # the pinned version's own file, on every run: a replaced file is seen also once a newer version is out
+            found = net.json(f"{AMO}addons/addon/{guid}/versions/{version}/", missing_ok=True)  # 404: gone from AMO
+            served = None if found is None else amo_file(found)
+            if served is not None and served["version"] != entry["version"]:
+                raise ValueError(f"AMO answered with version {served['version']} for {entry['version']}")
+            newer, complete = None, True
+            if served is not None and current["version"] != entry["version"]:
+                newer, complete = first_newer(net, guid, served)
             block = net.json(f"{AMO}blocklist/block/{guid}/", missing_ok=True)  # 404: not blocked
-            state, text = extension_verdict(entry, current, block, now)
+            state, text = extension_verdict(entry, served, current, newer, block, now, complete)
         except UNAVAILABLE as exc:  # the other extensions are still checked
             rows.append(
                 Row("extension", "error", f"{entry['key']}: no data from addons.mozilla.org: {exc}", {"key": entry["key"]})
             )
             continue
-        rows.append(Row("extension", state, text, {"key": entry["key"], "pinned": entry["version"], "amo": current["version"]}))
+        detail = {"key": entry["key"], "pinned": entry["version"], "amo": current["version"]}
+        if newer:
+            detail["newer"] = newer["version"]
+        rows.append(Row("extension", state, text, detail))
     return rows
 
 

@@ -1,0 +1,719 @@
+{
+ "recorded": "2026-11-26T19:37Z",
+ "how": "GET of each path below on https://addons.mozilla.org/api/v5/ (no authentication), as watch_dependencies.py requests it; version objects trimmed to the fields the watch reads, null for a 404",
+ "lock": {
+  "key": "keepassxc-browser",
+  "id": "keepassxc-browser@keepassxc.org",
+  "version": "1.10.4.1",
+  "sha256": "ae41157a3f017b0773abba2097d5b0056241631d0a38ad36d68d0b24b1a409c1",
+  "size": 1059004
+ },
+ "replies": {
+  "addons/addon/keepassxc-browser%40keepassxc.org/": {
+   "guid": "keepassxc-browser@keepassxc.org",
+   "slug": "keepassxc-browser",
+   "current_version": {
+    "id": 6534263,
+    "version": "1.10.4.1",
+    "file": {
+     "id": 5078406,
+     "created": "2026-10-02T10:04:16Z",
+     "hash": "sha256:ae41157a3f017b0773abba2097d5b0056241631d0a38ad36d68d0b24b1a409c1",
+     "size": 1059004,
+     "status": "public",
+     "url": "https://addons.mozilla.org/firefox/downloads/file/5078406/keepassxc_browser-1.10.4.1.xpi"
+    }
+   }
+  },
+  "addons/addon/keepassxc-browser%40keepassxc.org/versions/1.10.4.1/": {
+   "id": 6534263,
+   "version": "1.10.4.1",
+   "channel": "listed",
+   "file": {
+    "id": 5078406,
+    "created": "2026-10-02T10:04:16Z",
+    "hash": "sha256:ae41157a3f017b0773abba2097d5b0056241631d0a38ad36d68d0b24b1a409c1",
+    "size": 1059004,
+    "status": "public",
+    "url": "https://addons.mozilla.org/firefox/downloads/file/5078406/keepassxc_browser-1.10.4.1.xpi"
+   }
+  },
+  "addons/addon/keepassxc-browser%40keepassxc.org/versions/?page=1&page_size=50": {
+   "count": 99,
+   "next": "https://addons.mozilla.org/api/v5/addons/addon/keepassxc-browser@keepassxc.org/versions/?page=2&page_size=50",
+   "previous": null,
+   "page_count": 2,
+   "page_size": 50,
+   "results": [
+    {
+     "id": 6534263,
+     "version": "1.10.4.1",
+     "channel": "listed",
+     "file": {
+      "id": 5078406,
+      "created": "2026-10-02T10:04:16Z",
+      "hash": "sha256:ae41157a3f017b0773abba2097d5b0056241631d0a38ad36d68d0b24b1a409c1",
+      "size": 1059004,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5078406/keepassxc_browser-1.10.4.1.xpi"
+     }
+    },
+    {
+     "id": 6287615,
+     "version": "1.10.3",
+     "channel": "listed",
+     "file": {
+      "id": 4831838,
+      "created": "2026-06-01T16:30:50Z",
+      "hash": "sha256:4df9c54e0a293aa2e37e9bcf97ec307a35a00e78cebaa9a68edba552c07c4568",
+      "size": 1037851,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4831838/keepassxc_browser-1.10.3.xpi"
+     }
+    },
+    {
+     "id": 6206547,
+     "version": "1.10.1",
+     "channel": "listed",
+     "file": {
+      "id": 4750788,
+      "created": "2026-04-03T09:34:05Z",
+      "hash": "sha256:f358471e7f5545a64ab69f4897127033197a8d9cde5746324b1dae241a2b0a29",
+      "size": 1016025,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4750788/keepassxc_browser-1.10.1.xpi"
+     }
+    },
+    {
+     "id": 6173713,
+     "version": "1.10.0.1",
+     "channel": "listed",
+     "file": {
+      "id": 4717960,
+      "created": "2026-03-08T08:12:01Z",
+      "hash": "sha256:b7ddeb144036ce22fd687a531dbc5a04bd7b3596f9fa713fc004b29b6ca28340",
+      "size": 1015965,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4717960/keepassxc_browser-1.10.0.1.xpi"
+     }
+    },
+    {
+     "id": 6084024,
+     "version": "1.9.11",
+     "channel": "listed",
+     "file": {
+      "id": 4628286,
+      "created": "2025-11-26T04:57:31Z",
+      "hash": "sha256:bee523ac8d968d36ae3ae317b12b1b2bbe85e2c6f5b9ddb0fb822c2d90af6139",
+      "size": 998550,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4628286/keepassxc_browser-1.9.11.xpi"
+     }
+    },
+    {
+     "id": 6047759,
+     "version": "1.9.10",
+     "channel": "listed",
+     "file": {
+      "id": 4592023,
+      "created": "2025-10-05T19:05:43Z",
+      "hash": "sha256:38926e2225ba92da0962e6675a90e1e9bf1e3b280b88014c27f3aa727f212542",
+      "size": 993350,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4592023/keepassxc_browser-1.9.10.xpi"
+     }
+    },
+    {
+     "id": 6031103,
+     "version": "1.9.9.6",
+     "channel": "listed",
+     "file": {
+      "id": 4575368,
+      "created": "2025-09-09T16:34:56Z",
+      "hash": "sha256:72e6b7d55dcd6596e0dbdcf2e245b74560a3517701c64ac3aef0d1b9634dbef2",
+      "size": 989956,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4575368/keepassxc_browser-1.9.9.6.xpi"
+     }
+    },
+    {
+     "id": 6026577,
+     "version": "1.9.9.5",
+     "channel": "listed",
+     "file": {
+      "id": 4570842,
+      "created": "2025-09-03T12:21:10Z",
+      "hash": "sha256:469fde3170dacfdf153b033c712e8b6ae310ba85473bc16676655b668a563556",
+      "size": 989630,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4570842/keepassxc_browser-1.9.9.5.xpi"
+     }
+    },
+    {
+     "id": 6021586,
+     "version": "1.9.9.3",
+     "channel": "listed",
+     "file": {
+      "id": 4565853,
+      "created": "2025-08-27T10:41:52Z",
+      "hash": "sha256:ed2b44a3c3ec0fccf842158a156e30a94f731fa1215921363494642f1a84c22e",
+      "size": 989488,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4565853/keepassxc_browser-1.9.9.3.xpi"
+     }
+    },
+    {
+     "id": 5981853,
+     "version": "1.9.9.1",
+     "channel": "listed",
+     "file": {
+      "id": 4526126,
+      "created": "2025-07-03T21:00:01Z",
+      "hash": "sha256:d7207953ff4e3670b83ee1e4e0a1080fee1eaf304643d6c85759d381dcab483e",
+      "size": 986254,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4526126/keepassxc_browser-1.9.9.1.xpi"
+     }
+    },
+    {
+     "id": 5973912,
+     "version": "1.9.9",
+     "channel": "listed",
+     "file": {
+      "id": 4518185,
+      "created": "2025-06-22T14:09:58Z",
+      "hash": "sha256:84bdfd50bf30b1eb494c6e0753eda64a0c6489f557d59f3e8d3dbc878107fcba",
+      "size": 986218,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4518185/keepassxc_browser-1.9.9.xpi"
+     }
+    },
+    {
+     "id": 5933514,
+     "version": "1.9.8",
+     "channel": "listed",
+     "file": {
+      "id": 4477789,
+      "created": "2025-04-20T06:38:19Z",
+      "hash": "sha256:7629ee8fe6a8bace5d0f12c3aef41803c2ab01407a22ad8803633992a6c4eda2",
+      "size": 969242,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4477789/keepassxc_browser-1.9.8.xpi"
+     }
+    },
+    {
+     "id": 5897479,
+     "version": "1.9.7",
+     "channel": "listed",
+     "file": {
+      "id": 4441759,
+      "created": "2025-02-21T15:07:32Z",
+      "hash": "sha256:f4ecad9cabe70511fbff42fe4fe831c560cc3a0b6da10a740ce670f4f6597f42",
+      "size": 964502,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4441759/keepassxc_browser-1.9.7.xpi"
+     }
+    },
+    {
+     "id": 5865891,
+     "version": "1.9.6",
+     "channel": "listed",
+     "file": {
+      "id": 4410175,
+      "created": "2024-12-25T15:11:51Z",
+      "hash": "sha256:41cab3f7a1bdcc394d538ffd4106b85fe5916cc44735a61f1791bb6fe8ce790e",
+      "size": 961350,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4410175/keepassxc_browser-1.9.6.xpi"
+     }
+    },
+    {
+     "id": 5850861,
+     "version": "1.9.5",
+     "channel": "listed",
+     "file": {
+      "id": 4395146,
+      "created": "2024-11-27T04:47:09Z",
+      "hash": "sha256:248f90ba6bffc82ef43b97c9e501b0889f70519703f27434e2d920b47f6ead45",
+      "size": 960227,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4395146/keepassxc_browser-1.9.5.xpi"
+     }
+    },
+    {
+     "id": 5832036,
+     "version": "1.9.4",
+     "channel": "listed",
+     "file": {
+      "id": 4376326,
+      "created": "2024-10-26T05:49:38Z",
+      "hash": "sha256:bf1dab7e6471b61ba7b23e886795ab830eb6221dc1e7b499c3a15ad74f49c579",
+      "size": 959392,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4376326/keepassxc_browser-1.9.4.xpi"
+     }
+    },
+    {
+     "id": 5797719,
+     "version": "1.9.3",
+     "channel": "listed",
+     "file": {
+      "id": 4342010,
+      "created": "2024-08-24T11:33:24Z",
+      "hash": "sha256:a330fa4fc659f04f835802bb0c5df0b9025adced995112cad19d4849a5f1957d",
+      "size": 954361,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4342010/keepassxc_browser-1.9.3.xpi"
+     }
+    },
+    {
+     "id": 5790820,
+     "version": "1.9.2",
+     "channel": "listed",
+     "file": {
+      "id": 4335111,
+      "created": "2024-08-11T18:34:40Z",
+      "hash": "sha256:cbc085f0e1275d81af22e12fbc9627381d8eb891998a5ebbf5bc198f8d79a0bf",
+      "size": 954217,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4335111/keepassxc_browser-1.9.2.xpi"
+     }
+    },
+    {
+     "id": 5770922,
+     "version": "1.9.1.1",
+     "channel": "listed",
+     "file": {
+      "id": 4315216,
+      "created": "2024-07-06T18:43:14Z",
+      "hash": "sha256:94eb909e82507b228bc6c09e36d9043722bf0eaa36edbfe8b26d36e4b588f6f6",
+      "size": 952791,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4315216/keepassxc_browser-1.9.1.1.xpi"
+     }
+    },
+    {
+     "id": 5767876,
+     "version": "1.9.1",
+     "channel": "listed",
+     "file": {
+      "id": 4312170,
+      "created": "2024-07-01T12:54:10Z",
+      "hash": "sha256:cbd8d02401cfb42a93e0f1f1fa6ccf21be875bdac18bdb5634cb11c8263006ec",
+      "size": 952634,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4312170/keepassxc_browser-1.9.1.xpi"
+     }
+    },
+    {
+     "id": 5741463,
+     "version": "1.9.0.5",
+     "channel": "listed",
+     "file": {
+      "id": 4285762,
+      "created": "2024-05-12T15:30:23Z",
+      "hash": "sha256:bd490bf3ed6f6eab49538c248e895f7a4d2ec5e30deb9b06ca30d19e0198e369",
+      "size": 936828,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4285762/keepassxc_browser-1.9.0.5.xpi"
+     }
+    },
+    {
+     "id": 5713315,
+     "version": "1.9.0.3",
+     "channel": "listed",
+     "file": {
+      "id": 4257616,
+      "created": "2024-03-30T11:54:42Z",
+      "hash": "sha256:f153b29f6a05f7cb1fc83952f75f55e803573229800df737fa831d1f877c943e",
+      "size": 936614,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4257616/keepassxc_browser-1.9.0.3.xpi"
+     }
+    },
+    {
+     "id": 5705828,
+     "version": "1.9.0.2",
+     "channel": "listed",
+     "file": {
+      "id": 4250129,
+      "created": "2024-03-14T13:10:51Z",
+      "hash": "sha256:abbc78e65c9d129c43ee5097f9a038b3e8de05c088b92baaae33f6c0c9f57d4f",
+      "size": 936673,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4250129/keepassxc_browser-1.9.0.2.xpi"
+     }
+    },
+    {
+     "id": 5702544,
+     "version": "1.9.0.1",
+     "channel": "listed",
+     "file": {
+      "id": 4246845,
+      "created": "2024-03-07T15:44:21Z",
+      "hash": "sha256:f0f1144ac92cf84432eb0da3fa1d2d90fff8e4385d95effdd3bbaa08a79e0367",
+      "size": 935736,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4246845/keepassxc_browser-1.9.0.1.xpi"
+     }
+    },
+    {
+     "id": 5683726,
+     "version": "1.8.12",
+     "channel": "listed",
+     "file": {
+      "id": 4228043,
+      "created": "2024-01-28T13:04:53Z",
+      "hash": "sha256:c5c5c2def2040f32dde6d59e4e98515682eefc52bd8679128b5627e71c84cdc9",
+      "size": 965929,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4228043/keepassxc_browser-1.8.12.xpi"
+     }
+    },
+    {
+     "id": 5673692,
+     "version": "1.8.11",
+     "channel": "listed",
+     "file": {
+      "id": 4218010,
+      "created": "2024-01-06T19:35:04Z",
+      "hash": "sha256:8baf4fef3f7dfffb993190d3b4f6b881c89e2aabcf4850fd9d39e5cffd57eac8",
+      "size": 956468,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4218010/keepassxc_browser-1.8.11.xpi"
+     }
+    },
+    {
+     "id": 5655927,
+     "version": "1.8.10",
+     "channel": "listed",
+     "file": {
+      "id": 4200248,
+      "created": "2023-11-25T13:59:30Z",
+      "hash": "sha256:843d1181e8d0b0e9737258575586332fafb25a856e8e18da3527944885c69089",
+      "size": 956255,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4200248/keepassxc_browser-1.8.10.xpi"
+     }
+    },
+    {
+     "id": 5637766,
+     "version": "1.8.9",
+     "channel": "listed",
+     "file": {
+      "id": 4182106,
+      "created": "2023-10-16T16:43:01Z",
+      "hash": "sha256:b57313c8f68bb55610b79a761e42aa7a3235bcc542f105a7e362625aa021a197",
+      "size": 956086,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4182106/keepassxc_browser-1.8.9.xpi"
+     }
+    },
+    {
+     "id": 5631798,
+     "version": "1.8.8.1",
+     "channel": "listed",
+     "file": {
+      "id": 4176138,
+      "created": "2023-10-03T10:47:06Z",
+      "hash": "sha256:4971e36c27eeafb803921597bac1eb0fc7cc855e87ec4ed31b38c47030cfb3e3",
+      "size": 927100,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4176138/keepassxc_browser-1.8.8.1.xpi"
+     }
+    },
+    {
+     "id": 5626428,
+     "version": "1.8.8",
+     "channel": "listed",
+     "file": {
+      "id": 4170768,
+      "created": "2023-09-21T03:51:45Z",
+      "hash": "sha256:8260f6840f9b2e30c8da96fe6bce661a7626fb1ad96e7af4c67382c103bd9612",
+      "size": 926989,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4170768/keepassxc_browser-1.8.8.xpi"
+     }
+    },
+    {
+     "id": 5590426,
+     "version": "1.8.7",
+     "channel": "listed",
+     "file": {
+      "id": 4134768,
+      "created": "2023-07-06T19:24:13Z",
+      "hash": "sha256:deb1c3c29fabe90dd811536d434d64c200caab9a9f7febc3428aa170eefec5f2",
+      "size": 794144,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4134768/keepassxc_browser-1.8.7.xpi"
+     }
+    },
+    {
+     "id": 5550621,
+     "version": "1.8.6.1",
+     "channel": "listed",
+     "file": {
+      "id": 4094964,
+      "created": "2023-04-10T05:13:26Z",
+      "hash": "sha256:ce2275eb1f0a4b0ce2342204d00d62033f81f6dcb9e021cff38f51273e614f20",
+      "size": 793983,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4094964/keepassxc_browser-1.8.6.1.xpi"
+     }
+    },
+    {
+     "id": 5548314,
+     "version": "1.8.6",
+     "channel": "listed",
+     "file": {
+      "id": 4092657,
+      "created": "2023-04-03T13:02:18Z",
+      "hash": "sha256:85ea4d636cb5489a5ec2c89196de13693c4d0753d6cd0e3f5f2223a0dc53af43",
+      "size": 794040,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4092657/keepassxc_browser-1.8.6.xpi"
+     }
+    },
+    {
+     "id": 5533944,
+     "version": "1.8.5.1",
+     "channel": "listed",
+     "file": {
+      "id": 4078287,
+      "created": "2023-03-02T14:00:17Z",
+      "hash": "sha256:f50c5b6b9d662665ac1a279d4558c4a7b8d8d316c795969b65854569c9ba36ee",
+      "size": 794905,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4078287/keepassxc_browser-1.8.5.1.xpi"
+     }
+    },
+    {
+     "id": 5501521,
+     "version": "1.8.4",
+     "channel": "listed",
+     "file": {
+      "id": 4045866,
+      "created": "2022-12-19T15:05:18Z",
+      "hash": "sha256:cc39aa058cb8915cfc88424e2e1cebe3ccfc3f95d7bddb2abd0c4905d2b17719",
+      "size": 794639,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4045866/keepassxc_browser-1.8.4.xpi"
+     }
+    },
+    {
+     "id": 5479337,
+     "version": "1.8.3.1",
+     "channel": "listed",
+     "file": {
+      "id": 4023682,
+      "created": "2022-10-30T19:10:53Z",
+      "hash": "sha256:f97fb93e03f9a66fc089c16b7448a1669291cd5700365955b977bb2f01141dd1",
+      "size": 795148,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4023682/keepassxc_browser-1.8.3.1.xpi"
+     }
+    },
+    {
+     "id": 5475934,
+     "version": "1.8.3",
+     "channel": "listed",
+     "file": {
+      "id": 4020279,
+      "created": "2022-10-24T05:00:31Z",
+      "hash": "sha256:d214b340068d61d09e8393802b1df25b3a7554d2b8b41a482ca4b14f79e1e50a",
+      "size": 795160,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4020279/keepassxc_browser-1.8.3.xpi"
+     }
+    },
+    {
+     "id": 5457045,
+     "version": "1.8.2.2",
+     "channel": "listed",
+     "file": {
+      "id": 4001390,
+      "created": "2022-09-12T11:33:36Z",
+      "hash": "sha256:586db406dcdeaa62a0421884c7e3fd5a6ed8964a7d182eeec33673e797a0f4ab",
+      "size": 794697,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4001390/keepassxc_browser-1.8.2.2.xpi"
+     }
+    },
+    {
+     "id": 5455587,
+     "version": "1.8.2.1",
+     "channel": "listed",
+     "file": {
+      "id": 3999932,
+      "created": "2022-09-08T11:06:49Z",
+      "hash": "sha256:6857b21e68477206967f36cf3767eb21171b6e77a0af377696322f40d3b48321",
+      "size": 794664,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3999932/keepassxc_browser-1.8.2.1.xpi"
+     }
+    },
+    {
+     "id": 5454820,
+     "version": "1.8.2",
+     "channel": "listed",
+     "file": {
+      "id": 3999165,
+      "created": "2022-09-06T17:57:21Z",
+      "hash": "sha256:183f705678350afc7605cca4af838ea818216a765a32eeda3247209c465bd925",
+      "size": 794661,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3999165/keepassxc_browser-1.8.2.xpi"
+     }
+    },
+    {
+     "id": 5429901,
+     "version": "1.8.1",
+     "channel": "listed",
+     "file": {
+      "id": 3974246,
+      "created": "2022-07-11T08:00:09Z",
+      "hash": "sha256:5c1459e29b86b5f8e0a379d3b969e1e6e188ebb4d52071f368588ae97b797568",
+      "size": 783082,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3974246/keepassxc_browser-1.8.1.xpi"
+     }
+    },
+    {
+     "id": 5422670,
+     "version": "1.8.0",
+     "channel": "listed",
+     "file": {
+      "id": 3967015,
+      "created": "2022-06-23T18:49:22Z",
+      "hash": "sha256:792097f44b4565e28fd418c7e4a709324167e7c64464d2793764a829b3d20e1f",
+      "size": 778942,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3967015/keepassxc_browser-1.8.0.xpi"
+     }
+    },
+    {
+     "id": 5390049,
+     "version": "1.7.12",
+     "channel": "listed",
+     "file": {
+      "id": 3934394,
+      "created": "2022-04-10T12:37:31Z",
+      "hash": "sha256:f89242f081f85fa6c9f59bb42e03aa0ef8eeb49a4ef3d56550001a0837c04688",
+      "size": 778978,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3934394/keepassxc_browser-1.7.12.xpi"
+     }
+    },
+    {
+     "id": 5335686,
+     "version": "1.7.11",
+     "channel": "listed",
+     "file": {
+      "id": 3880031,
+      "created": "2021-12-11T11:28:06Z",
+      "hash": "sha256:03d469a4675dcd22f7f80d50af049a102383d3ef696ce2612070b818745714ed",
+      "size": 752932,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3880031/keepassxc_browser-1.7.11.xpi"
+     }
+    },
+    {
+     "id": 5324936,
+     "version": "1.7.10.1",
+     "channel": "listed",
+     "file": {
+      "id": 3869282,
+      "created": "2021-11-17T10:38:25Z",
+      "hash": "sha256:9b97c8cb87ca73daf9d4c0668c08a314c5020f2553a4203a3170bab9373d85d7",
+      "size": 639341,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3869282/keepassxc_browser-1.7.10.1.xpi"
+     }
+    },
+    {
+     "id": 5324470,
+     "version": "1.7.10",
+     "channel": "listed",
+     "file": {
+      "id": 3868816,
+      "created": "2021-11-16T17:14:57Z",
+      "hash": "sha256:553ce474dcd6c1b5cefab863eb47057a751639e5aa52b0df322fb4070558db96",
+      "size": 639367,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3868816/keepassxc_browser-1.7.10.xpi"
+     }
+    },
+    {
+     "id": 5269584,
+     "version": "1.7.9.1",
+     "channel": "listed",
+     "file": {
+      "id": 3813940,
+      "created": "2021-07-22T13:06:49Z",
+      "hash": "sha256:b57ef5d973992ed5e2e75fec69082c8517ca5f680fbbe5db48e9b1bac5ce9f81",
+      "size": 733778,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3813940/keepassxc_browser-1.7.9.1.xpi"
+     }
+    },
+    {
+     "id": 5269110,
+     "version": "1.7.9",
+     "channel": "listed",
+     "file": {
+      "id": 3813466,
+      "created": "2021-07-21T16:13:37Z",
+      "hash": "sha256:ee8432f3acbc3be64553d44dd7edff1d7fb84ede93570be278d90793d6fbf119",
+      "size": 733822,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3813466/keepassxc_browser-1.7.9.xpi"
+     }
+    },
+    {
+     "id": 5214592,
+     "version": "1.7.8.1",
+     "channel": "listed",
+     "file": {
+      "id": 3758952,
+      "created": "2021-04-12T13:32:14Z",
+      "hash": "sha256:c091084b5ac5acbf4652bd60033a69e10d1b1e3e5ff3dd1f68fc62afea636b3d",
+      "size": 723603,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3758952/keepassxc_browser-1.7.8.1.xpi"
+     }
+    },
+    {
+     "id": 5213781,
+     "version": "1.7.8",
+     "channel": "listed",
+     "file": {
+      "id": 3758141,
+      "created": "2021-04-10T11:45:26Z",
+      "hash": "sha256:659a33dcbcd956b8b05410d970c1d846fc0cb7023106c1d316a2111713e351ec",
+      "size": 723578,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/3758141/keepassxc_browser-1.7.8.xpi"
+     }
+    }
+   ]
+  },
+  "blocklist/block/keepassxc-browser%40keepassxc.org/": {
+   "id": 1132261,
+   "created": "2025-08-12T15:23:54Z",
+   "modified": "2025-08-12T15:37:21Z",
+   "addon_name": {
+    "en-US": "KeePassXC-Browser"
+   },
+   "blocked": [],
+   "soft_blocked": [
+    "1.1.8",
+    "1.4.1"
+   ],
+   "guid": "keepassxc-browser@keepassxc.org",
+   "reason": "Version deleted",
+   "url": null,
+   "is_all_versions": false,
+   "versions": []
+  }
+ }
+}

@@ -4,6 +4,7 @@ the watcher's and the Gradle review's network calls are replaced by fakes."""
 
 from __future__ import annotations
 
+import copy
 import datetime
 import hashlib
 import json
@@ -13,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import urllib.parse
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -227,13 +229,26 @@ class OtherPinsTest(unittest.TestCase):
 class FakeNet:
     """Stands in for watch_dependencies.Net: OSV, AMO and the registries answer from fixtures."""
 
-    def __init__(self, vulns=None, action_vulns=None, details=None, digests=None, amo=None, blocks=None, down=()):
+    def __init__(
+        self,
+        vulns=None,
+        action_vulns=None,
+        details=None,
+        digests=None,
+        amo=None,
+        served=None,
+        versions=None,
+        blocks=None,
+        down=(),
+    ):
         self.down = down  # URL prefixes that fail as if the service were unreachable
         self.vulns = vulns or {}  # (ecosystem, name, version) -> [ids]
         self.action_vulns = action_vulns or {}  # name -> [OSV records]
         self.details = details or {}
         self.digests = digests or {}  # manifest URL -> digest (default: the pinned one)
         self.amo = amo or {}  # extension id -> current_version override
+        self.served = served or {}  # extension id -> the pinned version's reply override (None: a 404)
+        self.versions = versions or {}  # extension id -> the versions list override
         self.blocks = blocks or {}
         self.lock = json.loads((ROOT / "browser" / "distribution" / "extensions.lock.json").read_text())
         self.pinned = {watch.manifest_url(ref): ref.partition("@")[2] for _, ref in watch.image_refs(ROOT)}
@@ -259,18 +274,31 @@ class FakeNet:
             return {"vulns": self.action_vulns.get(data["package"]["name"], [])}
         if url.startswith(watch.OSV + "vulns/"):
             return self.details[urllib.parse.unquote(url.rsplit("/", 1)[1])]
-        guid = urllib.parse.unquote(url.rstrip("/").rsplit("/", 1)[1])
-        if "/blocklist/block/" in url:
+        if url.startswith(watch.AMO + "blocklist/block/"):
             if not missing_ok:
                 raise AssertionError("a 404 from the blocklist means: not blocked")
-            return self.blocks.get(guid)
-        if "/addons/addon/" in url:
+            return self.blocks.get(urllib.parse.unquote(url.rstrip("/").rsplit("/", 1)[1]))
+        if url.startswith(watch.AMO + "addons/addon/"):
+            parts = url[len(watch.AMO) :].partition("?")[0].strip("/").split("/")  # addons addon <guid> [versions [<v>]]
+            guid = urllib.parse.unquote(parts[2])
             entry = next(e for e in self.lock["extensions"] if e["id"] == guid)
-            current = {
+            pinned = {
                 "version": entry["version"],
-                "file": {"hash": "sha256:" + entry["sha256"], "created": "2026-10-01T00:00:00Z"},
+                "channel": "listed",
+                "file": {
+                    "hash": "sha256:" + entry["sha256"],
+                    "size": entry["size"],
+                    "created": "2026-10-01T00:00:00Z",
+                    "status": "public",
+                },
             }
-            return {"current_version": self.amo.get(guid, current)}
+            if len(parts) == 3:
+                return {"current_version": self.amo.get(guid, pinned)}
+            if len(parts) == 5:
+                if not missing_ok:
+                    raise AssertionError("a 404 for the pinned version means: AMO no longer has it")
+                return self.served.get(guid, pinned)
+            return self.versions.get(guid, {"next": None, "results": [self.amo.get(guid, pinned), pinned]})
         raise AssertionError(f"unexpected URL {url}")
 
     def github_json(self, url):
@@ -395,18 +423,34 @@ class WatcherTest(unittest.TestCase):
         self.assertIn("GHSA-test-0002", failing[0])
 
     def test_extension_verdicts(self):
-        entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64}
-        same = {"version": "1.0", "sha256": "a" * 64, "created": "2026-01-01T00:00:00Z"}
+        entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64, "size": 10}
+        same = {"version": "1.0", "sha256": "a" * 64, "size": 10, "created": "2026-01-01T00:00:00Z"}
         now = watch.parse_time("2026-03-01T00:00:00Z")
-        self.assertEqual(watch.extension_verdict(entry, same, None, now)[0], "ok")
-        self.assertEqual(watch.extension_verdict(entry, {**same, "sha256": "b" * 64}, None, now)[0], "fail")
-        self.assertEqual(watch.extension_verdict(entry, same, {"blocked": ["1.0"], "soft_blocked": []}, now)[0], "fail")
-        self.assertEqual(watch.extension_verdict(entry, same, {"blocked": [], "soft_blocked": ["1.0"]}, now)[0], "fail")
-        self.assertEqual(watch.extension_verdict(entry, same, {"is_all_versions": True}, now)[0], "fail")
-        self.assertEqual(watch.extension_verdict(entry, same, {"blocked": ["0.9"], "soft_blocked": []}, now)[0], "ok")
+
+        def verdict(current, block=None, served=same, newer=None, complete=True):
+            return watch.extension_verdict(entry, served, current, newer, block, now, complete)[0]
+
+        self.assertEqual(verdict(same), "ok")
+        self.assertEqual(verdict({**same, "sha256": "b" * 64}), "fail")
+        self.assertEqual(verdict(same, {"blocked": ["1.0"], "soft_blocked": []}), "fail")
+        self.assertEqual(verdict(same, {"blocked": [], "soft_blocked": ["1.0"]}), "fail")
+        self.assertEqual(verdict(same, {"is_all_versions": True}), "fail")
+        self.assertEqual(verdict(same, {"blocked": ["0.9"], "soft_blocked": []}), "ok")
         newer = {**same, "version": "1.1", "created": "2026-02-25T00:00:00Z"}
-        self.assertEqual(watch.extension_verdict(entry, newer, None, now)[0], "warn")
-        self.assertEqual(watch.extension_verdict(entry, {**newer, "created": "2026-01-02T00:00:00Z"}, None, now)[0], "fail")
+        self.assertEqual(verdict(newer), "warn")  # no first newer version known: counted from the current one
+        self.assertEqual(verdict({**newer, "created": "2026-01-02T00:00:00Z"}), "fail")
+        # the lag is counted from the first version after the pin, not from AMO's newest (#629)
+        first = {"version": "1.0.1", "created": "2026-01-15T00:00:00Z"}
+        self.assertEqual(verdict(newer, newer=first), "fail")
+        self.assertEqual(verdict(newer, newer={**first, "created": "2026-02-20T00:00:00Z"}), "warn")
+        # the pinned version's own file is checked while a newer version exists
+        self.assertEqual(verdict(newer, served={**same, "sha256": "b" * 64}, newer=first), "fail")
+        self.assertEqual(verdict(newer, served={**same, "size": 11}), "fail")
+        self.assertEqual(verdict(same, served={**same, "size": 11}), "fail")
+        self.assertEqual(verdict(newer, served=None), "fail")  # AMO no longer has the pinned version
+        # a versions list not read back to the pin: a lower bound, which fails once it is over the limit
+        self.assertEqual(verdict(newer, newer=first, complete=False), "fail")
+        self.assertEqual(verdict(newer, newer={**first, "created": "2026-02-20T00:00:00Z"}, complete=False), "error")
 
     def test_a_blocked_extension_fails_the_run(self):
         guid = "uBlock0@raymondhill.net"
@@ -484,6 +528,223 @@ class WatcherTest(unittest.TestCase):
     def test_only_https_is_fetched(self):
         with self.assertRaises(ValueError):
             watch.Net().json("http://api.osv.dev/v1/query")
+
+
+AMO_FIXTURES = ROOT / "tests" / "fixtures" / "amo"
+
+
+class RecordedAmo:
+    """AMO's replies recorded on 2026-11-26 (tests/fixtures/amo/<key>.json), keyed by the path the watch requests."""
+
+    def __init__(self, keys, change=None):
+        self.records = [json.loads((AMO_FIXTURES / f"{key}.json").read_text()) for key in keys]
+        self.replies = {}
+        for record in self.records:
+            self.replies.update(record["replies"])
+        for path, reply in (change or {}).items():
+            self.replies[path] = reply
+        self.requested = []
+
+    def lock(self, tmp: Path) -> Path:
+        """A repository root whose lock holds the recorded pins, so a refresh of the real lock leaves these tests alone."""
+        target = tmp / "browser" / "distribution" / "extensions.lock.json"
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps({"extensions": [r["lock"] for r in self.records]}))
+        return tmp
+
+    def json(self, url, data=None, missing_ok=False):
+        self.requested.append(url)
+        if not url.startswith(watch.AMO):
+            raise AssertionError(f"unexpected URL {url}")
+        path = url[len(watch.AMO) :]
+        if path not in self.replies:
+            raise AssertionError(f"not recorded: {path}")
+        reply = self.replies[path]
+        if reply is None and not missing_ok:
+            raise AssertionError(f"a 404 that the watch does not expect: {path}")
+        return copy.deepcopy(reply)
+
+
+UBLOCK = "addons/addon/uBlock0%40raymondhill.net/"
+
+
+def at(text: str) -> datetime.datetime:
+    return watch.parse_time(text)
+
+
+class ExtensionLagTest(unittest.TestCase):
+    """The lag is counted from the first version AMO published after the pin, and the pinned file is read on every
+    run (#629): on AMO's replies recorded on 2026-11-26, and on a made-up stream of releases."""
+
+    KEYS = ("ublock-origin", "proton-pass", "keepassxc-browser", "bitwarden", "1password")
+
+    def rows(self, net, now):
+        with tempfile.TemporaryDirectory() as tmp:
+            return {r.detail["key"]: r for r in watch.extension_rows(net, now, net.lock(Path(tmp)))}
+
+    def test_the_recorded_pins_of_2026_11_26(self):
+        rows = self.rows(RecordedAmo(self.KEYS), at("2026-11-26T20:00:00Z"))
+        self.assertEqual({k: r.state for k, r in rows.items()}, {
+            "ublock-origin": "warn", "proton-pass": "warn", "keepassxc-browser": "ok", "bitwarden": "warn", "1password": "warn",
+        })  # fmt: skip
+        # uBlock Origin: pinned 1.76.4, AMO's newest is 1.77.2 (that day), the first after the pin 1.76.6 (6 days earlier)
+        self.assertEqual(
+            rows["ublock-origin"].text, "ublock-origin pinned 1.76.4, AMO has had 1.76.6 for 6 days (current 1.77.2)"
+        )
+        self.assertEqual(
+            rows["ublock-origin"].detail, {"key": "ublock-origin", "pinned": "1.76.4", "amo": "1.77.2", "newer": "1.76.6"}
+        )
+        self.assertEqual(rows["proton-pass"].detail["newer"], "1.43.1")
+        self.assertIn("for 23 days (current 1.44.0)", rows["proton-pass"].text)
+        self.assertEqual(rows["bitwarden"].detail["newer"], "2026.11.0")  # the first newer one is the current one
+        self.assertNotIn("current", rows["bitwarden"].text)
+        # KeePassXC-Browser's blocklist entry covers two old versions, not the pin
+        self.assertEqual(rows["keepassxc-browser"].text, "keepassxc-browser 1.10.4.1 is AMO's current version")
+
+    def test_a_pin_left_behind_fails_while_amo_keeps_releasing(self):
+        # 2026-12-22: uBlock Origin's newest recorded version (1.77.2) is 26 days old, so counting from it, as the
+        # watch did before #629, gave a warning; the pin was first superseded (1.76.6) 32 days before.
+        now = at("2026-12-22T20:00:00Z")
+        net = RecordedAmo(["ublock-origin"])
+        current = net.replies[UBLOCK]["current_version"]["file"]["created"]
+        self.assertLessEqual((now - at(current)).days, watch.EXTENSION_LAG_DAYS)
+        row = self.rows(net, now)["ublock-origin"]
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.76.6 for 32 days (current 1.77.2)", row.text)
+        # Proton Pass: 1.43.1 (2026-11-03) is 31 days old on 2026-12-04, its newest 1.44.0 only 16
+        row = self.rows(RecordedAmo(["proton-pass"]), at("2026-12-04T20:00:00Z"))["proton-pass"]
+        self.assertEqual(row.state, "fail", row.text)
+
+    def test_a_replaced_pinned_file_fails_while_a_newer_version_exists(self):
+        pinned = UBLOCK + "versions/1.76.4/"
+        reply = RecordedAmo(["ublock-origin"]).replies[pinned]
+        now = at("2026-11-26T20:00:00Z")
+        for change in (
+            {**reply, "file": {**reply["file"], "hash": "sha256:" + "b" * 64}},
+            {**reply, "file": {**reply["file"], "size": reply["file"]["size"] + 1}},
+        ):
+            net = RecordedAmo(["ublock-origin"], {pinned: change})
+            row = self.rows(net, now)["ublock-origin"]
+            self.assertEqual(row.state, "fail", row.text)
+            self.assertIn("AMO now serves a different file", row.text)
+            self.assertIn(watch.AMO + pinned, net.requested)
+        row = self.rows(RecordedAmo(["ublock-origin"], {pinned: None}), now)["ublock-origin"]  # a 404
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("no longer serves the pinned version", row.text)
+        # the pinned file is read when the pin is AMO's current version too
+        net = RecordedAmo(["keepassxc-browser"])
+        path = "addons/addon/keepassxc-browser%40keepassxc.org/versions/1.10.4.1/"
+        net.replies[path]["file"]["hash"] = "sha256:" + "c" * 64
+        self.assertEqual(self.rows(net, now)["keepassxc-browser"].state, "fail")
+
+    def test_a_malformed_reply_is_unavailable_data(self):
+        pinned = UBLOCK + "versions/1.76.4/"
+        reply = RecordedAmo(["ublock-origin"]).replies[pinned]
+        listed = UBLOCK + "versions/?page=1&page_size=50"
+        for change in (
+            {pinned: {**reply, "file": {**reply["file"], "hash": "md5:" + "a" * 32}}},
+            {pinned: {**reply, "file": {**reply["file"], "size": "6332093"}}},
+            {pinned: {**reply, "version": "1.76.6"}},  # an answer for another version
+            {listed: {"next": None, "results": "none"}},
+            {listed: {"next": None, "results": [None]}},
+            {listed: {"next": None, "results": [{"version": 1.77, "file": {"created": "2026-11-26T00:00:00Z"}}]}},
+            {listed: {"next": None, "results": [{"version": "1.77", "file": {"created": 1}}]}},
+            {pinned: {**reply, "file": {**reply["file"], "created": None}}},
+        ):
+            row = self.rows(RecordedAmo(["ublock-origin"], change), at("2026-11-26T20:00:00Z"))["ublock-origin"]
+            self.assertEqual(row.state, "error", (change, row.text))
+
+    def stream(self, count, every_days=10):
+        """A pin (1.0, 2026-05-01) followed by `count` releases, one every `every_days` days, newest first."""
+        start = at("2026-05-01T00:00:00Z")
+        made = [(f"1.{n}", start + datetime.timedelta(days=every_days * n)) for n in range(count + 1)]
+        return [
+            {
+                "version": v,
+                "channel": "listed",
+                "file": {
+                    "hash": "sha256:" + "a" * 64,
+                    "size": 10,
+                    "created": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "status": "public",
+                },
+            }
+            for v, t in reversed(made)
+        ]
+
+    def stream_net(self, versions):
+        """AMO for that stream: the versions list in pages, with a "next" link that points elsewhere."""
+        base = f"{watch.AMO}addons/addon/x%40y/"
+
+        class Stream:
+            def __init__(self):
+                self.requested = []
+
+            def json(self, url, data=None, missing_ok=False):
+                self.requested.append(url)
+                if url == base:
+                    return {"current_version": versions[0]}
+                if url == base + "versions/1.0/":
+                    return versions[-1]
+                if url == f"{watch.AMO}blocklist/block/x%40y/":
+                    return None
+                if not url.startswith(base + "versions/?"):
+                    raise AssertionError(f"unexpected URL {url}")
+                query = urllib.parse.parse_qs(url.partition("?")[2])
+                page, size = int(query["page"][0]), int(query["page_size"][0])
+                more = page * size < len(versions)
+                return {
+                    "next": "https://elsewhere.example/next" if more else None,
+                    "results": versions[(page - 1) * size : page * size],
+                }
+
+        return Stream()
+
+    def stream_row(self, versions, now, page_size=5, pages=watch.VERSIONS_PAGES):
+        net = self.stream_net(versions)
+        entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64, "size": 10}
+        with tempfile.TemporaryDirectory() as tmp:
+            lock = Path(tmp) / "browser" / "distribution" / "extensions.lock.json"
+            lock.parent.mkdir(parents=True)
+            lock.write_text(json.dumps({"extensions": [entry]}))
+            with mock.patch.object(watch, "VERSIONS_PAGE_SIZE", page_size), mock.patch.object(watch, "VERSIONS_PAGES", pages):
+                (row,) = watch.extension_rows(net, now, Path(tmp))
+        return row, net.requested
+
+    def test_a_stream_of_releases_counts_from_the_first_after_the_pin(self):
+        # a release every 10 days since the pin (2026-05-01): the newest is always under 30 days old
+        versions = self.stream(17)  # 1.1 (2026-05-11) ... 1.17 (2026-10-28)
+        row, requested = self.stream_row(versions, at("2026-10-30T00:00:00Z"))
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.1 for 172 days (current 1.17)", row.text)
+        pages = [u for u in requested if "versions/?" in u]
+        self.assertEqual(len(pages), 4)  # 18 versions, 5 a page: read until the pin, no further
+        self.assertTrue(all(u.startswith(watch.AMO) for u in requested), "a reply's next link is never followed")
+        # within the limit: only a warning, counted from 1.1 and not from 1.3
+        row, _ = self.stream_row(self.stream(3), at("2026-05-31T00:00:00Z"))
+        self.assertEqual((row.state, row.detail["newer"]), ("warn", "1.1"))
+        self.assertIn("for 20 days (current 1.3)", row.text)
+
+    def test_a_list_not_read_back_to_the_pin_is_a_lower_bound(self):
+        versions = self.stream(17)
+        row, requested = self.stream_row(versions, at("2026-10-30T00:00:00Z"), pages=2)
+        self.assertEqual(len([u for u in requested if "versions/?" in u]), 2)
+        self.assertEqual(row.state, "fail", row.text)  # 1.8, the oldest seen, is already 102 days old
+        self.assertIn("for at least 102 days", row.text)
+        # a release every day: two pages of five reach back 10 days, not to the pin; nothing is known to pass
+        row, _ = self.stream_row(self.stream(40, every_days=1), at("2026-06-11T00:00:00Z"), pages=2)
+        self.assertEqual(row.state, "error", row.text)
+        self.assertIn("not read back to the pin", row.text)
+
+    def test_only_listed_public_versions_after_the_pin_count(self):
+        versions = self.stream(4)  # 1.4, 1.3, 1.2, 1.1, 1.0
+        versions[3] = {**versions[3], "channel": "unlisted"}  # 1.1
+        versions[2] = {**versions[2], "file": {**versions[2]["file"], "status": "disabled"}}  # 1.2
+        row, _ = self.stream_row(versions, at("2026-06-15T00:00:00Z"))
+        self.assertEqual(row.detail["newer"], "1.3", row.text)
+        backport = {**versions[1], "version": "0.9.1"}  # made after the pin, numbered below it
+        row, _ = self.stream_row([versions[0], backport, versions[-1]], at("2026-06-15T00:00:00Z"))
+        self.assertEqual(row.detail["newer"], "1.4", row.text)
 
 
 class GradleReviewTest(unittest.TestCase):
