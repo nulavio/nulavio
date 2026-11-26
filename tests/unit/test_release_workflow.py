@@ -288,8 +288,8 @@ RUNBOOK_AWS = """#!/bin/sh
 # a local file (which writes other bytes with FAKE_AWS_CORRUPT).
 exec python3 -I -c '
 import json, os, shutil, sys
-names = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE",
-         "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_REQUEST_CHECKSUM_CALCULATION")
+names = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_PROFILE",
+         "AWS_DEFAULT_PROFILE", "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_REQUEST_CHECKSUM_CALCULATION")
 args = sys.argv[1:]
 with open(os.environ["FAKE_AWS_LOG"], "a") as log:
     print(json.dumps({"args": args, "env": {name: os.environ.get(name) for name in names}}), file=log)
@@ -414,7 +414,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
                     "FAKE_CDN": str(self.cdn), "FAKE_AWS_LOG": str(self.log), "FAKE_CURL_LOG": str(self.curl_log),
                     "FAKE_LEAK_LOG": str(self.leak_log), "TMPDIR": str(self.scratch),
                     # What the maintainer's shell may hold: never used for the upload.
-                    "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
+                    "AWS_SESSION_TOKEN": "sso-token", "AWS_SECURITY_TOKEN": "legacy-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
                     "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
     def run_block(self, *options: str, file_size_limit: str = ""):
@@ -463,7 +463,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
             self.assertEqual(call["env"]["AWS_ACCESS_KEY_ID"], "r2-key-id")
             self.assertEqual(call["env"]["AWS_SECRET_ACCESS_KEY"], "r2-secret")
             self.assertNotIn("r2-secret", json.dumps(call["args"]))
-            for inherited in ("AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
+            for inherited in ("AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE"):
                 self.assertIsNone(call["env"][inherited])
             self.assertEqual(call["env"]["AWS_CONFIG_FILE"], "/dev/null")
             self.assertEqual(call["env"]["AWS_SHARED_CREDENTIALS_FILE"], "/dev/null")
