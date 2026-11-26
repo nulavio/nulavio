@@ -207,7 +207,7 @@ class AiUiTest(unittest.TestCase):
         agent, _ = registry.add("Pesquisa", "codex", "restricted")
         cases = (
             ("interact", "", "warning", "#once", "once", "permission-request"),
-            ("transactions", "Trabalho", "critical", "#deny", "deny", "permission-request-critical"),
+            ("multiple_profiles", "Trabalho", "critical", "#deny", "deny", "permission-request-critical"),
         )
         for capability, place, risk, button, expected, shot in cases:
             thread, result = self.ask_in_thread(agent["id"], capability, "https://docs.example.org", place)
@@ -484,6 +484,9 @@ class AiUiTest(unittest.TestCase):
         path = registry._registry_path()
         data = json.loads(path.read_text())
         data["agents"][agent["id"]]["raw_automation_accepted"] = "2026-11-01T10:00:00+00:00"
+        # #714: a grant for a capability no longer offered, from a registry of before; the page loads and has no row for it.
+        data["agents"][agent["id"]]["grants"]["transactions"] = {"mode": "allow", "set": "2026-11-01T10:00:00+00:00",
+                                                                 "until": None, "session": None}  # fmt: skip
         path.write_text(json.dumps(data))
         self.open_page("settings/settings.html#ai")
         row = f"[data-agent-id='{agent['id']}']"
@@ -493,6 +496,9 @@ class AiUiTest(unittest.TestCase):
         self.assertFalse(self.js(f"return !!document.querySelector(\"[data-raw-removed='{plain['id']}']\");"))
         self.js(f'document.querySelector("{row} details").open = true;')
         self.assertFalse(self.js(f"return !!document.querySelector(\"[data-focus-key='mode-{agent['id']}-debugging']\");"))
+        self.assertTrue(self.js(f"return !!document.querySelector(\"[data-focus-key='mode-{agent['id']}-submit_forms']\");"))
+        for retired in sorted(policy.RETIRED_CAPABILITIES):
+            self.assertFalse(self.js(f"return !!document.querySelector(\"[data-focus-key='mode-{agent['id']}-{retired}']\");"))
         self.assertFalse(self.js("return !!document.querySelector(\"[data-focus-key^='raw-'], [data-raw-automation]\");"))
         self.assertEqual(policy.effective_mode(registry.get(agent["id"]), "debugging", "")[0], "block")
         self.shoot("raw-automation-removed", "ai")

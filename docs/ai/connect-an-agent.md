@@ -16,8 +16,8 @@ Autonomy levels (`nulavio ai capabilities` shows the full table):
 | Level | In one line |
 |---|---|
 | `restricted` | Reads and moves around; asks before clicking or typing |
-| `assisted` | Clicks and types; asks before submitting, files, sign-ins and purchases |
-| `autonomous` | Completes tasks without asking; purchases, account changes, scripts and the local network still ask |
+| `assisted` | Clicks and types; asks before submitting forms, using files and using signed-in sessions |
+| `autonomous` | Completes tasks without asking, forms included, even one that pays or changes an account, and uses signed-in sessions in the profiles you give it; working in two places at once (a profile beside its AI Workspace, or two profiles) and the local network still ask, and scripts stay off until you allow them |
 | `full-control` | Everything you select, without asking. Needs `--accept-full-control` after reading the warning |
 
 Options: `--site DOMAIN` (repeatable) limits the agent to those sites; `--disposable` deletes the workspace when the agent disconnects; `--headless` runs without a window.
