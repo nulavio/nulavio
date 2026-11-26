@@ -142,7 +142,10 @@ class Bidi:
 
 
 class Node(dict):
-    """A node's {"sharedId", "localName"} handle: its own type, since a page's object can have the same keys."""
+    """A node's {"sharedId", "localName"} handle: its own type, since a page's object can have the same keys.
+    `node_type` is the DOM's nodeType (1 for an element), kept off the dict that tools show."""
+
+    node_type: object = None
 
 
 def deserialize(value: dict):
@@ -168,7 +171,9 @@ def deserialize(value: dict):
             out[key if isinstance(key, str) else str(deserialize(key))] = deserialize(item)
         return out
     if kind == "node":
-        return Node(sharedId=value.get("sharedId"), localName=value.get("value", {}).get("localName"))
+        node = Node(sharedId=value.get("sharedId"), localName=value.get("value", {}).get("localName"))
+        node.node_type = value.get("value", {}).get("nodeType")
+        return node
     return {"type": kind}
 
 

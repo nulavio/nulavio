@@ -2523,7 +2523,10 @@ class PageResultsTest(Home):
         info = _obj(role=_s("link"), name=_s("Home"), tag=_s("a"))
         for name, result in (
             ("a node that is a plain object", _arr(_arr(_obj(x=_s("SECRET")), info))),  # the issue's KeyError
-            ("a node without its id", _arr(_arr({"type": "node", "value": {"localName": "a"}}, info))),
+            ("a node without its id", _arr(_arr({"type": "node", "value": {"nodeType": 1, "localName": "a"}}, info))),
+            # A page that redefines querySelectorAll can return nodes that are not elements: click and type need one.
+            ("a text node", _arr(_arr({"type": "node", "sharedId": "n-1", "value": {"nodeType": 3}}, info))),
+            ("a node of no type", _arr(_arr({"type": "node", "sharedId": "n-1", "value": {"localName": "a"}}, info))),
             ("a node that is null", _arr(_arr({"type": "null"}, info))),
             ("a node id that is not a string", _arr(_arr(_obj(sharedId=NUMBER), info))),
             ("an object that has a node's id", _arr(_arr(_obj(sharedId=_s("n-1"), localName=_s("a")), info))),

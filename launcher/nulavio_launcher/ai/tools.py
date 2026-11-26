@@ -258,12 +258,13 @@ _UNEXPECTED = "%s came back in an unexpected shape, which the page can cause; no
 
 
 def _element_pair(pair: object) -> bool:
-    """One entry of SNAPSHOT_FN's result: [node handle, info object]. The node is one BiDi sent as a node, not a
-    page's object with the same keys."""
+    """One entry of SNAPSHOT_FN's result: [node handle, info object]. The node is an element BiDi sent as a node,
+    not a page's object with the same keys nor a text node: click and type need an element."""
     if not isinstance(pair, list) or len(pair) != 2:
         return False
     node, info = pair
-    return isinstance(node, Node) and isinstance(node.get("sharedId"), str) and bool(node["sharedId"]) and isinstance(info, dict)
+    return (isinstance(node, Node) and node.node_type == 1 and isinstance(node.get("sharedId"), str)
+            and bool(node["sharedId"]) and isinstance(info, dict))  # fmt: skip
 
 
 @dataclass(frozen=True)
