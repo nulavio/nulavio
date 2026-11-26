@@ -8,6 +8,7 @@ import itertools
 import html as html_module
 import io
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -1427,6 +1428,115 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertEqual(levels.count(1), 1)
                 ids.append([n.attrs["id"] for n in Tree(html).all() if "id" in n.attrs])
         self.assertEqual(ids[0], ids[1])
+
+    def test_gpgs_english_message_on_the_pt_page_is_marked_english(self):
+        # #651: a screen reader reads the quoted terminal text in English, as the terminal prints it.
+        html = (ROOT / "site/baixar/index.html").read_text(encoding="utf-8")
+        tags = re.findall(r"<code([^>]*)>Good signature</code>", html)
+        self.assertTrue(tags)
+        for attrs in tags:
+            self.assertIn('lang="en"', attrs)
+
+    def test_the_manual_check_is_plain_commands(self):
+        # #651 (review of PR #733): the four lines before #651 also ran in Fish, and a shell variable
+        # (`sig=$(...)`) made Fish 3 refuse the whole paste ("Unsupported use of '='"). Commands joined by `&&`
+        # and `|` run in bash, zsh and Fish 3; no assignment, no command substitution.
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                html = (ROOT / "site" / page).read_text(encoding="utf-8")
+                block = html_module.unescape(re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1))
+                for line in block.splitlines():
+                    self.assertNotRegex(line, r"(^|&&|\||;)\s*[A-Za-z_][A-Za-z0-9_]*=", "a shell variable")
+                self.assertNotIn("$(", block)
+                self.assertNotIn("`", block)
+
+    def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
+        # #651: pasted as a block, the check must print no checksum result after a failed signature or one
+        # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
+        def site(name: str, fpr: str, key: str) -> Path:
+            values = build_site.release_values(self.source(name, "159.0.1-0.1", fpr, key))
+            built = self.tmp / f"{name}-site"
+            real = build_site.release_values
+            build_site.release_values = lambda src: values
+            try:
+                build_site.build(built)
+            finally:
+                build_site.release_values = real
+            return built
+
+        out = site("manual-check", self.fpr, self.armored)
+        other_home = self.tmp / "gnupg-other"
+        if not other_home.exists():
+            throwaway_key(other_home)
+        other = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--armor", "--export"],
+                               capture_output=True, text=True, check=True).stdout  # fmt: skip
+
+        def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
+                built: Path = out, extra_sig: bool = False, shell: str = "bash") -> str:  # fmt: skip
+            work = self.tmp / f"check-{case}-{page.split('/')[0]}-{shell}"
+            home = work / "gnupg"
+            home.mkdir(parents=True, mode=0o700)
+            if key:
+                (work / "nulavio-packages.asc").write_text(key, encoding="ascii")
+            sums = work / "SHA256SUMS"
+
+            def package(data: bytes) -> None:
+                (work / "nulavio.rpm").write_bytes(data)
+                sums.write_text(f"{hashlib.sha256(data).hexdigest()}  nulavio.rpm\n", encoding="ascii")
+
+            package(b"the package\n")
+            gpg = ["gpg", "--homedir", str(signer), "--batch", "--quiet", "--yes"]
+            armor = [] if extra_sig else ["--armor"]  # binary signatures concatenate into one file
+            subprocess.run([*gpg, *armor, "--detach-sign", "-o", str(work / "SHA256SUMS.asc"), str(sums)], check=True)
+            if extra_sig:  # a second signature, over other bytes: gpg prints our VALIDSIG, then BADSIG, and exits 1
+                other_sig = subprocess.run([*gpg, "--detach-sign", "-o", "-"], input=b"other bytes\n",
+                                           capture_output=True, check=True).stdout  # fmt: skip
+                with (work / "SHA256SUMS.asc").open("ab") as f:
+                    f.write(other_sig)
+            if tamper:  # another package, and the list changed to match it, under the old signature
+                package(b"another package\n")
+            env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(work), "GNUPGHOME": str(home), "LC_ALL": "C"}
+            if keyring:
+                subprocess.run(["gpg", "--batch", "--quiet", "--import"], input=keyring, text=True, env=env, check=True)
+            html = (built / page).read_text(encoding="utf-8")
+            block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
+            blocks.add(block)
+            ran = subprocess.run([shell], input=html_module.unescape(block) + "\n", cwd=work, env=env,
+                                 capture_output=True, text=True, timeout=60)  # fmt: skip
+            return ran.stdout
+
+        blocks: set[str] = set()
+        # The block is pasted into bash, and into Fish where it is installed (test_the_manual_check_is_plain_commands).
+        shells = ["bash", *(["fish"] if shutil.which("fish") else [])]
+        for page, sh in itertools.product(build_site.DOWNLOAD_PAGES, shells):
+            with self.subTest(page=page, shell=sh):
+                ours = self.tmp / "gnupg"
+                self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored, shell=sh))
+                # Signed by a key the reader already has: gpg says "Good signature", the list is still not ours.
+                self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other, shell=sh))
+                # The key file swapped for another one, with that key's signature.
+                self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other, shell=sh))
+                # The list changed after it was signed.
+                self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True, shell=sh))
+                # gpg found our valid signature but failed on another one, and exited non-zero.
+                self.assertNotIn("nulavio.rpm", run(page, "gpg-failed", ours, self.armored, extra_sig=True, shell=sh))
+                # No key file: the key setup fails, and the block stops there, even with the key already in the keyring.
+                self.assertNotIn("nulavio.rpm", run(page, "no-key-file", ours, "", keyring=self.armored, shell=sh))
+        self.assertEqual(len(blocks), 1, "both languages give the same commands")
+
+        # A key that signs with a subkey: VALIDSIG names the subkey first and the pinned primary key last.
+        sub_home = self.tmp / "gnupg-subkey"
+        sub_home.mkdir(mode=0o700)
+        gpg = ["gpg", "--homedir", str(sub_home), "--batch", "--quiet", "--passphrase", ""]
+        subprocess.run([*gpg, "--quick-generate-key", "Throwaway <s@example.invalid>", "ed25519", "cert", "1d"], check=True)
+        listing = subprocess.run([*gpg, "--with-colons", "--list-keys"], capture_output=True, text=True, check=True).stdout
+        primary = next(line.split(":")[9] for line in listing.splitlines() if line.startswith("fpr:"))
+        subprocess.run([*gpg, "--quick-add-key", primary, "ed25519", "sign", "1d"], check=True)
+        sub_key = subprocess.run([*gpg, "--armor", "--export", primary], capture_output=True, text=True, check=True).stdout
+        sub_site = site("manual-check-subkey", primary, sub_key)
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page, signer="subkey"):
+                self.assertIn("nulavio.rpm: OK", run(page, "subkey", sub_home, sub_key, built=sub_site))
 
 
 if __name__ == "__main__":

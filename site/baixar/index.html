@@ -100,11 +100,13 @@ sudo apt install nulavio</code></pre></div>
 <!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Conferir um download manual</h2>
-<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: confira antes de importar.</p>
-<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc
-gpg --import nulavio-packages.asc
-gpg --verify SHA256SUMS.asc SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
+<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: o primeiro comando a mostra, para você comparar. Os comandos rodam em sequência e param no primeiro que falhar.</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc &amp;&amp;
+  gpg --import nulavio-packages.asc &amp;&amp;
+  gpg --status-file SHA256SUMS.status --verify SHA256SUMS.asc SHA256SUMS &amp;&amp;
+  grep -q '^\[GNUPG:\] VALIDSIG .* {{key_fpr_plain}}$' SHA256SUMS.status &amp;&amp;
+  sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
+<p class="prose">O último comando só confere os arquivos se o gpg aceitou a assinatura e ela é da chave <code class="mono" translate="no">{{key_fpr}}</code>. O gpg dizer que a assinatura é válida (<code translate="no">Assinatura válida</code> ou <code translate="no" lang="en">Good signature</code>) não basta: ele diz isso para a assinatura de qualquer chave que você já tenha. Use só os arquivos que o último comando confirmar (<code translate="no">SUCESSO</code> ou <code translate="no">OK</code>, conforme o idioma do sistema); se ele não confirmar nenhum, não use o download.</p>
 </section>
 
 <section id="known" aria-labelledby="known-h">
