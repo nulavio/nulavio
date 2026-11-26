@@ -1109,6 +1109,8 @@ let reads = 0;
 const held = [];
 let holdThread = false; // the same for the conversation's reply (assistantThread)
 const threadHeld = [];
+let holdPage = false; // and for the selected tab's (assistantPage)
+const pageHeld = [];
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
@@ -1122,7 +1124,9 @@ globalThis.browser = {
       return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
     },
     assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
-    assistantPage: async () => ({ ...tab }), // the tab the items came from: the panel keeps them
+    // The tab the items came from: the panel keeps them.
+    assistantPage: () => (holdPage ? new Promise(resolve => pageHeld.push(() => resolve({ ...tab })))
+      : Promise.resolve({ ...tab })),
     assistantTakeOffer: async () => [offer, (offer = null)][0],
     assistantRuns: async () => [],
     assistantStart: async (kind, details) => {
@@ -1233,6 +1237,18 @@ holdThread = false;
 threadHeld.splice(0).forEach(answer => answer());
 await idle();
 await finish();
+// The same while it reads the selected tab, after the list.
+kept = [item("c8", "Oitava")];
+holdPage = true;
+$("allow-profile").fire("click");
+await idle();
+out.pageGapShown = shown();
+await send("Pergunta 8");
+out.pageGapSent = starts.at(-1).chips;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+await finish();
 
 // An "@ia" draft whose item-list reply spans a Send: it waits for the run's end, and once the person types the
 // next question, a list read again later does not write the draft over it.
@@ -1241,6 +1257,7 @@ offer = { draft: "Texto do ia" };
 hold = true;
 reads = 0;
 await emit({ type: "offer" });
+out.draftLine = $("send-line").textContent; // the list is still on its way: the size already counts the draft
 await send("Pergunta 7");
 await release(true); // the list read before the Send arrives during the run; it is read again
 await finish();
@@ -1273,8 +1290,9 @@ class PanelChipsTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # A clear failure, not a skip (I12): CI's node runs these tests, and a contributor's older node is told why.
         if not node_loads_js_modules():
-            raise unittest.SkipTest("this node does not import .js ES modules (module syntax detection: Node >= 22.7, 20.19)")
+            raise AssertionError("this node does not import panel.js: it needs module syntax detection (Node >= 22.7, 20.19)")
 
     @classmethod
     def _run(cls):
@@ -1313,10 +1331,13 @@ class PanelChipsTest(unittest.TestCase):
     def test_a_send_carries_only_items_the_panel_shows(self):
         out = self._run()
         self.assertEqual(out["gapSent"], out["gapShown"])
+        self.assertEqual(out["pageGapShown"], ["c8"])
+        self.assertEqual(out["pageGapSent"], out["pageGapShown"])
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
         out = self._run()
         self.assertEqual(out["draftPrompt"], "Pergunta nova")
+        self.assertEqual(out["draftLine"], "assistantSendLine|Provedor|modelo|111")  # 100 + "Texto do ia"
         self.assertEqual(out["draftReads"], 2)  # the list was read again: the case the review found
 
 

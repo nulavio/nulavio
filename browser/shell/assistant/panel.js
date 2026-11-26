@@ -676,6 +676,7 @@ async function takeOffer() {
       laterDraft = delivery.draft;
     } else {
       $("prompt").value = delivery.draft;
+      showSendLine(); // its size counts the draft while the list is on its way
     }
   }
   chips = await keptChips(() => chips);
