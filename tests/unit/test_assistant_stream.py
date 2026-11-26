@@ -221,6 +221,9 @@ class StreamTest(unittest.TestCase):
     def test_a_cancel_during_an_approval_removes_the_request(self):
         """Task mode: the run waits for a permission answer; a cancel ends the wait and its files go."""
         registry.grant(self.state["agent"]["id"], "navigate", "ask")
+        # A name that does not resolve counts as local: with local_resources blocked the call would be refused before
+        # navigate is asked (#730), so it asks too, after navigate.
+        registry.grant(self.state["agent"]["id"], "local_resources", "ask")
         call = {
             "id": "c1",
             "type": "function",

@@ -227,6 +227,11 @@ def _alive(pid: int) -> bool:
     return True
 
 
+# What a call asks for, in order: (capability, address, place). The place is None for where the call acts (its
+# arguments, Bridge._place), "" for the AI Workspace or a profile's label.
+Need = tuple[str, str | None, str | None]
+
+
 class Denied(Exception):
     def __init__(self, decision: policy.Decision, detail: str = ""):
         super().__init__(decision.reason)
@@ -483,13 +488,57 @@ class Bridge:
             checked.append(policy.INTERNAL_CAPABILITY)
             raise Denied(policy.Decision(False, "block", policy.INTERNAL_CAPABILITY, "internal-pages-off"))
 
-    def require_url(self, url: str, *, checked: list[str]) -> policy.Target:
+    def _refuse_blocked(self, needs: list[Need], *, checked: list[str]) -> None:
+        """Before a call asks anything: `needs` is what it will ask in this order, each (capability, address, place:
+        None for the call's own, as require() takes it). When one of them is blocked for this agent there and a question
+        would come before it, that one is refused now, through require() (decide() refuses it without a question):
+        asking first could only end in that refusal, and an answer "until the agent disconnects" would stay (#725,
+        #730). Each is looked up with the scope require() gives decide(), so a session answer counts here as it does
+        there, and nothing that an answer could allow is refused. Without a question before it, the call goes on as
+        it did: what it checks then refuses it there, with the same activity record. A stop, a pause, a revocation or
+        an address outside the agent's sites refuses the call where decide() meets it, before any question, as before.
+        The activity record names the address the refusal would have come at."""
+        agent = self._agent()
+        if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
+            return  # require() refuses at once, as before
+        at, asks = self._target, False
+        for capability, url, place in needs:
+            at = url or at
+            if not policy.in_scope(agent, policy.host_of(url)):
+                return  # decide() refuses this one before any question
+            target, where = policy.origin(url), self._place() if place is None else place
+            mode = policy.effective_mode(agent, capability, self.session_id, scope=(target, where))[0]
+            if mode == "block":
+                if asks:
+                    self._target = at
+                    self.require(capability, url, checked=checked, place=place)  # refused by decide(), nothing asked
+                return
+            # A question the person already answered in this call is not asked again (Bridge._approved).
+            asks = asks or (mode == "ask" and (capability, target, where) not in self._approved)
+
+    def _address(self, url: str) -> policy.Target:
+        """Where a call goes: an address agents never go to is a tool error, an internal page a refusal; both before
+        anything is asked."""
         try:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             self._target = url
             raise ToolError(str(exc)) from None
-        self._refuse_internal(target, url, checked)
+        return target
+
+    def _url_needs(self, target: policy.Target, url: str) -> list[Need]:
+        """What require_url asks, in its order."""
+        needs: list[Need] = [("navigate", url, None)] + [(c, url, None) for c in target.needs]
+        if (place := self._place()) and place in self.profiles:
+            needs.append(("authenticated_sessions", url, place))
+        return needs
+
+    def require_url(self, url: str, *, checked: list[str], target: policy.Target | None = None) -> policy.Target:
+        """`target`: the address as the caller classified it before its own checks (classified once)."""
+        if target is None:
+            target = self._address(url)
+            self._refuse_internal(target, url, checked)
+            self._refuse_blocked(self._url_needs(target, url), checked=checked)
         self.require("navigate", url, checked=checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
@@ -498,17 +547,36 @@ class Bridge:
             self.require("authenticated_sessions", url, checked=checked, place=place)
         return target
 
-    def require_needs(self, url: str, *, checked: list[str]) -> None:
-        """What the address a tab is at needs (local network, the Shell's pages, the user's signed-in session there in
-        one of the user's profiles), whatever took it there: a redirect or the page's own navigation never passed
-        require_url."""
+    def _here(self, url: str, checked: list[str]) -> policy.Target | None:
+        """The address a tab is at, classified once: one agents do not act on is a tool error and an internal page a
+        refusal, before anything is asked."""
         if not url:
-            return
+            return None
         try:
             target = policy.classify_url(url)
         except policy.UrlRefused as exc:
             raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
         self._refuse_internal(target, url, checked)
+        return target
+
+    def _needs_here(self, target: policy.Target | None, url: str) -> list[Need]:
+        """What require_needs asks, in its order."""
+        if target is None:
+            return []
+        needs: list[Need] = [(c, url, None) for c in target.needs]
+        if (place := self._place()) and place in self.profiles:
+            needs.append(("authenticated_sessions", self._profile_site(self._agent() or {}, url), place))
+        return needs
+
+    def require_needs(self, url: str, *, checked: list[str], target: policy.Target | None = None) -> None:
+        """What the address a tab is at needs (local network, the Shell's pages, the user's signed-in session there in
+        one of the user's profiles), whatever took it there: a redirect or the page's own navigation never passed
+        require_url. `target`: as the caller classified it before its own checks (classified once)."""
+        if not url:
+            return
+        if target is None:
+            target = self._here(url, checked)
+            self._refuse_blocked(self._needs_here(target, url), checked=checked)
         for capability in target.needs:
             self.require(capability, url, checked=checked)
         if (place := self._place()) and place in self.profiles:
@@ -521,31 +589,37 @@ class Bridge:
         refused before the tool's own question: asking first could only end in a refusal, and a "for this session"
         answer would stay (#508; the internal pages since the independent review of #504).
 
-        `also`: what the tool needs besides its own capability, asked after it. One of them blocked for this agent is
-        refused before any question, for the same reason (#725); the tool's own capability, blocked too, still wins."""
-        if url:
-            try:
-                target = policy.classify_url(url)
-            except policy.UrlRefused as exc:
-                self._target = url  # the activity record names the address, as for an internal page
-                raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
-            self._refuse_internal(target, url, checked)
-        if also and not self._blocked(capability, url):
-            for other in also:
-                if self._blocked(other, url):
-                    self.require(other, url, checked=checked)  # refused by decide() without a question
+        `also`: what the tool needs besides its own capability, asked after it. Of everything the call asks here, in this
+        order (entering one of the user's profiles, the tool's own capability, what the address needs, `also`), the
+        first one blocked for this agent is refused before any question (_refuse_blocked, #725, #730): the refusal a
+        yes to every question would have reached, so the tool's own capability, blocked too, still wins."""
+        try:
+            target = self._here(url, checked)
+        except ToolError:
+            self._target = url  # the activity record names the address, as for an internal page
+            raise
+        tab = self._args.get("tab")
+        entry = self._entry_needs(tab, url)
+        later = [(other, url, None) for other in also]
+        self._refuse_blocked([*entry, (capability, url, None), *self._needs_here(target, url), *later], checked=checked)
+        if entry:
+            self._enter_profile(self.owner[tab], tab, url)
         self.require(capability, url, checked=checked)
-        self.require_needs(url, checked=checked)
+        self.require_needs(url, checked=checked, target=target)
         for other in also:
             self.require(other, url, checked=checked)
 
-    def _blocked(self, capability: str, url: str) -> bool:
-        """The capability is blocked for this agent at that address in this call: no answer could allow it."""
-        agent = self._agent()
-        if agent is None:
-            return False  # revoked meanwhile: require() says so
-        scope = (policy.origin(url), self._place())
-        return policy.effective_mode(agent, capability, self.session_id, scope=scope)[0] == "block"
+    def _entry_needs(self, tab: str | None, url: str) -> list[Need]:
+        """What acting in a tab of one of the user's profiles asks first (_enter_profile), in its order; nothing for
+        the AI Workspace's tabs or a profile this call already entered. From what the Bridge knows (no engine is
+        asked): _url_of found where the tab is, and whose it is."""
+        label = self.owner.get(tab) if isinstance(tab, str) else None
+        if not label or label not in self.profiles or (label, tab) in self._entered:
+            return []
+        needs: list[Need] = [("authenticated_sessions", self._profile_site(self._agent() or {}, url), label)]
+        if any(name != label for name, _ in self._engines()):
+            needs.append(("multiple_profiles", None, label))
+        return needs
 
     def still_at(self, tab: str, url: str, cancel) -> None:
         """After an approval (which can wait for minutes): the tab is still on the origin the
@@ -663,11 +737,12 @@ class Bridge:
         out = [("", self.workspace)] if self.workspace is not None and self.workspace.bidi is not None else []
         return out + [(label, t) for label, t in self.profiles.items() if t.bidi is not None]
 
-    def bidi(self, tab: str | None = None) -> Bidi:
+    def bidi(self, tab: str | None = None, *, enter: bool = True) -> Bidi:
         """The AI Workspace's engine, or the engine that holds `tab`. A tab of one of the user's profiles only for a
-        call the user's choices allow to act there now (_enter_profile)."""
+        call the user's choices allow to act there now (_enter_profile). `enter=False` only to read where the tab is
+        (_url_of), as tabs_list does: nothing is done there and nothing asked."""
         owner = "" if tab is None else self._owner(tab)
-        if owner:
+        if owner and enter:
             self._enter_profile(owner, tab)
         engine = self.profiles[owner].bidi if owner else self._workspace().start()
         if engine not in self._forms_engines:  # just started: before its first navigation
@@ -699,16 +774,21 @@ class Bridge:
             web = False
         return url if web and policy.in_scope(agent, policy.host_of(url)) else None
 
-    def _enter_profile(self, label: str, tab: str) -> None:
+    def _enter_profile(self, label: str, tab: str, url: str | None = None) -> None:
         """A call acts in one of the user's profiles, with the user's signed-in sessions there. What lets it is asked of
         the user's choices as they are now, once a call: authenticated_sessions for the site the tab is at, and
         multiple_profiles while another place is open. An answer "once" is for that call; the profile was given, or
-        an answer was given, for a site and a place (registry.decide), not for the rest of the session."""
+        an answer was given, for a site and a place (registry.decide), not for the rest of the session.
+
+        The tools that read where the tab is first (_url_of) come here from require_here, tab_close and navigate,
+        with that address and after what the call needs was looked at (_refuse_blocked, #730); any other path to the
+        tab's engine comes through bidi(tab), which reads the address here."""
         if (label, tab) in self._entered:
             return
-        engine = self.profiles[label].bidi
-        tree = engine.command("browsingContext.getTree", {"maxDepth": 0}, cancel=self._cancel)
-        url = next((c.get("url", "") for c in tree.get("contexts", []) if c.get("context") == tab), "")
+        if url is None:
+            engine = self.profiles[label].bidi
+            tree = engine.command("browsingContext.getTree", {"maxDepth": 0}, cancel=self._cancel)
+            url = next((c.get("url", "") for c in tree.get("contexts", []) if c.get("context") == tab), "")
         checked = self._checked if self._checked is not None else []
         target = self._target  # the call's own address stays what the activity records
         self.require("authenticated_sessions", self._profile_site(self._agent() or {}, url), checked=checked, place=label)
@@ -716,6 +796,15 @@ class Bridge:
             self.require("multiple_profiles", checked=checked, place=label)
         self._target = target
         self._entered.add((label, tab))
+
+    def _enter_for(self, tab: str, url: str, needs: list[Need], checked: list[str]) -> None:
+        """Before a tool on a tab asks anything: what entering the tab's profile asks and then `needs` (what the tool
+        asks next, in order) are looked at, the first one blocked is refused (_refuse_blocked), and only then is the
+        profile entered."""
+        entry = self._entry_needs(tab, url)
+        self._refuse_blocked(entry + needs, checked=checked)
+        if entry:
+            self._enter_profile(self.owner[tab], tab, url)
 
     def _profile_needs(self, agent: dict, label: str, url: str) -> list[str]:
         """What acting in this profile's tab would ask the user first (_enter_profile): described only without it."""
@@ -813,8 +902,11 @@ class Bridge:
                 out.append({**context, "profile": label or "AI Workspace"})
         return out
 
-    def _url_of(self, tab: str, cancel) -> str:
-        tree = self.bidi(tab).command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
+    def _url_of(self, tab: str, cancel, *, enter: bool = True) -> str:
+        """Where a tab is. `enter=False` for a tool's first look at its tab: reading where it is does not enter one of
+        the user's profiles (bidi(tab, enter=False)), so what acting there asks comes after the refusals that no answer
+        changes (require_here, _enter_for, #730)."""
+        tree = self.bidi(tab, enter=enter).command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
         for context in tree.get("contexts", []):
             if context["context"] == tab:
                 return context.get("url", "")
@@ -1357,8 +1449,21 @@ class Bridge:
             self._refuse_if_held("authenticated_sessions", checked)
             checked.append("authenticated_sessions")
             raise Denied(policy.Decision(False, "block", "authenticated_sessions", "profile-not-authorized"))
+        target = None
         if url:
-            self.require_url(url, checked=checked)
+            target = self._address(url)
+            self._refuse_internal(target, url, checked)
+        # Everything this call asks, in its order, looked at before the first question (_refuse_blocked, #730).
+        where = registry.route_for(agent, policy.host_of(url)) if label is None and url else label
+        needs = self._url_needs(target, url) if target else [("navigate", None, None)]
+        if where in (None, "", "AI Workspace"):
+            if any(name for name, _ in self._engines()):
+                needs.append(("multiple_profiles", None, ""))
+        elif any(p.get("label") == where for p in agent.get("profiles", [])):
+            needs += self._opening_needs(where, url)
+        self._refuse_blocked(needs, checked=checked)
+        if url:
+            self.require_url(url, checked=checked, target=target)
         else:
             self.require("navigate", checked=checked)
         agent = self._agent() or {}
@@ -1390,6 +1495,7 @@ class Bridge:
         self.require("authenticated_sessions", url, checked=checked, place=label)
         if {name for name, _ in self._engines()} - {label}:
             self.require("multiple_profiles", checked=checked, place=label)  # about the places: it names no site
+        # (_opening_needs says the same, for tab_new to look at before it asks anything.)
         target = self.profiles.get(label)
         if target is None:
             target = ProfileTarget(self.agent_id, label, Path(entry["path"]), downloads_dir=self._workspace().downloads_dir,
@@ -1415,6 +1521,13 @@ class Bridge:
         self._sync_network()
         return bidi
 
+    def _opening_needs(self, label: str, url: str | None) -> list[Need]:
+        """What _open_profile asks, in its order."""
+        needs: list[Need] = [("authenticated_sessions", url, label)]
+        if {name for name, _ in self._engines()} - {label}:
+            needs.append(("multiple_profiles", None, label))
+        return needs
+
     def _t_profiles_list(self, args, cancel, checked):
         agent = self._agent() or {}
         items = [{"profile": "AI Workspace", "open": self.workspace is not None and self.workspace.bidi is not None}]
@@ -1424,7 +1537,8 @@ class Bridge:
         return self._ok({"profiles": items, "routes": routes}), None
 
     def _t_tab_close(self, args, cancel, checked):
-        url = self._url_of(args["tab"], cancel)
+        url = self._url_of(args["tab"], cancel, enter=False)
+        self._enter_for(args["tab"], url, [("navigate", url, None)], checked)
         self.require("navigate", url, checked=checked)
         self.bidi(args["tab"]).command("browsingContext.close", {"context": args["tab"]}, cancel=cancel)
         self.elements.pop(args["tab"], None)
@@ -1432,8 +1546,11 @@ class Bridge:
 
     def _t_navigate(self, args, cancel, checked):
         tab, url = args["tab"], args["url"]
-        self._url_of(tab, cancel)
-        self.require_url(url, checked=checked)
+        here = self._url_of(tab, cancel, enter=False)
+        target = self._address(url)
+        self._refuse_internal(target, url, checked)
+        self._enter_for(tab, here, self._url_needs(target, url), checked)
+        self.require_url(url, checked=checked, target=target)
         self.elements.pop(tab, None)
         self.bidi(tab).command("browsingContext.navigate", {"context": tab, "url": url, "wait": "complete"},
                             timeout=60, cancel=cancel)  # fmt: skip
@@ -1463,7 +1580,7 @@ class Bridge:
 
     def _t_page_read(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         self.require_here("read_pages", url, checked=checked)
         self.still_at(tab, url, cancel)
         limit = args.get("max_chars", 20000)
@@ -1482,7 +1599,7 @@ class Bridge:
 
     def _t_page_snapshot(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         self.require_here("read_pages", url, checked=checked)
         self.still_at(tab, url, cancel)
         pairs = self._call_fn(tab, SNAPSHOT_FN, [{"type": "number", "value": args.get("max_elements", 200)}], cancel)
@@ -1498,7 +1615,7 @@ class Bridge:
 
     def _t_screenshot(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         self.require_here("screenshots", url, checked=checked)
         self.still_at(tab, url, cancel)
         png = self.bidi(tab).command("browsingContext.captureScreenshot", {"context": tab}, cancel=cancel)["data"]
@@ -1563,7 +1680,7 @@ class Bridge:
 
     def _t_click(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         element = self._element(tab, args["element"])
         self.require_here("interact", url, checked=checked)
         self.still_at(tab, url, cancel)
@@ -1601,12 +1718,11 @@ class Bridge:
         if any("\ue000" <= char <= "\uf8ff" for char in args["text"]):
             # WebDriver reads these as keys (U+E007 is Enter, U+E006 Return): they are not text.
             raise ToolError("special keys (U+E000 to U+F8FF) are not typed; use submit=true to press Enter")
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         element = self._element(tab, args["element"])
-        self.require_here("interact", url, checked=checked)
+        # Enter (submit=true) sends the form: submit_forms is asked with the rest, before the tab is checked again.
+        self.require_here("interact", url, checked=checked, also=("submit_forms",) if args.get("submit") else ())
         self.still_at(tab, url, cancel)
-        if args.get("submit"):
-            self.require("submit_forms", url, checked=checked)
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
@@ -1643,7 +1759,7 @@ class Bridge:
 
     def _t_dialog(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         self.require_here("interact", url, checked=checked)
         self.still_at(tab, url, cancel)
         if self._open_dialog(tab) is None:
@@ -1687,7 +1803,7 @@ class Bridge:
 
     def _t_upload(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         element = self._element(tab, args["element"])
         self.require_here("files", url, checked=checked)
         self.still_at(tab, url, cancel)
@@ -1711,7 +1827,7 @@ class Bridge:
 
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]
-        url = self._url_of(tab, cancel)
+        url = self._url_of(tab, cancel, enter=False)
         # A page script reads document.cookie and the site's storage: the same as cookies_storage (audit A9).
         self.require_here("execute_js", url, checked=checked, also=("cookies_storage",))
         self.still_at(tab, url, cancel)
