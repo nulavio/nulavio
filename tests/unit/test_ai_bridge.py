@@ -2442,6 +2442,8 @@ class OpenProfileTest(Home):
         self.assertNotIn("browsingContext.close", commands)
         entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
         self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://elsewhere.example"))
+
+    def test_a_tab_that_moved_while_closing_it_was_asked_is_not_closed(self):
         # The tab moved while its own question (navigate) was open: not closed at an address nobody was asked about.
         agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="once")
         registry.grant(agent["id"], "navigate", "ask")
@@ -2479,7 +2481,9 @@ class OpenProfileTest(Home):
         self.assertEqual(approver.asked, [("interact", "https://mail.example")])
         self.assertNotIn("submit_forms", registry.get(agent["id"]).get("session_grants", {}))
         self.assertFalse(self.ACTS & set(commands), commands)
-        # And a script, whose two questions come one after the other: the second is not asked for a page left.
+
+    def test_a_scripts_second_question_is_not_asked_after_the_tab_moved(self):
+        # A script's two questions come one after the other: the second is not asked for a page the tab left.
         agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="session")
         registry.grant(agent["id"], "cookies_storage", "ask")
         self.move_on(approver, "execute_js", "https://news.example/")
@@ -2488,6 +2492,26 @@ class OpenProfileTest(Home):
         self.assertEqual(approver.asked, [("execute_js", "https://mail.example")])
         self.assertNotIn("cookies_storage", registry.get(agent["id"]).get("session_grants", {}))
         self.assertFalse(self.ACTS & set(commands), commands)
+
+    def test_a_links_question_is_not_asked_after_the_tab_moved(self):
+        # A submit button with a link: the link's question (navigate) is not asked for a page the tab left while the
+        # form's was open.
+        agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="session")
+        registry.grant(agent["id"], "submit_forms", "ask")
+        registry.grant(agent["id"], "navigate", "ask")
+        self.move_on(approver, "submit_forms", "https://news.example/")
+        info = {"connected": True, "submits": True, "href": "https://mail.example/sent"}
+        with (
+            mock.patch.object(tools.Bridge, "_earlier_forms", return_value=None),
+            mock.patch.object(tools.Bridge, "_forms_prepare"),
+            mock.patch.object(tools.Bridge, "_call_fn", return_value=info),
+        ):
+            result = bridge.call("click", {"tab": "w1", "element": "e1"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("moved", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [("submit_forms", "https://mail.example")])
+        self.assertNotIn("navigate", registry.get(agent["id"]).get("session_grants", {}))
+        self.assertNotIn("input.performActions", commands)
 
     def test_the_look_before_asking_never_asks(self):
         # Finding 5: a block that ended (a grant until a time) between the look before asking and the decision made

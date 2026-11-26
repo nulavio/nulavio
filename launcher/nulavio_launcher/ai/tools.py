@@ -1772,9 +1772,12 @@ class Bridge:
         info = self._call_fn(tab, INSPECT_FN, [element], cancel)
         if not info.get("connected"):
             raise ToolError("the element is gone; call page_snapshot again")
+        asked = self._questions
         if info.get("submits"):
             self.require("submit_forms", url, checked=checked)
         if info.get("href") and not info["href"].startswith(("javascript:", "#")):
+            if self._questions != asked:  # the link is not asked about for a page the tab left meanwhile
+                self.still_at(tab, url, cancel)
             self.require_url(info["href"], checked=checked)
         self.still_at(tab, url, cancel)
         self._call_fn(tab, SCROLL_FN, [element], cancel)
