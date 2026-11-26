@@ -39,6 +39,13 @@ class LookalikeLoginsTest(unittest.TestCase):
         expected = {"answer": {"dismissed": False}, "remembered": 0, "reads": 0, "prompts": 0}
         self.assertEqual(self.cases["locked_dismiss"], expected)
 
+    def test_continue_back_to_the_tabs_page_remembers_nothing_without_a_page_to_go_back_to(self):
+        case = self.cases["dismiss_back"]
+        self.assertEqual(case["first"], {"threw": "no-way-back", "remembered": 0})
+        self.assertEqual(case["none"], {"threw": "no-way-back", "remembered": 0})
+        self.assertEqual(case["after"], {"dismissed": True, "remembered": 1})
+        self.assertEqual(case["can"], [False, True, False, False])
+
     def test_the_look_alike_is_found_once_the_primary_password_is_entered(self):
         case = self.cases["locked_then_entered"]
         self.assertEqual(case["locked"], LOCKED)

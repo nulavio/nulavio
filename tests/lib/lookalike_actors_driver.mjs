@@ -93,13 +93,13 @@ const { NulavioLookalikeParent } = await import(pathToFileURL(process.argv[3]).h
 const password = { localName: "input", type: "password" };
 const text = { localName: "input", type: "text" };
 
-/** Events in order: [type, target, the document's transient activation, isTrusted, a held key's repeat]. */
+/** Events in order: [type, target, the document's transient activation, isTrusted, a held key's repeat, persisted]. */
 async function child(events, reply = async () => true) {
   const doc = { hasValidTransientUserGestureActivation: false };
   const actor = new NulavioLookalikeChild(doc, reply);
-  for (const [type, target, activated, trusted = true, repeat = false] of events) {
+  for (const [type, target, activated, trusted = true, repeat = false, persisted = false] of events) {
     doc.hasValidTransientUserGestureActivation = activated;
-    actor.handleEvent({ type, target, isTrusted: trusted, repeat });
+    actor.handleEvent({ type, target, isTrusted: trusted, repeat, persisted });
     await flush();
   }
   return { asked: actor.sent.length };
@@ -234,6 +234,17 @@ const cases = {
     let n = 0;
     return child([["focusin", password, true], ["focusin", password, true]], async () => ++n > 1);
   },
+  // The document is shown again from the back-forward cache: the next input asks again.
+  child_asks_again_after_a_restore: () =>
+    child([["focusin", password, true], ["pageshow", null, false, true, false, true], ["focusin", password, true]]),
+  // A page shown for the first time, or a pageshow the page made up, changes nothing.
+  child_not_again_after_a_first_show: () =>
+    child([
+      ["focusin", password, true],
+      ["pageshow", null, false, true, false, false],
+      ["pageshow", null, false, false, false, true],
+      ["focusin", password, true],
+    ]),
   child_not_again_when_the_query_fails: () =>
     child([["focusin", password, true], ["focusin", password, true]], async () => {
       throw new Error("actor destroyed");

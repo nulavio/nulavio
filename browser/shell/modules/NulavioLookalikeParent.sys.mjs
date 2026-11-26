@@ -84,15 +84,15 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!shell) {
       return true;
     }
-    // Only an address: the page asks the module again which saved site `url` imitates. The tab's page found
-    // on its own input gives its address, as it is; any other site gives only its origin (a frame's path,
-    // query and fragment stay out of the tab's address). For a field in a frame, or a page without a site's
-    // address of its own, a flag without an address (`in=frame`): "continue" goes back to the tab's page in
-    // its history, never to an address, and never opens the frame's document as the tab's page.
-    const own = found.global === page && web(page.documentURI);
+    // Only an address: the page asks the module again which saved site `url` imitates. A field in the tab's
+    // page, at a site's address, gives that address as it is. A field in a frame gives only the origin of the
+    // site found (a document's path, query and fragment stay out of the tab's address), and a flag without an
+    // address (`in=frame`): "continue" goes back to the tab's page in its history, never to an address, and
+    // never opens the frame's document as the tab's page.
+    const own = fieldInPage && web(page.documentURI);
     const url = own ? found.address.spec : `${found.address.scheme}://${found.address.hostPort}/`;
     const query = new URLSearchParams({ url });
-    if (!own || !fieldInPage) {
+    if (!own) {
       query.set("in", "frame");
     }
     browser.loadURI(Services.io.newURI(shell.getURL(`passwords/lookalike.html?${query}`)), {

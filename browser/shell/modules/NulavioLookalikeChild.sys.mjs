@@ -14,7 +14,10 @@
    in that field then does (a held key's repeated keydowns in it do not). A click or a key needs no
    activation: a trusted one is the person's input, and the page can use up the activation before it
    arrives.
-   The engine sends these actors trusted events only; isTrusted is checked as well. */
+   The engine sends these actors trusted events only; isTrusted is checked as well.
+
+   A document shown again from the back-forward cache (Back, or "continue" going back to the tab's page)
+   asks again on the person's next input: the pairs confirmed since, and the saved logins, may differ. */
 
 const EVENTS = new Set(["focusin", "mousedown", "keydown"]);
 
@@ -22,6 +25,12 @@ export class NulavioLookalikeChild extends JSWindowActorChild {
   #asked = false;
 
   handleEvent(event) {
+    if (event.type === "pageshow") {
+      if (event.isTrusted && event.persisted) {
+        this.#asked = false;
+      }
+      return;
+    }
     const field = event.target;
     if (this.#asked || !event.isTrusted || !EVENTS.has(event.type)) {
       return;

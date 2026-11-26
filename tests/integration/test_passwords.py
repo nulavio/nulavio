@@ -264,20 +264,29 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(self.m.current_url(), home)
 
     def test_01i_with_no_page_to_go_back_to_only_the_real_site_is_offered(self):
-        """Opened for a field in a frame (`in=frame`) in a tab with no earlier entry, "continue" has nowhere to go
-        back to: it is not offered, rather than do nothing."""
+        """Opened for a field in a frame (`in=frame`) as the first entry of a tab, "continue" has nowhere to go back to:
+        it is not offered, rather than do nothing, also once a later entry exists ahead of it."""
         main = self.m.send("WebDriver:GetWindowHandle")["value"]
         self.m.switch_to(self.m.new_tab())
         try:
             query = urllib.parse.urlencode({"url": self.fake + "/", "in": "frame"})
-            self.m.navigate(self.base + "passwords/lookalike.html?" + query)
-            self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
-            shown = self.m.execute(
-                "const seen = s => document.querySelector(s).checkVisibility();"
-                "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note'),"
-                " entries: history.length };"
-            )
-            self.assertEqual(shown, {"real": True, "onward": False, "note": False, "entries": 1})
+            warning = self.base + "passwords/lookalike.html?" + query
+            shown = "const seen = s => document.querySelector(s).checkVisibility();"
+            shown += "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note') };"
+            ready = "return document.body.dataset.state === 'ready';"
+            self.m.navigate(warning)
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
+            self.assertEqual(self.m.execute(shown), {"real": True, "onward": False, "note": False})
+            # Another page after it, then back to the warning and a reload: the tab's history has 2 entries, the
+            # warning still has none before it.
+            self.m.navigate(self.real + "/page/after")
+            self.m.send("WebDriver:Back")
+            self.assertTrue(harness.wait_until(lambda: self.m.current_url() == warning, 10), self.m.current_url())
+            self.m.send("WebDriver:Refresh")
+            self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
+            self.assertEqual(self.m.execute("return history.length;"), 2)
+            self.assertEqual(self.m.execute(shown), {"real": True, "onward": False, "note": False})
+            self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
         finally:
             self.m.send("WebDriver:CloseWindow")
             self.m.switch_to(main)

@@ -356,7 +356,7 @@ class Passwords {
       parent: { esModuleURI: `${base}NulavioLookalikeParent.sys.mjs` },
       child: {
         esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`,
-        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true } },
+        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true }, pageshow: {} },
       },
       // The engine matches a document's own address: a site's page, and the documents a page makes
       // that take its site (about:blank, about:srcdoc, blob:) or none (data:). Never an extension's
@@ -374,13 +374,24 @@ class Passwords {
    * "Continue anyway" on the warning page: the pair is found again from the address and this profile's
    * saved logins, never taken from the page. Nothing to remember when the address imitates no saved site.
    */
-  async dismissFor(url) {
+  async dismissFor(url, { back = false, browser = null } = {}) {
+    // "Continue" that goes back to the tab's page (a field in a frame): nothing is remembered unless the tab has a
+    // page to go back to.
+    if (back && !this.canGoBack(browser)) {
+      fail("no-way-back");
+    }
     const found = await this.#lookalike(url);
     if (!found || found.locked) {
       return { dismissed: false };
     }
     this.dismiss(found.site, found.similar);
     return { dismissed: true };
+  }
+
+  /** Whether the tab that shows `browser` has an entry before the one it shows (the engine's session history). */
+  canGoBack(browser) {
+    const history = browser?.browsingContext?.sessionHistory;
+    return Boolean(history && history.index > 0);
   }
 
   /** Not asked again for this pair of sites (kept in this profile only). */

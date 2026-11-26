@@ -113,6 +113,21 @@ const cases = {
     const entered = await check(passwords);
     return result(store, { locked, entered });
   },
+  // "Continue" that goes back to the tab's page: remembered only when the tab has an entry before the warning.
+  dismiss_back: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const tab = index => ({ browsingContext: { sessionHistory: { index } } });
+    const answers = {};
+    for (const [name, browser] of Object.entries({ first: tab(0), none: null, after: tab(1) })) {
+      answers[name] = await passwords
+        .dismissFor(LOOKALIKE, { back: true, browser })
+        .then(answer => ({ ...answer, remembered: passwords.listConfirmed().length }))
+        .catch(e => ({ threw: e.code, remembered: passwords.listConfirmed().length }));
+    }
+    answers.can = [tab(0), tab(2), null, {}].map(browser => passwords.canGoBack(browser));
+    return result(store, answers);
+  },
   // "Continue anyway" while locked remembers nothing and asks nothing.
   locked_dismiss: async () => {
     const store = loginManager({ primaryPassword: true });

@@ -29,9 +29,10 @@ function webAddress(value) {
 localize();
 const url = webAddress(params.get("url"));
 // "continue" goes back to the tab's page when the field was in one of its frames (the warning is the entry after
-// it), else to the site itself. With no entry to go back to, there is no way on but the real site.
+// it), else to the site itself. With no entry before this one in the tab's history (the engine's, which the module
+// reads), there is no way on but the real site, and the module remembers nothing without one.
 const back = params.has("in");
-const onward = back ? history.length > 1 : true;
+const onward = !back || (await browser.nulavioPasswords.canGoBack().catch(() => false));
 const origin = url ? `${url.origin}/` : "";
 const verdict = url ? await browser.nulavioPasswords.check(origin).catch(() => null) : null;
 const site = verdict?.suspicious ? String(verdict.site ?? "") : "";
@@ -49,11 +50,13 @@ if (url && HOST.test(similar) && site) {
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
-      await browser.nulavioPasswords.dismiss(origin);
+      await browser.nulavioPasswords.dismiss(origin, back);
     } catch (e) {
-      // Not remembered: do not open the site as if it were (the warning would silently differ next time).
+      // Not remembered: do not open the site as if it were (the warning would silently differ next time). With no
+      // page to go back to any more, only the real site is left.
       console.error("look-alike: could not remember the choice", e);
       button.disabled = false;
+      button.hidden = note.hidden = e?.message === "no-way-back";
       announce(t("lookalikeDismissFailed"), "error");
       return;
     }

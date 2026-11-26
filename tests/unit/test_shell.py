@@ -980,14 +980,17 @@ class PasswordsTest(unittest.TestCase):
         # The module needs only the host: the origin stays under the experiment API's length limit.
         self.assertIn('const origin = url ? `${url.origin}/` : "";', page)
         self.assertIn("browser.nulavioPasswords.check(origin)", page)
-        self.assertIn("browser.nulavioPasswords.dismiss(origin)", page)
+        self.assertIn("browser.nulavioPasswords.dismiss(origin, back)", page)
+        # Back only when the engine's session history has an entry before the warning; the module checks it again.
+        self.assertIn("await browser.nulavioPasswords.canGoBack()", page)
+        self.assertNotIn("history.length", page)
         self.assertEqual(re.findall(r"location\.replace\(([^)]*)\)", page), ["`https://${similar}/`", "url.href"])
         self.assertEqual(page.count("history.back()"), 1)
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
-        self.assertEqual((params["check"], params["dismiss"]), (["url"], ["url"]))
+        self.assertEqual((params["check"], params["dismiss"], params["canGoBack"]), (["url"], ["url", "back"], []))
 
 
 class LayoutModuleTest(unittest.TestCase):

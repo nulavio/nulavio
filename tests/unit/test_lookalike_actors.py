@@ -74,6 +74,11 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertEqual(self.asked("child_asks_again_when_not_decided"), 2)
         self.assertEqual(self.asked("child_not_again_when_the_query_fails"), 1)
 
+    def test_a_document_shown_again_from_the_back_forward_cache_asks_again(self):
+        # Back, or "continue" going back to the tab's page: the pairs confirmed since and the saved logins may differ.
+        self.assertEqual(self.asked("child_asks_again_after_a_restore"), 2)
+        self.assertEqual(self.asked("child_not_again_after_a_first_show"), 1)
+
     def test_the_warning_opens_for_the_checked_address(self):
         case = self.cases["parent_warns"]
         self.assertEqual(case["checked"], "https://paypa1.example/login")
@@ -117,9 +122,8 @@ class LookalikeActorsTest(unittest.TestCase):
         self.not_warned("frame_sandboxed_srcdoc_in_a_real_page", True, [REAL])
 
     def test_a_data_frame_is_checked_by_the_documents_around_it(self):
-        # The tab's page itself is the look-alike: its address as checked; the field was in a frame, so "continue"
-        # goes back.
-        self.warned("frame_data_in_a_lookalike_page", FAKE, True, [FAKE])
+        # The tab's page itself is the look-alike, for a field in a frame: its origin only, and "continue" goes back.
+        self.warned("frame_data_in_a_lookalike_page", SITE, True, [FAKE])
         self.warned("frame_data_in_a_lookalike_frame", SITE, True, [FAKE])
 
     def test_a_lookalike_frame_around_the_fields_frame_is_found(self):
@@ -157,8 +161,9 @@ class LookalikeActorsTest(unittest.TestCase):
         self.warned("frame_address_with_a_query", "https://paypa1.example:8443/", True, [frame])
 
     def test_a_frame_that_finds_the_tab_page_a_lookalike_goes_back_to_it(self):
-        # The tab's page moved inside its document while the check waited: going back returns to where it is now.
-        self.warned("frame_finds_the_tab_page_after_replace_state", FAKE, True, ["https://widgets.example/login", FAKE])
+        # The tab's page moved inside its document while the check waited: its origin only, and going back returns
+        # to where it is now.
+        self.warned("frame_finds_the_tab_page_after_replace_state", SITE, True, ["https://widgets.example/login", FAKE])
 
     def test_a_tab_page_without_a_sites_address_has_continue_go_back(self):
         self.warned("frame_tab_page_without_a_site", SITE, True, [FAKE])
