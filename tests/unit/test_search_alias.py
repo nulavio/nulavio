@@ -43,6 +43,15 @@ class ReservedAliasListTest(unittest.TestCase):
         self.assertIn('msg("searchAliasReserved"', panes)
         self.assertIn("releasedAliases()", panes)
 
+    def test_settings_says_it_under_the_search_shortcuts(self):
+        """In the group placed right after the engine's Search Shortcuts (nulavioSearchAdd), not with the suggestion
+        switches; tests/integration/test_settings_search.py (05) reads it on the page."""
+        panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
+        groups = dict(re.findall(r"\n      (nulavio\w+): \{\n(.*?)\n      \},", panes, re.S))
+        self.assertIn("searchAliasBar", groups["nulavioSearchAdd"])
+        self.assertNotIn("searchAliasBar", groups["nulavioSearch"])
+        self.assertIn('"searchShortcuts", "nulavioSearchAdd"', panes)
+
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
 class ReservedAliasTest(unittest.TestCase):
@@ -97,6 +106,17 @@ class ReservedAliasTest(unittest.TestCase):
         after = self.out["afterNewAlias"]
         self.assertEqual(after["archive"], "@archive")
         self.assertEqual(after["released"], ["Duck", "Fresh"])
+
+    def test_a_hidden_engine_is_named_again_once_it_is_back(self):
+        hidden = self.out["hidden"]
+        self.assertEqual(hidden["whileHidden"], ["Fresh"])
+        self.assertEqual(hidden["back"], ["Duck", "Fresh"], "hiding the engine dropped its warning for good")
+
+    def test_an_alias_given_then_cleared_before_settings_reads_is_not_named(self):
+        """The engine was given another alias: clearing it afterwards is the person's choice, not "@ia" taken off."""
+        after = self.out["replacedThenCleared"]
+        self.assertEqual(after["fresh"], "")
+        self.assertEqual(after["released"], ["Duck"])
 
 
 if __name__ == "__main__":

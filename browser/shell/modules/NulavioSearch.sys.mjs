@@ -404,10 +404,10 @@ class NulavioSearchClass {
     const names = [];
     for (const id of this.#released) {
       const engine = lazy.SearchService.getEngineById(id);
-      if (engine && !engine.hidden && !engine.alias) {
-        names.push(engine.name);
-      } else {
+      if (!engine || engine.alias) {
         this.#released.delete(id);
+      } else if (!engine.hidden) {
+        names.push(engine.name); // a hidden one is kept: it is named again once it is back in the list
       }
     }
     return names;
@@ -821,7 +821,7 @@ class NulavioSearchClass {
     }
   }
 
-  observe(_subject, topic, data) {
+  observe(subject, topic, data) {
     if (topic === "nsPref:changed" && data === PREF_SUGGEST && !this.#writingSuggestPref) {
       this.#onSuggestSwitchedElsewhere().catch(e => console.error("Nulavio Search: consent sync", e));
     }
@@ -829,6 +829,10 @@ class NulavioSearchClass {
       topic === lazy.SearchUtils.TOPIC_ENGINE_MODIFIED &&
       (data === lazy.SearchUtils.MODIFIED_TYPE.ADDED || data === lazy.SearchUtils.MODIFIED_TYPE.CHANGED)
     ) {
+      // Given another alias: not named any more, even if that one is cleared before Settings reads the list.
+      if (subject?.alias && !isReservedAlias(subject.alias)) {
+        this.#released.delete(subject.id);
+      }
       this.releaseReservedAliases().catch(e => console.error("Nulavio Search: reserved aliases", e));
     }
     for (const listener of this.#listeners) {

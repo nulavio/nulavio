@@ -187,4 +187,16 @@ archive.alias = "@archive";
 await flush();
 out.afterNewAlias = { archive: archive.alias, released: (await NulavioSearch.releasedAliases()).sort() };
 
+// A hidden engine (taken off the engine's list of shortcuts) is not named, and is named again once it is back.
+ddg.hidden = true;
+const whileHidden = (await NulavioSearch.releasedAliases()).sort();
+ddg.hidden = false;
+out.hidden = { whileHidden, back: (await NulavioSearch.releasedAliases()).sort() };
+
+// Another alias, then none, with no read of the list in between: that engine was given one and is not named.
+fresh.alias = "@fresh";
+fresh.alias = "";
+await flush();
+out.replacedThenCleared = { fresh: fresh.alias, released: (await NulavioSearch.releasedAliases()).sort() };
+
 process.stdout.write(JSON.stringify(out));

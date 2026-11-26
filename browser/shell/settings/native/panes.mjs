@@ -1819,7 +1819,7 @@
         placeholder: "https://example.org/opensearch.xml",
       }),
     ];
-    // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said where the search settings are.
+    // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
     const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
     const searchAliasBar = searchBench.bar(
       "nulavio-search-alias-reserved",
@@ -2766,12 +2766,13 @@
       nulavioSearch: {
         l10nId: "nulavio-search-group",
         headingLevel: 2,
-        items: [failureNote("nulavio-search-failed", search), searchAliasBar, { id: "nulavio-suggest-engines", control: "moz-box-group" }],
+        items: [failureNote("nulavio-search-failed", search), { id: "nulavio-suggest-engines", control: "moz-box-group" }],
       },
       nulavioSearchAdd: {
         l10nId: "nulavio-search-add-group",
         headingLevel: 2,
-        items: [...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
+        // First, right under the engine's Search Shortcuts list, where the alias it names is given (#663).
+        items: [searchAliasBar, ...searchBars, { id: "nulavio-search-providers", control: "moz-box-group" }, ...searchForms],
       },
       nulavioTranslate: {
         l10nId: "nulavio-translate-group",

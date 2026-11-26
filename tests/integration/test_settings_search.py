@@ -360,6 +360,13 @@ class SettingsSearchTest(unittest.TestCase):
             " endereços. Escolha outro atalho em Atalhos de pesquisa.",
         )
         self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "")
+        # Under the engine's Search Shortcuts, where the alias is given, not with the suggestion switches.
+        self.assertEqual(
+            self.m.chrome(
+                DOC + 'return d.getElementById("nulavio-search-alias-reserved").closest("setting-group").getAttribute("groupid");'
+            ),
+            "nulavioSearchAdd",
+        )
         # Another alias: the page stops naming it.
         self.m.chrome(engine + "e.alias = arguments[1];", [own, "@arquivo"])
         self.seen(lambda n: n["aliasReserved"] is None)
