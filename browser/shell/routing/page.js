@@ -10,6 +10,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { wireSettingsLinks } from "../lib/settings.js";
+import { closeOwnTab } from "../lib/tabs.js";
 import { announce, chip, errorText, h, profileStates, stateBadge } from "../lib/ui.js";
 
 const routing = browser.nulavioRouting;
@@ -25,9 +26,19 @@ function webUrl(raw) {
   }
 }
 
-async function closeThisTab() {
-  const tab = await browser.tabs.getCurrent();
-  await browser.tabs.remove(tab.id);
+function enableActions(enabled) {
+  for (const b of document.querySelectorAll("#actions button")) {
+    b.disabled = !enabled;
+  }
+}
+
+// "Don't open", and the end of "Open in …": in a window's only tab the window stays, on a new tab, as it
+// does for every Shell page (#720). A tab that could not close says so and gives its buttons back.
+function closeThisTab() {
+  return closeOwnTab(text => {
+    announce(text, "error", { control: null });
+    enableActions(true);
+  });
 }
 
 async function openHere(url, rule, remember) {
@@ -49,16 +60,12 @@ async function openThere(url, rule, remember) {
 function button(label, kind, action) {
   const el = h("button", { class: `button ${kind}`, type: "button", text: label });
   el.addEventListener("click", async () => {
-    for (const b of document.querySelectorAll("#actions button")) {
-      b.disabled = true;
-    }
+    enableActions(false);
     try {
       await action();
     } catch (e) {
       announce(errorText(e), "error");
-      for (const b of document.querySelectorAll("#actions button")) {
-        b.disabled = false;
-      }
+      enableActions(true);
     }
   });
   return el;

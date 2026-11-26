@@ -774,9 +774,33 @@ class LocaleKeysTest(unittest.TestCase):
                 self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
 
 
+def call_arguments(text: str, start: int) -> str:
+    """The arguments of the call whose `(` ends just before `start`, up to its own `)`: nested calls,
+    objects and brackets included, and a bracket inside a string literal not counted."""
+    depth, quote, index = 1, None, start
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == "\\":
+                index += 1
+            elif char == quote:
+                quote = None
+        elif char in "\"'`":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index]
+        index += 1
+    return text[start:]
+
+
 class LastTabCloseTest(unittest.TestCase):
-    """#700: Close and Cancel on a page that is its window's only tab. The engine refuses `tabs.update` to an
-    about: address from an extension page, so the button did nothing; one function closes every such page."""
+    """#700, #720: Close, Cancel and "Don't open" on a page that is its window's only tab. The engine refuses
+    `tabs.update` to an about: address from an extension page, so the button did nothing; removing the tab
+    closed the window. One function closes every such page."""
 
     PAGES = (
         "ai/request.js",
@@ -785,15 +809,22 @@ class LastTabCloseTest(unittest.TestCase):
         "guard/review.js",
         "warning/warning.js",
         "passwords/lookalike.js",
+        "routing/page.js",
     )
+    ABOUT = r"""["'`]about:"""
+
+    def test_the_scan_reads_the_whole_call(self):
+        missed = 'tabs.update(Number(id), { url: "about:newtab" });'
+        self.assertRegex(call_arguments(missed, missed.index("(") + 1), self.ABOUT)
+        quoted = 'tabs.update(tab.id, { url: ")" + "about:blank" }); other("about:x");'
+        self.assertEqual(call_arguments(quoted, quoted.index("(") + 1), 'tab.id, { url: ")" + "about:blank" }')
 
     def test_no_shell_script_loads_an_about_address_into_a_tab(self):
         for script in sorted(p for p in SHELL.rglob("*") if p.suffix in (".js", ".mjs")):
             text = script.read_text(encoding="utf-8")
             for call in re.finditer(r"tabs\.update\(", text):
-                arguments = text[call.end() : text.find(")", call.end())]
                 with self.subTest(script=str(script.relative_to(SHELL))):
-                    self.assertNotRegex(arguments, r"""["'`]about:""")
+                    self.assertNotRegex(call_arguments(text, call.end()), self.ABOUT)
 
     def test_every_page_with_close_or_cancel_uses_the_one_function(self):
         for page in self.PAGES:
@@ -810,6 +841,12 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertLess(body.index("browser.tabs.create({ windowId: tab.windowId })"), body.index("browser.tabs.remove(tab.id)"))
         self.assertIn('failed(t("tabCloseFailed"))', body.split("catch", 1)[1])
         self.assertNotIn("about:", body)
+        # Only visible tabs count, as in the engine's own last-tab check (#720).
+        self.assertIn("browser.tabs.query({ windowId: tab.windowId, hidden: false })", body)
+        # A second click while the tab closes does nothing; a failure lets the page try again.
+        self.assertLess(body.index("if (closing) {"), body.index("browser.tabs.getCurrent()"))
+        self.assertLess(body.index("closing = true;"), body.index("try {"))
+        self.assertIn("closing = false;", body.split("catch", 1)[1])
         for name in ("en", "pt_BR"):
             self.assertIn("tabCloseFailed", locale(name))
 
