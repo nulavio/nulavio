@@ -140,12 +140,18 @@ public final class Phone {
         if (!Long.valueOf(Nv1.PAIRING_VERSION).equals(qr.get("v"))) {
             throw new PhoneRejected("unsupported-version"); // no fallback to an older pairing
         }
-        if (!(qr.get("e") instanceof Long) || now() > (Long) qr.get("e")) {
+        if (!(qr.get("e") instanceof Long)) {
+            throw new PhoneRejected("bad-message"); // no expiry to compare: malformed, not expired
+        }
+        if (now() > (Long) qr.get("e")) {
             throw new PhoneRejected("expired");
         }
         byte[] commitment = B64.decode(str(qr, "c"));
         if (commitment.length != 32) {
             throw new PhoneRejected("bad-message");
+        }
+        if (B64.decode(str(qr, "d")).length != 32) {
+            throw new PhoneRejected("bad-message"); // an Ed25519 key, read by onAccept: refuse it before waiting
         }
         String invite = str(qr, "i");
         byte[] dePk = B64.decode(str(qr, "k"));
@@ -259,7 +265,7 @@ public final class Phone {
     /**
      * Check a signed unlock request before asking the user. Returns what to show: the request with the
      * desktop's name from this phone's own pairing record, never the name the request carries (audit V3).
-     * Throws: unpaired-desktop, bad-signature, expired, bad-expiry, replay, not-for-this-phone.
+     * Throws: bad-message, unpaired-desktop, bad-signature, expired, bad-expiry, replay, not-for-this-phone.
      */
     public Map<String, Object> check(Map<String, Object> signed) {
         Map<String, Object> r = verify(signed);
@@ -283,7 +289,10 @@ public final class Phone {
         if (!Crypto.verify(dsigPk, Nv1.requestSigningInput(r), B64.decode(str(signed, "sig")))) {
             throw new PhoneRejected("bad-signature");
         }
-        if (!(r.get("expiry") instanceof Long) || now() > (Long) r.get("expiry") + Nv1.CLOCK_SKEW) {
+        if (!(r.get("expiry") instanceof Long)) {
+            throw new PhoneRejected("bad-message"); // no expiry to compare: malformed, not expired
+        }
+        if (now() > (Long) r.get("expiry") + Nv1.CLOCK_SKEW) {
             throw new PhoneRejected("expired");
         }
         if ((Long) r.get("expiry") > now() + Nv1.MAX_REQUEST_AHEAD) {

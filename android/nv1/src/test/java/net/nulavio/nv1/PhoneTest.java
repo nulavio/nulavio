@@ -102,6 +102,59 @@ public class PhoneTest {
         }
     }
 
+    @Test
+    public void anInviteWithoutAUsableSigningKeyOrExpiryIsNotANulavioCode() {
+        // #769 review: a bad "d" was read only once the computer answered, and a missing "e" said "expired".
+        Desktop desktop = new Desktop();
+        Phone phone = Phone.create("Pixel", Secrets.generate(), () -> desktop.now);
+        Object[][] cases = {{"d", null}, {"d", 7L}, {"d", "not base64!"}, {"d", B64.encode(new byte[31])},
+            {"d", B64.encode(new byte[33])}, {"e", null}, {"e", "1300"}};
+        for (Object[] change : cases) {
+            Map<String, Object> qr = desktop.qr(2);
+            if (change[1] == null) {
+                qr.remove((String) change[0]);
+            } else {
+                qr.put((String) change[0], change[1]);
+            }
+            try {
+                phone.scan(qr);
+                fail("accepted " + change[0] + "=" + change[1]);
+            } catch (PhoneRejected e) {
+                assertEquals(change[0] + "=" + change[1], "bad-message", e.code);
+            }
+        }
+    }
+
+    @Test
+    public void aSignedRequestWithoutANumericExpiryIsMalformedNotExpired() {
+        byte[][] dsig = Crypto.ed25519Keypair();
+        Secrets secrets = Secrets.generate();
+        Map<String, Object> state = Phone.create("Pixel", secrets, () -> 0L).toState();
+        Map<String, Object> paired = new TreeMap<>();
+        paired.put("dsig_pk", B64.encode(dsig[1]));
+        paired.put("name", "Desktop");
+        Map<String, Object> desktops = new TreeMap<>();
+        desktops.put("some-desktop", paired);
+        state.put("desktops", desktops);
+        Phone phone = Phone.fromState(state, () -> 0L);
+        for (Object expiry : new Object[] {null, "300"}) {
+            Map<String, Object> r = new TreeMap<>();
+            r.put("desktop_id", "some-desktop");
+            if (expiry != null) {
+                r.put("expiry", expiry);
+            }
+            Map<String, Object> signed = new TreeMap<>();
+            signed.put("r", r);
+            signed.put("sig", B64.encode(Crypto.sign(dsig[0], Nv1.requestSigningInput(r))));
+            try {
+                phone.check(signed);
+                fail("accepted expiry=" + expiry);
+            } catch (PhoneRejected e) {
+                assertEquals("expiry=" + expiry, "bad-message", e.code);
+            }
+        }
+    }
+
     /** A desktop of pairing version 2, in Java, enough to answer one hello (the real one: test_companion_protocol.py). */
     private static final class Desktop {
         final long now = 1_000;
