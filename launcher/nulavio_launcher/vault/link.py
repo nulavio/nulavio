@@ -92,7 +92,9 @@ class Channel:
         self.sock.sendall(canonical(message) + b"\n")
 
     def recv(self, deadline: float) -> dict:
-        while b"\n" not in self._buffer:
+        # The cap holds for every line: one still arriving, one whose newline came in the same chunk as its
+        # end, and one already in the buffer behind an earlier message (#687).
+        while (end := self._buffer.find(b"\n")) < 0 and len(self._buffer) <= MAX_LINE:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise LinkError("timeout")
@@ -106,13 +108,15 @@ class Channel:
             if not chunk:
                 raise LinkError("closed")
             self._buffer += chunk
-            if len(self._buffer) > MAX_LINE and b"\n" not in self._buffer:
-                raise LinkError("too-large")
-        line, _, rest = bytes(self._buffer).partition(b"\n")
-        self._buffer = bytearray(rest)
+        if end < 0 or end > MAX_LINE:
+            raise LinkError("too-large")
+        line = bytes(self._buffer[:end])
+        del self._buffer[: end + 1]
         try:
             message = json.loads(line)
-        except (ValueError, UnicodeDecodeError):
+        except Exception:
+            # Not only ValueError: a decoder that gives up on a deep line raises RecursionError (Python 3.12,
+            # #687). Whatever the line does to the parser, it is a bad message the caller can skip (U-T29).
             raise LinkError("bad-message") from None
         if not isinstance(message, dict) or not isinstance(message.get("t"), str):
             raise LinkError("bad-message")
