@@ -307,26 +307,36 @@ class PasswordsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
         self.assertEqual(self.m.execute("return document.getElementById('address').textContent;"), long)
 
-    def mark_restored(self) -> None:
-        """Records on the tab's page whether it comes back from the back-forward cache (a persisted pageshow)."""
-        self.m.execute(
-            "window.addEventListener('pageshow', e => { document.documentElement.dataset.restored = String(e.persisted); });"
-        )
+    def mark_page(self) -> None:
+        """Marks the tab's page: the same document, shown again from the back-forward cache, still has the mark."""
+        self.m.execute("document.documentElement.dataset.kept = 'yes';")
 
     def back_from_warning_to(self, page: str) -> None:
         """Back from the warning to `page`, the same document, kept in the back-forward cache meanwhile."""
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
         self.m.send("WebDriver:Back")
         self.assertTrue(harness.wait_until(lambda: self.m.current_url() == page, 10), self.m.current_url())
-        shown = "return document.documentElement.dataset.restored ?? null;"
-        harness.wait_until(lambda: self.m.execute(shown) is not None, 10)
-        restored = self.m.execute("return document.documentElement.dataset.restored ?? 'loaded again';")
-        self.assertEqual(restored, "true", "the page did not come back from the back-forward cache")
+        kept = "return document.documentElement.dataset.kept === 'yes';"
+        if not harness.wait_until(lambda: self.m.execute(kept), 5):  # TEMP diagnostic (#709)
+            diag = self.m.chrome(
+                "const b = gBrowser.selectedBrowser; const bc = b.browsingContext; const p = Services.prefs;"
+                "const h = bc.sessionHistory; const out = {};"
+                "const get = (k, f) => { try { out[k] = f(); } catch (e) { out[k] = 'err ' + e; } };"
+                "get('shipParent', () => Services.appinfo.sessionHistoryInParent);"
+                "get('bfParent', () => p.getBoolPref('fission.bfcacheInParent', null));"
+                "get('viewers', () => p.getIntPref('browser.sessionhistory.max_total_viewers', null));"
+                "get('remoteExt', () => p.getBoolPref('extensions.webextensions.remote', null));"
+                "get('opener', () => bc.hadOriginalOpener); get('index', () => h.index); get('count', () => h.count);"
+                "get('saveLayout', () => h.getEntryAtIndex(h.index).saveLayoutStateFlag);"
+                "get('remoteType', () => b.remoteType);"
+                "return JSON.stringify(out);"
+            )
+            self.fail(f"the page was loaded again, not kept: {diag}")
 
     def test_01k_back_from_the_warning_to_the_page_warns_again_on_the_next_use_of_its_field(self):
         page = self.fake + "/login?cacheable=1"  # a page the back-forward cache keeps (no "no-store")
         self.m.navigate(page)
-        self.mark_restored()
+        self.mark_page()
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
         self.back_from_warning_to(page)
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
@@ -335,7 +345,7 @@ class PasswordsTest(unittest.TestCase):
     def test_01l_back_from_a_frames_warning_to_the_page_warns_again_on_the_next_use_of_the_frames_field(self):
         home = self.real + "/page/home?cacheable=1"
         self.m.navigate(home)
-        self.mark_restored()
+        self.mark_page()
         self.click_in_frame(None, f"f.src = {self.fake + '/login?cacheable=1'!r};")
         self.back_from_warning_to(home)
         # The same frame, kept with its page: the person uses its field again.
