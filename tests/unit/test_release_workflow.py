@@ -358,16 +358,39 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # The build job counts the served version, computes the revision once, and both the whats-new check and the
         # rehearsal use that one value.
         step = self.build[self.build.index("id: revision") : self.build.index("- name: What is new in this version")]
-        self.assertIn("served=$(curl -fsSL --proto '=https'", step)
+        script = step.split("run: |", 1)[1]
         self.assertIn("sed -n 's/^URIs: //p' site/apt/nulavio.sources", step)
+        # #729: the APT version only from the Packages file that the Release file names by SHA-256 (apt-served), and
+        # only once the release key's detached signature of that Release file verifies.
+        for name, url in (("Release", "$apt/dists/stable/Release"), ("Release.gpg", "$apt/dists/stable/Release.gpg"),
+                          ("repomd.xml.asc", "$rpm/repodata/repomd.xml.asc")):  # fmt: skip
+            self.assertIn(f"""curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/{name}" "{url}\"""", step)
+        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/Packages" """
+                      '"$apt/dists/stable/main/binary-amd64/Packages"', step)  # fmt: skip
+        verify = ('python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/{0}" "$RUNNER_TEMP/{1}" \\\n'
+                  '            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"')  # fmt: skip
+        apt_check, dnf_check = verify.format("Release", "Release.gpg"), verify.format("repomd.xml", "repomd.xml.asc")
+        self.assertIn(apt_check, step)
+        self.assertIn(dnf_check, step)
+        self.assertEqual(step.count("release_manifest.py verify-signed"), 2)
+        self.assertIn("FINGERPRINT: 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 # site/keys/nulavio-packages.asc", step)
+        self.assertIn("command -v gpg >/dev/null || scripts/ci/apt_install.sh gnupg", step)
+        served = (
+            'served=$(python3 -I scripts/release/release_manifest.py apt-served "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Packages")'
+        )
+        dnf_primary = 'primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")'
+        self.assertIn(served, step)
+        # Checked before anything reads the file: Release before apt-served, repomd.xml before dnf-primary.
+        self.assertLess(step.index(apt_check), step.index(served))
+        self.assertLess(step.index(dnf_check), step.index(dnf_primary))
+        self.assertNotIn("awk", script)
         self.assertIn('if ! [[ "$served" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
         # #723: and the dnf index, which is uploaded first and so may serve a revision the APT index does not: the
         # primary file its repomd.xml names, read from files so that a failed download or decompression stops the job.
         self.assertIn("sed -n 's/^baseurl=//p' site/rpm/nulavio.repo", step)
         self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" """
                       '"$rpm/repodata/repomd.xml"', step)  # fmt: skip
-        self.assertIn('primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")',
-                      step)  # fmt: skip
+        self.assertIn(dnf_primary, step)
         self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" """
                       '"$rpm/$primary"', step)  # fmt: skip
         # Bounded (the review of f2a6c211), far above the real files of 2026-11-25 (1.5 to 6.3 kB): every download
@@ -375,15 +398,15 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # failure stops this bash -e step.
         self.assertIn('(ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")',
                       step)  # fmt: skip
-        self.assertEqual(step.count("curl -fsSL"), 3)
-        self.assertEqual(len(re.findall(r"curl -fsSL --proto '=https' --retry 3 --max-filesize [0-9]+M ", step)), 3)
-        self.assertIn("""served=$(curl -fsSL --proto '=https' --retry 3 --max-filesize 8M "$apt/dists/""", step)
+        self.assertEqual(step.count("curl -fsSL"), 6)
+        self.assertEqual(len(re.findall(r"curl -fsSL --proto '=https' --retry 3 --max-filesize [0-9]+M -o ", step)), 6)
         self.assertEqual(step.count("zstd -q -d"), 1)
         self.assertIn('dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" '
                       '"$RUNNER_TEMP/primary.xml")', step)  # fmt: skip
         self.assertIn('if ! [[ "$dnf" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
-        dnf_lines = step[step.index("rpm=$(") : step.index("release=$(")]
-        self.assertNotIn("|", dnf_lines.replace("||", ""))  # no pipe: this shell has no pipefail
+        # No pipe: this shell has no pipefail, so a failed download or check must stop the job by itself.
+        reads = script[script.index("apt=$(") : script.index("release=$(")]
+        self.assertNotIn("|", reads.replace("||", ""))
         self.assertIn('release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served" '
                       '--also "v$dnf")', step)  # fmt: skip
         self.assertIn('echo "release=$release" >> "$GITHUB_OUTPUT"', step)

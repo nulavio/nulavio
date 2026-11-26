@@ -88,27 +88,38 @@ jobs:
         id: revision
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
+          FINGERPRINT: 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 # site/keys/nulavio-packages.asc; verify-signed checks it
         run: |
           # A run that uploaded and stopped before its draft left neither a tag nor a draft, only what the bucket
           # serves: counting the served version keeps the next run off that revision (#656). As in the publish job.
-          # Every index read is bounded far above the real files (2026-11-25: Packages, repomd.xml and the
-          # compressed primary file 1.5 to 1.6 kB each, the primary file 6.3 kB): curl stops at --max-filesize and
-          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job.
+          # Every index read is bounded far above the real files (2026-11-25: Packages, Release, repomd.xml and the
+          # compressed primary file 1 to 1.6 kB each, the primary file 6.3 kB): curl stops at --max-filesize and
+          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job. Each index is
+          # read only once the release key's signature of its root file verifies (#729): the APT Release file
+          # (Release.gpg) names the Packages file by its SHA-256, the dnf repomd.xml (repomd.xml.asc) names the
+          # primary file by its own. Files, not pipes, so a failed download or check stops the job here.
+          command -v gpg >/dev/null || scripts/ci/apt_install.sh gnupg
+          command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
           apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
-          served=$(curl -fsSL --proto '=https' --retry 3 --max-filesize 8M "$apt/dists/stable/main/binary-amd64/Packages" |
-            awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
-          # Empty when curl failed (this shell has no pipefail) or nulavio is not listed: both stop the job.
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/Release" "$apt/dists/stable/Release"
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/Release.gpg" "$apt/dists/stable/Release.gpg"
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/Packages" "$apt/dists/stable/main/binary-amd64/Packages"
+          python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Release.gpg" \
+            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
+          served=$(python3 -I scripts/release/release_manifest.py apt-served "$RUNNER_TEMP/Release" "$RUNNER_TEMP/Packages")
           if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
             echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
             exit 1
           fi
           # The dnf repository is uploaded first: when the APT upload then failed, only the dnf index serves that
-          # revision (#723). Files, not pipes, so a failed download or decompression stops the job here too.
+          # revision (#723).
           rpm=$(sed -n 's/^baseurl=//p' site/rpm/nulavio.repo)
           curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
+          python3 -I scripts/release/release_manifest.py verify-signed "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/repomd.xml.asc" \
+            --key site/keys/nulavio-packages.asc --fingerprint "$FINGERPRINT"
           primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")
           curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
-          command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
           (ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")
           dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml")
           if ! [[ "$dnf" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then

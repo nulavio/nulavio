@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,26 @@ def dnf_repomd(primary: bytes, href: str = PRIMARY_HREF) -> bytes:
         f'    <open-checksum type="sha256">{hashlib.sha256(primary).hexdigest()}</open-checksum>\n'
         f'    <location href="{href}"/>\n  </data>\n'
         '  <data type="other">\n    <location href="repodata/0-other.xml.zst"/>\n  </data>\n</repomd>\n'
+    ).encode()
+
+
+def apt_packages(*packages: tuple[str, str]) -> bytes:
+    """A Packages file as sign_apt_repo.sh's apt-ftparchive writes it, cut down."""
+    return "".join(
+        f"Package: {name}\nArchitecture: amd64\nVersion: {version}\nDescription: x\n multi-line\n Version: 9.9-9\n\n"
+        for name, version in packages
+    ).encode()
+
+
+def apt_release(packages: bytes, *, digest: str = "", size: int = -1, extra: str = "") -> bytes:
+    """The Release file that names it, with the real file's fields (2026-11-25)."""
+    digest = digest or hashlib.sha256(packages).hexdigest()
+    size = len(packages) if size < 0 else size
+    return (
+        "Codename: stable\nComponents: main\nSuite: stable\nSHA256:\n"
+        f" {digest}             {size} main/binary-amd64/Packages\n"
+        f" {'0' * 64}              874 main/binary-amd64/Packages.gz\n{extra}"
+        f"SHA512:\n {'1' * 128}             {size} main/binary-amd64/Packages\n"
     ).encode()
 
 
@@ -434,6 +455,34 @@ class ReleaseManifestTest(unittest.TestCase):
             release_manifest.dnf_primary(doctype)
         self.assertIn("declares a DTD", str(caught.exception))
 
+    def test_the_apt_version_comes_from_the_packages_file_the_signed_release_names(self):
+        # #729: Release (its signature checked by verify-signed) names Packages by SHA-256 and size; the build job
+        # reads the version only from a Packages file that is that one.
+        packages = apt_packages(("nulavio", "159.0.1-0.3"), ("other", "999.0-1"), ("nulavio", "159.0.1-0.10"))
+        self.assertEqual(release_manifest.apt_served(apt_release(packages), packages), "159.0.1-0.10")
+        (self.tmp / "Release").write_bytes(apt_release(packages))
+        (self.tmp / "Packages").write_bytes(packages)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = release_manifest.main(["apt-served", str(self.tmp / "Release"), str(self.tmp / "Packages")])
+        self.assertEqual((code, out.getvalue()), (0, "159.0.1-0.10\n"))
+        one = apt_packages(("nulavio", "159.0.1-0.3"))
+        line = f" {hashlib.sha256(one).hexdigest()} {len(one)} main/binary-amd64/Packages\n"
+        cases = [
+            ("not the one the Release file names", apt_release(one, digest="f" * 64), one),
+            ("not the one the Release file names", apt_release(one, size=len(one) + 1), one),
+            ("not the one the Release file names", apt_release(one), one + b"\n"),
+            ("names 2 SHA-256 sums", apt_release(one, extra=line), one),
+            ("names 0 SHA-256 sums", apt_release(one).replace(b"SHA256:", b"MD5Sum:"), one),
+            ("lists no nulavio package", apt_release(other := apt_packages(("other", "1.0-1"))), other),
+            ("not <version>-<release>", apt_release(odd := apt_packages(("nulavio", "1:159.0.1-0.3"))), odd),
+            ("the Release file is not UTF-8", apt_release(one).decode().encode("utf-16"), one),
+        ]
+        for fragment, release, data in cases:
+            with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.apt_served(release, data)
+            self.assertIn(fragment, str(caught.exception))
+
     def test_signing_refuses_packages_the_manifest_does_not_list(self):
         packages = self.out / "packages"
         self.assertEqual(len(release_manifest.check_packages(self.out / "manifest.json", packages)), 2)
@@ -576,6 +625,103 @@ class ReleaseManifestTest(unittest.TestCase):
             text = (ROOT / readme).read_text(encoding="utf-8")
             self.assertIn("--from-repofile=https://nulavio.net/rpm/nulavio.repo", text)
             self.assertNotIn("packages.nulavio.net/rpm/nulavio.repo", text)
+
+
+@unittest.skipUnless(shutil.which("gpg"), "needs gpg")
+class VerifySignedTest(unittest.TestCase):
+    """verify-signed (#729): the build job reads the bucket's indexes only once the release key signed them."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="nulavio-verify-test-"))
+        cls.homes = []
+        # The release key's shape (a primary key that signs), another key, and a key that signs with a subkey.
+        cls.release = cls.make_key("release", "sign")
+        cls.other = cls.make_key("other", "sign")
+        cls.withsub = cls.make_key("withsub", "cert", subkey=True)
+        cls.data = cls.tmp / "repomd.xml"
+        cls.data.write_bytes(b"<repomd/>\n")
+
+    @classmethod
+    def tearDownClass(cls):
+        for home in cls.homes:
+            subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "all"], capture_output=True, check=False)
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    @classmethod
+    def gpg(cls, home: Path, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["gpg", "--homedir", str(home), "--batch", "--pinentry-mode", "loopback", "--passphrase", "", *args],
+            capture_output=True, check=True,
+        )  # fmt: skip
+
+    @classmethod
+    def make_key(cls, name: str, usage: str, subkey: bool = False) -> dict:
+        home = cls.tmp / name
+        home.mkdir(mode=0o700)
+        cls.homes.append(home)
+        cls.gpg(home, "--quick-gen-key", f"Throwaway {name} <{name}@example.invalid>", "ed25519", usage, "never")
+        listed = cls.gpg(home, "--with-colons", "--list-keys").stdout.decode()
+        fpr = next(line.split(":")[9] for line in listed.splitlines() if line.startswith("fpr:"))
+        if subkey:
+            cls.gpg(home, "--quick-add-key", fpr, "ed25519", "sign", "never")
+        key = cls.tmp / f"{name}.asc"
+        key.write_bytes(cls.gpg(home, "--armor", "--export").stdout)
+        return {"home": home, "fpr": fpr, "key": key}
+
+    def sign(self, key: dict, *how: str) -> Path:
+        signature = self.tmp / f"{key['fpr'][:8]}-{len(how)}.asc"
+        signature.unlink(missing_ok=True)
+        self.gpg(key["home"], "--armor", *(how or ("--detach-sign",)), "-o", str(signature), str(self.data))
+        return signature
+
+    def refused(self, fragment: str, signature: Path, key: Path, fingerprint: str, data: Path | None = None) -> None:
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.verify_signature(data or self.data, signature, key, fingerprint)
+        self.assertIn(fragment, str(caught.exception))
+
+    def test_a_good_signature_by_the_release_key_or_its_subkey_passes(self):
+        release = self.release
+        release_manifest.verify_signature(self.data, self.sign(release), release["key"], release["fpr"].lower())
+        args = [str(self.data), str(self.sign(release)), "--key", str(release["key"]), "--fingerprint", release["fpr"]]
+        self.assertEqual(release_manifest.main(["verify-signed", *args]), 0)
+        # A signing subkey: VALIDSIG names the subkey first and the primary key last.
+        sub = self.withsub
+        release_manifest.verify_signature(self.data, self.sign(sub), sub["key"], sub["fpr"])
+
+    def test_a_bad_missing_or_foreign_signature_stops_the_build(self):
+        release, other = self.release, self.other
+        signature = self.sign(release)
+        changed = self.tmp / "changed.xml"
+        changed.write_bytes(b"<repomd>999</repomd>\n")
+        self.refused("BADSIG", signature, release["key"], release["fpr"], data=changed)
+        self.refused("has no signature", self.tmp / "none.asc", release["key"], release["fpr"])
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = [str(self.data), str(self.tmp / "none.asc"), "--key", str(release["key"]), "--fingerprint", release["fpr"]]
+            self.assertEqual(release_manifest.main(["verify-signed", *args]), 1)
+        # Signed by another key: only the release key is in the throwaway keyring.
+        self.refused("is not a good signature", self.sign(other), release["key"], release["fpr"])
+        # A key file that is another key, or that holds another key too, is not the release key.
+        self.refused("not the key", self.sign(other), other["key"], release["fpr"])
+        both = self.tmp / "both.asc"
+        both.write_bytes(release["key"].read_bytes() + other["key"].read_bytes())
+        self.refused("not the key", signature, both, release["fpr"])
+        # A signed message in place of a detached signature: gpg checks the message, not the file.
+        self.refused("is not a good signature", self.sign(release, "--sign"), release["key"], release["fpr"])
+        self.refused("is not a good signature", self.sign(release, "--clearsign"), release["key"], release["fpr"])
+        self.refused("not a full key fingerprint", signature, release["key"], release["fpr"][-16:])
+        self.refused("not an OpenPGP key", signature, self.data, release["fpr"])
+
+    def test_the_committed_release_key_is_the_one_the_workflow_names(self):
+        # The build job names this fingerprint; the key file in the repository must be that key alone.
+        listed = subprocess.run(
+            ["gpg", "--batch", "--with-colons", "--show-keys", str(release_manifest.RELEASE_KEY)],
+            capture_output=True, text=True, check=True, env={**os.environ, "GNUPGHOME": str(self.tmp / "release")},
+        ).stdout  # fmt: skip
+        self.assertEqual([line.split(":")[9] for line in listed.splitlines() if line.startswith("fpr:")],
+                         ["298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"])  # fmt: skip
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("FINGERPRINT: 298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1 # site/keys/nulavio-packages.asc", workflow)
 
 
 if __name__ == "__main__":

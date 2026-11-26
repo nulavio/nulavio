@@ -7,6 +7,8 @@
     python3 -I scripts/release/release_manifest.py not-older <tag> [--repo DIR] [--also TAG ...]
     python3 -I scripts/release/release_manifest.py dnf-primary <repomd.xml>
     python3 -I scripts/release/release_manifest.py dnf-served <repomd.xml> <primary.xml>
+    python3 -I scripts/release/release_manifest.py verify-signed <file> <signature> --fingerprint FPR [--key FILE]
+    python3 -I scripts/release/release_manifest.py apt-served <Release> <Packages>
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
 from a tree with uncommitted or untracked changes, an engine pin that differs
@@ -44,6 +46,15 @@ distribution (``0.3.fc44`` is ``0.3``), once its SHA-256 is the one repomd.xml g
 Both read only UTF-8 XML without a DTD or an entity, as createrepo_c writes it.
 Anything else stops it: the build job then fails closed.
 
+``verify-signed`` refuses a file unless its detached signature is good and made by
+the release key (site/keys/nulavio-packages.asc, by default) or one of its subkeys:
+a throwaway GNUPGHOME holds that key alone, the key file must be the fingerprint given,
+and gpg's status lines must show one signature, valid, by that key. The build job runs
+it on repomd.xml (repomd.xml.asc, sign_repo.sh) and on the APT Release file
+(Release.gpg, sign_apt_repo.sh) before it reads them (#729). ``apt-served`` prints the
+highest ``<version>-<release>`` of nulavio in a Packages file, once its SHA-256 and
+size are the ones that Release file gives.
+
 ``not-older`` refuses a release when a newer one is tagged, recorded in
 packaging/release.json or named with ``--also``. The publish job runs it before
 the upload with every GitHub release (drafts included) and the version the
@@ -59,6 +70,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from xml.parsers import expat
 from pathlib import Path
@@ -77,6 +89,13 @@ PRIMARY_NS = "{http://linux.duke.edu/metadata/common}"
 PRIMARY_HREF = re.compile(r"repodata/[0-9a-f]{64}-primary\.xml\.zst")
 # rpm adds the distribution after the release (0.3.fc44), as check_published.sh allows; a .deb's is exact.
 RPM_RELEASE = re.compile(r"([0-9]+(?:\.[0-9]+)*)(?:\.fc[0-9]+)?")
+# The key that signs both repositories' metadata (sign_repo.sh, sign_apt_repo.sh), as the site publishes it.
+RELEASE_KEY = ROOT / "site/keys/nulavio-packages.asc"
+FINGERPRINT = re.compile(r"[0-9A-F]{40}")
+# gpg status lines that mean the signature is not one good detached signature of the file: a bad, unchecked,
+# expired or revoked one, or a signed message (PLAINTEXT) in place of a detached signature.
+REFUSED_STATUS = ("BADSIG", "ERRSIG", "EXPSIG", "EXPKEYSIG", "REVKEYSIG", "NO_PUBKEY", "NODATA", "PLAINTEXT")
+APT_VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)+-[0-9]+(?:\.[0-9]+)*")
 # The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
 NETWORKING_RECORD = "browser/build/networking-check.json"
 
@@ -396,6 +415,95 @@ def dnf_served(repomd: bytes, primary: bytes) -> str:
     return f"{ver}-{rel}"
 
 
+def _gpg(home: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["gpg", "--homedir", home, "--batch", "--no-tty", "--no-auto-key-retrieve", *args],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+
+
+def verify_signature(data: Path, signature: Path, key: Path, fingerprint: str) -> None:
+    """Refuse data unless signature is one good detached signature of it by the key whose fingerprint is given, or
+    by one of that key's subkeys (#729). Only that key is in the throwaway GNUPGHOME gpg checks against."""
+    fingerprint = fingerprint.upper()
+    if not FINGERPRINT.fullmatch(fingerprint):
+        raise ManifestError(f"{fingerprint!r} is not a full key fingerprint (40 hex digits)")
+    if not signature.is_file():
+        raise ManifestError(f"{data.name} has no signature ({signature} is missing)")
+    with tempfile.TemporaryDirectory(prefix="nulavio-verify-") as home:
+        try:
+            if _gpg(home, "--quiet", "--import", str(key)).returncode != 0:
+                raise ManifestError(f"{key} is not an OpenPGP key gpg can import")
+            listed = _gpg(home, "--with-colons", "--fixed-list-mode", "--list-keys").stdout.splitlines()
+            primaries, signers, kind = [], set(), ""
+            for line in listed:
+                fields = line.split(":")
+                if fields[0] in ("pub", "sub"):
+                    kind = fields[0]
+                elif fields[0] == "fpr" and kind:
+                    if kind == "pub":
+                        primaries.append(fields[9])
+                    signers.add(fields[9])
+                    kind = ""
+            if primaries != [fingerprint]:
+                raise ManifestError(f"{key} holds {primaries}, not the key {fingerprint} alone")
+            checked = _gpg(home, "--status-fd", "1", "--verify", str(signature), str(data))
+        finally:
+            subprocess.run(["gpgconf", "--homedir", home, "--kill", "all"], capture_output=True, check=False)
+    status = [line.split()[1:] for line in checked.stdout.splitlines() if line.startswith("[GNUPG:] ")]
+    names = [fields[0] for fields in status if fields]
+    valid = [fields[1:] for fields in status if fields and fields[0] == "VALIDSIG"]
+    refused = sorted(set(names) & set(REFUSED_STATUS))
+    if (
+        checked.returncode != 0
+        or refused
+        or names.count("NEWSIG") != 1
+        or names.count("GOODSIG") != 1
+        or len(valid) != 1
+        or valid[0][0] not in signers
+        or valid[0][-1] != fingerprint
+    ):
+        why = ", ".join(refused) or f"gpg exit {checked.returncode}, {names.count('VALIDSIG')} valid signatures"
+        raise ManifestError(f"{signature.name} is not a good signature of {data.name} by {fingerprint} ({why})")
+
+
+def apt_served(release: bytes, packages: bytes) -> str:
+    """The highest <version>-<release> of nulavio in the APT Packages file, once the signed Release file names its
+    SHA-256 and size (#729)."""
+    try:
+        text = release.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ManifestError("the Release file is not UTF-8") from None
+    named, section = [], ""
+    for line in text.splitlines():
+        if not line.startswith(" "):
+            section = line.split(":", 1)[0]
+            continue
+        fields = line.split()
+        if section == "SHA256" and len(fields) == 3 and fields[2] == "main/binary-amd64/Packages":
+            named.append(fields[:2])
+    if len(named) != 1:
+        raise ManifestError(f"the Release file names {len(named)} SHA-256 sums of main/binary-amd64/Packages, not one")
+    if named[0] != [hashlib.sha256(packages).hexdigest(), str(len(packages))]:
+        raise ManifestError("the Packages file is not the one the Release file names (SHA256)")
+    try:
+        stanzas = packages.decode("utf-8").split("\n\n")
+    except UnicodeDecodeError:
+        raise ManifestError("the Packages file is not UTF-8") from None
+    served = []
+    for stanza in stanzas:
+        fields = dict(line.split(": ", 1) for line in stanza.splitlines() if ": " in line and not line.startswith(" "))
+        if fields.get("Package") != "nulavio":
+            continue
+        version = fields.get("Version", "")
+        if not APT_VERSION.fullmatch(version):
+            raise ManifestError(f"the Packages file lists nulavio {version!r}, not <version>-<release>")
+        served.append(version)
+    if not served:
+        raise ManifestError("the Packages file lists no nulavio package")
+    return max(served, key=lambda v: tuple(_numbers(part) for part in v.split("-", 1)))
+
+
 def debs(manifest: dict, release_tag: str) -> list[str]:
     """The .deb packages, which carry the RPM's version and release (one engine build, two formats)."""
     found = [e["file"] for e in manifest["packages"] if e["file"].endswith(".deb")]
@@ -474,6 +582,14 @@ def main(argv: list[str] | None = None) -> int:
     ds = sub.add_parser("dnf-served", help="the highest nulavio version the dnf repository's primary metadata lists")
     ds.add_argument("repomd", type=Path)
     ds.add_argument("primary", type=Path, help="the primary file dnf-primary named, decompressed")
+    vs = sub.add_parser("verify-signed", help="refuse a file unless the release key signed it (detached signature)")
+    vs.add_argument("file", type=Path)
+    vs.add_argument("signature", type=Path)
+    vs.add_argument("--fingerprint", required=True, help="the release key's full fingerprint")
+    vs.add_argument("--key", type=Path, default=RELEASE_KEY, help="the release key's public key file")
+    ap = sub.add_parser("apt-served", help="the highest nulavio version a Packages file that Release names lists")
+    ap.add_argument("release", type=Path, help="the Release file, its signature checked (verify-signed)")
+    ap.add_argument("packages", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "verify":
@@ -488,6 +604,10 @@ def main(argv: list[str] | None = None) -> int:
             print(dnf_primary(args.repomd.read_bytes()))
         elif args.command == "dnf-served":
             print(dnf_served(args.repomd.read_bytes(), args.primary.read_bytes()))
+        elif args.command == "verify-signed":
+            verify_signature(args.file, args.signature, args.key, args.fingerprint)
+        elif args.command == "apt-served":
+            print(apt_served(args.release.read_bytes(), args.packages.read_bytes()))
         else:
             print("\n".join(check_packages(args.manifest, args.packages)))
     except (ManifestError, OSError) as e:  # OSError: an input file that is missing or cannot be read
