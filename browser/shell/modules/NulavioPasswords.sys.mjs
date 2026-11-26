@@ -27,6 +27,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const DATA_URL = "resource://builtin-addons/nulavio-shell/shared/providers.json";
 const ORDER = ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"];
 export const PREF_DISMISSED = "nulavio.passwords.lookalikeDismissed";
+const READS = 3; // reads of the saved logins for one check, when they change while being read
 // The engine's own permission name (LoginManager.sys.mjs); test_vault_ui checks it still decides.
 const PERMISSION_SAVE_LOGINS = "login-saving";
 const LOGIN_WORDS = ["login", "signin", "secure", "account", "verify", "update", "support", "auth", "conta", "seguro", "acesso", "entrar", "senha"];
@@ -152,7 +153,10 @@ export function lookalikeOf(host, savedSites) {
 class Passwords {
   #data = null;
   #savedSites = null;
+  #reading = null; // the read of the saved logins under way, shared by the checks that start meanwhile
+  #generation = 0; // a change to the saved logins makes a read under way stale
   #observing = false;
+  #warnings = new WeakMap(); // a tab's browser -> the warning the engine's actor opened in it for a field in a frame
 
   async #providers() {
     if (!this.#data) {
@@ -257,25 +261,48 @@ class Passwords {
      no other call lists the logins' sites without decrypting them. So the check waits for the person to
      unlock the token where the engine asks for it, and nothing is kept meanwhile (R41). isLoggedIn is
      also false while the store starts, which is why its start is awaited first. */
-  async #sites() {
-    if (!this.#savedSites) {
-      await Services.logins.initializationPromise;
-      if (!Services.logins.isLoggedIn) {
-        return null;
-      }
-      const logins = await Services.logins.getAllLogins();
-      const sites = new Set();
-      for (const login of logins) {
-        try {
-          sites.add(siteOf(new URL(login.origin).hostname));
-        } catch {}
-      }
-      this.#savedSites = [...sites];
-      if (!this.#observing) {
-        this.#observing = true;
-        Services.obs.addObserver(() => (this.#savedSites = null), "passwordmgr-storage-changed");
-      }
+  async #sites(attempt = 0) {
+    if (this.#savedSites) {
+      return this.#savedSites;
     }
+    if (!this.#observing) {
+      this.#observing = true;
+      Services.obs.addObserver(() => {
+        this.#savedSites = this.#reading = null;
+        this.#generation++;
+      }, "passwordmgr-storage-changed");
+    }
+    // Checks that start while the logins are read (several frames of one tab) wait for the same read.
+    if (!this.#reading) {
+      const reading = this.#readSites(attempt).finally(() => {
+        if (this.#reading === reading) {
+          this.#reading = null;
+        }
+      });
+      this.#reading = reading;
+    }
+    return this.#reading;
+  }
+
+  async #readSites(attempt) {
+    const generation = this.#generation;
+    await Services.logins.initializationPromise;
+    if (!Services.logins.isLoggedIn) {
+      return null;
+    }
+    const logins = await Services.logins.getAllLogins();
+    const sites = new Set();
+    for (const login of logins) {
+      try {
+        sites.add(siteOf(new URL(login.origin).hostname));
+      } catch {}
+    }
+    if (generation !== this.#generation) {
+      // The saved logins changed meanwhile: read them again, up to READS times in all for one check; then answer
+      // with this read, not kept, so a burst of changes cannot hold the check back.
+      return attempt + 1 < READS ? this.#sites(attempt + 1) : [...sites];
+    }
+    this.#savedSites = [...sites];
     return this.#savedSites;
   }
 
@@ -342,8 +369,10 @@ class Passwords {
     }
   }
 
-  /** Watch password fields in web pages (top documents only), through the engine's window actors. The
-     child asks only after the person's own input (NulavioLookalikeChild.sys.mjs says which). */
+  /** Watch password fields in web pages, in the tab's page and in every frame of it, through the engine's
+     window actors. The child asks only after the person's own input (NulavioLookalikeChild.sys.mjs says
+     which); the parent checks the sites the engine gives the field's document and the documents around it
+     (NulavioLookalikeParent.sys.mjs). */
   registerLookalikeCheck() {
     if (this.registered) {
       return;
@@ -354,13 +383,16 @@ class Passwords {
       parent: { esModuleURI: `${base}NulavioLookalikeParent.sys.mjs` },
       child: {
         esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`,
-        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true } },
+        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true }, pageshow: { createActor: false } },
       },
-      matches: ["http://*/*", "https://*/*"],
-      allFrames: false,
+      // The engine matches a document's own address: a site's page, and the documents a page makes
+      // that take its site (about:blank, about:srcdoc, blob:) or none (data:). Never an extension's
+      // page (moz-extension:, Nulavio's own unlock, protection and phone pages) or a browser page.
+      matches: ["http://*/*", "https://*/*", "about:blank", "about:srcdoc", "blob:*", "data:*"],
+      allFrames: true,
       messageManagerGroups: ["browsers"],
       // Runs in web content processes: the parent trusts no data from them. The only message carries
-      // no data, and the address comes from the engine (documentURI), not from the page.
+      // no data, and the addresses come from the engine (documentURI, documentPrincipal), not from the page.
       safeForUntrustedWebProcess: true,
     });
   }
@@ -369,13 +401,37 @@ class Passwords {
    * "Continue anyway" on the warning page: the pair is found again from the address and this profile's
    * saved logins, never taken from the page. Nothing to remember when the address imitates no saved site.
    */
-  async dismissFor(url) {
+  async dismissFor(url, { back = false, browser = null } = {}) {
+    // "Continue" that goes back to the tab's page (a field in a frame): nothing is remembered unless the tab has a
+    // page to go back to.
+    if (back && !this.canGoBack(browser)) {
+      fail("no-way-back");
+    }
     const found = await this.#lookalike(url);
     if (!found || found.locked) {
       return { dismissed: false };
     }
+    if (back && !this.canGoBack(browser)) {
+      fail("no-way-back"); // the tab left the warning while the saved logins were read
+    }
     this.dismiss(found.site, found.similar);
     return { dismissed: true };
+  }
+
+  /** The warning the engine's actor opened in the tab of `browser` for a field in a frame: the entry of the tab's
+     history it takes and its address. Its "continue" goes back to the entry before it (NulavioLookalikeParent). */
+  bindWarning(browser, { index, url }) {
+    this.#warnings.set(browser, { index, url });
+  }
+
+  /** Whether "continue" may go back in the tab of `browser`: the tab shows the warning the engine's actor opened in
+     it, at the entry of its history it took (not one another extension opened, nor a later entry of it). */
+  canGoBack(browser) {
+    const warning = browser ? this.#warnings.get(browser) : null;
+    const index = browser?.browsingContext?.sessionHistory?.index;
+    return Boolean(
+      warning && index > 0 && index === warning.index && browser.currentURI?.specIgnoringRef === warning.url
+    );
   }
 
   /** Not asked again for this pair of sites (kept in this profile only). */
