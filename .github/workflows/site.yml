@@ -6,7 +6,8 @@ name: site
 # (CONTRIBUTING.md, "Website").
 #
 # It runs when a push to main changes something scripts/site/build_site.py reads, or by hand
-# (Actions -> site -> Run workflow), on main only. The build is the normal one, not --release:
+# (Actions -> site -> Run workflow), on main only. tests/unit/test_site.py traces a build and fails when
+# it reads a file that the paths below do not match. The build is the normal one, not --release:
 # --release requires the captures to come from the commit being built.
 #
 # Credentials: the secret CLOUDFLARE_API_TOKEN (an API token limited to
@@ -37,6 +38,7 @@ on:
       - "browser/patches/series"
       - "browser/distribution/extensions.lock.json"
       - "launcher/**" # the prefs explain excerpt on the page
+      - "browser/config/prefs/**" # the defaults count and the prefs explain excerpt (#661)
       - "ci/site/**"
       - ".github/workflows/site.yml"
   workflow_dispatch:

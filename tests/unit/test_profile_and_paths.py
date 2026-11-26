@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -12,13 +13,15 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import doctor, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import cli, confine, doctor, guard, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import engine as engine_mod  # noqa: E402
 
 
 def mode(path: Path) -> int:
@@ -513,6 +516,164 @@ class ProfileTest(TempHome):
         profile.delete(prof)
         self.assertFalse(prof.path.exists())
         self.assertTrue(paths.profiles_root().exists())
+
+
+class GuardAtLaunchTest(TempHome):
+    """#704: `nulavio run` audits the prefs the engine loads, after the launcher has written prefs.js and user.js."""
+
+    WEAK = 'user_pref("security.sandbox.content.level", 0);\n'  # critical for the Guard; no baseline pref
+    PROTECTIVE = 'user_pref("security.sandbox.content.level", 4);\n'
+
+    def setUp(self):
+        super().setUp()
+        self.prof = profile.create("work")
+        self.prof.path.joinpath("prefs.js").write_text(self.WEAK)
+        self.prof.path.joinpath("user.js").write_text(self.PROTECTIVE)
+
+    def run_cli(self, *extra: str) -> tuple[int, str]:
+        eng = engine_mod.Engine(path=self.home / "engine" / "nulavio", version="160.0.1", vendor="Nulavio")
+        err = io.StringIO()
+        with (
+            mock.patch.object(engine_mod, "find_engine", return_value=eng),
+            mock.patch.object(engine_mod, "check_supported"),
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(err),
+        ):
+            code = cli.main(["run", "--dry-run", "--profile", "work", *extra])
+        return code, err.getvalue()
+
+    def test_a_protective_user_js_line_the_launcher_replaces_does_not_hide_a_weakened_value(self):
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+        self.assertIn("refusing to start", said)
+        # The line the audit would have counted is gone: the engine is given the value from prefs.js.
+        self.assertNotIn("security.sandbox.content.level", prefs.read_user_prefs(self.prof.path / "user.js"))
+
+    def test_the_audited_value_is_the_one_the_engine_is_given(self):
+        code, said = self.run_cli("--allow-weakened")
+        self.assertEqual(code, 0, said)
+        loaded = prefs.effective_user_prefs(self.prof.path)  # prefs.js with user.js over it, as the engine reads them
+        self.assertEqual(loaded["security.sandbox.content.level"], 0)
+        self.assertIn(f"security.sandbox.content.level={loaded['security.sandbox.content.level']!r}", said)
+        self.assertEqual(
+            [(f.pref, f.actual) for f in guard.audit(self.prof.path) if f.severity == "critical"],
+            [("security.sandbox.content.level", 0)],
+        )
+
+    def test_a_pref_the_launcher_appends_to_prefs_js_is_audited(self):
+        self.prof.path.joinpath("prefs.js").write_text("")
+        settings = self.prof.load_settings()
+        settings["pending_prefs"] = {"xpinstall.signatures.required": False}
+        self.prof.save_settings(settings)
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("guard [critical] xpinstall.signatures.required=False", said)
+
+    def test_a_user_js_the_audit_refused_still_stops_the_start(self):
+        # The launcher replaces user.js before the audit: one that is not the person's own regular file is refused
+        # first, as the audit refused it before the order changed, and is left as it was.
+        elsewhere = self.home / "elsewhere.js"
+        elsewhere.write_text(self.PROTECTIVE)
+        self.prof.path.joinpath("prefs.js").write_text("")
+        user_js = self.prof.path / "user.js"
+        for make, reason in ((lambda: os.symlink(elsewhere, user_js), "symlink"), (lambda: os.mkfifo(user_js), "regular")):
+            with self.subTest(reason):
+                user_js.unlink()
+                make()
+                code, said = self.run_cli()
+                self.assertEqual(code, 1, said)
+                self.assertIn(reason, said)
+                self.assertFalse(user_js.is_file() and not user_js.is_symlink(), "user.js was replaced")
+        self.assertEqual(elsewhere.read_text(), self.PROTECTIVE)
+
+    def test_a_malformed_profile_file_is_reported_not_a_traceback(self):
+        # Preparing now comes before the audit: a file it cannot read ends the start with a message, not a crash.
+        settings = self.prof.load_settings()
+        settings["pending_prefs"] = {"browser.startup.page": 1}
+        self.prof.save_settings(settings)
+        self.prof.path.joinpath("prefs.js").write_bytes(b'user_pref("a", "\xff");\n' + self.WEAK.encode())
+        code, said = self.run_cli()
+        self.assertEqual(code, 1, said)
+        self.assertIn("prefs.js", said)
+        for broken in ('{"schema": ', "null", "[]", '"settings"'):
+            with self.subTest(broken):
+                paths.write_private_file(self.prof.settings_path, broken)
+                code, said = self.run_cli()
+                self.assertEqual(code, 1, said)
+                self.assertIn("settings", said)
+
+    def test_an_extension_registry_of_the_wrong_shape_does_not_stop_the_audit(self):
+        for registry in (
+            "[]",
+            '{"addons": null}',
+            '{"addons": {"id": "x"}}',
+            '{"addons": [null, 3, "x"]}',
+            '{"addons": [{"type": "extension", "location": "app-profile"}]}',
+            '{"addons": [{"id": 7, "type": "extension", "location": "app-profile"}]}',
+            '{"addons": [{"id": "x@y", "type": "extension", "location": "app-profile", "defaultLocale": "x"}]}',
+        ):
+            with self.subTest(registry):
+                self.prof.path.joinpath("extensions.json").write_text(registry)
+                code, said = self.run_cli()
+                self.assertEqual(code, 3, said)
+                self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+
+    def test_a_profile_that_closes_during_the_open_profile_audit_is_prepared_and_audited(self):
+        # The engine exits while its profile is being audited: the start is a fresh one, not a forward.
+        calls = iter([os.getpid()])
+        with mock.patch.object(profile.Profile, "running_pid", lambda _self: next(calls, None)):
+            code, said = self.run_cli()
+        self.assertEqual(code, 3, said)  # prepared: the protective user.js line is gone, the weakened value counts
+        self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+
+    def test_confinement_is_set_up_only_after_the_guard_allows_the_start(self):
+        for effect in (lambda command, **_: command, confine.ConfineError("not starting: no bubblewrap")):
+            with self.subTest(effect), mock.patch.object(confine, "wrap", side_effect=effect) as wrap:
+                code, said = self.run_cli("--confined")
+                self.assertEqual(code, 3, said)
+                self.assertIn("refusing to start", said)
+                wrap.assert_not_called()
+        with mock.patch.object(confine, "wrap", side_effect=lambda command, **_: command) as wrap:
+            code, said = self.run_cli("--confined", "--allow-weakened")
+        self.assertEqual(code, 0, said)
+        wrap.assert_called_once()
+        self.prof.path.joinpath("user.js").write_text(self.PROTECTIVE)
+        os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+        with mock.patch.object(confine, "wrap") as wrap:
+            code, said = self.run_cli("--confined")
+        self.assertEqual(code, 1, said)  # an open profile: audited, then refused as already open
+        self.assertIn("already open", said)
+        wrap.assert_not_called()
+
+    def test_a_profile_opened_while_the_start_is_checked_is_not_started_again(self):
+        # Preparing checked the lock; the audit and the confinement come after it. A profile another start opened
+        # meanwhile is refused as in use, as preparing refused it when it came last.
+        self.prof.path.joinpath("prefs.js").write_text("")
+
+        def open_it(command, **_):
+            os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+            return command
+
+        for extra, patch in ((("--confined",), mock.patch.object(confine, "wrap", side_effect=open_it)),
+                             ((), mock.patch.object(cli, "_guard_allows", side_effect=lambda *_: open_it(True)))):  # fmt: skip
+            with self.subTest(extra), patch:
+                try:
+                    code, said = self.run_cli(*extra)
+                finally:
+                    (self.prof.path / "lock").unlink(missing_ok=True)
+                self.assertEqual(code, 1, said)  # with --dry-run, 0 is the command printed for a start
+                self.assertIn("is open", said)
+
+    def test_an_open_profile_is_audited_as_it_is_and_not_prepared(self):
+        os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
+        code, said = self.run_cli()
+        self.assertEqual(code, 0, said)  # the running engine loaded user.js as it is
+        self.assertEqual(self.prof.path.joinpath("user.js").read_text(), self.PROTECTIVE)
+        self.prof.path.joinpath("user.js").write_text('user_pref("marionette.port", 2828);\n')
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("marionette.port", said)
 
 
 class OnePasswordDoctorTest(unittest.TestCase):
