@@ -27,11 +27,26 @@ let thread = null;
 let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
+// The list's revision (#759): every write of `chips` moves it, and so do every move of `contextVersion` and an entry
+// point's delivery. An item-list reply is drawn only when it did not move while that reply was on its way
+// (checkedChips); otherwise the list is read again. So a reply never puts back an item removed, dropped or replaced
+// meanwhile, nor writes over one included.
+let revision = 0;
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
 let drawn = false; // a ready render read the conversation and the items since the panel was last in another state
 
 const $ = id => document.getElementById(id);
+/** The one way `chips` changes: the revision moves with it. */
+function setChips(list) {
+  chips = list;
+  ++revision;
+}
+/** A Send, a mode change, a tab to read again, another state: a reply about the context before it is void. */
+function newContext() {
+  ++revision;
+  return ++contextVersion;
+}
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
 const code = error => String(error?.message ?? error);
 const codePoints = text => [...text].length; // as the tools count (Python's len), not UTF-16 units
@@ -272,7 +287,7 @@ function showContext() {
 
 /** An item leaves the message, here and in the browser, and the panel says why (`key` names it). */
 function drop(chip, key) {
-  chips = chips.filter(c => c !== chip);
+  setChips(chips.filter(c => c !== chip));
   ai.assistantRemove(chip.chipId).catch(() => {});
   const text = t(key, [chip.title]);
   $("drift-text").textContent = text;
@@ -281,8 +296,8 @@ function drop(chip, key) {
 }
 
 function removeChip(chip) {
-  ++contextVersion;
-  chips = chips.filter(c => c !== chip);
+  newContext();
+  setChips(chips.filter(c => c !== chip));
   ai.assistantRemove(chip.chipId).catch(() => {});
   showContext();
   $("include-page").focus();
@@ -291,7 +306,7 @@ function removeChip(chip) {
 /** "Incluir esta página" and "Resumir": the tab shown now is read and kept for the next message.
     Resolves to true when the page is in the message. */
 async function includeCurrent() {
-  const version = ++contextVersion;
+  const version = newContext();
   const sent = sends;
   const page = await ai.assistantPage().catch(() => null); // what the tab shows at this moment
   if (version !== contextVersion || document.body.dataset.state !== "ready") {
@@ -317,7 +332,7 @@ async function includeCurrent() {
     ai.assistantRemove(chip.chipId).catch(() => {}); // a Send or a change came first: it is not for that one
     return false;
   }
-  chips = [...chips.filter(c => c.kind !== "page"), chip];
+  setChips([...chips.filter(c => c.kind !== "page"), chip]); // a list read before the browser stored it is read again
   $("drift").hidden = true;
   showContext();
   return true;
@@ -339,7 +354,7 @@ function bindToPage(page, changedTab = null) {
 
 /** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
 async function refreshPage(changedTab = null) {
-  const version = ++contextVersion;
+  const version = newContext();
   const page = await ai.assistantPage().catch(() => null);
   if (version !== contextVersion) {
     return;
@@ -350,28 +365,29 @@ async function refreshPage(changedTab = null) {
 
 /** The items the browser keeps for this window's next message, checked against the tab selected now before they are
     drawn (#758): the list and that tab are read together, and what the tab does not hold leaves with no await in
-    between, so Send carries only items the panel shows and the selected tab holds. A Send, a tab event or another
-    change of `version` while they are on their way (#739) means both are read again, without cancelling what came
-    meanwhile. `fallback`: the list when it cannot be read. False when the panel went to another state meanwhile. */
-async function checkedChips(version, fallback) {
+    between, so Send carries only items the panel shows and the selected tab holds. When `revision` moved while they
+    were on their way (a Send, a tab event, an item included, removed or dropped, an entry point's delivery: #739,
+    #759), both are read again, without cancelling what came meanwhile. These reads start no new context, so an
+    Include or a tab event's check on its way stays (#773). `fallback`: the list when it cannot be read. False when
+    the panel went to another state meanwhile. */
+async function checkedChips(fallback) {
   for (;;) {
+    const read = revision;
     const [list, page] = await Promise.all([ai.assistantChips().catch(fallback), ai.assistantPage().catch(() => null)]);
     if (document.body.dataset.state !== "ready") {
       return false; // paused, private: no items there
     }
-    if (version === contextVersion) {
-      chips = list;
+    if (read === revision) {
+      setChips(list); // another list on its way, read before this one was drawn, is read again
       bindToPage(page);
       showContext();
       return true;
     }
-    version = contextVersion;
   }
 }
 
-/** The items the browser kept while the panel was closed. The revision is not bumped: a tab event's check on its way
-    still drops what the tab it read does not hold, before these reads come back (#773). */
-const restoreChips = () => checkedChips(contextVersion, () => []);
+/** The items the browser kept while the panel was closed. */
+const restoreChips = () => checkedChips(() => []);
 
 function syncMode() {
   const task = mode() === "task";
@@ -437,8 +453,8 @@ async function render() {
     await takeOffer();
     await adoptTask();
   } else {
-    ++contextVersion;
-    chips = [];
+    newContext();
+    setChips([]);
     drawn = false;
     // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
     // carry, no offer of a page, no hint, no size.
@@ -718,8 +734,8 @@ async function takeOffer() {
   }
   await restoring.catch(() => {}); // the items the panel opens with are checked against the selected tab first (#758)
   // Its item too, against the tab selected now: one from a tab the person left while it was read does not go (#773).
-  // The revision is not bumped, so an Include on its way stays; the drift notice of an item dropped stays too.
-  if (!(await checkedChips(contextVersion, () => chips))) {
+  // No new context, so an Include on its way stays; the drift notice of an item dropped stays too.
+  if (!(await checkedChips(() => chips))) {
     return;
   }
   const added = chips.find(c => c.chipId === delivery.chipId);
@@ -733,6 +749,8 @@ async function takeOffer() {
 
 function onRunEvent(event) {
   if (event.type === "offer") {
+    // The browser changed the list (an item added, or a selection replaced): a list read before this is read again (#759).
+    ++revision;
     takeOffer();
     return;
   }
@@ -875,11 +893,11 @@ async function send(question, { retry = false } = {}) {
   const expected = { recipient: state.recipient, model: state.provider.model };
   const items = task || retry ? [] : chips.map(c => c.chipId);
   const chars = retry ? Number($("retry").dataset.chars) : requestChars();
-  ++contextVersion;
+  newContext();
   ++sends;
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
   // The browser drops its copy too, whatever the start (#678).
-  chips = [];
+  setChips([]);
   $("drift").hidden = true;
   showContext();
   $("answer-section").hidden = true;
@@ -962,7 +980,7 @@ $("prompt").addEventListener("keydown", event => {
 });
 $("ask").addEventListener("change", event => {
   if (event.target.name === "mode") {
-    ++contextVersion;
+    newContext();
     syncMode();
   }
 });

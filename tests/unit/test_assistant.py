@@ -1151,6 +1151,9 @@ const offerHeld = [];
 let holdStart = false; // and for a start's answer (assistantStart), which refuses with `refuse` when set
 const startHeld = [];
 let refuse = null;
+let holdInclude = false; // and for an Include's reply (assistantInclude)
+const includeHeld = [];
+let includes = 0;
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
@@ -1185,6 +1188,12 @@ globalThis.browser = {
       const code = refuse;
       const answer = () => (code ? Promise.reject(new Error(code)) : Promise.resolve({ runId }));
       return holdStart ? new Promise((resolve, reject) => startHeld.push(() => answer().then(resolve, reject))) : answer();
+    },
+    // "Incluir esta página": the browser stores the item when its read ends, so a list read before that has none.
+    assistantInclude({ tabId }) {
+      const chip = item(`inc${++includes}`, "Incluída", [tab, otherTab].find(at => at.tabId === tabId));
+      const store = () => ((kept = [...kept.filter(c => c.kind !== "page"), chip]), chip);
+      return holdInclude ? new Promise(resolve => includeHeld.push(() => resolve(store()))) : Promise.resolve(store());
     },
     assistantAllow: async () => {},
     assistantRemove: async chipId => {
@@ -1559,6 +1568,107 @@ pageHeld.splice(0).forEach(answer => answer());
 await release();
 out.tabEventAfter = shown();
 await finish();
+
+// #759: an item-list reply never puts back an item removed, dropped or replaced while it was on its way, and never
+// writes over one an Include drew meanwhile. Each order ends with the next Send.
+const removeButton = chipId => $("chips").children.find(li => li.getAttribute("data-chip-id") === chipId).children[1];
+const times = (list, value) => list.filter(entry => entry === value).length;
+// The person removes an item while a render's list read, which still has it, is on its way.
+selected = tab;
+kept = [item("c23", "Vigésima terceira")];
+$("allow-profile").fire("click");
+await idle();
+out.removeBefore = shown();
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+removeButton("c23").fire("click");
+await idle();
+await release();
+out.removeShown = shown();
+await send("Pergunta 18");
+out.removeSent = starts.at(-1).chips;
+await finish();
+// Another tab is selected while a render's list read, which still has the item, is on its way: the tab event drops it.
+kept = [item("c24", "Vigésima quarta")];
+$("allow-profile").fire("click");
+await idle();
+out.dropBefore = shown();
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+await release();
+out.dropShown = shown();
+out.dropRemoved = times(removed, "c24");
+await send("Pergunta 19");
+out.dropSent = starts.at(-1).chips;
+await finish();
+// An Include ends while a list read made before the browser stored its item is on its way (#773 round 1): the click
+// makes the render read again, and that read is the one still on its way when the Include draws its item.
+selected = tab;
+kept = [];
+hold = true;
+holdInclude = true;
+$("allow-profile").fire("click");
+await idle();
+$("include-page").fire("click");
+await idle();
+await release(true); // the render's first reply: read again, and that read waits too
+holdInclude = false;
+includeHeld.splice(0).forEach(answer => answer());
+await idle();
+out.includeDrawn = shown();
+await release(); // the list read before the Include stored its item
+out.includeShown = shown();
+await send("Pergunta 20");
+out.includeSent = starts.at(-1).chips;
+await finish();
+// The panel opens with a selection kept from the selected tab; the person selects again in that tab while the opening
+// reply is on its way, so the browser replaces the item and an entry point says so (#773 round 2, order 1).
+const selection = (chipId, title) => ({ ...item(chipId, title), kind: "selection" });
+kept = [selection("c26", "Vigésima sexta")];
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+kept = [selection("c27", "Vigésima sétima")];
+offer = { chipId: "c27" };
+await emit({ type: "offer" });
+out.replacedSeen = [];
+for (let step = 0; step < 4; step++) {
+  await release(true); // one reply at a time, the opening one first
+  out.replacedSeen.push(...shown());
+}
+await release();
+out.replacedShown = shown();
+await send("Pergunta 21");
+out.replacedSent = starts.at(-1).chips;
+await finish();
+// Two renders read an item from another tab (#773 round 2, order 2). The older one's reply comes first and reads
+// again, because the revision moved after it read; the newer one's reply drops the item; then the older one's second
+// reply, read before that drop, arrives with the item in it.
+kept = [item("c28", "Vigésima oitava", otherTab)];
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+$("ask").fire("change", { target: { name: "mode" } });
+$("allow-profile").fire("click");
+await idle();
+held.shift()(); // the older render's reply: read again
+await idle();
+held.shift()(); // the newer render's: the item leaves
+await idle();
+held.shift()(); // the older render's second reply, with the item
+await idle();
+await release();
+out.twiceDropShown = shown();
+out.twiceDropRemoved = times(removed, "c28");
+out.twiceDropAnnounced = announced.filter(([, text]) => text === "assistantDriftTab|Vigésima oitava").length;
+await send("Pergunta 22");
+out.twiceDropSent = starts.at(-1).chips;
+await finish();
 console.log(JSON.stringify(out));
 """
 
@@ -1580,7 +1690,8 @@ def shell_package(tmp: Path) -> Path:
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
 class PanelChipsTest(unittest.TestCase):
     """#739: an item-list reply that spans a Send never puts back in the panel an item that Send took. The ready-state
-    render and takeOffer (the selection menu's delivery) discard such a reply and read the list again."""
+    render and takeOffer (the selection menu's delivery) discard such a reply and read the list again. #759: the same
+    for any change to the list while the reply was on its way: an item removed, dropped, included or replaced."""
 
     _out = None
 
@@ -1717,6 +1828,38 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()
         self.assertEqual(out["refusedTypedPrompt"], "Digitado depois")  # typed during a refused start's error
         self.assertEqual(out["secondDraftPrompt"], "Rascunho novo")  # a second "@ia" during an Ask's end
+
+    def test_a_list_reply_does_not_bring_back_an_item_removed_meanwhile(self):
+        out = self._run()  # #759
+        self.assertEqual(out["removeBefore"], ["c23"])
+        self.assertEqual(out["removeShown"], [])
+        self.assertEqual(out["removeSent"], [])
+
+    def test_a_list_reply_does_not_bring_back_an_item_a_tab_change_dropped(self):
+        out = self._run()
+        self.assertEqual(out["dropBefore"], ["c24"])
+        self.assertEqual(out["dropShown"], [])
+        self.assertEqual(out["dropRemoved"], 1)
+        self.assertEqual(out["dropSent"], [])
+
+    def test_a_list_reply_read_before_an_include_stored_its_item_does_not_remove_it(self):
+        out = self._run()  # #759, OpenCodeReview on #773 round 1
+        self.assertEqual(out["includeDrawn"], ["inc1"])
+        self.assertEqual(out["includeShown"], ["inc1"])
+        self.assertEqual(out["includeSent"], ["inc1"])
+
+    def test_a_list_reply_read_before_a_selection_was_replaced_never_draws_the_old_one(self):
+        out = self._run()  # #773 round 2, order 1
+        self.assertNotIn("c26", out["replacedSeen"])
+        self.assertEqual(out["replacedShown"], ["c27"])
+        self.assertEqual(out["replacedSent"], ["c27"])
+
+    def test_an_item_dropped_by_one_check_is_not_dropped_and_announced_again_by_another(self):
+        out = self._run()  # #773 round 2, order 2
+        self.assertEqual(out["twiceDropShown"], [])
+        self.assertEqual(out["twiceDropRemoved"], 1)
+        self.assertEqual(out["twiceDropAnnounced"], 1)
+        self.assertEqual(out["twiceDropSent"], [])
 
 
 if __name__ == "__main__":
