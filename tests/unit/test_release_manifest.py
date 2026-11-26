@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -303,6 +305,22 @@ class ReleaseManifestTest(unittest.TestCase):
         self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.10")
         self.published("160.0-0.10")
         self.refused("not newer")  # the Firefox version is compared first
+
+    def test_a_revision_the_bucket_serves_is_taken_though_nothing_tagged_or_drafted_it(self):
+        # #656: run A uploaded 159.0.1-0.2 and stopped before its draft; the build job of run B names the version the
+        # bucket's APT index serves, and B builds 0.3 instead of uploading other bytes as 0.2.
+        subprocess.run(["git", "-C", str(self.repo), "tag", "v159.0.1-0.1", self.base], check=True)
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo), "0.2")  # what B picked before #656
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo, ["v159.0.1-0.2"]), "0.3")
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo, ["v159.0.1-0.1"]), "0.2")  # served = tagged
+        # Another Firefox version, or anything that is not a release tag, is not counted.
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo, ["v160.0-0.7", "159.0.1-0.9", "x"]), "0.2")
+        self.assertEqual(release_manifest.next_release("160.0", self.repo, ["v159.0.1-0.2"]), "0.1")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = release_manifest.main(["next-release", "159.0.1", "--repo", str(self.repo), "--also", "v159.0.1-0.2"])
+        self.assertEqual((code, out.getvalue()), (0, "0.3\n"))
+        release_manifest.check_newer("v159.0.1-0.3", self.repo)  # and the sign job's verify takes it
 
     def test_signing_refuses_packages_the_manifest_does_not_list(self):
         packages = self.out / "packages"

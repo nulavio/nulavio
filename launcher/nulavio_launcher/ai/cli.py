@@ -87,6 +87,8 @@ def _agents(args) -> int:
         for cap, g in sorted(a.get("grants", {}).items()):
             if cap == policy.INTERNAL_CAPABILITY:
                 continue  # an earlier version's grant: it grants nothing (#463), said below
+            if cap not in policy.CAPABILITIES:
+                continue  # a capability no longer offered (policy.RETIRED_CAPABILITIES, #714): it counts for nothing
             scope = f" until {g['until']}" if g.get("until") else " this session" if g.get("session") else ""
             _out(f"      {cap}: {g['mode']}{scope}")
         if a.get("raw_automation_accepted") or policy.INTERNAL_CAPABILITY in a.get("grants", {}):
@@ -242,6 +244,11 @@ def _public(agent: dict, active: dict | None = None) -> dict:
     # An agent that had raw automation on before it was removed (#463): the agents' page says so once.
     view["raw_automation_removed"] = bool(agent.get("raw_automation_accepted"))
     view["modes"] = {c: policy.effective_mode(agent, c, "")[0] for c in policy.CAPABILITIES}
+    # A grant or an answer for a capability no longer offered (policy.RETIRED_CAPABILITIES, #714) counts for nothing:
+    # the UI does not see it. New dicts: `view` is a shallow copy of the stored record.
+    for key in ("grants", "session_grants"):
+        if key in view:
+            view[key] = {c: g for c, g in view[key].items() if c in policy.CAPABILITIES}
     view["active_sessions"] = (active or {}).get(agent["id"], [])
     return view
 

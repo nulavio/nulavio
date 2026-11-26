@@ -8,14 +8,16 @@ name: release
 #    budget (NULAVIO_BUILD_PROFILE=runner, docs/architecture/build.md): verified
 #    source, build, unit and integration tests, RPM and .deb checked in clean
 #    containers, the signed-repository checks, SBOMs, manifest.json. The packages and
-#    the manifest get a GitHub build-provenance attestation.
+#    the manifest get a GitHub build-provenance attestation. The package release is
+#    one above every tagged, published or served one (#656).
 # 2. sign (GitHub-hosted, environment `release`: the maintainer approves, main only):
 #    checks the attestation, then scripts/release/publish_release.sh signs through AWS
 #    KMS (OIDC; ci/aws/), attests the signed files and hands them to publish as one
 #    archive whose hash is its output.
 #    publish (GitHub-hosted, environment `release-upload`, which holds the R2 token; no
 #    id-token, so it cannot take the signing role, #334): takes only that archive,
-#    uploads the dnf and APT repositories to R2 (packages first, signed metadata last),
+#    uploads the dnf and APT repositories to R2 (packages first, signed metadata last,
+#    never a package over one with other bytes),
 #    installs from https://nulavio.net/rpm/nulavio.repo in a clean Fedora container with
 #    both signature checks on, and drafts the GitHub release. The maintainer reviews and
 #    publishes the draft. Publishing it triggers release-metadata.yml (changelog and
@@ -82,10 +84,28 @@ jobs:
       - name: Pinned Firefox release
         id: pin
         run: python3 -I -c 'import json; print("firefox=" + json.load(open("browser/build/engine.json"))["firefox"])' >> "$GITHUB_OUTPUT"
+      - name: The package release to build, above every tagged, published or served one
+        id: revision
+        env:
+          FIREFOX: ${{ steps.pin.outputs.firefox }}
+        run: |
+          # A run that uploaded and stopped before its draft left neither a tag nor a draft, only what the bucket
+          # serves: counting the served version keeps the next run off that revision (#656). As in the publish job.
+          apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
+          served=$(curl -fsSL --proto '=https' --retry 3 "$apt/dists/stable/main/binary-amd64/Packages" |
+            awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
+          # Empty when curl failed (this shell has no pipefail) or nulavio is not listed: both stop the job.
+          if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
+            exit 1
+          fi
+          release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served")
+          echo "release=$release" >> "$GITHUB_OUTPUT"
       - name: What is new in this version is written (packaging/whats-new/), before hours of building
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
-        run: python3 -I scripts/release/whats_new.py require "$FIREFOX-$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX")"
+          RELEASE: ${{ steps.revision.outputs.release }}
+        run: python3 -I scripts/release/whats_new.py require "$FIREFOX-$RELEASE"
       - name: libsodium and gocryptfs for the Vault tests (decisions D1, D2)
         run: scripts/ci/apt_install.sh libsodium23 gocryptfs fuse3
       - name: Google Safe Browsing key (file mode 0600, read by build_nulavio.sh)
@@ -99,6 +119,7 @@ jobs:
       - name: Rehearse the release (build, tests, packages, checks, manifest)
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
+          NULAVIO_RELEASE: ${{ steps.revision.outputs.release }} # the one the whats-new check read
           NULAVIO_BUILD_PROFILE: runner
           NULAVIO_INTEGRATION_IMAGE: fedora-release-itest # the gallery baselines' fonts (run_integration.sh)
         run: scripts/release/rehearse_release.sh "$FIREFOX" "$RUNNER_TEMP/rehearsal"
