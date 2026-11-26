@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import unittest
 from pathlib import Path
+
+from node_tool import requires_node
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = ROOT / "browser" / "shell" / "modules" / "NulavioProfiles.sys.mjs"
@@ -45,7 +46,7 @@ def drive(driver: str, module: Path, *extra: str) -> dict:
     return json.loads(done.stdout)
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ProfilesLaunchGuardTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -100,7 +101,7 @@ class ProfilesLaunchGuardTest(unittest.TestCase):
                 self.assertEqual(case["logged"], ["Nulavio profiles: launch agent-window"], case)
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ChooserLaunchTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -127,7 +128,7 @@ class ChooserLaunchTest(unittest.TestCase):
                 self.assertEqual(case["logged"], ["Nulavio chooser: launch agent-window"], case)
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class AgentEngineProfilePagesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

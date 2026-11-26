@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import unittest
 from pathlib import Path
+
+from node_tool import requires_node
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "browser" / "shell"
@@ -61,7 +62,7 @@ class ReservedAliasListTest(unittest.TestCase):
         self.assertIn('"searchShortcuts", "nulavioSearchAdd"', panes)
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ReservedAliasTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

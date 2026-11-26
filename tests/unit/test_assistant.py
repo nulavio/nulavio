@@ -25,6 +25,7 @@ from test_vault_storage import FAKE_SECRET_TOOL  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
 from fake_llm import FakeProvider, Reply  # noqa: E402
+from node_tool import requires_node  # noqa: E402
 
 PROFILE = "/home/u/.local/share/nulavio/profiles/pessoal"
 KEY = "sk-artificial-test-key-123"
@@ -822,7 +823,7 @@ console.log(JSON.stringify(cases.map(c => ({
 """
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ShellAddressTest(unittest.TestCase):
     """#653: the Shell reduces the address as the tools do, and counts the blocks the tools then send."""
 
@@ -1005,7 +1006,7 @@ console.log(JSON.stringify(out));
 """
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ShellContextTest(unittest.TestCase):
     """#678: an included page goes with one message at most. A Task, "Tentar de novo" and a refused start empty
     the window's items in the browser too, so nothing comes back in a later message unseen."""
@@ -1577,7 +1578,7 @@ def shell_package(tmp: Path) -> Path:
     return tmp / "assistant" / "panel.js"
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class PanelChipsTest(unittest.TestCase):
     """#739: an item-list reply that spans a Send never puts back in the panel an item that Send took. The ready-state
     render and takeOffer (the selection menu's delivery) discard such a reply and read the list again."""

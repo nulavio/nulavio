@@ -104,7 +104,7 @@ Out of scope for this area: the engine's own source (Mozilla's), Blacksmith's an
 
 ## Running it
 
-- The unit tests: `python3 -I tests/run.py unit`, with Python 3.11 or later, gocryptfs, libsodium, `gpg`, `openssl`, Python's `cryptography`, and Android's `apksigner`. Without one of them, the tests that need it are skipped, not failed: set `NULAVIO_REQUIRE_SODIUM=1`, `NULAVIO_REQUIRE_GOCRYPTFS=1` and `NULAVIO_REQUIRE_APKSIGNER=1` to make those skips failures (question 5 of the release chain rests on `apksigner`). Nothing in them touches a real profile or a real key.
+- The unit tests: `python3 -I tests/run.py unit`, with Python 3.11 or later, gocryptfs, libsodium, `gpg`, `openssl`, Python's `cryptography`, Android's `apksigner`, and Node, which runs the Shell modules' behavioural tests. Without one of them, the tests that need it are skipped, not failed: set `NULAVIO_REQUIRE_SODIUM=1`, `NULAVIO_REQUIRE_GOCRYPTFS=1`, `NULAVIO_REQUIRE_APKSIGNER=1` and `NULAVIO_REQUIRE_NODE=1` to make those skips failures, as CI does (question 5 of the release chain rests on `apksigner`). Nothing in them touches a real profile or a real key.
 - The signing chain end to end, in containers (podman): `scripts/release/test_kms_signing.sh` and `test_apt_repo.sh` sign through a stand-in for KMS, as releases do; `test_signed_repo.sh <packages-dir>` signs through a gpg-agent instead.
 - The integration suites need a Nulavio build or the released package, named by `NULAVIO_ENGINE`; without it the tests that need the build are skipped, not failed ([CONTRIBUTING](../../CONTRIBUTING.md)).
 - The reviewer gets no access to the AWS account, the `release` environment or the package bucket. A question that needs them goes to the maintainer.

@@ -27,6 +27,7 @@ import build_site  # noqa: E402
 import verify_live  # noqa: E402
 import waitlist_remove  # noqa: E402
 from contrast import ratio  # noqa: E402
+from node_tool import requires_node  # noqa: E402
 
 # The landing (what Nulavio is at launch, the comparison, the waitlist form), the waitlist pages, the
 # link page a sign-up is answered with (site/_worker.js serves it with the key in its address) and
@@ -579,7 +580,7 @@ class SiteTest(unittest.TestCase):
                 self.assertRegex(self.read(page), r"(novembro de|November) 20\d\d", "the comparison says when it was made")
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class WaitlistWorkerTest(unittest.TestCase):
     """site/_worker.js: what it answers (tests/lib/waitlist_worker_driver.mjs) and what its SQL does in SQLite."""
 

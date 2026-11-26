@@ -9,17 +9,18 @@ the check in tests/integration/test_passwords.py.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import unittest
 from pathlib import Path
+
+from node_tool import requires_node
 
 ROOT = Path(__file__).resolve().parents[2]
 FOUND = {"suspicious": True, "site": "paypa1.example", "similar": "paypal.example"}
 LOCKED = {"suspicious": False, "locked": True}
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class LookalikeLoginsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
