@@ -91,7 +91,7 @@ function topContext() {
  * One check for a document at `address`. `during(state)` runs while checkLogin waits, and may change
  * what the engine reports afterwards (the document's address, the tab's current document, the actor).
  */
-async function parent({ address = "https://paypa1.example/login", suspicious = true, during = () => {} } = {}) {
+async function parent({ address = "https://paypa1.example/login", suspicious = true, locked = false, during = () => {} } = {}) {
   const loads = [];
   const context = topContext();
   const browser = { browsingContext: context, loadURI: uri => loads.push(uri.spec) };
@@ -102,7 +102,10 @@ async function parent({ address = "https://paypa1.example/login", suspicious = t
   passwords = {
     checkLogin: url => {
       passwords.asked = url;
-      return new Promise(resolve => (release = () => resolve(suspicious ? { suspicious: true, site: "paypa1.example", similar: "paypal.example" } : { suspicious: false })));
+      const verdict = suspicious
+        ? { suspicious: true, site: "paypa1.example", similar: "paypal.example" }
+        : { suspicious: false, ...(locked ? { locked: true } : {}) };
+      return new Promise(resolve => (release = () => resolve(verdict)));
     },
   };
   const answer = actor.receiveMessage({ name: "PasswordFieldFocused" });
@@ -145,6 +148,8 @@ const cases = {
   // The parent.
   parent_warns: () => parent(),
   parent_nothing_to_warn: () => parent({ suspicious: false }),
+  // A Primary Password not yet entered: the module compared nothing, so nothing was decided (#708).
+  parent_primary_password_locked: () => parent({ suspicious: false, locked: true }),
   // The page changes its address inside the document while the check waits.
   parent_replace_state: () =>
     parent({ during: ({ actor }) => (actor.globalState.documentURI = new URI("https://paypa1.example/elsewhere#x")) }),
