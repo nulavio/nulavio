@@ -1003,5 +1003,240 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["lateNext"], ["Lenta"])  # a later Include still counts
 
 
+# The panel itself (browser/shell/assistant/panel.js) on a fake DOM, with a fake browser whose item-list replies the
+# script can hold back: a reply the browser read before a Send reaches the panel after it (#739).
+PANEL_CHIPS = """
+// The assistant panel (browser/shell/assistant/panel.js) on a fake DOM just big enough for it, with a fake
+// browser whose item-list replies (assistantChips) the script can hold back until after a Send.
+process.on("unhandledRejection", e => {
+  console.error(e);
+  process.exit(3);
+});
+const announced = []; // [level, text] of every status-line announcement
+class Node {} // ui.js h() appends a Node as it is and anything else as text
+class El extends Node {
+  constructor(tag, id = "") {
+    super();
+    Object.assign(this, { tagName: tag.toUpperCase(), id, hidden: false, disabled: false, readOnly: false, value: "",
+      className: "", dataset: {}, children: [], isConnected: true });
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.text = "";
+    const names = new Set();
+    this.classList = {
+      toggle: (name, on = !names.has(name)) => (on ? names.add(name) : names.delete(name), on),
+      add: (...list) => list.forEach(name => names.add(name)),
+      remove: (...list) => list.forEach(name => names.delete(name)),
+      contains: name => names.has(name),
+    };
+  }
+  get textContent() {
+    return this.text + this.children.map(c => (c instanceof El ? c.textContent : String(c))).join("");
+  }
+  set textContent(text) {
+    this.text = String(text);
+    this.children = [];
+    if (this.id === "status") {
+      announced.push([this.dataset.level, this.text]);
+    }
+  }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  getAttribute(name) { return this.attributes.get(name) ?? null; }
+  hasAttribute(name) { return this.attributes.has(name); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  toggleAttribute(name, on) { on ? this.attributes.set(name, "") : this.attributes.delete(name); }
+  addEventListener(type, listener) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]); }
+  removeEventListener() {}
+  fire(type, event = {}) {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener({ preventDefault() {}, target: this, currentTarget: this, ...event });
+    }
+  }
+  append(...nodes) { this.children.push(...nodes); }
+  prepend(...nodes) { this.children.unshift(...nodes); }
+  replaceChildren(...nodes) { this.text = ""; this.children = nodes; }
+  focus() { document.activeElement = this; }
+  closest() { return null; }
+  querySelector() { return null; }
+  querySelectorAll() { return []; }
+  requestSubmit() { this.fire("submit"); }
+}
+const elements = new Map();
+const $ = id => elements.get(id) ?? elements.set(id, new El("div", id)).get(id);
+$("ask").elements = { mode: { value: "ask" } };
+globalThis.Node = Node;
+globalThis.document = { getElementById: $, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag),
+  createTextNode: String, querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
+  body: new El("body"), documentElement: new El("html"), activeElement: null };
+globalThis.window = { addEventListener() {} };
+globalThis.requestAnimationFrame = () => 1;
+globalThis.cancelAnimationFrame = () => {};
+globalThis.CSS = { escape: String };
+
+// The browser's side: the items it keeps for this window's next message, and what each start was given.
+const tab = { tabId: 1, url: "https://a.example/doc", title: "Doc" };
+const item = (chipId, title) => ({ chipId, kind: "page", tabId: tab.tabId, url: tab.url, title, host: "a.example",
+  address: tab.url, chars: 10, truncated: false, blockChars: 40 });
+let kept = [];
+let offer = null;
+let hold = false; // the next item-list replies wait for release(): the browser read its list, the panel gets it later
+let reads = 0;
+const held = [];
+const starts = [];
+const events = [];
+const noEvent = { addListener() {} };
+globalThis.browser = {
+  nulavioAI: {
+    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked: null,
+      recipient: "Provedor", provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
+    assistantChips() {
+      ++reads;
+      const list = [...kept]; // as the browser has it now
+      return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
+    },
+    assistantThread: async () => null,
+    assistantPage: async () => ({ ...tab }), // the tab the items came from: the panel keeps them
+    assistantTakeOffer: async () => [offer, (offer = null)][0],
+    assistantRuns: async () => [],
+    assistantStart: async (kind, details) => {
+      starts.push({ kind, chips: details.chips ?? null });
+      kept = []; // every start empties the window's items (#678)
+      return { runId: `run-${starts.length}` };
+    },
+    assistantAllow: async () => {},
+    assistantRemove: async () => {},
+    assistantCancel: async () => {},
+    onAssistantEvent: { addListener: listener => events.push(listener) },
+  },
+  i18n: { getMessage: (key, subs) => [key, ...[subs ?? []].flat()].join("|"), getUILanguage: () => "pt-BR" },
+  tabs: { onActivated: noEvent, onUpdated: noEvent, onRemoved: noEvent, getCurrent: async () => ({ id: 1 }),
+    create: async () => {} },
+  windows: { getCurrent: async () => ({ id: 1 }) },
+  runtime: { getURL: path => path },
+};
+
+const idle = async () => {
+  for (let i = 0; i < 50; i++) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+};
+const release = async () => {
+  hold = false;
+  held.splice(0).forEach(answer => answer());
+  await idle();
+};
+const shown = () => $("chips").children.map(li => li.getAttribute("data-chip-id"));
+const emit = async event => {
+  events.forEach(listener => listener(event));
+  await idle();
+};
+const send = async (question, mode = "ask") => {
+  $("ask").elements.mode.value = mode;
+  $("prompt").value = question;
+  $("ask").fire("submit");
+  await idle();
+};
+const finish = () => emit({ type: "done", runId: `run-${starts.length}`, answer: "Ok.", chars: 1, recipient: "Provedor" });
+const out = {};
+
+// The panel opens with an item the browser kept: it shows it, and Send takes it (the fakes work).
+kept = [item("c1", "Primeira")];
+await import(process.argv[1]);
+await idle();
+out.openShown = shown();
+await send("Pergunta 1");
+out.openSent = starts.at(-1).chips;
+out.openAfter = shown();
+await finish();
+
+// A render whose item-list reply was read before a Send and arrives after it.
+kept = [item("c2", "Segunda")];
+hold = true;
+reads = 0;
+$("allow-profile").fire("click"); // renders the panel again
+await idle();
+out.renderHeld = held.length;
+await send("Pergunta 2");
+kept = [item("c3", "Terceira")]; // an entry point left an item after the Send: the list read again has it
+await release();
+out.renderReads = reads;
+out.renderShown = shown();
+await finish();
+await send("Pergunta 3");
+out.renderNextSent = starts.at(-1).chips;
+await finish();
+
+// An entry point's item (the selection menu) with no Send in between: shown and announced.
+kept = [item("c4", "Quarta")];
+offer = { chipId: "c4" };
+await emit({ type: "offer" });
+out.offerShown = shown();
+out.offerAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Quarta");
+await send("Pergunta 4");
+await finish();
+
+// takeOffer whose item-list reply was read before a Task started and arrives after it.
+kept = [item("c5", "Quinta")];
+offer = { chipId: "c5" };
+hold = true;
+reads = 0;
+await emit({ type: "offer" });
+out.offerHeld = held.length;
+await send("Abra algo", "task");
+out.taskSent = starts.at(-1);
+await release();
+out.offerReads = reads;
+out.offerRaceShown = shown();
+out.offerRaceAnnounced = announced.some(([, text]) => text === "assistantPageAdded|Quinta");
+await finish();
+await send("Pergunta 5");
+out.offerNextSent = starts.at(-1).chips;
+out.errors = announced.filter(([level]) => level === "error");
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class PanelChipsTest(unittest.TestCase):
+    """#739: an item-list reply that spans a Send never puts back in the panel an item that Send took. The ready-state
+    render and takeOffer (the selection menu's delivery) discard such a reply and read the list again."""
+
+    _out = None
+
+    @classmethod
+    def _run(cls):
+        if cls._out is None:
+            panel = (ROOT / "browser" / "shell" / "assistant" / "panel.js").as_uri()
+            done = subprocess.run(["node", "--input-type=module", "-e", PANEL_CHIPS, panel],
+                                  capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+            cls._out = json.loads(done.stdout)
+        return cls._out
+
+    def test_the_fakes_drive_the_panel(self):
+        out = self._run()
+        self.assertEqual(out["openShown"], ["c1"])  # an item the browser kept is shown when the panel opens
+        self.assertEqual(out["openSent"], ["c1"])  # and goes with the Send
+        self.assertEqual(out["openAfter"], [])
+        self.assertEqual(out["offerShown"], ["c4"])  # an entry point's item with no Send in between
+        self.assertTrue(out["offerAnnounced"])
+        self.assertEqual(out["errors"], [])
+
+    def test_a_render_reply_that_spans_a_send_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["renderHeld"], 1)  # the reply was waiting when Send came
+        self.assertEqual(out["renderShown"], ["c3"])  # what the browser has after the Send, never "c2"
+        self.assertEqual(out["renderReads"], 2)
+        self.assertEqual(out["renderNextSent"], ["c3"])
+
+    def test_a_take_offer_reply_that_spans_a_task_is_read_again(self):
+        out = self._run()
+        self.assertEqual(out["offerHeld"], 1)
+        self.assertEqual(out["taskSent"], {"kind": "task", "chips": None})
+        self.assertEqual(out["offerRaceShown"], [])
+        self.assertEqual(out["offerReads"], 2)
+        self.assertFalse(out["offerRaceAnnounced"])  # nor announced as added
+        self.assertEqual(out["offerNextSent"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

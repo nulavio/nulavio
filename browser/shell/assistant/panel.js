@@ -321,6 +321,18 @@ async function includeCurrent() {
   return true;
 }
 
+/** The items the browser keeps for this window's next message. A list read before a Send can arrive after
+    it, with an item that Send took (#739): that reply is not about the next message, so it is read again. */
+async function keptChips(fallback) {
+  for (;;) {
+    const sent = sends;
+    const list = await ai.assistantChips().catch(fallback);
+    if (sends === sent) {
+      return list;
+    }
+  }
+}
+
 /** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
 async function refreshPage(changedTab = null) {
   const version = ++contextVersion;
@@ -387,7 +399,7 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    chips = await ai.assistantChips().catch(() => []); // kept by the browser while the panel was closed
+    chips = await keptChips(() => []); // kept by the browser while the panel was closed
     thread = await ai.assistantThread().catch(() => null);
     await refreshPage();
     syncMode();
@@ -656,7 +668,7 @@ async function takeOffer() {
   if (!delivery) {
     return;
   }
-  chips = await ai.assistantChips().catch(() => chips);
+  chips = await keptChips(() => chips);
   $("drift").hidden = true;
   if (delivery.draft) {
     // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
