@@ -321,6 +321,18 @@ async function includeCurrent() {
   return true;
 }
 
+/** The items the browser keeps for this window's next message. A list read before a Send can arrive after
+    it, with an item that Send took (#739): that reply is not about the next message, so it is read again. */
+async function keptChips(fallback) {
+  for (;;) {
+    const sent = sends;
+    const list = await ai.assistantChips().catch(fallback);
+    if (sends === sent) {
+      return list;
+    }
+  }
+}
+
 /** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
 async function refreshPage(changedTab = null) {
   const version = ++contextVersion;
@@ -387,8 +399,9 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    chips = await ai.assistantChips().catch(() => []); // kept by the browser while the panel was closed
     thread = await ai.assistantThread().catch(() => null);
+    chips = await keptChips(() => []); // kept by the browser while the panel was closed
+    showContext(); // drawn before any other await: Send carries only what the panel shows
     await refreshPage();
     syncMode();
     renderThread();
@@ -656,16 +669,18 @@ async function takeOffer() {
   if (!delivery) {
     return;
   }
-  chips = await ai.assistantChips().catch(() => chips);
-  $("drift").hidden = true;
   if (delivery.draft) {
     // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
+    // Decided before the list is read: a later read must not write it over a question typed since.
     if (run) {
       laterDraft = delivery.draft;
     } else {
       $("prompt").value = delivery.draft;
+      showSendLine(); // its size counts the draft while the list is on its way
     }
   }
+  chips = await keptChips(() => chips);
+  $("drift").hidden = true;
   showContext();
   const added = chips.find(c => c.chipId === delivery.chipId);
   if (added) {
@@ -770,14 +785,19 @@ async function finishRun(result) {
     result = { ...result, steps }; // the timeline as it went, with what happened to each step
   }
   const task = kind === "task";
+  if (!result.cancelled && !task) {
+    // The question is in the conversation now; after an error or a stop it stays. Emptied before any await: an
+    // "@ia" draft written in while the conversation is on its way is the next question, not this one.
+    $("prompt").value = "";
+  }
   endRun();
+  if (!result.cancelled) {
+    // Written in as the composer opens, before any await: text typed or delivered since stays on top of it.
+    applyLaterDraft();
+  }
   // The conversation first, so the panel is whole when it says the answer is ready.
   thread = await ai.assistantThread().catch(() => thread);
   if (!result.cancelled) {
-    if (!task) {
-      $("prompt").value = ""; // the question is in the conversation now; after an error or a stop it stays
-    }
-    applyLaterDraft();
     showResult(result, task);
     renderThread();
     if (stopping) {
@@ -853,6 +873,9 @@ async function send(question, { retry = false } = {}) {
     waiting.forEach(onRunEvent);
   } catch (e) {
     endRun();
+    // An "@ia" draft that came while the start was on its way, written in as the composer opens (before any
+    // await): what the person types during the error's handling stays.
+    applyLaterDraft();
     await showError(e, task);
     await refreshThread();
   }
