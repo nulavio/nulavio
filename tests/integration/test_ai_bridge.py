@@ -1442,11 +1442,13 @@ class AiBridgeTest(unittest.TestCase):
             entry = [e for e in entries if "tool" in e][-1]
             return entry["capability"], entry["reason"]
 
-        for result in (c.call("click", tab=tab, element=self.element(snap, name="Send")),
-                       c.call("type", tab=tab, element=self.element(snap, role="textbox"), text="x\n")):  # fmt: skip
-            self.assertTrue(result["isError"], result)
-            self.assertIn("'Submit forms'", result["content"][0]["text"])
-            self.assertEqual(last(), ("submit_forms", "grant"))
+        for tool, arguments in (("click", {"element": self.element(snap, name="Send")}),
+                                ("type", {"element": self.element(snap, role="textbox"), "text": "x\n"})):  # fmt: skip
+            with self.subTest(tool=tool):
+                result = c.call(tool, tab=tab, **arguments)
+                self.assertTrue(result["isError"], result)
+                self.assertIn("'Submit forms'", result["content"][0]["text"])
+                self.assertEqual(last(), ("submit_forms", "grant"))
         registry.grant(agent["id"], "navigate", "block")
         result = c.call("click", tab=tab, element=self.element(snap, role="link"))
         self.assertTrue(result["isError"], result)
