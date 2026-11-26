@@ -17,6 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 import settings_page
+from marionette import MarionetteError
 
 PASSWORDS = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs")'
 REAL, FAKE = "paypal.example", "paypa1.example"
@@ -181,6 +182,76 @@ class PasswordsTest(unittest.TestCase):
         print(f"test_01e: back-forward cache restored the page: {restored}", file=sys.stderr)
         self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
         self.assertTrue(harness.wait_until(self.on_warning, 10), f"not checked after coming back: {self.m.current_url()}")
+
+    def to_top(self) -> bool:
+        try:
+            self.m.send("WebDriver:SwitchToFrame", {})  # neither element nor id: the tab's page
+            return True
+        except MarionetteError:
+            return False  # the tab was changing documents: try again
+
+    def click_in_frame(self, page: str, setup: str) -> None:
+        """Opens `page`, adds a frame to it (`setup`, in the page's script, sets up `f`) and clicks the frame's
+        password field (#password), as the person would."""
+        self.m.navigate(page)
+        self.m.execute(
+            "const f = document.createElement('iframe'); f.id = 'f';"
+            "f.addEventListener('load', () => { document.documentElement.dataset.framed = 'yes'; }, { once: true });"
+            + setup
+            + "document.body.append(f);"
+        )
+        framed = "return document.documentElement.dataset.framed === 'yes';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(framed), 10), "the frame did not load")
+        self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
+        try:
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        finally:
+            self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+
+    def warning_params(self) -> dict:
+        return self.m.execute(
+            "const p = new URLSearchParams(location.search);"
+            "return { url: p.get('url'), page: p.has('page') ? p.get('page') : null };"
+        )
+
+    def test_01f_a_lookalike_frame_in_another_sites_page_shows_the_warning_and_continue_goes_back_to_that_page(self):
+        home = self.real + "/page/home"
+        self.click_in_frame(home, f"f.src = {self.fake + '/login'!r};")
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        ready = "return document.documentElement?.dataset.ready === 'true';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
+        self.assertEqual(self.warning_params(), {"url": self.fake + "/login", "page": home})
+        shown = self.m.execute(
+            "return { address: document.getElementById('address').textContent,"
+            " text: document.querySelector('main').textContent, onward: document.getElementById('continue').checkVisibility() };"
+        )
+        self.assertEqual(shown["address"], self.fake + "/login")  # the frame's site is the one named
+        self.assertIn(REAL, shown["text"])
+        self.assertTrue(shown["onward"])
+        forget = f"{PASSWORDS}.NulavioPasswords.removeConfirmed(args[0], args[1]); return true;"
+        self.addCleanup(chrome_async, self.m, forget, [FAKE, REAL])  # test_02 and test_06 expect no pair before them
+        self.m.execute("document.getElementById('continue').click();")
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == home, 10), self.m.current_url())
+
+    def test_01g_password_fields_in_srcdoc_data_and_blob_frames_of_a_lookalike_page_are_checked(self):
+        field = "<!doctype html><input id=password type=password>"
+        setups = {
+            "srcdoc": f"f.srcdoc = {field!r};",
+            "data": f"f.src = 'data:text/html,' + encodeURIComponent({field!r});",
+            "blob": f"f.src = URL.createObjectURL(new Blob([{field!r}], {{ type: 'text/html' }}));",
+        }
+        for kind, setup in setups.items():
+            with self.subTest(kind):
+                self.click_in_frame(self.fake + "/page/" + kind, setup)
+                self.assertTrue(harness.wait_until(self.on_warning, 10), f"{kind}: {self.m.current_url()}")
+                params = self.warning_params()
+                self.assertTrue(params["url"].startswith(self.fake + "/"), params)
+
+    def test_01h_a_frame_of_another_site_in_the_real_sites_page_is_not_warned(self):
+        home = self.real + "/page/home"
+        self.click_in_frame(home, f"f.src = {'http://localhost:' + str(self.server.port) + '/login'!r};")
+        time.sleep(1.5)  # as long as focus_password gives the check; nothing may happen in it
+        self.assertEqual(self.m.current_url(), home)
 
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)

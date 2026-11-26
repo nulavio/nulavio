@@ -2,16 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Flow D, in the page's process: tell the parent once per document that the person is about to use
-   a password field. Nothing of the page is read: not the field's value, not the key, not the form,
-   not the address (the parent knows the document's address from the engine).
+/* Flow D, in the page's process: tell the parent once per document (the tab's page or any frame of it,
+   each with its own actor) that the person is about to use a password field. Nothing of the page is
+   read: not the field's value, not the key, not the form, not the address (the parent knows the
+   addresses from the engine).
 
    Only the person's own input counts: a click or a key in the field, or the field getting the focus
    while the document has the engine's transient user activation (a click, a tap or a key the person
-   pressed in it, a few seconds at most). A focus the page gives itself (script, autofocus) asks
-   nothing; the first click or key in that field then does (a held key's repeated keydowns in it do
-   not). A click or a key needs no activation: a trusted one is the person's input, and the page can
-   use up the activation before it arrives.
+   pressed in it, in a frame inside it, or in a document around it of the same origin; a few seconds
+   at most). A focus the page gives itself (script, autofocus) asks nothing; the first click or key
+   in that field then does (a held key's repeated keydowns in it do not). A click or a key needs no
+   activation: a trusted one is the person's input, and the page can use up the activation before it
+   arrives.
    The engine sends these actors trusted events only; isTrusted is checked as well. */
 
 const EVENTS = new Set(["focusin", "mousedown", "keydown"]);

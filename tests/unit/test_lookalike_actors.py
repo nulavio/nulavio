@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MODULES = ROOT / "browser" / "shell" / "modules"
 WARNING = "moz-extension://shell/passwords/lookalike.html?"
+REAL, FAKE = "https://paypal.example/account", "https://paypa1.example/login"
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
@@ -31,6 +32,20 @@ class LookalikeActorsTest(unittest.TestCase):
 
     def asked(self, name: str) -> int:
         return self.cases[name]["asked"]
+
+    def warned(self, name: str, url: str, page: str | None, asked: list[str]) -> None:
+        """The warning opened for `url`, with `page` as where "continue" goes (None: to `url` itself)."""
+        case = self.cases[name]
+        self.assertEqual((case["warned"], case["decided"]), (True, True), case)
+        self.assertTrue(case["warning"].startswith(WARNING), case["warning"])
+        self.assertEqual((case["url"], case["page"]), (url, page), case)
+        self.assertEqual(case["asked"], asked, case)
+
+    def not_warned(self, name: str, decided: bool, asked: list[str] | None = None) -> None:
+        case = self.cases[name]
+        self.assertEqual((case["warned"], case["decided"]), (False, decided), case)
+        if asked is not None:
+            self.assertEqual(case["asked"], asked, case)
 
     def test_a_focus_the_page_gives_itself_asks_nothing(self):
         self.assertEqual(self.asked("child_script_focus"), 0)
@@ -63,7 +78,7 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertTrue(case["warning"].startswith(WARNING), case["warning"])
         self.assertIn("url=https%3A%2F%2Fpaypa1.example%2Flogin", case["warning"])
         self.assertIs(case["decided"], True)
-        self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None})
+        self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None, "url": None})
 
     def test_a_locked_primary_password_decides_nothing_so_the_next_input_asks_again(self):
         # The module compared nothing rather than ask for the Primary Password (#708): the child asks again.
@@ -81,6 +96,73 @@ class LookalikeActorsTest(unittest.TestCase):
         for name in left:
             with self.subTest(name):
                 self.assertEqual((self.cases[name]["warned"], self.cases[name]["decided"]), (False, False), self.cases[name])
+
+    # Password fields in frames: each document from the field's up to the tab's page is checked, nearest first.
+
+    def test_a_lookalike_frame_in_another_sites_page_shows_the_warning_and_continue_goes_back_to_that_page(self):
+        self.warned("frame_lookalike_in_a_real_page", FAKE, REAL, [FAKE])
+
+    def test_a_frame_without_an_address_of_its_own_is_checked_by_its_principals_site(self):
+        self.warned(
+            "frame_blank_with_a_lookalike_principal",
+            "https://paypa1.example/",
+            "https://news.example/",
+            ["https://paypa1.example/"],
+        )
+        self.warned("frame_blob_with_a_lookalike_principal", "https://paypa1.example/", REAL, ["https://paypa1.example/"])
+        # One check per site: the srcdoc frame and the frame around it are the same site.
+        self.warned("frame_srcdoc_inside_a_lookalike_frame", "https://paypa1.example/", REAL, ["https://paypa1.example/"])
+
+    def test_a_sandboxed_frame_is_checked_by_its_address(self):
+        self.warned("frame_sandboxed_on_the_lookalike_site", FAKE, REAL, [FAKE])
+        # A sandboxed srcdoc has no site of its own; the page around it is checked.
+        self.not_warned("frame_sandboxed_srcdoc_in_a_real_page", True, [REAL])
+
+    def test_a_data_frame_is_checked_by_the_documents_around_it(self):
+        # In the look-alike page itself, "continue" goes to the checked address: the tab's page.
+        self.warned("frame_data_in_a_lookalike_page", FAKE, None, [FAKE])
+        self.warned("frame_data_in_a_lookalike_frame", FAKE, REAL, [FAKE])
+
+    def test_a_lookalike_frame_around_the_fields_frame_is_found(self):
+        self.warned("frame_nested_lookalike_in_the_middle", FAKE, REAL, ["https://widgets.example/login", FAKE])
+        # The nearest look-alike decides, and nothing past it is checked.
+        nearest = "https://paypa1-login.example/form"
+        self.warned("frame_nearest_lookalike_decides", nearest, FAKE, [nearest])
+
+    def test_a_frame_of_another_site_on_a_real_page_is_not_warned(self):
+        self.not_warned("frame_real_in_a_real_page", True, ["https://widgets.example/login", REAL])
+
+    def test_documents_without_a_sites_address_are_never_checked(self):
+        # The system's, an expanded principal's or an extension's (Nulavio's unlock page): nothing to compare.
+        self.not_warned("frame_no_site_anywhere", True, [])
+
+    def test_a_locked_primary_password_decides_nothing_for_a_frame_either(self):
+        self.not_warned("frame_primary_password_locked", False, [FAKE, REAL])
+
+    def test_a_frame_of_a_page_the_tab_has_left_never_replaces_it(self):
+        left = (
+            "frame_tab_page_navigated",
+            "frame_tab_page_navigated_during_a_later_check",
+            "frame_tab_page_changed_only_at_the_top",
+            "frame_tab_shows_another_context",
+            "frame_actor_gone",
+            "frame_blank_other_site",
+        )
+        for name in left:
+            with self.subTest(name):
+                self.not_warned(name, False)
+
+    def test_continue_goes_to_the_tabs_page_where_it_is_now(self):
+        self.warned("frame_tab_page_replace_state", FAKE, f"{REAL}?tab=2#top", [FAKE])
+
+    def test_a_tab_page_without_a_sites_address_leaves_continue_nowhere_to_go(self):
+        # The warning opens; its "continue" has no page to go back to (an empty `page`), never the frame's document.
+        self.warned("frame_tab_page_without_a_site", FAKE, "", [FAKE])
+
+    def test_a_field_in_the_tabs_page_opens_the_warning_as_before(self):
+        for name in ("parent_warns", "parent_replace_state"):
+            with self.subTest(name):
+                self.warned(name, FAKE, None, [FAKE])
 
 
 if __name__ == "__main__":

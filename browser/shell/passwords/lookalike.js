@@ -2,9 +2,11 @@
    first choice; continuing is remembered for this pair of sites in this profile only, says so next
    to the button, and can be undone in Settings › Passwords.
 
-   The page's address carries only the site's address. Which saved site it looks like is asked of
-   the passwords module, which compares it with this profile's saved logins again: another extension
-   can open this page with parameters of its own, and the page names no site the module did not. */
+   The page's address carries the site's address (`url`) and, when the password field was in a frame of
+   the tab's page, that page's address (`page`): "continue" goes back to it, not to the frame's document.
+   `page` is never shown. Which saved site `url` looks like is asked of the passwords module, which
+   compares it with this profile's saved logins again: another extension can open this page with
+   parameters of its own, and the page names no site the module did not. */
 
 import { localize, t } from "../lib/i18n.js";
 import { closeOwnTab } from "../lib/tabs.js";
@@ -13,9 +15,9 @@ import { announce } from "../lib/ui.js";
 const params = new URLSearchParams(location.search);
 const HOST = /^[a-z0-9.-]+$/i;
 
-function target() {
+function webAddress(value) {
   try {
-    const url = new URL(params.get("url"));
+    const url = new URL(value);
     return /^https?:$/.test(url.protocol) ? url : null;
   } catch {
     return null;
@@ -23,7 +25,10 @@ function target() {
 }
 
 localize();
-const url = target();
+const url = webAddress(params.get("url"));
+// Where "continue" goes: the tab's page when the field was in one of its frames, else the site itself. A `page`
+// that is not a site's address (the tab's page had none) leaves no way on but the real site.
+const onwardTo = params.has("page") ? webAddress(params.get("page")) : url;
 const verdict = url ? await browser.nulavioPasswords.check(url.href).catch(() => null) : null;
 const site = verdict?.suspicious ? String(verdict.site ?? "") : "";
 const similar = verdict?.suspicious ? String(verdict.similar ?? "") : "";
@@ -34,7 +39,9 @@ if (url && HOST.test(similar) && site) {
   real.textContent = t("lookalikeGoReal", [similar]);
   real.addEventListener("click", () => location.replace(`https://${similar}/`));
   const onward = document.getElementById("continue");
-  document.getElementById("continue-note").textContent = t("lookalikeContinueNote", [site, similar]);
+  const note = document.getElementById("continue-note");
+  note.textContent = t("lookalikeContinueNote", [site, similar]);
+  onward.hidden = note.hidden = !onwardTo;
   onward.addEventListener("click", async () => {
     onward.disabled = true;
     try {
@@ -46,7 +53,7 @@ if (url && HOST.test(similar) && site) {
       announce(t("lookalikeDismissFailed"), "error");
       return;
     }
-    location.replace(url.href);
+    location.replace(onwardTo.href);
   });
   document.body.dataset.state = "ready";
   real.focus();

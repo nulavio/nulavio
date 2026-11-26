@@ -947,19 +947,40 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(code.count("sendQuery("), 1)
         self.assertNotIn("sendAsyncMessage(", code)
         parent = module_text("NulavioLookalikeParent.sys.mjs")
-        self.assertIn("this.manager.documentURI", parent)  # the address comes from the engine
+        # The addresses come from the engine: each document's own address, or its principal's site.
+        code = re.sub(r"//.*", "", parent.rsplit("*/", 1)[1])
+        self.assertEqual(set(re.findall(r"global\??\.(document\w+)", code)), {"documentURI", "documentPrincipal"})
+        self.assertIn("for (let global = this.manager; global; global = global.browsingContext?.parentWindowContext)", code)
         self.assertNotIn("message.data", parent)
         self.assertNotIn("content_scripts", make_shell.manifest())
 
+    def test_lookalike_check_runs_in_every_frame_of_a_web_page(self):
+        """The child runs in the tab's page and in its frames, for the documents that have a site or take one from
+        the page that made them; never in an extension's page or a browser page."""
+        source = module_text("NulavioPasswords.sys.mjs")
+        options = source[source.index('registerWindowActor("NulavioLookalike"') :]
+        options = options[: options.index("});")]
+        matches = json.loads(re.search(r"matches: (\[[^\]]*\])", options).group(1))
+        self.assertEqual(matches, ["http://*/*", "https://*/*", "about:blank", "about:srcdoc", "blob:*", "data:*"])
+        self.assertIn("allFrames: true,", options)
+        self.assertIn('messageManagerGroups: ["browsers"],', options)
+        self.assertNotIn("moz-extension", "".join(matches))
+
     def test_the_warning_page_names_only_what_the_module_finds(self):
-        """The look-alike warning is opened with the site's address only; the passwords module finds the saved site
-        it imitates again, and "continue" remembers the pair the module finds, not one the page names."""
+        """The look-alike warning is opened with the site's address, and the tab's page's when the field was in a
+        frame; the passwords module finds the saved site `url` imitates again, and "continue" remembers the pair the
+        module finds, not one the page names. The tab's page's address is only where "continue" goes."""
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("new URLSearchParams({ url })", parent)
+        self.assertEqual(re.findall(r'query\.set\("(\w+)"', parent), ["page"])
         page = (SHELL / "passwords" / "lookalike.js").read_text(encoding="utf-8")
-        self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url"])
+        self.assertEqual(re.findall(r'params\.get\("(\w+)"\)', page), ["url", "page"])
         self.assertIn("browser.nulavioPasswords.check(url.href)", page)
         self.assertIn("browser.nulavioPasswords.dismiss(url.href)", page)
+        # `page` is not shown and names nothing: it is used only as where "continue" goes.
+        self.assertEqual(re.findall(r"\bonwardTo\b[.\w]*", page.rsplit("*/", 1)[1]).count("onwardTo.href"), 1)
+        self.assertIn("location.replace(onwardTo.href)", page)
+        self.assertNotIn("textContent = onwardTo", page)
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]

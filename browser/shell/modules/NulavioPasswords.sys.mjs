@@ -342,8 +342,10 @@ class Passwords {
     }
   }
 
-  /** Watch password fields in web pages (top documents only), through the engine's window actors. The
-     child asks only after the person's own input (NulavioLookalikeChild.sys.mjs says which). */
+  /** Watch password fields in web pages, in the tab's page and in every frame of it, through the engine's
+     window actors. The child asks only after the person's own input (NulavioLookalikeChild.sys.mjs says
+     which); the parent checks the sites the engine gives the field's document and the documents around it
+     (NulavioLookalikeParent.sys.mjs). */
   registerLookalikeCheck() {
     if (this.registered) {
       return;
@@ -356,11 +358,14 @@ class Passwords {
         esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`,
         events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true } },
       },
-      matches: ["http://*/*", "https://*/*"],
-      allFrames: false,
+      // The engine matches a document's own address: a site's page, and the documents a page makes
+      // that take its site (about:blank, about:srcdoc, blob:) or none (data:). Never an extension's
+      // page (moz-extension:, Nulavio's own unlock, protection and phone pages) or a browser page.
+      matches: ["http://*/*", "https://*/*", "about:blank", "about:srcdoc", "blob:*", "data:*"],
+      allFrames: true,
       messageManagerGroups: ["browsers"],
       // Runs in web content processes: the parent trusts no data from them. The only message carries
-      // no data, and the address comes from the engine (documentURI), not from the page.
+      // no data, and the addresses come from the engine (documentURI, documentPrincipal), not from the page.
       safeForUntrustedWebProcess: true,
     });
   }
