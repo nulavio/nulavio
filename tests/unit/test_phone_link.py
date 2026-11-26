@@ -393,6 +393,45 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertEqual(session.state, "cancelled")
         self.assertFalse(profiles.container(self.prof).mounted())
 
+    def test_06a_a_cancel_while_the_approved_unlock_waits_for_the_state_lock_opens_nothing(self):
+        # #783 review, round 3: the phone approves while the profile is open and its auto-lock watcher is closing
+        # it under the state lock. The person cancels on the desktop while the helper waits for that lock: once the
+        # watcher has unmounted, the helper opens nothing, says "cancelled", and tells the phone.
+        self.pair()
+        profiles.unlock(self.prof, password=PASSWORD).lock()
+        box = profiles.container(self.prof)
+        held, release, waiting = threading.Event(), threading.Event(), threading.Event()
+
+        def watcher() -> None:
+            with box._state_lock():
+                held.set()
+                release.wait(20)
+                box.unmount()
+
+        closing = threading.Thread(target=watcher, daemon=True)
+        closing.start()
+        self.assertTrue(held.wait(20))
+        real_lock = storage.Container._state_lock
+
+        def lock(container, *args, **kwargs):
+            if threading.current_thread() is not closing:
+                waiting.set()  # the helper's mount, at the state lock the watcher holds
+            return real_lock(container, *args, **kwargs)
+
+        with mock.patch.object(storage.Container, "_state_lock", lock):
+            session, first, thread = self.start("unlock", {"autolock": False})
+            phone = self.phone.unlock(first["qr"])
+            self.assertTrue(waiting.wait(20))
+            session.handle({"action": "cancel"})
+            release.set()
+            closing.join(30)
+            thread.join(30)
+            phone.join(20)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(session.state, "cancelled")
+        self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
+        self.assertFalse(profiles.container(self.prof).mounted())
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):
