@@ -447,12 +447,10 @@ def extension_verdict(
     complete: whether the versions list was read back to the pin (otherwise the lag is a lower bound).
     """
     pinned = entry["version"]
-    failure = pin_failure(entry, served, block)
+    failure = pin_failure(entry, served, block, current)
     if failure:
         return "fail", failure
     if current["version"] == pinned:
-        if current["sha256"] != entry["sha256"].lower():
-            return "fail", f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256"
         return "ok", f"{entry['key']} {pinned} is AMO's current version"
     since = newer
     if since is None:  # no listed, public version after the pin in the list: AMO's current one, if it came after it
@@ -476,8 +474,11 @@ def extension_verdict(
     return "warn", text
 
 
-def pin_failure(entry: dict, served, block) -> str | None:
-    """What the blocklist or the pinned version's own file shows on its own; MISSING for a reply not had."""
+def pin_failure(entry: dict, served, block, current) -> str | None:
+    """What the blocklist, the pinned version's own file or, when it is the pin, AMO's current file shows on its own.
+
+    Any of them may be MISSING, a reply the watch could not have.
+    """
     pinned = entry["version"]
     if (
         block is not MISSING
@@ -489,6 +490,8 @@ def pin_failure(entry: dict, served, block) -> str | None:
         return f"{entry['key']} {pinned}: AMO no longer serves the pinned version: refresh the lock now"
     if served is not MISSING and (served["sha256"] != entry["sha256"].lower() or served["size"] != entry["size"]):
         return f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256 and size"
+    if current is not MISSING and current["version"] == pinned and current["sha256"] != entry["sha256"].lower():
+        return f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256"
     return None
 
 
@@ -534,7 +537,7 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
         try:
             if not problems:
                 state, text = extension_verdict(entry, served, current, newer, block, now, complete)
-            elif failure := pin_failure(entry, served, block):  # confirmed whatever the missing reply says
+            elif failure := pin_failure(entry, served, block, current):  # confirmed whatever the missing reply says
                 state, text = "fail", failure
             elif block is MISSING and len(problems) == 1:  # only the blocklist is missing: a lag over the limit stands
                 state, text = extension_verdict(entry, served, current, newer, None, now, complete)

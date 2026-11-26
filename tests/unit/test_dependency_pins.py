@@ -702,6 +702,13 @@ class ExtensionLagTest(unittest.TestCase):
             row = self.rows(RecordedAmo(["ublock-origin"], change, down), now)["ublock-origin"]
             self.assertEqual(row.state, "fail", (down, row.text))
             self.assertIn(expect, row.text)
+        # the pin is AMO's current version and the summary shows another file: that stands with the pin's reply down
+        keepass = "addons/addon/keepassxc-browser%40keepassxc.org/"
+        net = RecordedAmo(["keepassxc-browser"], down=[keepass + "versions/1.10.4.1/"])
+        net.replies[keepass]["current_version"]["file"]["hash"] = "sha256:" + "c" * 64
+        row = self.rows(net, now)["keepassxc-browser"]
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("different file", row.text)
         # a lag already over the limit stands when only the blocklist is down
         row = self.rows(RecordedAmo(["ublock-origin"], down=[block]), at("2026-12-22T20:00:00Z"))["ublock-origin"]
         self.assertEqual(row.state, "fail", row.text)
