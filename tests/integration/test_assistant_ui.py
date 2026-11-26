@@ -992,6 +992,17 @@ class AssistantUiTest(unittest.TestCase):
         self.addCleanup(
             chrome_async, self.m, f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'navigate'}});", [agent]
         )
+        # A name that does not resolve counts as local: with local_resources blocked the call would be refused before
+        # navigate is asked (#730, #737), so it asks too, after navigate, as in test_assistant_stream's twin (#746).
+        chrome_async(
+            self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'local_resources', mode: 'ask'}});", [agent]
+        )
+        self.addCleanup(
+            chrome_async,
+            self.m,
+            f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'local_resources'}});",
+            [agent],
+        )
         call = {"id": "c1", "type": "function",
                 "function": {"name": "tab_new", "arguments": json.dumps({"url": "https://example.invalid/"})}}  # fmt: skip
         self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
