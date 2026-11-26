@@ -7,7 +7,7 @@
 #       scripts/release/upload_repo.sh <stage>/rpm|<stage>/apt
 #
 # The token is the bucket-scoped "nulavio-packages-upload" (Object Read & Write on
-# nulavio-packages only). The release workflow passes it from the `release`
+# nulavio-packages only). The release workflow passes it from the `release-upload`
 # environment; any AWS credentials already set (the KMS signing role) are not used.
 # Order: the packages and the hash-named metadata files first, the signed metadata
 # last, so the signed metadata never names a file that is not there yet:
