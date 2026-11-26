@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import itertools
 import html as html_module
+import inspect
 import io
 import json
 import os
@@ -1003,20 +1004,39 @@ def _nulavio_trace(event, args, _log=open({log!r}, "a", encoding="utf-8", buffer
         pass  # an exception in an audit hook would abort the call it audits
 _sys.addaudithook(_nulavio_trace)
 """
-TRACE_BUILD = """import pathlib, subprocess, sys
+TRACE_BUILD = """import pathlib, re, subprocess, sys
 root, out, hook = sys.argv[1:4]
 exec(hook)
 _run = subprocess.run
 def _traced(argv, *args, **kwargs):
     argv = [str(a) for a in argv]
-    if pathlib.Path(argv[0]).name.startswith("python") and "-c" in argv:
-        argv[argv.index("-c") + 1] = hook + argv[argv.index("-c") + 1]
+    code = python_code_at(argv) if pathlib.Path(argv[0]).name.startswith("python") else None
+    if code is not None:
+        argv[code] = hook + argv[code]
     return _run(argv, *args, **kwargs)
 subprocess.run = _traced
 sys.path.insert(0, str(pathlib.Path(root) / "scripts" / "site"))
 import build_site
 build_site.build(pathlib.Path(out))
 """
+
+
+def python_code_at(argv: list[str]):  # no "| None": its source also runs in the child, without the __future__ import
+    """Where the code of python3 [flags] -c <code> is in argv, or None: only flags that take no value may
+    come before -c (python3 tool.py -c x runs tool.py, and -c x is its argument)."""
+    at = argv.index("-c") if "-c" in argv else 0
+    return at + 1 if at and all(re.fullmatch(r"-[bBdEIOqsSuv]+", a) for a in argv[1:at]) else None
+
+
+def links_met(name: str, hops: int = 40) -> set[str]:
+    """Each symlink met while resolving name, by its own path: repointing one changes what is read."""
+    parts = Path(name).parts
+    for i in range(2, len(parts) + 1):
+        prefix = os.path.join(*parts[:i])  # no link before it, so normpath reads its ".." right
+        if os.path.islink(prefix) and hops:
+            rest = os.path.join(os.path.dirname(prefix), os.readlink(prefix), *parts[i:])
+            return {os.path.normpath(prefix), *links_met(rest, hops - 1)}
+    return set()
 
 
 def traced_build_inputs(test: unittest.TestCase) -> set[str]:
@@ -1031,7 +1051,7 @@ def traced_build_inputs(test: unittest.TestCase) -> set[str]:
         log, out = Path(tmp) / "trace.log", Path(tmp) / "site"
         hook = TRACE_HOOK.format(log=str(log))
         result = subprocess.run(
-            [sys.executable, "-I", "-c", TRACE_BUILD, str(ROOT), str(out), hook],
+            [sys.executable, "-I", "-c", inspect.getsource(python_code_at) + TRACE_BUILD, str(ROOT), str(out), hook],
             capture_output=True, text=True, timeout=300, cwd=tmp,
         )  # fmt: skip
         test.assertEqual(result.returncode, 0, result.stderr[-2000:])
@@ -1051,7 +1071,8 @@ def trace_inputs(test: unittest.TestCase, lines: list[str], root: Path = ROOT) -
             name = Path(argv[0]).name
             if name.startswith("python"):
                 # A traced python logs its own opens; its arguments are code and options, not files.
-                if not ("-c" in argv and "_nulavio_trace" in argv[argv.index("-c") + 1]):
+                code = python_code_at(argv)
+                if code is None or "_nulavio_trace" not in argv[code]:
                     other.append(f"untraced python: {argv[:4]}")
             elif name in ("git", "gpg"):
                 read.update(os.path.abspath(os.path.join(cwd, arg)) for arg in argv[1:])
@@ -1061,10 +1082,10 @@ def trace_inputs(test: unittest.TestCase, lines: list[str], root: Path = ROOT) -
             other.append(value)
     test.assertEqual(other, [], "the build starts a process this trace does not follow: teach traced_build_inputs about it")
     inputs = set()
-    for path in {Path(p) for name in read for p in (name, os.path.realpath(name))}:  # a symlink and its target
+    for path in {Path(p) for name in read for p in (name, os.path.realpath(name), *links_met(name))}:
         if path.parent.name == "__pycache__" and path.suffix == ".pyc":
             path = path.parent.parent / (path.name.split(".", 1)[0] + ".py")  # x.cpython-312.pyc is x.py
-        if not path.is_relative_to(root) or not path.is_file():
+        if not path.is_relative_to(root) or not (path.is_file() or path.is_symlink()):  # a link to a directory too
             continue
         relative = path.relative_to(root).as_posix()
         if not relative.startswith(".git/"):
@@ -1100,7 +1121,7 @@ def path_filter_matches(patterns: list[str], path: str) -> bool:
             "(?:.*/)?" if token == "**/" else ".*" if token == "**" else "[^/]*" if token == "*" else re.escape(token)
             for token in re.findall(r"\*\*/|\*\*|\*|[^*]+", glob)
         )
-        if re.fullmatch(regex, path):
+        if re.fullmatch(regex, path, re.S):
             included = not negative
     return included
 
@@ -1146,6 +1167,9 @@ class SiteWorkflowTest(unittest.TestCase):
 
     def push_paths(self):
         paths = self.block(self.block(self.block(self.lines, "on:"), "push:"), "paths:")
+        for line in paths:  # one-line items only: YAML folds a continued line into the entry above
+            if self.indent(line) != self.indent(paths[0]) or not line.lstrip().startswith("- "):
+                raise ValueError(f"{line.strip()!r}: push_paths reads one-line list items only")
         entries = [line.strip().removeprefix("- ").strip() for line in paths]
         return [e[1:-1] if len(e) > 1 and e[0] == e[-1] and e[0] in "'\"" else e for e in entries]
 
@@ -1167,6 +1191,29 @@ class SiteWorkflowTest(unittest.TestCase):
             (root / "docs/logo.svg").symlink_to("../site/logo.svg")
             inputs = hooked_trace(self, root, "open('docs/logo.svg').close()")
         self.assertEqual(inputs, {"docs/logo.svg", "site/logo.svg"})
+
+    def test_the_trace_counts_a_symlink_met_on_the_way_to_the_target(self):
+        # site/assets/icon.svg goes through docs/current: repointing docs/current changes the icon.
+        with tempfile.TemporaryDirectory(prefix="nulavio-site-trace-") as tmp:
+            root = Path(os.path.realpath(tmp))
+            (root / "site/real").mkdir(parents=True)
+            (root / "site/real/icon.svg").write_text("<svg/>", encoding="utf-8")
+            (root / "docs").mkdir()
+            (root / "docs/current").symlink_to("../site/real")
+            (root / "site/assets").mkdir()
+            (root / "site/assets/icon.svg").symlink_to("../../docs/current/icon.svg")
+            inputs = hooked_trace(self, root, "open('site/assets/icon.svg').close()")
+        self.assertEqual(inputs, {"site/assets/icon.svg", "docs/current", "site/real/icon.svg"})
+
+    def test_only_a_python_whose_code_is_its_own_c_counts_as_traced(self):
+        # python3 tool.py -c x runs tool.py, with -c x as its argument: the hook would not run.
+        self.assertEqual(python_code_at(["python3", "-I", "-B", "-c", "code", "prefs"]), 4)
+        for argv in (["python3", "tool.py", "-c", "x"], ["python3", "-m", "tool", "-c", "x"], ["python3", "-W", "-c", "x"]):
+            with self.subTest(argv=argv):
+                self.assertIsNone(python_code_at(argv))
+                line = "run\t" + json.dumps(["/", [*argv[:-1], "_nulavio_trace"]])
+                with self.assertRaisesRegex(AssertionError, "untraced python"):
+                    trace_inputs(self, [line])
 
     def test_the_trace_does_not_take_a_traced_pythons_arguments_for_files(self):
         # prefs explain runs in the root with --category tracking: a scratch file named tracking
@@ -1194,6 +1241,9 @@ class SiteWorkflowTest(unittest.TestCase):
             with self.subTest(pattern=pattern), self.assertRaises(ValueError):
                 path_filter_matches([pattern], "browser/config/prefs/baseline.js")
         self.assertTrue(path_filter_matches(["**/README.md"], "README.md"), "**/ matches at the root too")
+        # * already crosses a line break in a name; ** and **/ cross it as well.
+        self.assertTrue(path_filter_matches(["site/**"], "site/a\nb/x.txt"))
+        self.assertTrue(path_filter_matches(["**/x.txt"], "a\nb/x.txt"))
 
     def test_the_push_paths_are_read_single_or_double_quoted(self):
         self.lines = [
@@ -1202,6 +1252,12 @@ class SiteWorkflowTest(unittest.TestCase):
             "  workflow_dispatch:",
         ]  # fmt: skip
         self.assertEqual(self.push_paths(), ["site/**", "browser/config/prefs/**", "launcher/**"])
+
+    def test_the_push_paths_refuse_an_entry_continued_on_the_next_line(self):
+        # YAML folds the two lines into one pattern, browser/config/prefs/** extra, which baseline.js does not match.
+        self.lines = ["on:", "  push:", "    paths:", "      - browser/config/prefs/**", "        extra", "  workflow_dispatch:"]
+        with self.assertRaisesRegex(ValueError, "extra"):
+            self.push_paths()
 
     def test_the_paths_check_finds_an_input_the_workflow_does_not_watch(self):
         patterns = ["site/**", "launcher/**", "scripts/site/**"]  # its own list: site.yml may watch browser/**
