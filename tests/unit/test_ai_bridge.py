@@ -2563,6 +2563,138 @@ class OpenProfileTest(Home):
         entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
         self.assertEqual((entry["capability"], entry["reason"]), ("navigate", "grant"))
 
+    # OpenCodeReview of #737 at c6b99ea8: after any question, the tab's address is looked at and classified again.
+    def resolving(self, approver: Approve, capability: str) -> dict:
+        """The tab's host starts to resolve to the local network while the question about `capability` is open (a
+        rebinding name). Returns the lookups made, with how many questions had been asked by then."""
+        state = {"local": False, "lookups": []}
+
+        def lookup(host):
+            state["lookups"].append((host, len(approver.asked)))
+            return state["local"] and host == "mail.example"  # the tab's site, not where its link goes
+
+        def meanwhile():
+            if approver.asked[-1][0] == capability:
+                state["local"] = True
+
+        approver.meanwhile = meanwhile
+        stack = contextlib.ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(mock.patch.object(policy, "_resolves_locally", side_effect=lookup))
+        return state
+
+    def test_a_host_that_turns_local_while_a_question_is_open_is_checked_again(self):
+        # Finding 1: the tab's address was classified before the tool's own question and that reading was kept, so a
+        # host that resolved to the local network once the person answered was acted on without local_resources
+        # (the base classified it again after that question). Each question a call can ask about the tab, the last
+        # one of each chain included: the check after it is the one before acting.
+        info = {"connected": True, "submits": True, "href": "https://news.example/sent", "editable": True}
+        cases = [(tool, "own") for tool in self.HERE] + [
+            ("page_read", "authenticated_sessions"),  # the profile's question (Assisted)
+            ("evaluate", "cookies_storage"),  # a script's second question
+            ("type", "submit_forms"),  # Enter
+            ("click", "submit_forms"),  # a submit button, before its link
+            ("click", "navigate"),  # its link: the last question before the click
+        ]
+        for tool, question in cases:
+            with self.subTest(tool=tool, question=question):
+                level = "assisted" if question == "authenticated_sessions" else "autonomous"
+                agent, bridge, approver, _target, commands = self.opened(level=level, answer="once")
+                registry.grant(agent["id"], "local_resources", "block")
+                own = tools.BY_NAME[tool].capability
+                registry.grant(agent["id"], own, "ask" if question == "own" else "allow")
+                registry.grant(agent["id"], "cookies_storage", "ask" if question == "cookies_storage" else "allow")
+                for other in ("submit_forms", "navigate"):
+                    registry.grant(agent["id"], other, "ask" if question == other else "allow")
+                state = self.resolving(approver, own if question == "own" else question)
+                arguments = self.here_arguments(tool)
+                if tool == "type" and question == "submit_forms":
+                    arguments["submit"] = True
+                with (
+                    mock.patch.object(tools.Bridge, "_earlier_forms", return_value=None),
+                    mock.patch.object(tools.Bridge, "_forms_prepare"),
+                    mock.patch.object(tools.Bridge, "_call_fn", return_value=info) as called,
+                ):
+                    result = bridge.call(tool, arguments)
+                self.assertTrue(result["isError"], result)
+                self.assertTrue(state["local"], approver.asked)  # the question was asked
+                self.assertEqual(approver.asked[-1][0], own if question == "own" else question)  # and nothing after it
+                self.assertFalse(self.ACTS & set(commands), commands)
+                self.read.assert_not_called()
+                self.assertFalse([c for c in called.call_args_list if c.args[1] != tools.INSPECT_FN], called.call_args_list)
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["capability"].split(",")[-1], entry["reason"]), ("local_resources", "grant"))
+
+    def test_a_call_that_asks_nothing_looks_its_tab_up_once(self):
+        # I7: without a question, the tab's host is looked up once, as before.
+        _agent, bridge, approver, _target, _commands = self.opened(level="autonomous")
+        state = self.resolving(approver, "read_pages")
+        self.assertFalse(bridge.call("page_read", {"tab": "w1"})["isError"])
+        self.assertEqual((approver.asked, state["lookups"]), ([], [("mail.example", 0)]))
+
+    def test_a_profiles_tab_is_not_looked_up_before_its_question_is_answered(self):
+        # Finding 2: the host of a profile's tab, and of where navigate takes it, went to this computer's resolver
+        # before the person answered the profile's question (Assisted asks about the signed-in session), even when
+        # they said no; the profile may use encrypted DNS. The base entered the profile first.
+        for tool in (*self.HERE, "navigate"):
+            for answer in ("deny", "once"):
+                with self.subTest(tool=tool, answer=answer):
+                    agent, bridge, approver, _target, _commands = self.opened(level="assisted", answer=answer)
+                    for capability in ("interact", "execute_js", "cookies_storage", "screenshots"):
+                        registry.grant(agent["id"], capability, "allow")
+                    state = self.resolving(approver, "authenticated_sessions")
+                    arguments = self.here_arguments(tool)
+                    with mock.patch.object(tools.Bridge, "_call_fn", return_value={"connected": True, "editable": True}):
+                        bridge.call(tool, arguments)
+                    self.assertEqual(approver.asked[0], ("authenticated_sessions", "https://mail.example"))
+                    if answer == "deny":
+                        self.assertEqual(state["lookups"], [])
+                    else:
+                        self.assertTrue(state["lookups"])
+                        self.assertNotIn(0, [asked for _host, asked in state["lookups"]], state["lookups"])
+
+    def test_a_tab_already_in_reader_view_is_closed_after_its_question(self):
+        # Finding 3: tab_close on a tab at Reader View, or at an address agents do not act on, asked navigate and,
+        # after a yes, said the tab had moved, though it had not; the base closed it, as it does with navigate allowed.
+        for url in (self.READER, "data:text/html,hi"):
+            with self.subTest(url=url):
+                agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="once", url=url)
+                registry.grant(agent["id"], "navigate", "ask")
+                result = bridge.call("tab_close", {"tab": "w1"})
+                self.assertFalse(result["isError"], result)
+                self.assertEqual([c for c, _ in approver.asked], ["navigate"])
+                self.assertIn("browsingContext.close", commands)
+        # Moved into Reader View while the question was open: not closed, as before.
+        agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="once")
+        registry.grant(agent["id"], "navigate", "ask")
+        self.move_on(approver, "navigate", self.READER)
+        result = bridge.call("tab_close", {"tab": "w1"})
+        self.assertTrue(result["isError"], result)
+        self.assertNotIn("browsingContext.close", commands)
+
+    def test_a_profile_given_back_during_the_lookup_is_not_refused(self):
+        # Finding 4: a new tab for a site routed to a profile taken from the agent, given back while the address was
+        # looked up, was refused as not given, from the agent's record read before the lookup.
+        agent, _ = registry.add("r-2", "other", "assisted")
+        profiles = [{"label": "Trabalho", "path": self.PATH}]
+        registry.set_profiles(agent["id"], profiles)
+        registry.set_routes(agent["id"], [{"site": "mail.example", "profile": "Trabalho"}])
+        registry.set_profiles(agent["id"], [])  # the route stays
+        registry.grant(agent["id"], "navigate", "ask")
+        approver = Approve("deny")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+
+        def given_back(_host):
+            registry.set_profiles(agent["id"], profiles)
+            return False
+
+        with mock.patch.object(policy, "_resolves_locally", side_effect=given_back):
+            result = bridge.call("tab_new", {"url": "https://mail.example/"})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(approver.asked, [("navigate", "https://mail.example")])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["capability"], entry["reason"]), ("navigate", "denied"))
+
 
 class LocalRequestsTest(Home):
     """R29 (LESIS 83a648d8): an agent without local_resources has every request of its engines held, and one
