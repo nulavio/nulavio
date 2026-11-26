@@ -204,14 +204,17 @@ class Container:
         if not self.vault_path.exists():
             raise StorageError("not-encrypted")
         if self.mounted():
+            self._refuse_changed(vault)
             return
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
             # Checked again, and only now for files in the folder: another unlock of this profile (a second tab,
             # the chooser, the phone, the command line) may have mounted it while this one waited for the lock.
             # The profile is then open, which is what this request asked for; going on would fail on the mounted
-            # folder, or take the volume's own files for plaintext in a locked profile (#620).
+            # folder, or take the volume's own files for plaintext in a locked profile (#620). Not with a key
+            # file that changed since this request read it, as when nothing is mounted (#783 review).
             if self.mounted():
+                self._refuse_changed(vault)
                 log.event("vault.unlocked-meanwhile")
                 return
             if any(self.mountpoint.iterdir()):
@@ -221,10 +224,7 @@ class Container:
             self._settle_new_key()
             if not self.exists():  # after the above: while a new volume takes the old one's place, neither is at `cipher`
                 raise StorageError("not-encrypted")
-            if not self._same_as_on_disk(vault):
-                # A change to the unlock methods finished while this waited for the lock: what was
-                # read is no longer the key file (checking it would look like a rollback).
-                raise StorageError("changed", "the profile's key file changed since it was read; try again")
+            self._refuse_changed(vault)
             self._restore_cipher_mode()
             # The mount point's mode is changed through a handle on the bare directory, taken before
             # anything is mounted there: never through the path, which would reach the root of a volume
@@ -443,6 +443,13 @@ class Container:
         if self.mounted():
             with self._state_lock():
                 self._check_state(vault)
+
+    def _refuse_changed(self, vault: Vault) -> None:
+        if not self._same_as_on_disk(vault):
+            # A change to the unlock methods finished while this waited (for the lock, or for the phone): what was
+            # read is no longer the key file (checking it would look like a rollback). A method that change removed
+            # opens nothing, also when another unlock opened the profile meanwhile (U-T21).
+            raise StorageError("changed", "the profile's key file changed since it was read; try again")
 
     def _same_as_on_disk(self, vault: Vault) -> bool:
         path = vault.path.with_suffix(vault.path.suffix + ".bak") if vault.from_backup else vault.path

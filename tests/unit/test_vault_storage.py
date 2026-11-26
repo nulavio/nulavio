@@ -472,6 +472,41 @@ class OverlappingUnlockTest(StorageCase):
         self.assertEqual((box.mountpoint / "prefs.js").read_text(), "inside")
         box.unmount()
 
+    def test_a_request_whose_key_file_changed_meanwhile_opens_nothing_on_the_open_profile(self):
+        # It read the key file before a change to the unlock methods (a phone unlock whose envelope was removed while
+        # the phone answered), and another unlock opened the profile meanwhile: "changed", as when nothing is
+        # mounted, never an unlock acknowledged with a key file that is gone (U-T21, #783 review).
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        stale = box.load_vault()
+        stale.unlock_password(PASSWORD)
+        self.addCleanup(stale.lock)
+        change = box.load_vault()
+        change.unlock_password(PASSWORD)
+        try:
+            with box.recording(change) as record:
+                change.add_password("a second password", FAST)
+                change.save()
+                record()
+        finally:
+            change.lock()
+        profiles.unlock(prof, password=PASSWORD).lock()
+        self.addCleanup(box.unmount)
+        real = storage.Container.mounted
+        for waited in (False, True):  # came after the other unlock, or passed its first check before it mounted
+            asked = []
+
+            def mounted(box, waited=waited, asked=asked) -> bool:
+                asked.append(1)
+                return False if waited and len(asked) == 1 else real(box)
+
+            with self.subTest(waited=waited), mock.patch.object(storage.Container, "mounted", mounted):
+                with self.assertRaises(storage.StorageError) as ctx:
+                    box.mount(stale)
+                self.assertEqual(ctx.exception.code, "changed")
+        self.assertTrue(box.mounted())  # the other unlock's profile stays open
+        self.assertEqual(mode(box.cipher), 0o700)
+
     def test_an_unlock_restores_an_encrypted_folder_left_read_only(self):
         # What the overlapping unlocks of earlier versions left behind: P.vault/cipher at 0500.
         box, vault = self.new_container()
