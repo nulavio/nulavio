@@ -11,7 +11,12 @@
       { "name": "check", "type": "function", "async": true, "parameters": [{ "name": "url", "type": "string", "maxLength": 8192 }] },
       {
         "name": "dismiss", "type": "function", "async": true,
-        "parameters": [{ "name": "url", "type": "string", "maxLength": 8192 }, { "name": "back", "type": "boolean", "optional": true }]
+        "parameters": [
+          { "name": "url", "type": "string", "maxLength": 8192 },
+          { "name": "site", "type": "string", "maxLength": 512 },
+          { "name": "similar", "type": "string", "maxLength": 512 },
+          { "name": "back", "type": "boolean", "optional": true }
+        ]
       },
       { "name": "canGoBack", "type": "function", "async": true, "parameters": [] }
     ]

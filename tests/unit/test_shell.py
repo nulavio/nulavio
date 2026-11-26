@@ -1239,8 +1239,9 @@ class PasswordsTest(unittest.TestCase):
     def test_the_warning_page_names_only_what_the_module_finds(self):
         """The look-alike warning is opened with the site's address only, and a flag with no address when the field
         was in a frame; the passwords module finds the saved site it imitates again from its origin, and "continue"
-        remembers the pair the module finds, not one the page names. "Continue" goes to that address or back in the
-        tab's history, never to an address of its own."""
+        passes the pair the page shows, which the module remembers only if it still finds that same pair (#762); a
+        refusal keeps the page. "Continue" goes to that address or back in the tab's history, never to an address of
+        its own."""
         parent = module_text("NulavioLookalikeParent.sys.mjs")
         self.assertIn("new URLSearchParams({ url })", parent)
         self.assertEqual(re.findall(r'query\.set\(("\w+", "\w+")\)', parent), ['"in", "frame"'])
@@ -1250,7 +1251,11 @@ class PasswordsTest(unittest.TestCase):
         # The module needs only the host: the origin stays under the experiment API's length limit.
         self.assertIn('const origin = url ? `${url.origin}/` : "";', page)
         self.assertIn("browser.nulavioPasswords.check(origin)", page)
-        self.assertIn("browser.nulavioPasswords.dismiss(origin, back)", page)
+        self.assertIn("browser.nulavioPasswords.dismiss(origin, site, similar, back)", page)
+        # Only a saved choice goes on: an answer of { dismissed: false } is a refusal, as a thrown error is.
+        refused = page.index("if (answer?.dismissed !== true) {")
+        self.assertLess(refused, page.index("history.back()"))
+        self.assertIn('announce(t("lookalikeDismissFailed"), "error");\n      return;', page[refused:])
         # Back only when the engine's session history has an entry before the warning; the module checks it again.
         self.assertIn("await browser.nulavioPasswords.canGoBack()", page)
         self.assertNotIn("history.length", page)
@@ -1260,7 +1265,8 @@ class PasswordsTest(unittest.TestCase):
         self.assertNotIn("document.title", page)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
-        self.assertEqual((params["check"], params["dismiss"], params["canGoBack"]), (["url"], ["url", "back"], []))
+        self.assertEqual(params["dismiss"], ["url", "site", "similar", "back"])
+        self.assertEqual((params["check"], params["canGoBack"]), (["url"], []))
 
 
 class LayoutModuleTest(unittest.TestCase):

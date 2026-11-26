@@ -316,10 +316,10 @@ class Passwords {
   }
 
   /**
-   * The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null.
+   * The site of `url` and the saved site it imitates, confirmed or not; otherwise null.
    * `{ locked: true }` when the saved logins cannot be read without asking for the Primary Password.
    */
-  async #lookalike(url) {
+  async #pairFor(url) {
     let parsed;
     try {
       parsed = new URL(url);
@@ -334,11 +334,17 @@ class Passwords {
       return { locked: true };
     }
     const similar = lookalikeOf(parsed.hostname, saved);
-    const pair = similar ? pairEntry(siteOf(parsed.hostname), similar) : null;
-    if (!similar || this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair)) {
-      return null;
+    return similar ? { site: siteOf(parsed.hostname), similar } : null;
+  }
+
+  /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null (or locked). */
+  async #lookalike(url) {
+    const found = await this.#pairFor(url);
+    if (!found || found.locked) {
+      return found;
     }
-    return { site: siteOf(parsed.hostname), similar };
+    const pair = pairEntry(found.site, found.similar);
+    return this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair) ? null : found;
   }
 
   /**
@@ -398,17 +404,24 @@ class Passwords {
   }
 
   /**
-   * "Continue anyway" on the warning page: the pair is found again from the address and this profile's
-   * saved logins, never taken from the page. Nothing to remember when the address imitates no saved site.
+   * "Continue anyway" on the warning page, for the pair it showed (`shown`: the `site` and `similar` that
+   * checkLogin() gave it). That pair is remembered only if the module still finds it for the address from this
+   * profile's saved logins: the saved logins can change while the warning is open, and the person confirmed the
+   * pair they read, not another one. Otherwise nothing is remembered (`dismissed: false`), and the page says so.
+   * What is saved is the module's own pair, never a site the page names.
    */
-  async dismissFor(url, { back = false, browser = null } = {}) {
+  async dismissFor(url, { site, similar, back = false, browser = null } = {}) {
+    if (typeof site !== "string" || typeof similar !== "string" || !site || !similar) {
+      return { dismissed: false };
+    }
     // "Continue" that goes back to the tab's page (a field in a frame): nothing is remembered unless the tab has a
     // page to go back to.
     if (back && !this.canGoBack(browser)) {
       fail("no-way-back");
     }
-    const found = await this.#lookalike(url);
-    if (!found || found.locked) {
+    // A pair already confirmed (in another tab with the same warning) is still the pair shown: saved again, no change.
+    const found = await this.#pairFor(url);
+    if (!found || found.locked || pairEntry(found.site, found.similar) !== pairEntry(site, similar)) {
       return { dismissed: false };
     }
     if (back && !this.canGoBack(browser)) {

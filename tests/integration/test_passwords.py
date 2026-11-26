@@ -336,8 +336,38 @@ class PasswordsTest(unittest.TestCase):
             self.assertIn("Nada foi alterado", self.m.execute("return document.getElementById('status').textContent;"))
         finally:
             chrome_async(self.m, f"delete {PASSWORDS}.NulavioPasswords.dismiss; return true;")
+        # #762: the saved login is removed while the warning is open. The pair shown is no longer found, so nothing is
+        # remembered, the page says so and the site does not open; with the login back, "continue" saves that pair.
+        self.m.execute("const s = document.getElementById('status'); s.textContent = ''; delete s.dataset.level;")
+        chrome_async(
+            self.m,
+            "const login = (await Services.logins.getAllLogins()).find(l => l.origin === args[0]);"
+            "Services.logins.removeLogin(login); return true;",
+            [self.real],
+        )
+        try:
+            self.m.execute("document.getElementById('continue').click();")
+            refused = harness.wait_until(
+                lambda: self.m.execute("return document.getElementById('status').dataset.level;") == "error", 10
+            )
+            self.assertTrue(refused, "no error shown")
+            self.assertTrue(self.m.current_url().startswith(self.base + "passwords/lookalike.html"))
+            self.assertIn("Nada foi alterado", self.m.execute("return document.getElementById('status').textContent;"))
+            self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
+            shown = "const b = document.getElementById('continue'); return b.checkVisibility() && !b.disabled;"
+            self.assertTrue(self.m.execute(shown), "continue is offered again")
+        finally:
+            chrome_async(
+                self.m,
+                "const info = Cc['@mozilla.org/login-manager/loginInfo;1'].createInstance(Ci.nsILoginInfo);"
+                "info.init(args[0], args[0], null, 'tester', 'artificial-pass-1', 'username', 'password');"
+                "await Services.logins.addLoginAsync(info); return true;",
+                [self.real],
+            )
         self.m.execute("document.getElementById('continue').click();")
         self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
+        confirmed = chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();")
+        self.assertEqual(confirmed, [{"site": FAKE, "similar": REAL}])
         self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not asked again for this pair
 
     def test_02b_the_warning_page_without_a_site_offers_only_the_way_out(self):
