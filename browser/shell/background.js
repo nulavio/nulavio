@@ -9,11 +9,29 @@ import { workspaceBarTexts } from "./lib/agent-texts.js";
 import { t } from "./lib/i18n.js";
 import { TOOLBAR_INK, drawProfileIcon } from "./lib/profile-icon.js";
 import { isRiskyFilename } from "./lib/risky.js";
+import { tabCloser } from "./lib/tab-closer.js";
 import { temporaryStorageText } from "./lib/ui.js";
 
 // This is an event page: without a listener here it would not start with the browser after the
 // first run, and the work below (profile icon, AI requests, temporary bar) would wait for an event.
 browser.runtime.onStartup.addListener(() => {});
+
+// -- A Shell page's Close or Cancel (lib/tabs.js): one place decides, one close at a time per window (#741) --
+// Only a Shell page in a tab of its own may ask, and only for that tab: not a popup or the sidebar (no tab),
+// a frame, or anything that is not this extension's page. The answer is true once the tab was removed.
+
+const closeTab = tabCloser(browser.tabs);
+
+browser.runtime.onMessage.addListener((message, sender) => {
+  if (message?.type !== "close-own-tab") {
+    return undefined; // another listener's message
+  }
+  const page = sender.id === browser.runtime.id && String(sender.url ?? "").startsWith(browser.runtime.getURL(""));
+  if (!page || !sender.tab || sender.frameId) {
+    return Promise.reject(new Error("only a Shell page can close its own tab"));
+  }
+  return closeTab(sender.tab.id);
+});
 
 async function windowFor(incognito) {
   // Keep private downloads in private windows and vice versa.

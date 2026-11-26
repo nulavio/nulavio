@@ -15,6 +15,10 @@ replaced by a recorder, so nothing is started.
 The permission request (``ai/request.html``) and the unlock page (``vault/unlock.html``) close only
 after a real answer or unlock; they use the same function (``tests/unit/test_shell.py``), and
 ``test_ai_ui`` and ``test_vault_ui`` close them in a window with other tabs.
+
+Two Shell pages that are a window's only tabs and close at the same moment (a page's timer, another's click)
+used to count each other from their own documents, and the window closed (#741). The background now decides
+every close, one at a time per window: the window stays, on one new tab.
 """
 
 from __future__ import annotations
@@ -67,6 +71,18 @@ WINDOW_TABS = """
 const [id] = arguments;
 const w = [...Services.wm.getEnumerator("navigator:browser")].find(w => w.browsingContext.id === id);
 return w && !w.closed ? w.gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec) : null;
+"""
+
+ADD_TAB = """
+const [id, url] = arguments;
+const w = [...Services.wm.getEnumerator("navigator:browser")].find(w => w.browsingContext.id === id);
+w.gBrowser.addTab(url, {triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal()});
+"""
+
+# Click `selector` at the time `at` (ms since the epoch): pages scheduled with the same `at` click together.
+CLICK_AT = """
+const [selector, at] = arguments;
+setTimeout(() => document.querySelector(selector).click(), Math.max(0, at - Date.now()));
 """
 
 CLOSE_WINDOW = """
@@ -139,6 +155,9 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertEqual(alone, [self.base + page + query], f"{page}{query} is not its window's only tab: {alone}")
         self.m.execute("document.querySelector(arguments[0]).click();", [button])
         self.m.switch_to(self.main)  # the page's tab goes away: drive from a tab that stays
+        self.settled_on_new_tab(opened, f"{page}: {button}")
+
+    def settled_on_new_tab(self, opened: int, what: str) -> None:
         # The new-tab page, by the address the override gives it (or its about: name while it loads).
         new_tab = {self.new_tab, "about:newtab"}
 
@@ -147,9 +166,9 @@ class LastTabCloseTest(unittest.TestCase):
             return tabs if tabs and len(tabs) == 1 and tabs[0] in new_tab else None
 
         tabs = harness.wait_until(settled, timeout=20) or self.m.chrome(WINDOW_TABS, [opened])
-        self.assertIsNotNone(tabs, f"{page}: {button} closed the window")
-        self.assertEqual(len(tabs), 1, f"{page}: {button} left {tabs}")
-        self.assertIn(tabs[0], new_tab, f"{page}: {button} left {tabs}, not the new-tab page")
+        self.assertIsNotNone(tabs, f"{what} closed the window")
+        self.assertEqual(len(tabs), 1, f"{what} left {tabs}")
+        self.assertIn(tabs[0], new_tab, f"{what} left {tabs}, not the new-tab page")
 
     def test_01_close_or_cancel_in_a_windows_only_tab_leaves_the_window_on_a_new_tab(self):
         self.assertTrue(
@@ -184,6 +203,38 @@ class LastTabCloseTest(unittest.TestCase):
         # "Open in Bancos" went to the recorder, with the held link, and nothing else did.
         calls = chrome_async(self.m, ROUTING + "return R.__calls;")
         self.assertEqual(calls, [[other, "https://held.example/page"]])
+
+    def close_two_at_once(self) -> None:
+        (first, _, first_button), (second, _, second_button) = PAGES[0], PAGES[1]  # neither shows a state
+        before = set(self.m.window_handles())
+        opened = self.open_alone(first)
+        self.m.chrome(ADD_TAB, [opened, self.base + second])
+        both = harness.wait_until(lambda: len(self.m.chrome(WINDOW_TABS, [opened]) or []) == 2, timeout=15)
+        self.assertTrue(both, f"no second tab: {self.m.chrome(WINDOW_TABS, [opened])}")
+        buttons = {self.base + first: first_button, self.base + second: second_button}
+        handles = {}
+        for handle in set(self.m.window_handles()) - before:
+            self.m.switch_to(handle)
+
+            def loaded():
+                href = self.m.execute("return location.href;")
+                return href if href in buttons and self.m.execute(PAGE_STATE, [buttons[href]]) is not None else None
+
+            href = harness.wait_until(loaded, timeout=20)
+            if href:
+                handles[href] = handle
+        self.assertEqual(set(handles), set(buttons), f"the pages did not load: {handles}")
+        at = self.m.execute("return Date.now();") + 1500
+        for href, handle in handles.items():
+            self.m.switch_to(handle)
+            self.m.execute(CLICK_AT, [buttons[href], at])
+        self.m.switch_to(self.main)  # both tabs go away: drive from a tab that stays
+        self.settled_on_new_tab(opened, f"{first} and {second} closing at once")
+
+    def test_03_two_shell_pages_closing_at_once_leave_their_window_on_a_new_tab(self):
+        for attempt in range(3):  # a race: several tries, each in a window of its own
+            with self.subTest(attempt=attempt):
+                self.close_two_at_once()
 
 
 if __name__ == "__main__":

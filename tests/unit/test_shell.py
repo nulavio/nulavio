@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -868,21 +869,40 @@ class LastTabCloseTest(unittest.TestCase):
                 self.assertNotIn("tabs.remove(", text)
                 self.assertNotIn("siblings", text)
 
-    def test_the_function_opens_a_new_tab_before_it_removes_the_page_and_says_when_it_cannot(self):
+    def test_the_page_asks_the_background_and_says_when_it_cannot(self):
         text = (SHELL / "lib" / "tabs.js").read_text(encoding="utf-8")
         body = text[text.index("export async function closeOwnTab(") :]
         body = body[: body.index("\n}\n")]
-        self.assertLess(body.index("browser.tabs.create({ windowId: tab.windowId })"), body.index("browser.tabs.remove(tab.id)"))
+        # The page no longer counts or removes tabs itself (#741): the background decides, one close per window.
+        for own in ("tabs.query(", "tabs.remove(", "tabs.create(", "tabs.getCurrent("):
+            self.assertNotIn(own, body)
+        self.assertIn('(await browser.runtime.sendMessage({ type: "close-own-tab" })) !== true', body)
         self.assertIn('failed(t("tabCloseFailed"))', body.split("catch", 1)[1])
         self.assertNotIn("about:", body)
-        # Only visible tabs count, as in the engine's own last-tab check (#720).
-        self.assertIn("browser.tabs.query({ windowId: tab.windowId, hidden: false })", body)
         # A second click while the tab closes does nothing; a failure lets the page try again.
-        self.assertLess(body.index("if (closing) {"), body.index("browser.tabs.getCurrent()"))
+        self.assertLess(body.index("if (closing) {"), body.index("browser.runtime.sendMessage("))
         self.assertLess(body.index("closing = true;"), body.index("try {"))
         self.assertIn("closing = false;", body.split("catch", 1)[1])
         for name in ("en", "pt_BR"):
             self.assertIn("tabCloseFailed", locale(name))
+
+    def test_the_background_closes_only_the_asking_pages_own_tab(self):
+        background = (SHELL / "background.js").read_text(encoding="utf-8")
+        self.assertIn('import { tabCloser } from "./lib/tab-closer.js";', background)
+        self.assertIn("const closeTab = tabCloser(browser.tabs);", background)
+        listener = background[background.index('if (message?.type !== "close-own-tab") {') :]
+        listener = listener[: listener.index("\n});\n")]
+        # This extension's page, in a tab of its own, top frame; the tab it closes is the sender's, never one it names.
+        self.assertIn("sender.id === browser.runtime.id", listener)
+        self.assertIn('String(sender.url ?? "").startsWith(browser.runtime.getURL(""))', listener)
+        self.assertIn("if (!page || !sender.tab || sender.frameId) {", listener)
+        self.assertIn("return closeTab(sender.tab.id);", listener)
+        self.assertNotIn("message.tab", listener)
+        # The one place that removes a Shell page's tab: no other Shell script counts and removes for a close.
+        closer = (SHELL / "lib" / "tab-closer.js").read_text(encoding="utf-8")
+        self.assertNotRegex(closer, r"(?m)^import ", "the closer runs in the background and in node, with no imports")
+        self.assertNotRegex(closer, r"\bbrowser\.\w+\.\w+\(", "the closer only uses the tabs it is given")
+        self.assertIn("tabs.query({ windowId, hidden: false })", closer)  # only visible tabs count (#720)
 
     def test_a_held_link_page_that_could_not_close_never_sends_the_link_twice(self):
         # "Open in …", "Try again" and "Unlock and open" send the link, then close the tab. When only the close
@@ -900,6 +920,171 @@ class LastTabCloseTest(unittest.TestCase):
         dont_open = r'button\(t\("routingDontOpen"\), "button--quiet", closeThisTab\);\n\s+dontOpen\.dataset\.close = "";'
         self.assertRegex(text, dont_open)
         self.assertEqual(text.count("dataset.close"), 1)
+
+
+# lib/tab-closer.js against fake tabs: each call settles one turn of the event loop later, so two closes started
+# together interleave the same way every run. A window whose last visible tab is removed closes, as in the engine.
+# `hold` keeps a removal waiting until the test lets it go; `fail` makes one removal fail once.
+TAB_CLOSER = r"""
+const { tabCloser } = await import(process.argv[1]);
+const later = () => new Promise(resolve => setImmediate(resolve));
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function world(windows) {
+  const state = new Map(Object.entries(windows).map(([id, list]) => [Number(id), list.map(tab => ({ ...tab }))]));
+  const closed = [];
+  const hold = new Map();
+  const fail = new Set();
+  let next = 100;
+  const find = id => {
+    for (const [windowId, list] of state) {
+      const tab = list.find(t => t.id === id);
+      if (tab) return { windowId, list, tab };
+    }
+    throw new Error(`no tab ${id}`);
+  };
+  const tabs = {
+    async get(id) { await later(); const f = find(id); return { id, windowId: f.windowId, hidden: Boolean(f.tab.hidden) }; },
+    async query({ windowId, hidden }) {
+      await later();
+      return (state.get(windowId) ?? []).filter(t => Boolean(t.hidden) === hidden).map(t => ({ id: t.id, windowId }));
+    },
+    async create({ windowId }) {
+      await later();
+      const list = state.get(windowId);
+      if (!list) throw new Error(`no window ${windowId}`);
+      const tab = { id: next++, fresh: true };
+      list.push(tab);
+      return { id: tab.id, windowId };
+    },
+    async remove(id) {
+      await later();
+      await hold.get(id);
+      if (fail.delete(id)) throw new Error("the engine refused");
+      const { windowId, list, tab } = find(id);
+      list.splice(list.indexOf(tab), 1);
+      if (!list.some(t => !t.hidden)) { state.delete(windowId); closed.push(windowId); }
+    },
+  };
+  const tabsOf = id => state.has(id) ? state.get(id).map(t => t.fresh ? "new" : t.id) : null;
+  const move = (id, to) => { const { list, tab } = find(id); list.splice(list.indexOf(tab), 1); state.get(to).push(tab); };
+  return { tabs, closed, hold, fail, tabsOf, move };
+}
+
+// What each page did from its own document before #741: count, then remove, with nothing shared.
+async function perDocument(tabs, id) {
+  const tab = await tabs.get(id);
+  const visible = await tabs.query({ windowId: tab.windowId, hidden: false });
+  if (!visible.some(other => other.id !== id)) await tabs.create({ windowId: tab.windowId });
+  await tabs.remove(id);
+}
+
+const out = {};
+
+{ // Before: two Shell pages, a window's only tabs, closing at once, each count the other: the window closes.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }] });
+  await Promise.all([perDocument(w.tabs, 1), perDocument(w.tabs, 2)]);
+  out.perDocument = { closed: w.closed, tabs: w.tabsOf(1) };
+}
+{ // Now: the second close counts after the first removal, and opens the new tab.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }] });
+  const close = tabCloser(w.tabs);
+  out.together = { answers: await Promise.all([close(1), close(2)]), closed: w.closed, tabs: w.tabsOf(1) };
+}
+{ // Three at once, and a window with other tabs: nothing extra is opened there.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 4 }, { id: 5 }] });
+  const close = tabCloser(w.tabs);
+  await Promise.all([close(1), close(2), close(3), close(4)]);
+  out.three = { closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+}
+{ // Only visible tabs count (#720): a window whose other tab is hidden keeps a new tab.
+  const w = world({ 1: [{ id: 1 }, { id: 2, hidden: true }] });
+  await tabCloser(w.tabs)(1);
+  out.hidden = { closed: w.closed, tabs: w.tabsOf(1) };
+}
+{ // A removal that fails is reported to its page, and the next close in that window still runs.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }] });
+  w.fail.add(1);
+  const close = tabCloser(w.tabs);
+  const [first, second] = await Promise.allSettled([close(1), close(2)]);
+  const reason = String(first.reason?.message);
+  out.failed = { first: first.status, reason, second: second.value, closed: w.closed, tabs: w.tabsOf(1) };
+}
+{ // A close in one window does not wait for another window's; a stuck one holds its own window only for `wait`.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 4 }, { id: 5 }] });
+  let release;
+  w.hold.set(1, new Promise(resolve => (release = resolve)));
+  const close = tabCloser(w.tabs, { wait: 200 });
+  const stuck = close(1);
+  await pause(20);
+  const order = [];
+  const other = close(4).then(() => order.push("other window"));
+  const same = close(2).then(() => order.push("same window"));
+  await other;
+  await pause(20);
+  const sameBeforeWait = order.includes("same window");
+  await same;
+  release();
+  await stuck;
+  out.windows = { order, sameBeforeWait, closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+}
+{ // A tab moved to another window while its close waited is counted in the window it is now in.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 9, hidden: true }] });
+  let release;
+  w.hold.set(1, new Promise(resolve => (release = resolve)));
+  const close = tabCloser(w.tabs);
+  const first = close(1);
+  await pause(20);
+  const second = close(2); // queued behind tab 1, in window 1
+  await pause(20);
+  w.move(2, 2); // window 2's only visible tab now
+  release();
+  await Promise.all([first, second]);
+  out.moved = { closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+}
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class TabCloserTest(unittest.TestCase):
+    """#741: two Shell pages closing at once, from their own documents, could each count the other and close their
+    window. The background now decides every close, one at a time per window (lib/tab-closer.js)."""
+
+    @classmethod
+    def setUpClass(cls):
+        module = (SHELL / "lib" / "tab-closer.js").as_uri()
+        done = subprocess.run(["node", "--input-type=module", "-e", TAB_CLOSER, module],
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        cls.out = json.loads(done.stdout)
+
+    def test_the_fake_shows_the_race_the_pages_had(self):
+        # Without this, the next test could pass on a fake that never interleaves.
+        self.assertEqual(self.out["perDocument"], {"closed": [1], "tabs": None})
+
+    def test_two_pages_closing_at_once_leave_their_window_on_a_new_tab(self):
+        self.assertEqual(self.out["together"], {"answers": [True, True], "closed": [], "tabs": ["new"]})
+        self.assertEqual(self.out["three"], {"closed": [], "one": ["new"], "two": [5]})
+
+    def test_only_visible_tabs_count(self):
+        self.assertEqual(self.out["hidden"], {"closed": [], "tabs": [2, "new"]})
+
+    def test_a_failed_close_is_reported_and_does_not_block_the_window(self):
+        self.assertEqual(
+            self.out["failed"],
+            {"first": "rejected", "reason": "the engine refused", "second": True, "closed": [], "tabs": [1]},
+        )
+
+    def test_windows_do_not_wait_for_each_other_and_a_stuck_close_holds_only_for_a_while(self):
+        windows = self.out["windows"]
+        self.assertEqual(windows["order"], ["other window", "same window"])
+        self.assertFalse(windows["sameBeforeWait"], "a close in the same window ran before the one before it")
+        self.assertEqual(windows["closed"], [])
+        self.assertEqual(windows["one"], [3])
+        self.assertEqual(windows["two"], [5])
+
+    def test_a_tab_moved_while_it_waited_is_counted_where_it_is(self):
+        self.assertEqual(self.out["moved"], {"closed": [], "one": [3], "two": [9, "new"]})
 
 
 class PasswordsTest(unittest.TestCase):
