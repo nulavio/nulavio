@@ -492,6 +492,38 @@ class RoutingTest(unittest.TestCase):
         self.assertEqual(self.hits("/page/moved-cold"), 1, "the moved tab was requested more than once")
         self.assertFalse(any("/page/moved-cold" in u for u in self.tabs(bank)), "the rule moved it back to Bancos")
 
+    def test_06c_a_tab_moved_to_its_rules_profile_is_not_credited_to_the_rule(self):
+        """#785 review: a tab the person moved with the engine's menu to the very profile its site's rule names opens
+        there, and the band does not say "Aberto pela sua regra" (D-UX19 counts only the group's rules; the move was
+        the person's explicit choice). test_04b shows the notice for a link the rule did send there."""
+        move = (
+            "gProfiles.openTabsInProfile({target: {getAttribute: () => String(arguments[0])}},"
+            " [{linkedBrowser: {currentURI: {spec: arguments[1]}}}]);"
+        )
+        self.m.chrome(move, [self.ids["Bancos"], self.local("/page/moved-to-rule")])
+        bank = self.instance("Bancos")
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/moved-to-rule") for u in self.tabs(bank)), timeout=30),
+            self.tabs(bank),
+        )
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.current_url().endswith("/page/moved-to-rule"):
+                break
+        self.assertTrue(
+            harness.wait_until(
+                lambda: bank.chrome("return gBrowser.selectedBrowser.currentURI.spec;").endswith("/page/moved-to-rule"),
+                timeout=15,
+            )
+        )
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=10)
+        self.assertFalse(shown, "a tab the person moved was credited to the rule")
+        self.assertEqual(self.hits("/page/moved-to-rule"), 1, "the moved tab was requested more than once")
+
     def test_07_routing_off_opens_links_where_they_arrive(self):
         self.call("await R.setEnabled(false);")
         try:
