@@ -414,7 +414,8 @@ class FailedPublishRunbookTest(unittest.TestCase):
                     "FAKE_CDN": str(self.cdn), "FAKE_AWS_LOG": str(self.log), "FAKE_CURL_LOG": str(self.curl_log),
                     "FAKE_LEAK_LOG": str(self.leak_log), "TMPDIR": str(self.scratch),
                     # What the maintainer's shell may hold: never used for the upload.
-                    "AWS_SESSION_TOKEN": "sso-token", "AWS_SECURITY_TOKEN": "legacy-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
+                    "AWS_SESSION_TOKEN": "sso-token", "AWS_SECURITY_TOKEN": "legacy-token",
+                    "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
                     "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
     def run_block(self, *options: str, file_size_limit: str = ""):
