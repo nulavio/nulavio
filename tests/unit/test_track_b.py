@@ -821,7 +821,18 @@ class PackagingTest(unittest.TestCase):
         probe = (ROOT / "scripts" / "release" / "updates_probe.sh").read_text(encoding="utf-8")
         self.assertIn("URIs: http://127.0.0.1:9/apt", probe)
         self.assertIn("fail \"update-nulavio succeeded when the refresh of Nulavio's index failed", probe)
-        self.assertIn('grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out', probe)
+        self.assertIn('if ! grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out ||', probe)
+        # The refused connection to 127.0.0.1:9 itself: a proxy set for that host in apt.conf.d wins over DIRECT, and its
+        # 403 also gives "E: Failed to fetch" (OCR on #751).
+        self.assertIn(
+            '! grep -qF "Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)" /tmp/update.out;',
+            probe,
+        )
+        # An image that already has Nulavio's APT list fails the probe, instead of the list being taken for a missing
+        # repository, then overwritten and removed (OCR on #751).
+        guard = '[ ! -e "$list" ] || fail "$list is there before the checks'
+        self.assertIn(guard, probe)
+        self.assertLess(probe.index(guard), probe.index("if /usr/libexec/nulavio/update-nulavio >/tmp/update.out"))
         # Straight to the refusing address, so a proxy's 403 cannot stand in for the failure, and in English for the grep.
         self.assertIn("printf 'Acquire::http::Proxy::127.0.0.1 \"DIRECT\";\\n' >/tmp/direct.conf", probe)
         self.assertIn("if APT_CONFIG=/tmp/direct.conf LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out", probe)
