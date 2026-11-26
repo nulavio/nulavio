@@ -47,6 +47,8 @@ class PasswordsTest(unittest.TestCase):
     def setUpClass(cls):
         cls.server = harness.FixtureServer().__enter__()
         cls.session = harness.GeckoProfileSession(name="Pessoal")
+        cls.session.env["MOZ_LOG"] = "SHIPBFCache:5,ProcessIsolation:5,PageCache:5"  # TEMP diagnostic (#709)
+        cls.session.env["MOZ_LOG_FILE"] = str(cls.session.tmp / "engine")
         cls.m = cls.session.start()
         port = cls.server.port
         cls.real = f"http://{REAL}:{port}"
@@ -331,6 +333,14 @@ class PasswordsTest(unittest.TestCase):
                 "get('remoteType', () => b.remoteType);"
                 "return JSON.stringify(out);"
             )
+            import re
+
+            lines = []
+            for log in sorted(self.session.tmp.glob("engine*")):
+                for line in log.read_text(errors="replace").splitlines():
+                    if re.search(r"BFCache|bfcache|blocked|Checking|\* |->|IsolationBehavior|current uri|login|page/home", line):
+                        lines.append(f"{log.name}: {line[:300]}")
+            print("\n".join(lines[-150:]), file=sys.stderr)
             self.fail(f"the page was loaded again, not kept: {diag}")
 
     def test_01k_back_from_the_warning_to_the_page_warns_again_on_the_next_use_of_its_field(self):
