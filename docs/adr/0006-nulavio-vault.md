@@ -55,7 +55,7 @@ Method data by envelope: `password` and `recovery-code` hold Argon2id parameters
 - **Remove method:** requires an unlocked profile; refuses to remove the last method; warns below two.
 - **Rotate a wrapping key** (new password, re-paired phone): replace that envelope only.
 - **Rotate the DEK** (suspected compromise, lost phone with a stolen profile copy): new DEK, new storage, data copied; offered, never automatic. How it is done, what carries over and what an interruption leaves: [ADR 0015](0015-a-new-key-for-a-profile.md).
-- **Lock:** end the profile's engine instance, unmount the storage, drop the DEK. Nothing sensitive stays unlocked by a hidden path.
+- **Lock:** end the profile's engine instance, unmount the storage, drop the DEK. Nothing sensitive stays unlocked by a hidden path. What the browser's profile group keeps about the profile outside its folder is not in the Vault (see Consequences).
 - **All factors lost:** the data cannot be recovered. No Nulavio master key, no escrow, no backdoor; onboarding says so.
 
 ### Crash consistency
@@ -110,4 +110,5 @@ Tests (S5): `tests/unit/test_vault_storage.py` (15, real FUSE mounts, a stand-in
 
 - Phone, password, recovery code and keyring are independent: losing one method does not lose the profile.
 - Encryption at rest protects **locked** profiles and offline copies; it does not protect an unlocked session from same-user malware ([threat model](../security/threat-model-unlock.md)).
+- It protects the profile's own folder only. The engine's profile group keeps a protected profile's name, picture and theme in its store (`Profile Groups/<storeID>.sqlite`), and Nulavio's routing rules (with the sites they send to the profile) and profile colours are prefs shared through that store and the prefs of the group's other profiles. These stay readable while the profile is locked ([R89](../security/residual-risks.md), [U-T1](../security/threat-model-unlock.md)).
 - Track A (distribution Firefox) gets the same Vault through the launcher; Track B integrates it with engine profiles (S5).
