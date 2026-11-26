@@ -12,6 +12,7 @@ import os
 import sys
 import time
 import unittest
+import urllib.parse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
@@ -252,6 +253,18 @@ class PasswordsTest(unittest.TestCase):
         self.click_in_frame(home, f"f.src = {'http://localhost:' + str(self.server.port) + '/login'!r};")
         time.sleep(1.5)  # as long as focus_password gives the check; nothing may happen in it
         self.assertEqual(self.m.current_url(), home)
+
+    def test_01i_a_tab_page_without_a_sites_address_leaves_only_the_real_site(self):
+        """The field's frame was in a page with no http or https address (`page` empty): the warning shows, and
+        offers no "continue" rather than open the frame's document as the tab's page."""
+        query = urllib.parse.urlencode({"url": self.fake + "/login", "page": ""})
+        self.m.navigate(self.base + "passwords/lookalike.html?" + query)
+        self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
+        shown = self.m.execute(
+            "const seen = s => document.querySelector(s).checkVisibility();"
+            "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note') };"
+        )
+        self.assertEqual(shown, {"real": True, "onward": False, "note": False})
 
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)
