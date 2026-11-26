@@ -309,46 +309,85 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
 1. **Both repositories serve that revision** (the upload finished; a later step failed). A new run builds the next revision by itself. `whats_new.py require` then asks for `packaging/whats-new/<firefox>-<next release>.json`: rename the record (and its `version`) in a pull request before starting the run.
 2. **dnf serves it, APT does not** (the APT upload failed). As in 1: a new run reads the dnf index too and builds the next revision by itself (#723); rename the whats-new record the same way. The RPM of the failed run stays in the bucket, unlisted once the new run's dnf metadata is up: people may have installed it, so it is never deleted or replaced.
 3. **Neither serves it** (the upload stopped before the dnf metadata). A new run picks the same revision and stops at the upload. Those packages are in no served metadata: the maintainer deletes them from the bucket (`nulavio-packages`, `rpm/x86_64/` and `apt/pool/main/n/nulavio/`, after checking that neither the primary file `rpm/repodata/repomd.xml` names nor `apt/dists/stable/main/binary-amd64/Packages` lists them; the failed run may have uploaded a newer primary file that does list them but is not the one `repomd.xml` names), then re-runs the new run's `publish` job.
-4. **The build job stops at the signature of `repomd.xml`** (`repomd.xml.asc is not a good signature`): the upload stopped between `repomd.xml.asc` and `repomd.xml`, so the bucket serves a new signature beside the old file. dnf refuses the repository too (`repo_gpgcheck=1`), so it is urgent. The route of state 3 does not work here: a new run stops at that signature before it can upload a pair of its own, and the build job does not fall back to another pair (it stays fail-closed). Re-run the failed `publish` job while it can; otherwise copy the signed pair `upload_repo.sh` left under the failed run's revision onto the served keys (#740). From the repository's root, paste the block below with `<firefox>-<release>` set to the failed run's revision (the `v<firefox>-<release>` its `publish` log names) and `<account id>` to the Cloudflare account id. It runs in a subshell that stops at the first failure, so no copy happens unless every check before it passed. It asks for the R2 upload token (`nulavio-packages-upload`, the key pair the `release-upload` environment holds as `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; GitHub does not show a secret again, so use the maintainer's own copy of that token) only after those checks, with `read -rs`: it reaches `aws` through the environment, never a command line or the shell history:
+4. **The build job stops at the signature of `repomd.xml`** (`repomd.xml.asc is not a good signature`): the upload stopped between `repomd.xml.asc` and `repomd.xml`, so the bucket serves a new signature beside the old file. dnf refuses the repository too (`repo_gpgcheck=1`), so it is urgent. The route of state 3 does not work here: a new run stops at that signature before it can upload a pair of its own, and the build job does not fall back to another pair (it stays fail-closed). Re-run the failed `publish` job while it can; otherwise copy the signed pair `upload_repo.sh` left under the failed run's revision onto the served keys (#740). From the repository's root, paste the block below with `<firefox>-<release>` set to the failed run's revision (the `v<firefox>-<release>` its `publish` log names) and `<account id>` to the Cloudflare account id. It needs `curl`, `python3`, `zstd` and the AWS CLI. It runs in a subshell that stops at the first failure, so nothing is written unless every check before it passed:
+   - Over HTTPS, before it asks for anything: the revision's pair verifies with the release key, and the served signature is that run's.
+   - It then asks for the R2 upload token (`nulavio-packages-upload`, the key pair the `release-upload` environment holds as `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; GitHub does not show a secret again, so use the maintainer's own copy of that token), with `read -rs`, into shell variables that are never exported. Each `aws` call gets it from `r2()`, a subshell that exports it and becomes `aws`: it is never on a command line, in the shell history, or in the environment of `curl`, `python3` or `zstd`.
+   - The live objects in R2, read with that token, pass the same checks: a CDN cache can serve other bytes than the bucket holds.
+   - It uploads that verified pair onto the served keys, in the upload's order (the signature, then `repomd.xml`), and reads the served pair back from R2.
+   - What `https://packages.nulavio.net` now serves, as dnf and the build job read it: the same pair, which verifies, naming a primary file that lists that revision.
+   - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file, and 32 MiB for any file the block writes (`ulimit -f`, the decompressed primary file included).
 
    ```sh
    (
    set -euo pipefail
    rev=<firefox>-<release>
-   rpm=https://packages.nulavio.net/rpm/repodata
+   rpm=https://packages.nulavio.net/rpm
+   bucket=s3://nulavio-packages/rpm/repodata
+   r2=https://<account id>.r2.cloudflarestorage.com
    fpr=298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1  # site/keys/nulavio-packages.asc
+   ulimit -f 32768
    tmp=$(mktemp -d)
    trap 'rm -rf "$tmp"' EXIT
-   verify() {
-       python3 -I scripts/release/release_manifest.py verify-signed "$tmp/repomd.xml" "$tmp/repomd.xml.asc" \
+   mkdir "$tmp/https" "$tmp/r2" "$tmp/after" "$tmp/public"
+   get() {  # <size> <file> <url>
+       curl -fsS --proto '=https' --retry 3 --max-time 60 --retry-max-time 180 --max-filesize "$1" -o "$2" "$3"
+   }
+   verify() {  # <dir>: its repomd.xml.asc is the release key's signature of its repomd.xml
+       python3 -I scripts/release/release_manifest.py verify-signed "$1/repomd.xml" "$1/repomd.xml.asc" \
            --key site/keys/nulavio-packages.asc --fingerprint "$fpr"
    }
-   # The pair is that run's, signed by the release key, and the served signature is that run's.
-   curl -fsS --proto '=https' -o "$tmp/repomd.xml" "$rpm/$rev/repomd.xml"
-   curl -fsS --proto '=https' -o "$tmp/repomd.xml.asc" "$rpm/$rev/repomd.xml.asc"
-   curl -fsS --proto '=https' -o "$tmp/served.asc" "$rpm/repomd.xml.asc"
-   verify
-   cmp "$tmp/repomd.xml.asc" "$tmp/served.asc"
-   # The upload token, typed at the prompts (not echoed), as upload_repo.sh's r2() passes it to aws.
+   same() {  # <dir> <dir>: the same pair
+       cmp "$1/repomd.xml.asc" "$2/repomd.xml.asc"
+       cmp "$1/repomd.xml" "$2/repomd.xml"
+   }
+   # Over HTTPS: the pair is that run's, signed by the release key, and the served signature is that run's.
+   get 1M "$tmp/https/repomd.xml" "$rpm/repodata/$rev/repomd.xml"
+   get 1M "$tmp/https/repomd.xml.asc" "$rpm/repodata/$rev/repomd.xml.asc"
+   get 1M "$tmp/https/served.asc" "$rpm/repodata/repomd.xml.asc"
+   verify "$tmp/https"
+   cmp "$tmp/https/repomd.xml.asc" "$tmp/https/served.asc"
+   # The upload token, typed at the prompts (not echoed) into variables this shell never exports.
+   unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE
    read -rsp 'R2_ACCESS_KEY_ID: ' AWS_ACCESS_KEY_ID; echo
    read -rsp 'R2_SECRET_ACCESS_KEY: ' AWS_SECRET_ACCESS_KEY; echo
-   unset AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE
-   export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null \
-       AWS_PAGER= AWS_REGION=auto AWS_DEFAULT_REGION=auto \
-       AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
-   r2=https://<account id>.r2.cloudflarestorage.com
-   # Onto the served keys, in the upload's order: the signature, then repomd.xml.
-   aws --endpoint-url "$r2" s3 cp "s3://nulavio-packages/rpm/repodata/$rev/repomd.xml.asc" s3://nulavio-packages/rpm/repodata/repomd.xml.asc
-   aws --endpoint-url "$r2" s3 cp "s3://nulavio-packages/rpm/repodata/$rev/repomd.xml" s3://nulavio-packages/rpm/repodata/repomd.xml
-   # What dnf and the build job now read verifies with the committed key alone.
-   curl -fsS --proto '=https' -o "$tmp/repomd.xml" "$rpm/repomd.xml"
-   curl -fsS --proto '=https' -o "$tmp/repomd.xml.asc" "$rpm/repomd.xml.asc"
-   verify
-   echo "restored: the served pair is $rev's and verifies"
+   r2() {  # <from> <to>: aws s3 cp, as upload_repo.sh's r2() runs it; only here does the token reach a process
+       (
+       export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+           AWS_PAGER='' AWS_REGION=auto AWS_DEFAULT_REGION=auto \
+           AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
+       exec aws --endpoint-url "$r2" --cli-connect-timeout 30 --cli-read-timeout 60 s3 cp --only-show-errors "$1" "$2"
+       )
+   }
+   # The live objects in R2, which a CDN cache may not show: the same checks.
+   r2 "$bucket/$rev/repomd.xml" "$tmp/r2/repomd.xml"
+   r2 "$bucket/$rev/repomd.xml.asc" "$tmp/r2/repomd.xml.asc"
+   r2 "$bucket/repomd.xml.asc" "$tmp/r2/served.asc"
+   verify "$tmp/r2"
+   cmp "$tmp/r2/repomd.xml.asc" "$tmp/r2/served.asc"
+   # Those verified bytes onto the served keys, in the upload's order: the signature, then repomd.xml.
+   r2 "$tmp/r2/repomd.xml.asc" "$bucket/repomd.xml.asc"
+   r2 "$tmp/r2/repomd.xml" "$bucket/repomd.xml"
+   r2 "$bucket/repomd.xml.asc" "$tmp/after/repomd.xml.asc"
+   r2 "$bucket/repomd.xml" "$tmp/after/repomd.xml"
+   same "$tmp/r2" "$tmp/after"
+   echo "the bucket serves $rev's pair; checking what https://packages.nulavio.net serves"
+   # What dnf and the build job read: that pair, which verifies with the committed key alone and lists $rev.
+   get 1M "$tmp/public/repomd.xml" "$rpm/repodata/repomd.xml"
+   get 1M "$tmp/public/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
+   same "$tmp/r2" "$tmp/public"
+   verify "$tmp/public"
+   primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$tmp/public/repomd.xml")
+   get 8M "$tmp/primary.xml.zst" "$rpm/$primary"
+   python3 -I scripts/release/release_manifest.py dnf-compressed "$tmp/public/repomd.xml" "$tmp/primary.xml.zst"
+   zstd -q -d -o "$tmp/primary.xml" "$tmp/primary.xml.zst"
+   served=$(python3 -I scripts/release/release_manifest.py dnf-served "$tmp/public/repomd.xml" "$tmp/primary.xml")
+   echo "the dnf index lists nulavio $served"
+   [[ $served == "$rev" ]]
+   echo "restored: dnf is served $rev's pair, which verifies and lists $rev"
    )
    ```
 
-   It ends with `restored: …`; anything else stopped it, and nothing after the failed step ran. If `cmp` reports a difference, the served signature is not that run's: find the revision whose `repomd.xml.asc` it is before copying anything. The packages and the primary file that pair names went up before it, so dnf then serves the failed run's revision and APT does not: go on as in state 2. A run made from a commit before #740 left no such pair; for it, only the re-run of its `publish` job restores one. The APT side has no such state: the build reads `InRelease`, one object, uploaded last, and the `Packages` file it names by hash.
+   It ends with `restored: …`; anything else stopped it, and nothing after the failed step ran. If a `cmp` before the upload reports a difference, the served signature is not that run's: find the revision whose `repomd.xml.asc` it is before copying anything. If it stops after `the bucket serves …`, the bucket holds the restored pair and the site does not serve it yet: a CDN cache still holds the old `repomd.xml`. Wait for it to expire, or purge those two URLs in Cloudflare, and paste the block again: every check then passes and the upload writes the same bytes. If the index lists another version than that revision, stop and find out why before going on. The packages and the primary file that pair names went up before it, so dnf then serves the failed run's revision and APT does not: go on as in state 2. A run made from a commit before #740 left no such pair; for it, only the re-run of its `publish` job restores one. The APT side has no such state: the build reads `InRelease`, one object, uploaded last, and the `Packages` file it names by hash.
 
 The maintainer then publishes the draft (which creates the tag), sets `version` in `packaging/release.json` by pull request (the site workflow rebuilds the download pages), and adds the changelog entry; the job summary lists these steps. `publish: false` stops after the build: a rehearsal in CI. The build machine never holds the signing role or the upload token.
 

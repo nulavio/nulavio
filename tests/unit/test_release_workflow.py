@@ -253,34 +253,90 @@ class UploadRepoTest(unittest.TestCase):
         self.assertEqual(self.uploads(), [])
 
 
-RUNBOOK_CURL = """#!/bin/sh
-# Stand-in for curl -fsS --proto '=https' -o <file> <url>: the URL's path from FAKE_BUCKET, or curl's 22 (a 404).
-while [ $# -gt 1 ]; do
-  case $1 in -o) out=$2; shift 2 ;; *) shift ;; esac
-done
-src="$FAKE_BUCKET/${1#https://packages.nulavio.net/}"
-[ -f "$src" ] || exit 22
-cp "$src" "$out"
+# The runbook's upload token reaches aws alone (#742): every other stand-in records the process that saw it.
+RUNBOOK_LEAK = """
+if {"r2-key-id", "r2-secret"} & set(os.environ.values()):
+    with open(os.environ["FAKE_LEAK_LOG"], "a") as leak:
+        print("WHO", file=leak)
 """
+RUNBOOK_CURL = """#!/bin/sh
+# Stand-in for curl ... --max-filesize <n>M -o <file> <url>: the URL's path from FAKE_CDN when it holds it (a cached
+# copy), else from FAKE_BUCKET; curl's 22 (a 404), or its 63 for a file past --max-filesize.
+exec python3 -I -c '
+import json, os, shutil, sys
+LEAK
+args = sys.argv[1:]
+with open(os.environ["FAKE_CURL_LOG"], "a") as log:
+    print(json.dumps(args), file=log)
+path = args[-1].removeprefix("https://packages.nulavio.net/")
+held = [os.path.join(root, path) for root in (os.environ.get("FAKE_CDN"), os.environ["FAKE_BUCKET"]) if root]
+held = [src for src in held if os.path.isfile(src)]
+if not held:
+    sys.exit(22)
+limit = args[args.index("--max-filesize") + 1] if "--max-filesize" in args else None
+if limit and os.path.getsize(held[0]) > int(limit.removesuffix("M")) << 20:
+    sys.exit(63)
+shutil.copyfile(held[0], args[args.index("-o") + 1])
+' "$@"
+""".replace("LEAK", RUNBOOK_LEAK.replace("WHO", "curl"))
 RUNBOOK_AWS = """#!/bin/sh
-python3 -I -c 'import json, os, sys
+# Stand-in for aws <global options> s3 cp --only-show-errors <from> <to> on FAKE_BUCKET: a download, or an upload of
+# a local file (which writes other bytes with FAKE_AWS_CORRUPT).
+exec python3 -I -c '
+import json, os, shutil, sys
 names = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_DEFAULT_PROFILE",
          "AWS_CONFIG_FILE", "AWS_SHARED_CREDENTIALS_FILE", "AWS_REQUEST_CHECKSUM_CALCULATION")
-print(json.dumps({"args": sys.argv[1:], "env": {name: os.environ.get(name) for name in names}}))' "$@" >> "$FAKE_AWS_LOG"
-shift 2
-[ "$1 $2" = "s3 cp" ] || exit 9
-if [ -n "${FAKE_AWS_CORRUPT:-}" ]; then echo corrupt > "$FAKE_BUCKET/${4#s3://nulavio-packages/}"; exit 0; fi
-cp "$FAKE_BUCKET/${3#s3://nulavio-packages/}" "$FAKE_BUCKET/${4#s3://nulavio-packages/}"
-"""
-# Stand-in for release_manifest.py verify-signed: a "signature" is "signed:" and the file's SHA-256.
-RUNBOOK_VERIFY = """import hashlib, sys
 args = sys.argv[1:]
-assert args[0] == "verify-signed" and args[3:] == ["--key", "site/keys/nulavio-packages.asc", "--fingerprint",
-                                                 "298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"], args
-with open(args[1], "rb") as f, open(args[2], "rb") as g:
-    good = g.read() == b"signed:" + hashlib.sha256(f.read()).hexdigest().encode()
-sys.exit(0 if good else 1)
+with open(os.environ["FAKE_AWS_LOG"], "a") as log:
+    print(json.dumps({"args": args, "env": {name: os.environ.get(name) for name in names}}), file=log)
+if len(args) != 11 or args[6:9] != ["s3", "cp", "--only-show-errors"]:
+    sys.exit(9)
+def key(url):
+    return os.path.join(os.environ["FAKE_BUCKET"], url.removeprefix("s3://nulavio-packages/"))
+src, dst = args[9:]
+if dst.startswith("s3://"):
+    if os.environ.get("FAKE_AWS_CORRUPT"):
+        with open(key(dst), "w") as f:
+            f.write("corrupt")
+    else:
+        shutil.copyfile(src, key(dst))
+elif os.path.isfile(key(src)):
+    shutil.copyfile(key(src), dst)
+else:
+    sys.exit(1)
+' "$@"
 """
+RUNBOOK_ZSTD = """#!/bin/sh
+# Stand-in for zstd -q -d -o <out> <in>: the stand-in primary file is not compressed.
+exec python3 -I -c '
+import os, shutil, sys
+LEAK
+args = sys.argv[1:]
+if len(args) != 5 or args[:3] != ["-q", "-d", "-o"]:
+    sys.exit(9)
+shutil.copyfile(args[4], args[3])
+' "$@"
+""".replace("LEAK", RUNBOOK_LEAK.replace("WHO", "zstd"))
+# Stand-in for release_manifest.py: a "signature" is "signed:" and the file's SHA-256; a "repomd.xml" is a label, then
+# the primary file's key and its SHA-256 on the second line; a "primary file" is "nulavio <version>-<release>".
+RUNBOOK_MANIFEST = """import hashlib, os, sys
+LEAK
+args = sys.argv[1:]
+key = ["--key", "site/keys/nulavio-packages.asc", "--fingerprint", "298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1"]
+def read(name):
+    with open(name, "rb") as f:
+        return f.read()
+if args[0] == "verify-signed" and len(args) == 7 and args[3:] == key:
+    sys.exit(0 if read(args[2]) == b"signed:" + hashlib.sha256(read(args[1])).hexdigest().encode() else 1)
+elif args[0] == "dnf-primary" and len(args) == 2:
+    print(read(args[1]).decode().splitlines()[1].split()[0])
+elif args[0] == "dnf-compressed" and len(args) == 3:
+    sys.exit(0 if hashlib.sha256(read(args[2])).hexdigest() == read(args[1]).decode().splitlines()[1].split()[1] else 1)
+elif args[0] == "dnf-served" and len(args) == 3:
+    print(read(args[2]).decode().removeprefix("nulavio "))
+else:
+    sys.exit(f"unexpected arguments: {args}")
+""".replace("LEAK", RUNBOOK_LEAK.replace("WHO", "python3"))
 
 
 def signed(text: str) -> tuple[bytes, bytes]:
@@ -288,13 +344,25 @@ def signed(text: str) -> tuple[bytes, bytes]:
     return data, b"signed:" + hashlib.sha256(data).hexdigest().encode()
 
 
+def repodata(label: str, listed: str) -> tuple[bytes, bytes, str, bytes]:
+    """A stand-in dnf index: repomd.xml, its signature, the key of the primary file it names, and that file."""
+    primary = f"nulavio {listed}".encode()
+    digest = hashlib.sha256(primary).hexdigest()
+    href = f"repodata/{digest}-primary.xml.zst"
+    repomd, signature = signed(f"<repomd>{label}</repomd>\n{href} {digest}\n")
+    return repomd, signature, href, primary
+
+
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
 class FailedPublishRunbookTest(unittest.TestCase):
-    """build.md, "After a failed publish", state 4 (#740): the block copies the revision's pair onto the served keys
-    only once every check before it passed, takes the upload token at a prompt into the environment, and fails
-    when the served pair does not verify afterwards."""
+    """build.md, "After a failed publish", state 4 (#740, #742): the block checks the revision's pair over HTTPS,
+    then the live objects in R2, and uploads those verified bytes onto the served keys only once every check passed;
+    the upload token, taken at a prompt, reaches the aws calls alone; it then reads the served pair back from R2 and
+    requires the public index to serve it and to list the revision; every download is bounded."""
 
     REVISION = "160.0.1-0.4"
+    BUCKET = "s3://nulavio-packages/rpm/repodata"
+    LOCAL = "<local>"
 
     @classmethod
     def setUpClass(cls):
@@ -308,54 +376,79 @@ class FailedPublishRunbookTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = self.tmp / "repo"
         (self.repo / "scripts" / "release").mkdir(parents=True)
-        (self.repo / "scripts" / "release" / "release_manifest.py").write_text(RUNBOOK_VERIFY)
+        (self.repo / "scripts" / "release" / "release_manifest.py").write_text(RUNBOOK_MANIFEST)
         (self.repo / "site" / "keys").mkdir(parents=True)
         (self.repo / "site" / "keys" / "nulavio-packages.asc").write_text("the release key")
         self.bucket = self.tmp / "bucket"
-        self.served = self.bucket / "rpm" / "repodata"
+        self.cdn = self.tmp / "cdn"  # what the CDN still serves from its cache, when it holds the key
+        self.rpm = self.bucket / "rpm"
+        self.served = self.rpm / "repodata"
         (self.served / self.REVISION).mkdir(parents=True)
-        new, new_sig = signed("<repomd>the failed run's</repomd>")
-        old, _ = signed("<repomd>the run before</repomd>")
-        (self.served / self.REVISION / "repomd.xml").write_bytes(new)
+        self.new, new_sig, href, primary = repodata("the failed run's", self.REVISION)
+        self.old, _, old_href, old_primary = repodata("the run before", "160.0.1-0.3")
+        (self.served / self.REVISION / "repomd.xml").write_bytes(self.new)
         (self.served / self.REVISION / "repomd.xml.asc").write_bytes(new_sig)
         (self.served / "repomd.xml.asc").write_bytes(new_sig)  # the publish stopped here
-        (self.served / "repomd.xml").write_bytes(old)
+        (self.served / "repomd.xml").write_bytes(self.old)
+        (self.rpm / href).write_bytes(primary)
+        (self.rpm / old_href).write_bytes(old_primary)
         bin_dir = self.tmp / "bin"
         bin_dir.mkdir()
-        for name, body in (("curl", RUNBOOK_CURL), ("aws", RUNBOOK_AWS)):
+        for name, body in (("curl", RUNBOOK_CURL), ("aws", RUNBOOK_AWS), ("zstd", RUNBOOK_ZSTD)):
             (bin_dir / name).write_text(body)
             (bin_dir / name).chmod(stat.S_IRWXU)
         self.log = self.tmp / "aws.json"
+        self.curl_log = self.tmp / "curl.json"
+        self.leak_log = self.tmp / "leak.txt"
         self.scratch = self.tmp / "scratch"
         self.scratch.mkdir()
         script = self.block.replace("<firefox>-<release>", self.REVISION).replace("<account id>", "acct")
         (self.tmp / "block.sh").write_text(script)
         self.env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_BUCKET": str(self.bucket),
-                    "FAKE_AWS_LOG": str(self.log), "TMPDIR": str(self.scratch),
-                    # What the maintainer's shell may hold: never used for the copy.
-                    "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin"}  # fmt: skip
+                    "FAKE_CDN": str(self.cdn), "FAKE_AWS_LOG": str(self.log), "FAKE_CURL_LOG": str(self.curl_log),
+                    "FAKE_LEAK_LOG": str(self.leak_log), "TMPDIR": str(self.scratch),
+                    # What the maintainer's shell may hold: never used for the upload.
+                    "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
+                    "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
     def run_block(self):
         return subprocess.run(["bash", str(self.tmp / "block.sh")], cwd=self.repo, env=self.env, capture_output=True,
                               text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
 
+    def cache(self, key: str, data: bytes):
+        (self.cdn / key).parent.mkdir(parents=True, exist_ok=True)
+        (self.cdn / key).write_bytes(data)
+
     def calls(self) -> list[dict]:
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
 
-    def test_the_pair_is_copied_in_the_upload_order_and_verifies(self):
+    def writes(self) -> list[dict]:
+        return [call for call in self.calls() if call["args"][-1].startswith("s3://")]
+
+    def curls(self) -> list[list[str]]:
+        return [json.loads(line) for line in self.curl_log.read_text().splitlines()] if self.curl_log.exists() else []
+
+    def test_the_verified_pair_is_uploaded_in_the_upload_order_and_served(self):
         out = self.run_block()
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn(f"restored: the served pair is {self.REVISION}'s and verifies", out.stdout)
-        calls = self.calls()
-        self.assertEqual([call["args"][4:] for call in calls], [
-            [f"s3://nulavio-packages/rpm/repodata/{self.REVISION}/repomd.xml.asc",
-             "s3://nulavio-packages/rpm/repodata/repomd.xml.asc"],
-            [f"s3://nulavio-packages/rpm/repodata/{self.REVISION}/repomd.xml",
-             "s3://nulavio-packages/rpm/repodata/repomd.xml"],
+        self.assertIn(f"restored: dnf is served {self.REVISION}'s pair, which verifies and lists {self.REVISION}",
+                      out.stdout)  # fmt: skip
+        b, rev, local = self.BUCKET, self.REVISION, self.LOCAL
+        self.assertEqual([[arg if arg.startswith("s3://") else local for arg in call["args"][9:]] for call in self.calls()], [
+            [f"{b}/{rev}/repomd.xml", local], [f"{b}/{rev}/repomd.xml.asc", local], [f"{b}/repomd.xml.asc", local],
+            [local, f"{b}/repomd.xml.asc"], [local, f"{b}/repomd.xml"],  # the signature first, as upload_repo.sh
+            [f"{b}/repomd.xml.asc", local], [f"{b}/repomd.xml", local],
         ])  # fmt: skip
-        for call in calls:
-            self.assertEqual(call["args"][:4], ["--endpoint-url", "https://acct.r2.cloudflarestorage.com", "s3", "cp"])
-            # I3: the token reaches aws through the environment, from the prompt; never as an argument.
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), self.new)
+        self.assertEqual((self.served / "repomd.xml.asc").read_bytes(),
+                         (self.served / self.REVISION / "repomd.xml.asc").read_bytes())  # fmt: skip
+        self.assertEqual(list(self.scratch.iterdir()), [])  # its temporary directory is gone
+
+    def test_the_token_reaches_the_aws_calls_alone(self):
+        out = self.run_block()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        for call in self.calls():
+            # I3: the token reaches aws through its environment, from the prompt; never as an argument.
             self.assertEqual(call["env"]["AWS_ACCESS_KEY_ID"], "r2-key-id")
             self.assertEqual(call["env"]["AWS_SECRET_ACCESS_KEY"], "r2-secret")
             self.assertNotIn("r2-secret", json.dumps(call["args"]))
@@ -364,21 +457,52 @@ class FailedPublishRunbookTest(unittest.TestCase):
             self.assertEqual(call["env"]["AWS_CONFIG_FILE"], "/dev/null")
             self.assertEqual(call["env"]["AWS_SHARED_CREDENTIALS_FILE"], "/dev/null")
             self.assertEqual(call["env"]["AWS_REQUEST_CHECKSUM_CALCULATION"], "when_required")
-        self.assertEqual((self.served / "repomd.xml").read_bytes(),
-                         (self.served / self.REVISION / "repomd.xml").read_bytes())  # fmt: skip
-        self.assertEqual(list(self.scratch.iterdir()), [])  # its temporary directory is gone
+        # curl, python3 and zstd ran after the prompt and never saw it.
+        self.assertGreater(len(self.curls()), 3)
+        self.assertFalse(self.leak_log.exists(), self.leak_log.read_text() if self.leak_log.exists() else "")
 
     def test_no_credential_is_written_on_a_command_line(self):
         self.assertNotRegex(self.block, r"AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
         self.assertNotRegex(self.block, r"R2_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
+        self.assertNotRegex(self.block, r"\benv\s")  # env NAME=value puts the value on env's command line
         self.assertIn("read -rsp", self.block)
         self.assertTrue(self.block.startswith("(\nset -euo pipefail\n"), self.block[:40])
+
+    def test_every_download_is_bounded(self):
+        out = self.run_block()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        curls = self.curls()
+        self.assertEqual(len(curls), 6)  # the revision's pair and the served signature, the served pair, the primary
+        for args in curls:
+            self.assertEqual(args[:10], ["-fsS", "--proto", "=https", "--retry", "3", "--max-time", "60",
+                                         "--retry-max-time", "180", "--max-filesize"])  # fmt: skip
+            self.assertEqual(args[10], "8M" if args[-1].endswith("-primary.xml.zst") else "1M", args[-1])
+        for call in self.calls():
+            self.assertEqual(call["args"][:9], ["--endpoint-url", "https://acct.r2.cloudflarestorage.com",
+                                                "--cli-connect-timeout", "30", "--cli-read-timeout", "60",
+                                                "s3", "cp", "--only-show-errors"])  # fmt: skip
+        self.assertIn("\nulimit -f 32768\n", self.block)  # every file the block writes, aws's downloads included
+
+    def test_a_download_past_its_size_limit_stops_it(self):
+        big, big_sig, _, _ = repodata("x" * (1 << 20), self.REVISION)  # signed, and past 1 MiB
+        (self.served / self.REVISION / "repomd.xml").write_bytes(big)
+        (self.served / self.REVISION / "repomd.xml.asc").write_bytes(big_sig)
+        (self.served / "repomd.xml.asc").write_bytes(big_sig)
+        self.assert_stopped_before_any_copy(self.run_block())
 
     def assert_stopped_before_any_copy(self, out):
         self.assertNotEqual(out.returncode, 0)
         self.assertNotIn("restored", out.stdout)
         self.assertEqual(self.calls(), [])
-        self.assertEqual((self.served / "repomd.xml").read_bytes(), signed("<repomd>the run before</repomd>")[0])
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), self.old)
+        self.assertEqual(list(self.scratch.iterdir()), [])
+
+    def assert_stopped_before_any_write(self, out):
+        self.assertNotEqual(out.returncode, 0)
+        self.assertNotIn("restored", out.stdout)
+        self.assertNotEqual(self.calls(), [])  # it read R2
+        self.assertEqual(self.writes(), [])
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), self.old)
         self.assertEqual(list(self.scratch.iterdir()), [])
 
     def test_another_served_signature_stops_it_before_any_copy(self):
@@ -395,11 +519,49 @@ class FailedPublishRunbookTest(unittest.TestCase):
         shutil.rmtree(self.served / self.REVISION)
         self.assert_stopped_before_any_copy(self.run_block())
 
+    def test_another_signature_in_r2_stops_it_while_the_cdn_shows_the_run_s(self):
+        self.cache("rpm/repodata/repomd.xml.asc", (self.served / "repomd.xml.asc").read_bytes())
+        (self.served / "repomd.xml.asc").write_bytes(signed("<repomd>another run's</repomd>")[1])
+        self.assert_stopped_before_any_write(self.run_block())
+
+    def test_a_revision_pair_in_r2_that_does_not_verify_stops_it_while_the_cdn_shows_a_good_one(self):
+        self.cache(f"rpm/repodata/{self.REVISION}/repomd.xml", self.new)
+        (self.served / self.REVISION / "repomd.xml").write_bytes(b"<repomd>changed</repomd>")
+        self.assert_stopped_before_any_write(self.run_block())
+
+    def assert_restored_in_r2_only(self, out):
+        self.assertNotEqual(out.returncode, 0)  # the cleanup does not hide it
+        self.assertIn(f"the bucket serves {self.REVISION}'s pair", out.stdout)
+        self.assertNotIn("restored", out.stdout)
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), self.new)
+        self.assertEqual(list(self.scratch.iterdir()), [])
+
+    def test_a_cdn_that_still_serves_the_old_index_fails_it_after_the_upload(self):
+        self.cache("rpm/repodata/repomd.xml", self.old)
+        self.assert_restored_in_r2_only(self.run_block())
+
+    def test_a_served_index_that_lists_another_revision_fails_it(self):
+        other, other_sig, href, primary = repodata("the failed run's, listing another", "160.0.1-0.3")
+        (self.served / self.REVISION / "repomd.xml").write_bytes(other)
+        (self.served / self.REVISION / "repomd.xml.asc").write_bytes(other_sig)
+        (self.served / "repomd.xml.asc").write_bytes(other_sig)
+        (self.rpm / href).write_bytes(primary)
+        out = self.run_block()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("the dnf index lists nulavio 160.0.1-0.3", out.stdout)
+        self.assertNotIn("restored", out.stdout)
+
+    def test_a_primary_file_past_its_size_limit_fails_it(self):
+        href = self.new.decode().splitlines()[1].split()[0]
+        self.cache(f"rpm/{href}", b"x" * ((8 << 20) + 1))
+        self.assert_restored_in_r2_only(self.run_block())
+
     def test_a_served_pair_that_does_not_verify_after_the_copy_fails_it(self):
         self.env["FAKE_AWS_CORRUPT"] = "1"
         out = self.run_block()
         self.assertNotEqual(out.returncode, 0)  # the cleanup does not hide it
         self.assertNotIn("restored", out.stdout)
+        self.assertNotIn("the bucket serves", out.stdout)
         self.assertEqual(list(self.scratch.iterdir()), [])
 
 
