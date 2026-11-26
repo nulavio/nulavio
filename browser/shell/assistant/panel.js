@@ -439,7 +439,13 @@ async function render() {
     ++contextVersion;
     chips = [];
     drawn = false;
-    $("send-line").textContent = ""; // hidden now; when the composer shows again, it waits for the reads
+    // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
+    // carry, no offer of a page, no hint, no size.
+    $("chips").replaceChildren();
+    $("attached").hidden = true;
+    $("include-page").hidden = true;
+    $("no-page").hidden = true;
+    $("send-line").textContent = "";
   }
 }
 

@@ -1489,6 +1489,10 @@ holdThread = true;
 $("allow-profile").fire("click");
 await idle();
 out.resumedLine = $("send-line").textContent;
+out.resumedShown = shown(); // "c20" was drawn before the pause; Send would not carry it now
+out.resumedAttachedHidden = $("attached").hidden;
+out.resumedIncludeHidden = $("include-page").hidden;
+out.resumedNoPageHidden = $("no-page").hidden;
 holdThread = false;
 threadHeld.splice(0).forEach(answer => answer());
 await idle();
@@ -1619,8 +1623,12 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["openShown"], ["c1"])
 
     def test_after_a_pause_the_line_waits_for_the_reads(self):
-        out = self._run()  # neither the recipient from before the pause nor a size read before it
+        out = self._run()  # neither the recipient, the items nor a size from before the pause
         self.assertEqual(out["resumedLine"], "")
+        self.assertEqual(out["resumedShown"], [])  # nor an item from before it, which Send would not carry
+        self.assertTrue(out["resumedAttachedHidden"])
+        self.assertTrue(out["resumedIncludeHidden"])
+        self.assertTrue(out["resumedNoPageHidden"])
         self.assertEqual(out["resumedAfter"], ["assistantSendLine", "Terceiro"])
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
