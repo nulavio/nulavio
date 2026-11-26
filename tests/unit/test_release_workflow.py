@@ -364,12 +364,21 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # #723: and the dnf index, which is uploaded first and so may serve a revision the APT index does not: the
         # primary file its repomd.xml names, read from files so that a failed download or decompression stops the job.
         self.assertIn("sed -n 's/^baseurl=//p' site/rpm/nulavio.repo", step)
-        self.assertIn("""curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml\"""",
-                      step)  # fmt: skip
+        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" """
+                      '"$rpm/repodata/repomd.xml"', step)  # fmt: skip
         self.assertIn('primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")',
                       step)  # fmt: skip
-        self.assertIn("""curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary\"""", step)
-        self.assertIn('zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst"', step)
+        self.assertIn("""curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" """
+                      '"$rpm/$primary"', step)  # fmt: skip
+        # Bounded (the review of f2a6c211), far above the real files of 2026-11-25 (1.5 to 6.3 kB): every download
+        # stops at --max-filesize, and the decompression at the shell's file-size limit (blocks of 1 KiB), whose
+        # failure stops this bash -e step.
+        self.assertIn('(ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")',
+                      step)  # fmt: skip
+        self.assertEqual(step.count("curl -fsSL"), 3)
+        self.assertEqual(len(re.findall(r"curl -fsSL --proto '=https' --retry 3 --max-filesize [0-9]+M ", step)), 3)
+        self.assertIn("""served=$(curl -fsSL --proto '=https' --retry 3 --max-filesize 8M "$apt/dists/""", step)
+        self.assertEqual(step.count("zstd -q -d"), 1)
         self.assertIn('dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" '
                       '"$RUNNER_TEMP/primary.xml")', step)  # fmt: skip
         self.assertIn('if ! [[ "$dnf" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)

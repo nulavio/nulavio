@@ -41,6 +41,7 @@ not hand its revision to the next run (#656), even when only its dnf upload fini
 (``repodata/<sha256>-primary.xml.zst``, nothing else). ``dnf-served`` prints the
 highest ``<version>-<release>`` of nulavio that this primary file lists, without the
 distribution (``0.3.fc44`` is ``0.3``), once its SHA-256 is the one repomd.xml gives.
+Both read only UTF-8 XML without a DTD or an entity, as createrepo_c writes it.
 Anything else stops it: the build job then fails closed.
 
 ``not-older`` refuses a release when a newer one is tagged, recorded in
@@ -59,6 +60,7 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from xml.parsers import expat
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -335,12 +337,23 @@ def next_release(firefox: str, repo: Path, others: list[str] | tuple[str, ...] =
 
 
 def _xml(data: bytes, what: str) -> ET.Element:
-    # Downloaded from the bucket: createrepo_c writes no DTD, and without one no entity can expand (S314).
-    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
-        raise ManifestError(f"{what} declares a DTD or an entity, which createrepo_c never writes")
+    # Downloaded from the bucket: createrepo_c writes UTF-8 and no DTD, and without one no entity can expand (S314).
+    # Checked on what expat reads, not on the bytes, which another encoding (UTF-16) hides from a byte search.
     try:
-        return ET.fromstring(data)  # noqa: S314 - no DTD (above); the bucket's own index, written by sign_repo.sh
-    except ET.ParseError as e:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ManifestError(f"{what} is not UTF-8, which createrepo_c always writes") from None
+
+    def refuse(*_args: object) -> None:
+        raise ManifestError(f"{what} declares a DTD or an entity, which createrepo_c never writes")
+
+    scan = expat.ParserCreate()
+    scan.StartDoctypeDeclHandler = refuse
+    scan.EntityDeclHandler = refuse
+    try:
+        scan.Parse(data, True)
+        return ET.fromstring(data)  # noqa: S314 - no DTD or entity (above); the bucket's index, written by sign_repo.sh
+    except (expat.ExpatError, ET.ParseError) as e:
         raise ManifestError(f"{what} is not readable XML: {e}") from None
 
 
@@ -477,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
             print(dnf_served(args.repomd.read_bytes(), args.primary.read_bytes()))
         else:
             print("\n".join(check_packages(args.manifest, args.packages)))
-    except ManifestError as e:
+    except (ManifestError, OSError) as e:  # OSError: an input file that is missing or cannot be read
         print(f"release_manifest: {e}", file=sys.stderr)
         return 1
     return 0

@@ -91,8 +91,11 @@ jobs:
         run: |
           # A run that uploaded and stopped before its draft left neither a tag nor a draft, only what the bucket
           # serves: counting the served version keeps the next run off that revision (#656). As in the publish job.
+          # Every index read is bounded far above the real files (2026-11-25: Packages, repomd.xml and the
+          # compressed primary file 1.5 to 1.6 kB each, the primary file 6.3 kB): curl stops at --max-filesize and
+          # the decompression at the shell's file-size limit (32 MiB), so a huge index fails the job.
           apt=$(sed -n 's/^URIs: //p' site/apt/nulavio.sources)
-          served=$(curl -fsSL --proto '=https' --retry 3 "$apt/dists/stable/main/binary-amd64/Packages" |
+          served=$(curl -fsSL --proto '=https' --retry 3 --max-filesize 8M "$apt/dists/stable/main/binary-amd64/Packages" |
             awk '$0 == "Package: nulavio" { found = 1 } found && /^Version: / { print $2; exit }')
           # Empty when curl failed (this shell has no pipefail) or nulavio is not listed: both stop the job.
           if ! [[ "$served" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
@@ -102,11 +105,11 @@ jobs:
           # The dnf repository is uploaded first: when the APT upload then failed, only the dnf index serves that
           # revision (#723). Files, not pipes, so a failed download or decompression stops the job here too.
           rpm=$(sed -n 's/^baseurl=//p' site/rpm/nulavio.repo)
-          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 1M -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
           primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")
-          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
+          curl -fsSL --proto '=https' --retry 3 --max-filesize 8M -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
           command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
-          zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst"
+          (ulimit -f 32768 && zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst")
           dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml")
           if ! [[ "$dnf" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
             echo "::error::the bucket's dnf index lists no nulavio version in the <version>-<release> form"

@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -379,24 +380,59 @@ class ReleaseManifestTest(unittest.TestCase):
     def test_a_dnf_index_that_cannot_be_read_stops_the_build(self):
         # Fail closed, as the APT read does: the build job must not pick a revision from an index it could not read.
         primary = dnf_primary_xml(("nulavio", "159.0.1", "0.3.fc44"))
-        cases = {
-            "readable XML": (b"<repomd", primary),
-            "declares a DTD": (b'<!DOCTYPE r [<!ENTITY a "aaaa">]>' + dnf_repomd(primary), primary),
-            "0 primary files": (dnf_repomd(primary).replace(b'type="primary"', b'type="other"'), primary),
-            "not repodata/<sha256>-primary.xml.zst": (dnf_repomd(primary, href="../x86_64/evil.xml.zst"), primary),
-            "open-checksum": (dnf_repomd(primary), primary.replace(b"0.3.fc44", b"0.2.fc44")),
-            "lists no nulavio package": (dnf_repomd(other := dnf_primary_xml(("other", "1.0", "1"))), other),
-            "not <version>-<release>": (dnf_repomd(odd := dnf_primary_xml(("nulavio", "159.0.1", "0.3.el9"))), odd),
-        }
-        for fragment, (repomd, data) in cases.items():
+        repomd = dnf_repomd(primary)
+        cut = primary[:-20]
+        cases = [
+            ("readable XML", b"<repomd", primary),
+            ("declares a DTD", b'<!DOCTYPE r [<!ENTITY a "aaaa">]>' + repomd, primary),
+            ("0 primary files", repomd.replace(b'type="primary"', b'type="other"'), primary),
+            ("not repodata/<sha256>-primary.xml.zst", dnf_repomd(primary, href="../x86_64/evil.xml.zst"), primary),
+            ("open-checksum", repomd, primary.replace(b"0.3.fc44", b"0.2.fc44")),
+            ("lists no nulavio package", dnf_repomd(other := dnf_primary_xml(("other", "1.0", "1"))), other),
+            ("not <version>-<release>", dnf_repomd(odd := dnf_primary_xml(("nulavio", "159.0.1", "0.3.el9"))), odd),
+            # From the review of f2a6c211: two primary entries; an open-checksum that is missing, or that has the
+            # right digest under another type (only sha256 is read); a primary file that is not readable XML.
+            ("2 primary files", repomd.replace(b'type="other"', b'type="primary"'), primary),
+            ("open-checksum", re.sub(rb"\s*<open-checksum[^>]*>[0-9a-f]+</open-checksum>", b"", repomd), primary),
+            ("open-checksum", repomd.replace(b'<open-checksum type="sha256">', b'<open-checksum type="sha1">'), primary),
+            ("the primary file is not readable XML", dnf_repomd(cut), cut),
+        ]
+        for fragment, index, data in cases:
             with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
-                release_manifest.dnf_primary(repomd)
-                release_manifest.dnf_served(repomd, data)
+                release_manifest.dnf_primary(index)
+                release_manifest.dnf_served(index, data)
             self.assertIn(fragment, str(caught.exception))
         empty = self.tmp / "empty.xml"
         empty.write_bytes(b"")
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(release_manifest.main(["dnf-primary", str(empty)]), 1)
+        # A file the job did not write is a clean error too, not a traceback.
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(release_manifest.main(["dnf-served", str(self.tmp / "none.xml"), str(empty)]), 1)
+        self.assertIn("release_manifest: ", err.getvalue())
+
+    def test_a_dnf_index_in_another_encoding_cannot_declare_an_entity(self):
+        # The review of f2a6c211: a byte search for <!DOCTYPE misses it in UTF-16, and the entity then expanded into
+        # the release. createrepo_c writes UTF-8: anything else is refused, and expat refuses a DTD in any encoding.
+        utf8 = dnf_primary_xml(("nulavio", "159.0.1", "0.3.fc44")).decode()
+        crafted = utf8.replace('encoding="UTF-8"?>', 'encoding="UTF-16"?><!DOCTYPE metadata [<!ENTITY r "0.9.fc44">]>')
+        crafted = crafted.replace('rel="0.3.fc44"', 'rel="&r;"')
+        for primary, fragment in ((crafted.encode("utf-16"), "is not UTF-8"),
+                                  (crafted.replace("UTF-16", "UTF-8").encode(), "declares a DTD")):  # fmt: skip
+            with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.dnf_served(dnf_repomd(primary), primary)
+            self.assertIn(fragment, str(caught.exception))
+        # And repomd.xml the same way.
+        repomd = dnf_repomd(primary := utf8.encode()).decode().replace('encoding="UTF-8"', 'encoding="UTF-16"')
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.dnf_primary(repomd.encode("utf-16"))
+        self.assertIn("repomd.xml is not UTF-8", str(caught.exception))
+        # A DTD with no entity, which expat reads in any encoding, is refused as well.
+        doctype = b'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE repomd SYSTEM "x.dtd">' + dnf_repomd(primary)[39:]
+        with self.assertRaises(release_manifest.ManifestError) as caught:
+            release_manifest.dnf_primary(doctype)
+        self.assertIn("declares a DTD", str(caught.exception))
 
     def test_signing_refuses_packages_the_manifest_does_not_list(self):
         packages = self.out / "packages"
