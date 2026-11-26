@@ -1965,16 +1965,21 @@ class OpenProfileTest(Home):
                 bridge.approver = approver
                 commands.clear()
                 self.read.reset_mock()
+                if tool.capability == "execute_js":
+                    # Assisted blocks scripts, which would be refused before the profile is asked about (#730): on ask,
+                    # with cookies and storage allowed, the script shows the answer "once" is not reused either.
+                    registry.grant(_agent["id"], "execute_js", "ask")
+                    registry.grant(_agent["id"], "cookies_storage", "allow")
                 result = bridge.call(tool.name, self.arguments(tool))
                 self.assertTrue(result["isError"], result)
                 self.assertFalse(self.ACTS & set(commands), commands)
                 self.read.assert_not_called()
-                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
-                if tool.capability == "execute_js":
-                    # Assisted blocks scripts: refused for that before the profile is asked about (#730).
+                if tool.name == "upload":
+                    # Uploads work only in the AI Workspace: refused before the profile is asked about (#730).
                     self.assertEqual(approver.asked, [])
-                    self.assertEqual((entry["reason"], entry["capability"]), ("preset:assisted", "execute_js"))
+                    self.assertIn("uploads work only in the AI Workspace", result["content"][0]["text"])
                     continue
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
                 self.assertEqual(approver.asked[:1], [("authenticated_sessions", "https://mail.example")])
                 self.assertEqual((entry["reason"], entry["capability"].split(",")[0]), ("denied", "authenticated_sessions"))
 
@@ -2206,7 +2211,8 @@ class OpenProfileTest(Home):
         self.assertEqual(approver.asked, [("multiple_profiles", None)])
 
     # The tools that act on the page where the tab is (require_here): what that address needs is theirs to check.
-    HERE = ("page_read", "page_snapshot", "screenshot", "click", "type", "evaluate", "dialog", "upload")
+    # upload works only in the AI Workspace: refused in a profile's tab before anything else (test_an_upload_...).
+    HERE = ("page_read", "page_snapshot", "screenshot", "click", "type", "evaluate", "dialog")
 
     @staticmethod
     def with_workspace(bridge) -> None:
@@ -2273,6 +2279,24 @@ class OpenProfileTest(Home):
         entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
         self.assertEqual((entry["capability"], entry["reason"], entry["target"]),
                          ("local_resources", "preset:assisted", "http://localhost:8080"))  # fmt: skip
+
+    def test_an_upload_in_a_profiles_tab_asks_nothing(self):
+        # Independent review of #737: an upload in a tab of one of the user's profiles asked about the signed-in
+        # session there, with another place open about working in two places, and about files, and then always failed
+        # because uploads work only in the AI Workspace. The session answers stayed.
+        for level, workspace in (("assisted", False), ("autonomous", True)):
+            with self.subTest(level=level, workspace=workspace):
+                agent, bridge, approver, _target, commands = self.opened(level=level, answer="session")
+                registry.grant(agent["id"], "files", "ask")
+                if workspace:  # a second place open: Autonomous asks about it (multiple_profiles)
+                    self.with_workspace(bridge)
+                result = bridge.call("upload", {"tab": "w1", "element": "e1", "file": "a.txt"})
+                self.assertTrue(result["isError"], result)
+                self.assertIn("uploads work only in the AI Workspace", result["content"][0]["text"])
+                self.assertEqual(approver.asked, [])
+                self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+                self.assertFalse(self.ACTS & set(commands), commands)
+                self.read.assert_not_called()
 
     def test_a_profiles_tab_is_asked_about_in_the_same_order_when_an_answer_can_allow_it(self):
         # I7: with those permissions on ask or allowed, the same questions as before, in the same order.
