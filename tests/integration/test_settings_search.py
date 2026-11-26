@@ -343,7 +343,8 @@ class SettingsSearchTest(unittest.TestCase):
     def test_05_an_engine_given_the_assistants_keyword_loses_it_and_the_page_says_so(self):
         """#663: "@ia" is the assistant's keyword. The engine's own dialogs write an engine's alias themselves, so
         Nulavio Search takes "@ia" off right after, and this page says which engine lost it until it has another."""
-        own = self.m.chrome(S + "return S.addCustom({name: 'Arquivo', url: 'https://arquivo.example/?q=%s'});")
+        # A name with ", " in it (review of #772): the page quotes it, so it does not read as two engines.
+        own = self.m.chrome(S + "return S.addCustom({name: 'Arquivo, Biblioteca', url: 'https://arquivo.example/?q=%s'});")
         self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [own])
         now = self.open()
         self.assertIsNone(now["aliasReserved"])
@@ -356,7 +357,7 @@ class SettingsSearchTest(unittest.TestCase):
         said = self.seen(lambda n: n["aliasReserved"])
         self.assertEqual(
             said["aliasReserved"],
-            "“@ia” deixou de ser o atalho de pesquisa de Arquivo: ele é a palavra-chave do assistente na barra de"
+            "“@ia” deixou de ser o atalho de pesquisa de “Arquivo, Biblioteca”: ele é a palavra-chave do assistente na barra de"
             " endereços. Escolha outro atalho em Atalhos de pesquisa.",
         )
         self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "")

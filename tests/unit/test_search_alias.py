@@ -43,6 +43,14 @@ class ReservedAliasListTest(unittest.TestCase):
         self.assertIn('msg("searchAliasReserved"', panes)
         self.assertIn("releasedAliases()", panes)
 
+    def test_settings_quotes_each_engine_it_names(self):
+        """Review of #772: a name may hold ", ", so each one is quoted; "Library, Archive" is then not two engines.
+        tests/integration/test_settings_search.py (05) reads it on the page with such a name."""
+        panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
+        call = re.search(r'msg\("searchAliasReserved", ([^\n]*)', panes).group(1)
+        self.assertIn(".map(name => `“${name}”`)", call)
+        self.assertIn('.join(", ")', call)
+
     def test_settings_says_it_under_the_search_shortcuts(self):
         """In the group placed right after the engine's Search Shortcuts (nulavioSearchAdd), not with the suggestion
         switches; tests/integration/test_settings_search.py (05) reads it on the page."""

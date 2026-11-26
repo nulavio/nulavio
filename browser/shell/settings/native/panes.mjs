@@ -1820,11 +1820,12 @@
       }),
     ];
     // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
+    // Each name quoted: a name may hold ", " itself (review of #772).
     const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
     const searchAliasBar = searchBench.bar(
       "nulavio-search-alias-reserved",
       "warning",
-      () => msg("searchAliasReserved", releasedNow().join(", ")),
+      () => msg("searchAliasReserved", releasedNow().map(name => `“${name}”`).join(", ")),
       () => releasedNow().length > 0
     );
     const searchBars = [
