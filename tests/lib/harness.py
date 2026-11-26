@@ -362,7 +362,10 @@ class FixtureServer:
                 body, ctype, extra = outer.route(self.path)
                 self.send_response(200 if body is not None else 404)
                 self.send_header("Content-Type", ctype)
-                self.send_header("Cache-Control", "no-store")
+                # `cacheable=1` in the query: no "no-store", so the engine may keep the page in its back-forward
+                # cache (it never keeps a no-store page there). Any other fixture is never cached.
+                if "cacheable=1" not in self.path.partition("?")[2].split("&"):
+                    self.send_header("Cache-Control", "no-store")
                 for key, value in extra.items():
                     self.send_header(key, value)
                 self.end_headers()

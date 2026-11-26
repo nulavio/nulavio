@@ -307,6 +307,46 @@ class PasswordsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
         self.assertEqual(self.m.execute("return document.getElementById('address').textContent;"), long)
 
+    def mark_restored(self) -> None:
+        """Records on the tab's page whether it comes back from the back-forward cache (a persisted pageshow)."""
+        self.m.execute(
+            "window.addEventListener('pageshow', e => { document.documentElement.dataset.restored = String(e.persisted); });"
+        )
+
+    def back_from_warning_to(self, page: str) -> None:
+        """Back from the warning to `page`, the same document, kept in the back-forward cache meanwhile."""
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        self.m.send("WebDriver:Back")
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == page, 10), self.m.current_url())
+        shown = "return document.documentElement.dataset.restored ?? null;"
+        harness.wait_until(lambda: self.m.execute(shown) is not None, 10)
+        restored = self.m.execute("return document.documentElement.dataset.restored ?? 'loaded again';")
+        self.assertEqual(restored, "true", "the page did not come back from the back-forward cache")
+
+    def test_01k_back_from_the_warning_to_the_page_warns_again_on_the_next_use_of_its_field(self):
+        page = self.fake + "/login?cacheable=1"  # a page the back-forward cache keeps (no "no-store")
+        self.m.navigate(page)
+        self.mark_restored()
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.back_from_warning_to(page)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
+
+    def test_01l_back_from_a_frames_warning_to_the_page_warns_again_on_the_next_use_of_the_frames_field(self):
+        home = self.real + "/page/home?cacheable=1"
+        self.m.navigate(home)
+        self.mark_restored()
+        self.click_in_frame(None, f"f.src = {self.fake + '/login?cacheable=1'!r};")
+        self.back_from_warning_to(home)
+        # The same frame, kept with its page: the person uses its field again.
+        self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
+        try:
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        finally:
+            self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
+        self.assertEqual(self.warning_params(), {"url": self.fake + "/", "in": "frame"})
+
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)
         self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), url)
