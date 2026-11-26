@@ -79,6 +79,9 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertEqual(self.asked("child_asks_again_after_a_restore"), 2)
         self.assertEqual(self.asked("child_not_again_after_a_first_show"), 1)
 
+    def test_a_late_answer_to_an_earlier_query_changes_nothing(self):
+        self.assertEqual(self.asked("child_late_answer_of_an_earlier_query"), 2)
+
     def test_the_warning_opens_for_the_checked_address(self):
         case = self.cases["parent_warns"]
         self.assertEqual(case["checked"], "https://paypa1.example/login")
@@ -154,6 +157,23 @@ class LookalikeActorsTest(unittest.TestCase):
         for name in left:
             with self.subTest(name):
                 self.not_warned(name, False)
+
+    def test_a_frame_warning_is_bound_to_the_entry_it_takes_in_the_tabs_history(self):
+        # The tab's page is entry 2: the warning becomes entry 3, and only that entry's "continue" goes back.
+        case = self.cases["frame_lookalike_in_a_real_page"]
+        self.assertEqual(case["bound"], {"index": 3, "url": case["warning"]}, case)
+        # A full history keeps its length: the warning takes the last entry.
+        case = self.cases["frame_history_full"]
+        self.assertEqual(case["bound"], {"index": 49, "url": case["warning"]}, case)
+        # A field in the tab's page goes on to its own address: nothing to bind.
+        self.assertIsNone(self.cases["parent_warns"]["bound"])
+
+    def test_two_documents_of_one_tab_open_one_warning(self):
+        case = self.cases["parent_two_frames_at_once"]
+        self.assertEqual(case["loads"], 1, case)
+        self.assertEqual(case["answers"], [True, True], case)
+        # Once that warning took its entry, the page shown again by Back warns again.
+        self.assertEqual(self.cases["parent_warns_again_after_back"], {"loads": 2, "answers": [True, True]})
 
     def test_a_frame_site_gives_only_its_origin_to_the_warnings_address(self):
         # Its path, query and fragment stay out of the tab's address; the check itself had the whole address.

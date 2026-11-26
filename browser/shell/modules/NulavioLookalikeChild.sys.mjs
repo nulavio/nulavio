@@ -23,11 +23,13 @@ const EVENTS = new Set(["focusin", "mousedown", "keydown"]);
 
 export class NulavioLookalikeChild extends JSWindowActorChild {
   #asked = false;
+  #query = 0; // which query the answer belongs to: only the newest one's counts
 
   handleEvent(event) {
     if (event.type === "pageshow") {
       if (event.isTrusted && event.persisted) {
         this.#asked = false;
+        this.#query++;
       }
       return;
     }
@@ -45,12 +47,13 @@ export class NulavioLookalikeChild extends JSWindowActorChild {
       return; // a held key is one press: only its first keydown counts
     }
     this.#asked = true;
+    const query = ++this.#query;
     // The parent answers false when it could not decide for this document (the tab no longer showed
     // it when the check ended): the next use of a password field asks again. A failed query (the
     // warning replaced the page, or the check itself failed) is not asked again for this document.
     this.sendQuery("PasswordFieldFocused").then(
       decided => {
-        if (decided === false) {
+        if (decided === false && query === this.#query) {
           this.#asked = false;
         }
       },

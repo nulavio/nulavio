@@ -963,6 +963,8 @@ class PasswordsTest(unittest.TestCase):
         matches = json.loads(re.search(r"matches: (\[[^\]]*\])", options).group(1))
         self.assertEqual(matches, ["http://*/*", "https://*/*", "about:blank", "about:srcdoc", "blob:*", "data:*"])
         self.assertIn("allFrames: true,", options)
+        # Only an actor that exists hears pageshow (a document shown again); none is made for it.
+        self.assertIn("pageshow: { createActor: false }", options)
         self.assertIn('messageManagerGroups: ["browsers"],', options)
         self.assertNotIn("moz-extension", "".join(matches))
 

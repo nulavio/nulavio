@@ -152,7 +152,10 @@ export function lookalikeOf(host, savedSites) {
 class Passwords {
   #data = null;
   #savedSites = null;
+  #reading = null; // the read of the saved logins under way, shared by the checks that start meanwhile
+  #generation = 0; // a change to the saved logins makes a read under way stale
   #observing = false;
+  #warnings = new WeakMap(); // a tab's browser -> the warning the engine's actor opened in it for a field in a frame
 
   async #providers() {
     if (!this.#data) {
@@ -258,24 +261,45 @@ class Passwords {
      unlock the token where the engine asks for it, and nothing is kept meanwhile (R41). isLoggedIn is
      also false while the store starts, which is why its start is awaited first. */
   async #sites() {
-    if (!this.#savedSites) {
-      await Services.logins.initializationPromise;
-      if (!Services.logins.isLoggedIn) {
-        return null;
-      }
-      const logins = await Services.logins.getAllLogins();
-      const sites = new Set();
-      for (const login of logins) {
-        try {
-          sites.add(siteOf(new URL(login.origin).hostname));
-        } catch {}
-      }
-      this.#savedSites = [...sites];
-      if (!this.#observing) {
-        this.#observing = true;
-        Services.obs.addObserver(() => (this.#savedSites = null), "passwordmgr-storage-changed");
-      }
+    if (this.#savedSites) {
+      return this.#savedSites;
     }
+    if (!this.#observing) {
+      this.#observing = true;
+      Services.obs.addObserver(() => {
+        this.#savedSites = this.#reading = null;
+        this.#generation++;
+      }, "passwordmgr-storage-changed");
+    }
+    // Checks that start while the logins are read (several frames of one tab) wait for the same read.
+    if (!this.#reading) {
+      const reading = this.#readSites().finally(() => {
+        if (this.#reading === reading) {
+          this.#reading = null;
+        }
+      });
+      this.#reading = reading;
+    }
+    return this.#reading;
+  }
+
+  async #readSites() {
+    const generation = this.#generation;
+    await Services.logins.initializationPromise;
+    if (!Services.logins.isLoggedIn) {
+      return null;
+    }
+    const logins = await Services.logins.getAllLogins();
+    const sites = new Set();
+    for (const login of logins) {
+      try {
+        sites.add(siteOf(new URL(login.origin).hostname));
+      } catch {}
+    }
+    if (generation !== this.#generation) {
+      return this.#sites(); // the saved logins changed meanwhile: read them again
+    }
+    this.#savedSites = [...sites];
     return this.#savedSites;
   }
 
@@ -356,7 +380,7 @@ class Passwords {
       parent: { esModuleURI: `${base}NulavioLookalikeParent.sys.mjs` },
       child: {
         esModuleURI: `${base}NulavioLookalikeChild.sys.mjs`,
-        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true }, pageshow: {} },
+        events: { focusin: { capture: true }, mousedown: { capture: true }, keydown: { capture: true }, pageshow: { createActor: false } },
       },
       // The engine matches a document's own address: a site's page, and the documents a page makes
       // that take its site (about:blank, about:srcdoc, blob:) or none (data:). Never an extension's
@@ -384,14 +408,27 @@ class Passwords {
     if (!found || found.locked) {
       return { dismissed: false };
     }
+    if (back && !this.canGoBack(browser)) {
+      fail("no-way-back"); // the tab left the warning while the saved logins were read
+    }
     this.dismiss(found.site, found.similar);
     return { dismissed: true };
   }
 
-  /** Whether the tab that shows `browser` has an entry before the one it shows (the engine's session history). */
+  /** The warning the engine's actor opened in the tab of `browser` for a field in a frame: the entry of the tab's
+     history it takes and its address. Its "continue" goes back to the entry before it (NulavioLookalikeParent). */
+  bindWarning(browser, { index, url }) {
+    this.#warnings.set(browser, { index, url });
+  }
+
+  /** Whether "continue" may go back in the tab of `browser`: the tab shows the warning the engine's actor opened in
+     it, at the entry of its history it took (not one another extension opened, nor a later entry of it). */
   canGoBack(browser) {
-    const history = browser?.browsingContext?.sessionHistory;
-    return Boolean(history && history.index > 0);
+    const warning = browser ? this.#warnings.get(browser) : null;
+    const index = browser?.browsingContext?.sessionHistory?.index;
+    return Boolean(
+      warning && index > 0 && index === warning.index && browser.currentURI?.specIgnoringRef === warning.url
+    );
   }
 
   /** Not asked again for this pair of sites (kept in this profile only). */

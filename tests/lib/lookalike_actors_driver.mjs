@@ -83,6 +83,7 @@ globalThis.WebExtensionPolicy = { getByID: () => ({ getURL: path => `moz-extensi
 globalThis.Services = {
   io: { newURI: spec => new URI(spec) },
   scriptSecurityManager: { getSystemPrincipal: () => ({ system: true }) },
+  prefs: { getIntPref: (name, fallback) => (name === "browser.sessionhistory.max_entries" ? 50 : fallback) },
 };
 
 const { NulavioLookalikeChild } = await import(pathToFileURL(process.argv[2]).href);
@@ -98,6 +99,27 @@ async function child(events, reply = async () => true) {
   const doc = { hasValidTransientUserGestureActivation: false };
   const actor = new NulavioLookalikeChild(doc, reply);
   for (const [type, target, activated, trusted = true, repeat = false, persisted = false] of events) {
+    doc.hasValidTransientUserGestureActivation = activated;
+    actor.handleEvent({ type, target, isTrusted: trusted, repeat, persisted });
+    await flush();
+  }
+  return { asked: actor.sent.length };
+}
+
+/** A query answered late: the first one waits for `release(answer)`, later ones answer `later` at once. */
+async function childWithLateAnswer(events, later) {
+  let release;
+  let n = 0;
+  const reply = () => (n++ === 0 ? new Promise(resolve => (release = resolve)) : Promise.resolve(later));
+  const doc = { hasValidTransientUserGestureActivation: false };
+  const actor = new NulavioLookalikeChild(doc, reply);
+  for (const step of events) {
+    if (step === "release") {
+      release(false); // the first query: not decided
+      await flush();
+      continue;
+    }
+    const [type, target, activated, trusted = true, repeat = false, persisted = false] = step;
     doc.hasValidTransientUserGestureActivation = activated;
     actor.handleEvent({ type, target, isTrusted: trusted, repeat, persisted });
     await flush();
@@ -142,6 +164,7 @@ function tab(docs, loads) {
   }
   const browser = { browsingContext: contexts[0], loadURI: uri => loads.push(uri.spec) };
   contexts[0].embedderElement = browser;
+  contexts[0].sessionHistory = { index: 2, count: 3 }; // the tab's page is its third and last entry
   return { contexts, browser };
 }
 
@@ -179,6 +202,7 @@ async function parent({
   actor.globalState = field.currentWindowGlobal;
   const asked = [];
   passwords = {
+    bindWarning: (tab, warning) => (passwords.bound = tab === browser ? warning : "another browser"),
     checkLogin: async url => {
       const n = asked.push(url) - 1;
       await flush();
@@ -208,6 +232,7 @@ async function parent({
     warning,
     url: query?.get("url") ?? null,
     in: query?.get("in") ?? null,
+    bound: passwords.bound ?? null,
     decided: decided ?? null,
   };
 }
@@ -245,6 +270,19 @@ const cases = {
       ["pageshow", null, false, false, false, true],
       ["focusin", password, true],
     ]),
+  // A query still waiting when the document was left and shown again: its late "not decided" does not let the newer
+  // query's document ask a third time.
+  child_late_answer_of_an_earlier_query: () =>
+    childWithLateAnswer(
+      [
+        ["focusin", password, true],
+        ["pageshow", null, false, true, false, true],
+        ["focusin", password, true],
+        "release",
+        ["focusin", password, true],
+      ],
+      true
+    ),
   child_not_again_when_the_query_fails: () =>
     child([["focusin", password, true], ["focusin", password, true]], async () => {
       throw new Error("actor destroyed");
@@ -351,9 +389,57 @@ const cases = {
       duringAt: 1,
       during: ({ contexts }) => (contexts[0].currentWindowGlobal.documentURI = new URI(`${FAKE}?step=2#top`)),
     }),
+  // The tab's history is full (browser.sessionhistory.max_entries): the warning takes the last entry, the oldest goes.
+  frame_history_full: () =>
+    parent({ docs: [doc(REAL), doc(FAKE)], during: ({ contexts }) => (contexts[0].sessionHistory.index = 49) }),
   // A frame's address with a port, a query and a fragment: only its origin goes in the warning's address.
   frame_address_with_a_query: () =>
     parent({ docs: [doc(REAL), doc("https://paypa1.example:8443/login?token=s3cret&state=x#frag")] }),
+};
+
+// Two documents of one tab (two frames) each find a look-alike before either warning opens: one warning opens.
+cases.parent_two_frames_at_once = async () => {
+  const loads = [];
+  const { contexts, browser } = tab([doc(REAL), doc(FAKE)], loads);
+  const sibling = { parent: contexts[0], top: contexts[0], embedderElement: null, parentWindowContext: contexts[0].currentWindowGlobal };
+  sibling.currentWindowGlobal = {
+    documentURI: new URI("https://paypa1-login.example/form"),
+    documentPrincipal: principal("content https://paypa1-login.example/form"),
+    isCurrentGlobal: true,
+    browsingContext: sibling,
+  };
+  const actors = [contexts[1], sibling].map(context => {
+    const actor = new NulavioLookalikeParent();
+    actor.globalState = context.currentWindowGlobal;
+    return actor;
+  });
+  passwords = {
+    bindWarning: () => {},
+    checkLogin: async url => {
+      await flush();
+      const similar = LOOKALIKES.get(new URL(url).hostname);
+      return similar ? { suspicious: true, site: new URL(url).hostname, similar } : { suspicious: false };
+    },
+  };
+  const answers = await Promise.all(actors.map(actor => actor.receiveMessage({ name: "PasswordFieldFocused" })));
+  return { loads: loads.length, warning: loads[0] ?? null, answers };
+};
+
+// The warning was shown and the tab went Back to the same page (kept in the back-forward cache, the same document):
+// the next look-alike found there opens its warning again.
+cases.parent_warns_again_after_back = async () => {
+  const loads = [];
+  const { contexts, browser } = tab([doc(REAL), doc(FAKE)], loads);
+  const actor = new NulavioLookalikeParent();
+  actor.globalState = contexts[1].currentWindowGlobal;
+  passwords = {
+    bindWarning: () => {},
+    checkLogin: async url => ({ suspicious: true, site: new URL(url).hostname, similar: "paypal.example" }),
+  };
+  const first = await actor.receiveMessage({ name: "PasswordFieldFocused" });
+  contexts[0].sessionHistory = { index: 2, count: 4 }; // the warning is entry 3; Back shows entry 2 again
+  const again = await actor.receiveMessage({ name: "PasswordFieldFocused" });
+  return { loads: loads.length, answers: [first, again] };
 };
 
 const results = {};

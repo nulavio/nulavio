@@ -27,6 +27,12 @@ ChromeUtils.defineESModuleGetters(lazy, {
   NulavioPasswords: "resource://builtin-addons/nulavio-shell/modules/NulavioPasswords.sys.mjs",
 });
 
+// The tab's browser -> the tab's page for which a warning is being opened, where its history stood, and when: a
+// second document of that page that finds a look-alike before that warning is shown does not open another one over
+// it. Once the warning took its entry (and the page is shown again, by Back), the history has one entry more.
+const opening = new WeakMap();
+const OPENING_MS = 10_000;
+
 const web = uri => Boolean(uri && (uri.schemeIs("http") || uri.schemeIs("https")));
 
 /** The site's address the engine gives a document (a window global), or null. */
@@ -84,6 +90,16 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!shell) {
       return true;
     }
+    const history = top.sessionHistory;
+    const pending = opening.get(browser);
+    if (
+      pending?.page === page &&
+      pending.index === history?.index &&
+      pending.count === history?.count &&
+      Date.now() - pending.at < OPENING_MS
+    ) {
+      return true; // this page's warning is already on its way
+    }
     // Only an address: the page asks the module again which saved site `url` imitates. A field in the tab's
     // page, at a site's address, gives that address as it is. A field in a frame gives only the origin of the
     // site found (a document's path, query and fragment stay out of the tab's address), and a flag without an
@@ -95,7 +111,16 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!own) {
       query.set("in", "frame");
     }
-    browser.loadURI(Services.io.newURI(shell.getURL(`passwords/lookalike.html?${query}`)), {
+    const warning = shell.getURL(`passwords/lookalike.html?${query}`);
+    if (!own) {
+      // The warning takes the entry after the tab's page (the last one when the history is full): its "continue"
+      // goes back from there only (NulavioPasswords.canGoBack).
+      const max = Services.prefs.getIntPref("browser.sessionhistory.max_entries", 50);
+      const index = Math.min((history?.index ?? -1) + 1, max - 1);
+      lazy.NulavioPasswords.bindWarning(browser, { index, url: warning });
+    }
+    opening.set(browser, { page, index: history?.index, count: history?.count, at: Date.now() });
+    browser.loadURI(Services.io.newURI(warning), {
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
     });
     return true;

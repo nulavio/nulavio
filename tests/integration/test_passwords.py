@@ -264,16 +264,23 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(self.m.current_url(), home)
 
     def test_01i_with_no_page_to_go_back_to_only_the_real_site_is_offered(self):
-        """Opened for a field in a frame (`in=frame`) as the first entry of a tab, "continue" has nowhere to go back to:
-        it is not offered, rather than do nothing, also once a later entry exists ahead of it."""
+        """`in=frame` on a warning the engine's actor did not open for that tab's page (after a page of the tab, or as a
+        tab's first entry, also once a later entry exists ahead of it): "continue" is not offered, rather than go back
+        somewhere else or do nothing."""
+        query = urllib.parse.urlencode({"url": self.fake + "/", "in": "frame"})
+        warning = self.base + "passwords/lookalike.html?" + query
+        shown = "const seen = s => document.querySelector(s).checkVisibility();"
+        shown += "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note') };"
+        ready = "return document.body.dataset.state === 'ready';"
+        # Opened by hand after a page of this tab (as another extension could): not the engine's warning for that
+        # page, so it does not go back either.
+        self.m.navigate(self.real + "/page/before")
+        self.m.navigate(warning)
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
+        self.assertEqual(self.m.execute(shown), {"real": True, "onward": False, "note": False})
         main = self.m.send("WebDriver:GetWindowHandle")["value"]
         self.m.switch_to(self.m.new_tab())
         try:
-            query = urllib.parse.urlencode({"url": self.fake + "/", "in": "frame"})
-            warning = self.base + "passwords/lookalike.html?" + query
-            shown = "const seen = s => document.querySelector(s).checkVisibility();"
-            shown += "return { real: seen('#go-real'), onward: seen('#continue'), note: seen('#continue-note') };"
-            ready = "return document.body.dataset.state === 'ready';"
             self.m.navigate(warning)
             self.assertTrue(harness.wait_until(lambda: self.m.execute(ready), 10))
             self.assertEqual(self.m.execute(shown), {"real": True, "onward": False, "note": False})

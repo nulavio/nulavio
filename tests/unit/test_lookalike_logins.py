@@ -39,12 +39,26 @@ class LookalikeLoginsTest(unittest.TestCase):
         expected = {"answer": {"dismissed": False}, "remembered": 0, "reads": 0, "prompts": 0}
         self.assertEqual(self.cases["locked_dismiss"], expected)
 
-    def test_continue_back_to_the_tabs_page_remembers_nothing_without_a_page_to_go_back_to(self):
+    def test_continue_back_goes_only_from_the_warning_the_engines_actor_opened(self):
         case = self.cases["dismiss_back"]
-        self.assertEqual(case["first"], {"threw": "no-way-back", "remembered": 0})
+        self.assertEqual(case["unbound"], {"threw": "no-way-back", "remembered": 0})
         self.assertEqual(case["none"], {"threw": "no-way-back", "remembered": 0})
-        self.assertEqual(case["after"], {"dismissed": True, "remembered": 1})
-        self.assertEqual(case["can"], [False, True, False, False])
+        expected = {"bound": True, "fragment": False, "other_entry": False, "other_page": False, "unbound": False}
+        self.assertEqual(case["can"], {**expected, "no_history": False})
+        self.assertEqual(case["bound"], {"dismissed": True, "remembered": 1})
+
+    def test_continue_back_remembers_nothing_once_the_tab_left_the_warning(self):
+        case = self.cases["dismiss_back_left_during_the_read"]
+        self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)
+
+    def test_checks_at_once_share_one_read_of_the_saved_logins(self):
+        case = self.cases["concurrent_checks"]
+        self.assertEqual((case["first"], case["second"]), (FOUND, FOUND))
+        self.assertEqual(case["reads"], 1, case)
+
+    def test_a_change_during_the_read_is_read_again(self):
+        case = self.cases["storage_changed_during_the_read"]
+        self.assertEqual(case["after"], {"suspicious": False}, case)
 
     def test_the_look_alike_is_found_once_the_primary_password_is_entered(self):
         case = self.cases["locked_then_entered"]
