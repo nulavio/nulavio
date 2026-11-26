@@ -136,13 +136,16 @@ class IdentifiersTest(unittest.TestCase):
                     self.assertEqual(result.returncode, 2, result.stderr)
                     self.assertIn("--release-version", result.stderr)
                     self.assertEqual(result.stdout, "")
-        for mode in ([], ["--companion"]):  # only a package has a release of its own here
-            with self.subTest(mode=mode):
-                result = subprocess.run(
-                    [sys.executable, "-I", str(SCRIPT), *mode, "--release-version", "158.0.1-0.1"], capture_output=True, text=True
-                )
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertIn("--release-version needs --package", result.stderr)
+        # Only a package has a release of its own here; an empty one (a caller's unset variable) is still one given.
+        for mode in ([], ["--companion"]):
+            for release in ("158.0.1-0.1", ""):
+                with self.subTest(mode=mode, release=release):
+                    result = subprocess.run(
+                        [sys.executable, "-I", str(SCRIPT), *mode, "--release-version", release], capture_output=True, text=True
+                    )
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn("--release-version needs --package", result.stderr)
+                    self.assertEqual(result.stdout, "")
 
 
 # The keys the CycloneDX 1.6 JSON schema (bom-1.6.schema.json) allows in the objects the engine's

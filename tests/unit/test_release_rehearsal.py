@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -126,6 +127,78 @@ class RehearsalInstallTest(unittest.TestCase):
                     # The full version of this rehearsal, <firefox>-<release>: whose notes the packages carry.
                     self.assertRegex((tmp / "reached-make_distribution.py").read_text(), r"^159\.0\.1-[0-9]+(\.[0-9]+)*$")
                 self.assertFalse(packaged.exists(), "packaged after a failed install")
+
+
+class RehearsalSbomTest(unittest.TestCase):
+    """The sbom step names each package by this rehearsal's release (#637). An output directory that still holds a
+    package of another revision is refused before any SBOM is written: that package's SBOM would carry this release."""
+
+    RPM = "x86_64/nulavio-160.0.1-0.2.fc44.x86_64.rpm"
+    DEB = "nulavio_160.0.1-0.2_amd64.deb"
+
+    @classmethod
+    def setUpClass(cls):
+        script = (ROOT / "scripts" / "release" / "rehearse_release.sh").read_text(encoding="utf-8")
+        match = re.search(r"^sbom\(\) \{\n.*?^\}\n", script, re.S | re.M)
+        if match is None:
+            raise AssertionError("rehearse_release.sh must define the sbom step as a function")
+        cls.function = match.group(0)
+
+    def scaffold(self, tmp: Path, files: list[str]) -> Path:
+        repo, out = tmp / "repo", tmp / "out"
+        (repo / "scripts" / "release").mkdir(parents=True)
+        # A stand-in for sbom.py that writes what it was asked to describe.
+        (repo / "scripts" / "release" / "sbom.py").write_text("import sys\nprint(' '.join(sys.argv[1:]))\n")
+        (out / "packages" / "x86_64").mkdir(parents=True)
+        for name in files:
+            (out / "packages" / name).write_bytes(b"package")
+        return out
+
+    def run_step(self, tmp: Path) -> subprocess.CompletedProcess:
+        # As the step runs it: errexit on, the script's variables set. Not what a surrounding rehearsal exported.
+        env = {k: v for k, v in os.environ.items() if not k.startswith("NULAVIO_")}
+        code = f"set -euo pipefail\nrepo=$1 out=$2 version=160.0.1\n{self.function}sbom\n"
+        return subprocess.run(
+            ["bash", "-c", code, "sbom", str(tmp / "repo"), str(tmp / "out")],
+            env={**env, "NULAVIO_RELEASE": "0.2"},
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+    def test_this_releases_packages_get_their_sboms_again_on_a_rerun(self):
+        with tempfile.TemporaryDirectory(prefix="nulavio-rehearsal-sbom-") as directory:
+            tmp = Path(directory)
+            out = self.scaffold(tmp, [self.RPM, self.DEB])
+            for name in (self.RPM, self.DEB):
+                (out / "packages" / (name + ".cdx.json")).write_text("an earlier run of this release\n")
+            result = self.run_step(tmp)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for name in (self.RPM, self.DEB):
+                written = (out / "packages" / (name + ".cdx.json")).read_text()
+                self.assertIn(f"--package {out / 'packages' / name} ", written)
+                self.assertIn("--release-version 160.0.1-0.2", written)
+
+    def test_a_package_of_another_revision_is_refused_before_any_sbom(self):
+        for stale in (
+            "x86_64/nulavio-160.0.1-0.1.fc44.x86_64.rpm",
+            "x86_64/nulavio-160.0.1-0.20.fc44.x86_64.rpm",
+            "x86_64/nulavio-160.0.1-0.2.1.fc44.x86_64.rpm",
+            "x86_64/nulavio-160.0.2-0.2.fc44.x86_64.rpm",
+            "nulavio_160.0.1-0.1_amd64.deb",
+            "nulavio_160.0.1-0.2.1_amd64.deb",
+        ):
+            with self.subTest(stale=stale), tempfile.TemporaryDirectory(prefix="nulavio-rehearsal-sbom-") as directory:
+                tmp = Path(directory)
+                out = self.scaffold(tmp, [self.RPM, self.DEB, stale])
+                kept = out / "packages" / (stale + ".cdx.json")
+                kept.write_text("the SBOM of that revision\n")
+                result = self.run_step(tmp)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn(Path(stale).name, result.stderr)
+                self.assertEqual(kept.read_text(), "the SBOM of that revision\n")
+                for name in (self.RPM, self.DEB):
+                    self.assertFalse((out / "packages" / (name + ".cdx.json")).exists(), f"{name}: written before the refusal")
 
 
 if __name__ == "__main__":

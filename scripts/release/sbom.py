@@ -315,7 +315,7 @@ def main() -> int:
     # Two revisions on one Firefox are two releases: the root component must tell them apart (#637).
     if args.package and not re.fullmatch(re.escape(args.engine_version) + r"-[0-9]+(?:\.[0-9]+)*", args.release_version or ""):
         parser.error(f"--package needs --release-version {args.engine_version}-<Nulavio revision>")
-    if args.release_version and not args.package:
+    if args.release_version is not None and not args.package:
         parser.error("--release-version needs --package")
     if args.companion:
         if args.package:

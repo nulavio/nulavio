@@ -89,10 +89,18 @@ install_tree() {
 }
 
 sbom() {
-    local file
+    local file release="$version-$NULAVIO_RELEASE"
+    # Each SBOM names its package by this release (#637). A reused directory with a package of another revision
+    # is refused before any SBOM is written: that package's would carry this release.
+    for file in "$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb; do
+        case ${file##*/} in
+            "nulavio-$release".[a-z]*.rpm | "nulavio_${release}_amd64.deb") ;;
+            *) echo "sbom: ${file##*/} is not of release $release: rehearse into a clean directory" >&2; return 1 ;;
+        esac
+    done
     for file in "$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb; do
         python3 -I "$repo/scripts/release/sbom.py" --package "$file" --engine-version "$version" \
-            --release-version "$version-$NULAVIO_RELEASE" > "$file.cdx.json"
+            --release-version "$release" > "$file.cdx.json"
     done
 }
 
