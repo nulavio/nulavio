@@ -207,7 +207,8 @@ FORMS_OPEN_FN = "() => (globalThis.nulavioForms ? globalThis.nulavioForms.open()
 DIALOG = "dialog"  # in place of a count: sending the form opened a dialog (a submit handler that asks), which holds it
 FORMS_FRAMES = 60  # documents of one tab asked directly; the others still carry the guard from their creation
 # The look before a call's first question (Bridge._act_here): its reads of the page together, not each. Past it the look
-# adds nothing, and the call is checked after its question, as before.
+# adds nothing, and the call is checked after its question, as before. A link's host looked up on this computer is not
+# cut short (policy.classify_url, as for the tab's own address); an answer that comes after it adds nothing either.
 LOOK_SECONDS = 5.0
 LOCAL_HOST_TTL = 60.0  # seconds a name's answer (local or not) is kept for the requests that follow
 LOCAL_HOSTS_KEPT = 2048  # names whose answer is kept; the older half goes when it is full
@@ -541,6 +542,20 @@ class Bridge:
             then()
         return True
 
+    def _answered(self, needs: list[Need]) -> bool:
+        """Whether each of `needs` is allowed now with no question: by the agent's choices, looked up as
+        _refuse_blocked does, or by an answer in this call (Bridge._approved)."""
+        agent = self._agent()
+        if agent is None:
+            return False
+        for capability, url, place in needs:
+            target, where = policy.origin(url), self._place() if place is None else place
+            if (capability, target, where) in self._approved:
+                continue
+            if policy.effective_mode(agent, capability, self.session_id, scope=(target, where))[0] != "allow":
+                return False
+        return True
+
     def _refuse_now(self, capability: str, url: str | None, place: str, at: str | None, checked: list[str]):
         """The refusal require() would reach for this one, from decide() with no one to ask: nothing is asked and
         nothing stored. Returns the decision when it is no longer refused whatever the answer (it would ask, or it is
@@ -652,8 +667,9 @@ class Bridge:
         acts at and the activity names.
 
         `look`: what the page will make the call need after all of that (_act_here, #736), read from the page only
-        when nothing before it is refused, and in a tab of one of the user's profiles only once its profile was
-        entered: what of it is blocked is refused too before any question."""
+        when nothing before it is refused and what the address needs is allowed with no question (_answered), and in a
+        tab of one of the user's profiles only once its profile was entered: what of it is blocked is refused too
+        before any question."""
         tab = self._args.get("tab")
         entry = self._entry_needs(tab, url)
         target, resolved = self._looked_at(url, checked, resolve=not entry)
@@ -667,7 +683,9 @@ class Bridge:
             target, resolved = self._looked_at(url, checked)
             needs = self._here_needs(capability, target, url, (*also, *then))
             clear = self._refuse_blocked(needs, checked=checked)
-        if look is not None and clear:  # nothing is read of a page the call is refused at anyway (outside its sites)
+        # Nothing is read of a page the call is refused at anyway (outside its sites), nor of one whose own address
+        # still waits on a question (the signed-in session of a site the tab moved to, a page on this computer).
+        if look is not None and clear and self._answered(self._needs_here(target, url)):
             later, after = look(url, checked)
             self._refuse_blocked([*needs, *((c, url, None) if isinstance(c, str) else c for c in later)], checked=checked,
                                  then=after)  # fmt: skip
@@ -1026,11 +1044,11 @@ class Bridge:
                 out.append({**context, "profile": label or "AI Workspace"})
         return out
 
-    def _url_of(self, tab: str, cancel, *, enter: bool = True) -> str:
+    def _url_of(self, tab: str, cancel, *, enter: bool = True, timeout: float = 30.0) -> str:
         """Where a tab is. `enter=False` for a tool's first look at its tab: reading where it is does not enter one of
         the user's profiles (bidi(tab, enter=False)), so what acting there asks comes after the refusals that no answer
         changes (require_here, _enter_for, #730)."""
-        tree = self.bidi(tab, enter=enter).command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel)
+        tree = self.bidi(tab, enter=enter).command("browsingContext.getTree", {"maxDepth": 0}, timeout=timeout, cancel=cancel)
         for context in tree.get("contexts", []):
             if context["context"] == tab:
                 return context.get("url", "")
@@ -1339,9 +1357,9 @@ class Bridge:
                 engine.command("script.removePreloadScript", {"script": script})
                 del self._forms_scripts[engine]  # documents already open still hold: opened when next acted on
 
-    def _frames(self, tab: str, cancel) -> list[str]:
+    def _frames(self, tab: str, cancel, timeout: float = 30.0) -> list[str]:
         """The tab's document and the frames in it, the document first."""
-        tree = self.bidi(tab).command("browsingContext.getTree", {"root": tab}, cancel=cancel)
+        tree = self.bidi(tab).command("browsingContext.getTree", {"root": tab}, timeout=timeout, cancel=cancel)
         out, queue = [], list(tree.get("contexts", []))
         while queue and len(out) < FORMS_FRAMES:
             context = queue.pop(0)
@@ -1419,7 +1437,8 @@ class Bridge:
         if not self._forms_ever:
             return []
         realms = []
-        for frame in self._frames(tab, cancel):
+        frames = self._frames(tab, cancel) if deadline is None else self._frames(tab, cancel, timeout=_left(deadline))
+        for frame in frames:
             timeout = 5.0 if deadline is None else min(5.0, _left(deadline))
             try:
                 held, realm = self._in_sandbox(tab, {"context": frame, "sandbox": SANDBOX}, FORMS_HELD_FN, cancel,
@@ -1830,8 +1849,10 @@ class Bridge:
         question; otherwise the next call would find it and be refused again. The call is judged on the element as
         it is when the call comes; after the question the tool reads it again and checks what it needs then, as before.
         What only the action shows (a form the page sends from its own handler) is settled after it (_forms_settle).
-        A look that fails (the element gone, a frame that went away, documents that do not answer within
-        LOOK_SECONDS for all its reads) adds nothing: the call reports it after its question, where it did before."""
+        A look that fails (the element gone, a frame that went away, the tab or its documents not answering within
+        LOOK_SECONDS for all its reads, a link's lookup answering after it) adds nothing: the call reports it after its
+        question, where it did before. Nothing is read of a page whose own address still waits on a question
+        (require_here)."""
         tab = self._args["tab"]
         held: list[str] = []  # the documents of a held form this call refuses submit_forms for
 
@@ -1841,7 +1862,7 @@ class Bridge:
             try:
                 found = self._forms_where(tab, cancel, deadline=deadline)
                 # Read after the count, as _forms_settle does: these documents' address, or a later one's.
-                if found and policy.origin(self._url_of(tab, cancel)) != policy.origin(here):
+                if found and policy.origin(self._url_of(tab, cancel, timeout=_left(deadline))) != policy.origin(here):
                     return [], None  # the tab moved: its forms stay held, and the move is said after the question
                 if element is not None and (text is not None or not found):  # a click settles a held form first
                     decided = self._element_needs(tab, element, text, here, checked, cancel, deadline)
@@ -1876,7 +1897,8 @@ class Bridge:
         None when the element is gone. `text`: what `type` types; None for a click. `here`: where the tab is. Also
         the refusal the element decides that is no permission (a link to an address agents never go to or to an
         internal page, a field that takes no text), made before any question only when nothing of the call is
-        blocked (_refuse_blocked's `then`)."""
+        blocked (_refuse_blocked's `then`). None too when the agent was removed meanwhile: the call is refused for
+        that at its own check."""
         info = self._call_fn(tab, INSPECT_FN, [element], cancel, sandbox=True, timeout=_left(deadline))
         if not isinstance(info, dict) or not info.get("connected"):
             return None
@@ -1893,7 +1915,9 @@ class Bridge:
         # what comes before what it decides is blocked (the form's submit_forms, navigate there): that refusal comes
         # first whatever the lookup says. A tab of one of the user's profiles is looked at only once the profile was
         # entered (require_here).
-        agent = self._agent() or {}
+        agent = self._agent()
+        if agent is None:
+            return None  # removed while the element was read: require() refuses the call, and closes its engines
         before = [("submit_forms", here)] if needs else []
         if any(self._blocks(agent, capability, at) for capability, at in [*before, ("navigate", href)]):
             resolve = False
@@ -1903,6 +1927,7 @@ class Bridge:
             target = policy.classify_url(href, resolve)
         except policy.UrlRefused as exc:
             return needs, self._fails(str(exc), at=href)
+        _left(deadline)  # a lookup that answered after the budget adds nothing: checked after the question, as before
         if policy.INTERNAL_CAPABILITY in target.needs:
             return needs, lambda: self._refuse_internal(target, href, checked)
         return [*needs, *self._url_needs(target, href)], None
@@ -2095,16 +2120,18 @@ class Bridge:
         if not self.workspace.uploads:
             self._target = url
             raise ToolError("uploads were not allowed when this workspace started; reconnect the agent after allowing files")
-        path = (folder / args["file"]).resolve()
 
-        def there() -> bool:
-            return path.parent == folder and path.is_file()
+        def there() -> Path | None:
+            """The file the name points to now, in the uploads folder."""
+            path = (folder / args["file"]).resolve()
+            return path if path.parent == folder and path.is_file() else None
 
         # A form held from an earlier action, before the question; refused after it, as before, when the file is not
-        # there (a call refused for that leaves the form to the next one).
-        url = self._act_here("files", url, checked, cancel, ready=there)
+        # there (a call refused for that leaves the form to the next one). The name is resolved again after the
+        # question: what is uploaded is what it points to then.
+        url = self._act_here("files", url, checked, cancel, ready=lambda: there() is not None)
         self.still_at(tab, url, cancel)
-        if not there():
+        if (path := there()) is None:
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
         if earlier := self._earlier_forms(tab, url, checked, cancel):
             return earlier, url
