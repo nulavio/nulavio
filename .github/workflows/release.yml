@@ -9,7 +9,7 @@ name: release
 #    source, build, unit and integration tests, RPM and .deb checked in clean
 #    containers, the signed-repository checks, SBOMs, manifest.json. The packages and
 #    the manifest get a GitHub build-provenance attestation. The package release is
-#    one above every tagged, published or served one (#656).
+#    one above every tagged, published or served one, in the APT or the dnf index (#656, #723).
 # 2. sign (GitHub-hosted, environment `release`: the maintainer approves, main only):
 #    checks the attestation, then scripts/release/publish_release.sh signs through AWS
 #    KMS (OIDC; ci/aws/), attests the signed files and hands them to publish as one
@@ -84,7 +84,7 @@ jobs:
       - name: Pinned Firefox release
         id: pin
         run: python3 -I -c 'import json; print("firefox=" + json.load(open("browser/build/engine.json"))["firefox"])' >> "$GITHUB_OUTPUT"
-      - name: The package release to build, above every tagged, published or served one
+      - name: The package release to build, above every tagged, published or served one (APT and dnf)
         id: revision
         env:
           FIREFOX: ${{ steps.pin.outputs.firefox }}
@@ -99,7 +99,20 @@ jobs:
             echo "::error::the bucket's APT index lists no nulavio version in the <version>-<release> form"
             exit 1
           fi
-          release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served")
+          # The dnf repository is uploaded first: when the APT upload then failed, only the dnf index serves that
+          # revision (#723). Files, not pipes, so a failed download or decompression stops the job here too.
+          rpm=$(sed -n 's/^baseurl=//p' site/rpm/nulavio.repo)
+          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml"
+          primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")
+          curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary"
+          command -v zstd >/dev/null || scripts/ci/apt_install.sh zstd
+          zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst"
+          dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" "$RUNNER_TEMP/primary.xml")
+          if ! [[ "$dnf" =~ ^[0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::error::the bucket's dnf index lists no nulavio version in the <version>-<release> form"
+            exit 1
+          fi
+          release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served" --also "v$dnf")
           echo "release=$release" >> "$GITHUB_OUTPUT"
       - name: What is new in this version is written (packaging/whats-new/), before hours of building
         env:

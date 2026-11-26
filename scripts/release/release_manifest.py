@@ -5,6 +5,8 @@
     python3 -I scripts/release/release_manifest.py packages <manifest.json> <packages-dir>
     python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR] [--also TAG ...]
     python3 -I scripts/release/release_manifest.py not-older <tag> [--repo DIR] [--also TAG ...]
+    python3 -I scripts/release/release_manifest.py dnf-primary <repomd.xml>
+    python3 -I scripts/release/release_manifest.py dnf-served <repomd.xml> <primary.xml>
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
 from a tree with uncommitted or untracked changes, an engine pin that differs
@@ -30,10 +32,16 @@ signed.
 
 ``next-release`` prints the package release to build: one above every revision of
 that Firefox version that is tagged, recorded in packaging/release.json or named
-with ``--also``. The build job names the version the bucket's APT index serves, so
-a run that uploaded and stopped before its draft (no tag, no draft) does not hand
-its revision to the next run (#656); upload_repo.sh refuses to overwrite a package
-with other bytes in any case.
+with ``--also``. The build job names the versions the bucket's APT and dnf indexes
+serve, so a run that uploaded and stopped before its draft (no tag, no draft) does
+not hand its revision to the next run (#656), even when only its dnf upload finished
+(#723); upload_repo.sh refuses to overwrite a package with other bytes in any case.
+
+``dnf-primary`` prints where the bucket's repomd.xml says the primary metadata is
+(``repodata/<sha256>-primary.xml.zst``, nothing else). ``dnf-served`` prints the
+highest ``<version>-<release>`` of nulavio that this primary file lists, without the
+distribution (``0.3.fc44`` is ``0.3``), once its SHA-256 is the one repomd.xml gives.
+Anything else stops it: the build job then fails closed.
 
 ``not-older`` refuses a release when a newer one is tagged, recorded in
 packaging/release.json or named with ``--also``. The publish job runs it before
@@ -50,6 +58,7 @@ import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,6 +69,12 @@ RPM = re.compile(r"^nulavio-(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)\.[a-
 DEB = re.compile(r"^nulavio_(?P<version>\d+(?:\.\d+)+)-(?P<release>[0-9.]+)_amd64\.deb$")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 RELEASE_TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
+# The dnf repository's metadata (createrepo_c in sign_repo.sh): repomd.xml names the primary file by its hash.
+REPOMD_NS = "{http://linux.duke.edu/metadata/repo}"
+PRIMARY_NS = "{http://linux.duke.edu/metadata/common}"
+PRIMARY_HREF = re.compile(r"repodata/[0-9a-f]{64}-primary\.xml\.zst")
+# rpm adds the distribution after the release (0.3.fc44), as check_published.sh allows; a .deb's is exact.
+RPM_RELEASE = re.compile(r"([0-9]+(?:\.[0-9]+)*)(?:\.fc[0-9]+)?")
 # The Firefox release whose Rust code passed the engine's networking check (scripts/build/networking_check.py, #430).
 NETWORKING_RECORD = "browser/build/networking-check.json"
 
@@ -319,6 +334,55 @@ def next_release(firefox: str, repo: Path, others: list[str] | tuple[str, ...] =
     return ".".join(map(str, parts))
 
 
+def _xml(data: bytes, what: str) -> ET.Element:
+    # Downloaded from the bucket: createrepo_c writes no DTD, and without one no entity can expand (S314).
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ManifestError(f"{what} declares a DTD or an entity, which createrepo_c never writes")
+    try:
+        return ET.fromstring(data)  # noqa: S314 - no DTD (above); the bucket's own index, written by sign_repo.sh
+    except ET.ParseError as e:
+        raise ManifestError(f"{what} is not readable XML: {e}") from None
+
+
+def _primary_entry(repomd: bytes) -> ET.Element:
+    entries = [d for d in _xml(repomd, "repomd.xml").iter(f"{REPOMD_NS}data") if d.get("type") == "primary"]
+    if len(entries) != 1:
+        raise ManifestError(f"repomd.xml names {len(entries)} primary files, not one")
+    return entries[0]
+
+
+def dnf_primary(repomd: bytes) -> str:
+    """Where repomd.xml says the primary metadata is, relative to the repository; only createrepo_c's form, since
+    it becomes part of a URL."""
+    location = _primary_entry(repomd).find(f"{REPOMD_NS}location")
+    href = location.get("href", "") if location is not None else ""
+    if not PRIMARY_HREF.fullmatch(href):
+        raise ManifestError(f"repomd.xml names the primary file {href!r}, not repodata/<sha256>-primary.xml.zst")
+    return href
+
+
+def dnf_served(repomd: bytes, primary: bytes) -> str:
+    """The highest <version>-<release> of nulavio in the primary metadata that repomd.xml names (#723): a run whose
+    dnf upload finished and whose APT upload failed left this version in the dnf index only."""
+    checksum = _primary_entry(repomd).find(f"{REPOMD_NS}open-checksum")
+    if checksum is None or checksum.get("type") != "sha256" or checksum.text != hashlib.sha256(primary).hexdigest():
+        raise ManifestError("the primary file is not the one repomd.xml names (open-checksum)")
+    served = []
+    for package in _xml(primary, "the primary file").iter(f"{PRIMARY_NS}package"):
+        if package.findtext(f"{PRIMARY_NS}name") != "nulavio":
+            continue
+        version = package.find(f"{PRIMARY_NS}version")
+        ver, rel = (version.get("ver", ""), version.get("rel", "")) if version is not None else ("", "")
+        release = RPM_RELEASE.fullmatch(rel)
+        if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", ver) or not release:
+            raise ManifestError(f"the primary file lists nulavio {ver!r}-{rel!r}, not <version>-<release>")
+        served.append((ver, release[1]))
+    if not served:
+        raise ManifestError("the primary file lists no nulavio package")
+    ver, rel = max(served, key=lambda v: (_numbers(v[0]), _numbers(v[1])))
+    return f"{ver}-{rel}"
+
+
 def debs(manifest: dict, release_tag: str) -> list[str]:
     """The .deb packages, which carry the RPM's version and release (one engine build, two formats)."""
     found = [e["file"] for e in manifest["packages"] if e["file"].endswith(".deb")]
@@ -392,6 +456,11 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("tag")
     o.add_argument("--repo", type=Path, default=ROOT)
     o.add_argument("--also", action="append", default=[], help="another release's tag, such as a draft's")
+    d = sub.add_parser("dnf-primary", help="where the dnf repository's repomd.xml says its primary metadata is")
+    d.add_argument("repomd", type=Path)
+    ds = sub.add_parser("dnf-served", help="the highest nulavio version the dnf repository's primary metadata lists")
+    ds.add_argument("repomd", type=Path)
+    ds.add_argument("primary", type=Path, help="the primary file dnf-primary named, decompressed")
     args = parser.parse_args(argv)
     try:
         if args.command == "verify":
@@ -402,6 +471,10 @@ def main(argv: list[str] | None = None) -> int:
             check_not_older(args.tag, args.repo, args.also)
         elif args.command == "next-release":
             print(next_release(args.firefox, args.repo, args.also))
+        elif args.command == "dnf-primary":
+            print(dnf_primary(args.repomd.read_bytes()))
+        elif args.command == "dnf-served":
+            print(dnf_served(args.repomd.read_bytes(), args.primary.read_bytes()))
         else:
             print("\n".join(check_packages(args.manifest, args.packages)))
     except ManifestError as e:

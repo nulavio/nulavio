@@ -361,8 +361,22 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("served=$(curl -fsSL --proto '=https'", step)
         self.assertIn("sed -n 's/^URIs: //p' site/apt/nulavio.sources", step)
         self.assertIn('if ! [[ "$served" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
-        self.assertIn('release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served")',
+        # #723: and the dnf index, which is uploaded first and so may serve a revision the APT index does not: the
+        # primary file its repomd.xml names, read from files so that a failed download or decompression stops the job.
+        self.assertIn("sed -n 's/^baseurl=//p' site/rpm/nulavio.repo", step)
+        self.assertIn("""curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/repomd.xml" "$rpm/repodata/repomd.xml\"""",
                       step)  # fmt: skip
+        self.assertIn('primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$RUNNER_TEMP/repomd.xml")',
+                      step)  # fmt: skip
+        self.assertIn("""curl -fsSL --proto '=https' --retry 3 -o "$RUNNER_TEMP/primary.xml.zst" "$rpm/$primary\"""", step)
+        self.assertIn('zstd -q -d -f -o "$RUNNER_TEMP/primary.xml" "$RUNNER_TEMP/primary.xml.zst"', step)
+        self.assertIn('dnf=$(python3 -I scripts/release/release_manifest.py dnf-served "$RUNNER_TEMP/repomd.xml" '
+                      '"$RUNNER_TEMP/primary.xml")', step)  # fmt: skip
+        self.assertIn('if ! [[ "$dnf" =~ ^[0-9]+(\\.[0-9]+)+-[0-9]+(\\.[0-9]+)*$ ]]; then', step)
+        dnf_lines = step[step.index("rpm=$(") : step.index("release=$(")]
+        self.assertNotIn("|", dnf_lines.replace("||", ""))  # no pipe: this shell has no pipefail
+        self.assertIn('release=$(python3 -I scripts/release/release_manifest.py next-release "$FIREFOX" --also "v$served" '
+                      '--also "v$dnf")', step)  # fmt: skip
         self.assertIn('echo "release=$release" >> "$GITHUB_OUTPUT"', step)
         self.assertNotIn("${{", step.split("run: |", 1)[1])
         self.assertEqual(self.build.count("next-release"), 1)

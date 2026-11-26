@@ -33,6 +33,35 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# The dnf index as createrepo_c writes it (sign_repo.sh), cut down from the bucket's on 2026-11-25 (#723).
+PRIMARY_HREF = "repodata/" + "8f064b7e2db78c916db1cee8fc66d805f476b50ccc2c7d4a310869b0d6b6ed14" + "-primary.xml.zst"
+
+
+def dnf_primary_xml(*packages: tuple[str, str, str]) -> bytes:
+    entries = "".join(
+        f'<package type="rpm">\n  <name>{name}</name>\n  <arch>x86_64</arch>\n  <version epoch="0" ver="{ver}" rel="{rel}"/>\n'
+        f'  <location href="x86_64/{name}-{ver}-{rel}.x86_64.rpm"/>\n  <format>\n'
+        f'    <rpm:provides><rpm:entry name="{name}" flags="EQ" epoch="0" ver="9.9" rel="9.9"/></rpm:provides>\n'
+        f"  </format>\n</package>\n"
+        for name, ver, rel in packages
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<metadata xmlns="http://linux.duke.edu/metadata/common" '
+        f'xmlns:rpm="http://linux.duke.edu/metadata/rpm" packages="{len(packages)}">\n{entries}</metadata>\n'
+    ).encode()
+
+
+def dnf_repomd(primary: bytes, href: str = PRIMARY_HREF) -> bytes:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<repomd xmlns="http://linux.duke.edu/metadata/repo" '
+        'xmlns:rpm="http://linux.duke.edu/metadata/rpm">\n  <revision>1795642880</revision>\n'
+        '  <data type="primary">\n    <checksum type="sha256">8f064b7e</checksum>\n'
+        f'    <open-checksum type="sha256">{hashlib.sha256(primary).hexdigest()}</open-checksum>\n'
+        f'    <location href="{href}"/>\n  </data>\n'
+        '  <data type="other">\n    <location href="repodata/0-other.xml.zst"/>\n  </data>\n</repomd>\n'
+    ).encode()
+
+
 class ReleaseManifestTest(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="nulavio-manifest-test-"))
@@ -321,6 +350,53 @@ class ReleaseManifestTest(unittest.TestCase):
             code = release_manifest.main(["next-release", "159.0.1", "--repo", str(self.repo), "--also", "v159.0.1-0.2"])
         self.assertEqual((code, out.getvalue()), (0, "0.3\n"))
         release_manifest.check_newer("v159.0.1-0.3", self.repo)  # and the sign job's verify takes it
+
+    def test_a_revision_only_the_dnf_index_serves_is_taken_too(self):
+        # #723: run A uploaded the dnf repository of 159.0.1-0.3, then its APT upload failed. The APT index still
+        # serves 0.2; the dnf index serves 0.3 (with the distribution, as rpm writes it). The build job of run B reads
+        # both, and B builds 0.4 instead of stopping at the dnf upload with other bytes under 0.3.
+        subprocess.run(["git", "-C", str(self.repo), "tag", "v159.0.1-0.2", self.base], check=True)
+        primary = dnf_primary_xml(("nulavio", "159.0.1", "0.3.fc44"), ("nulavio-debug", "159.0.1", "0.9.fc44"))
+        repomd = dnf_repomd(primary)
+        self.assertEqual(release_manifest.dnf_primary(repomd), PRIMARY_HREF)
+        dnf = release_manifest.dnf_served(repomd, primary)
+        self.assertEqual(dnf, "159.0.1-0.3")
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo, ["v159.0.1-0.2"]), "0.3")  # APT alone
+        self.assertEqual(release_manifest.next_release("159.0.1", self.repo, ["v159.0.1-0.2", f"v{dnf}"]), "0.4")
+        # The highest of several nulavio packages; the commands the build job runs print the same.
+        two = dnf_primary_xml(("nulavio", "159.0.1", "0.10.fc44"), ("nulavio", "159.0.1", "0.9.fc45"))
+        self.assertEqual(release_manifest.dnf_served(dnf_repomd(two), two), "159.0.1-0.10")
+        (self.tmp / "repomd.xml").write_bytes(repomd)
+        (self.tmp / "primary.xml").write_bytes(primary)
+        repomd_file, primary_file = str(self.tmp / "repomd.xml"), str(self.tmp / "primary.xml")
+        for argv, printed in ((["dnf-primary", repomd_file], PRIMARY_HREF + "\n"),
+                              (["dnf-served", repomd_file, primary_file], "159.0.1-0.3\n")):  # fmt: skip
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = release_manifest.main(argv)
+            self.assertEqual((code, out.getvalue()), (0, printed))
+
+    def test_a_dnf_index_that_cannot_be_read_stops_the_build(self):
+        # Fail closed, as the APT read does: the build job must not pick a revision from an index it could not read.
+        primary = dnf_primary_xml(("nulavio", "159.0.1", "0.3.fc44"))
+        cases = {
+            "readable XML": (b"<repomd", primary),
+            "declares a DTD": (b'<!DOCTYPE r [<!ENTITY a "aaaa">]>' + dnf_repomd(primary), primary),
+            "0 primary files": (dnf_repomd(primary).replace(b'type="primary"', b'type="other"'), primary),
+            "not repodata/<sha256>-primary.xml.zst": (dnf_repomd(primary, href="../x86_64/evil.xml.zst"), primary),
+            "open-checksum": (dnf_repomd(primary), primary.replace(b"0.3.fc44", b"0.2.fc44")),
+            "lists no nulavio package": (dnf_repomd(other := dnf_primary_xml(("other", "1.0", "1"))), other),
+            "not <version>-<release>": (dnf_repomd(odd := dnf_primary_xml(("nulavio", "159.0.1", "0.3.el9"))), odd),
+        }
+        for fragment, (repomd, data) in cases.items():
+            with self.subTest(fragment), self.assertRaises(release_manifest.ManifestError) as caught:
+                release_manifest.dnf_primary(repomd)
+                release_manifest.dnf_served(repomd, data)
+            self.assertIn(fragment, str(caught.exception))
+        empty = self.tmp / "empty.xml"
+        empty.write_bytes(b"")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(release_manifest.main(["dnf-primary", str(empty)]), 1)
 
     def test_signing_refuses_packages_the_manifest_does_not_list(self):
         packages = self.out / "packages"
