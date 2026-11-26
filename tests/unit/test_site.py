@@ -1417,8 +1417,8 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertIn("Signing key not found", html)
                 # The key from the release assets is checked against that fingerprint before import (audit R5),
                 # by the block itself, not only by the reader's eyes (#744).
-                self.assertLess(html.index("gpg --show-keys --with-colons"), html.index("gpg --import"))
-                self.assertLess(html.index(f'f == "{self.fpr}")'), html.index("gpg --import"))
+                self.assertLess(html.index("gpg --show-keys --with-colons"), html.index("gpg --import nulavio-packages.asc"))
+                self.assertLess(html.index(f'f == "{self.fpr}")'), html.index("gpg --import nulavio-packages.asc"))
                 self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
                 self.assertIn("159.0.1-0.1", html)
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
@@ -1492,10 +1492,11 @@ class DownloadPagesTest(unittest.TestCase):
                          ["pub"], listed.stdout)  # fmt: skip
 
         def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
-                built: Path = out, extra_sig: bool = False, shell: str = "bash") -> str:  # fmt: skip
+                built: Path = out, extra_sig: bool = False, shell: str = "bash", prelude: str = "") -> str:  # fmt: skip
             work = self.tmp / f"check-{case}-{page.split('/')[0]}-{shell}"
             home = work / "gnupg"
             home.mkdir(parents=True, mode=0o700)
+            (work / "nulavio-packages.keys").write_text("the reader's own file\n", encoding="ascii")
             if key:
                 (work / "nulavio-packages.asc").write_text(key, encoding="ascii")
             sums = work / "SHA256SUMS"
@@ -1522,9 +1523,11 @@ class DownloadPagesTest(unittest.TestCase):
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
             blocks.add(block)
             before = primary_keys(env)
-            ran = subprocess.run([shell], input=html_module.unescape(block) + "\n", cwd=work, env=env,
+            ran = subprocess.run([shell], input=prelude + html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
             keyrings[case, page, shell] = (before, primary_keys(env))
+            # Review of #752: the block writes no file of its own, so a file the reader had keeps its content.
+            self.assertEqual((work / "nulavio-packages.keys").read_text(encoding="ascii"), "the reader's own file\n")
             return ran.stdout
 
         def primary_keys(env: dict[str, str]) -> list[str]:
@@ -1545,6 +1548,8 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored, shell=sh))
                 # The key file is imported once its fingerprint matched, and only then (#744).
                 self.assertEqual(keyrings["good", page, sh], ([], [self.fpr]))
+                if sh == "bash":  # Review of #752: with noclobber set, no redirection into a file stops the block.
+                    self.assertIn("nulavio.rpm: OK", run(page, "noclobber", ours, self.armored, prelude="set -o noclobber\n"))
                 # Signed by a key the reader already has: gpg says "Good signature", the list is still not ours.
                 self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other, shell=sh))
                 # The key file swapped for another one, with that key's signature.

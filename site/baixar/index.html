@@ -100,11 +100,12 @@ sudo apt install nulavio</code></pre></div>
 <!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Conferir um download manual</h2>
-<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: os dois primeiros comandos conferem isso e param tudo se o arquivo da chave tiver outra chave, ou mais de uma, ou se o gpg não conseguir lê-lo, antes que qualquer coisa entre no seu chaveiro do GnuPG. Os comandos rodam em sequência e param no primeiro que falhar.</p>
-<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-colons nulavio-packages.asc &gt; nulavio-packages.keys &amp;&amp;
-  awk -F: '$1 == "pub" || $1 == "sec" {n++} $1 == "fpr" &amp;&amp; last == "pub" {f = $10}
-    {last = $1} END {if (n == 1 &amp;&amp; f == "{{key_fpr_plain}}") exit 0
-    exit 1}' nulavio-packages.keys &amp;&amp;
+<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: os comandos antes de <code translate="no">gpg --import</code> conferem isso e param tudo se o arquivo da chave tiver outra chave, ou mais de uma, ou se o gpg não conseguir lê-lo, antes que qualquer coisa entre no seu chaveiro do GnuPG. Os comandos rodam em sequência e param no primeiro que falhar.</p>
+<div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc &amp;&amp;
+  gpg --show-keys --with-colons nulavio-packages.asc | awk -F: '$1 == "pub" || $1 == "sec" {n++}
+    $1 == "fpr" &amp;&amp; last == "pub" {f = $10} {last = $1}
+    END {if (n == 1 &amp;&amp; f == "{{key_fpr_plain}}") exit 0
+    exit 1}' &amp;&amp;
   gpg --import nulavio-packages.asc &amp;&amp;
   gpg --status-file SHA256SUMS.status --verify SHA256SUMS.asc SHA256SUMS &amp;&amp;
   grep -q '^\[GNUPG:\] VALIDSIG .* {{key_fpr_plain}}$' SHA256SUMS.status &amp;&amp;
