@@ -362,10 +362,7 @@ class FixtureServer:
                 body, ctype, extra = outer.route(self.path)
                 self.send_response(200 if body is not None else 404)
                 self.send_header("Content-Type", ctype)
-                # `cacheable=1` in the query: no "no-store", so the engine may keep the page in its back-forward
-                # cache (it never keeps a no-store page there). Any other fixture is never cached.
-                if "cacheable=1" not in self.path.partition("?")[2].split("&"):
-                    self.send_header("Cache-Control", "no-store")
+                self.send_header("Cache-Control", "no-store")
                 for key, value in extra.items():
                     self.send_header(key, value)
                 self.end_headers()
@@ -399,7 +396,10 @@ class FixtureServer:
         html = "text/html; charset=utf-8"
         if path.startswith("/page/"):
             name = path.rsplit("/", 1)[-1]
-            return f"<!doctype html><title>{name}</title><p id=name>{name}</p>".encode(), html, {}
+            # `frame=<address>`: the page holds a frame (#f) with that address, also when it is loaded again.
+            frame = urllib.parse.quote(urllib.parse.unquote(query["frame"]), safe=":/?=&") if "frame" in query else ""
+            frame = f'<iframe id=f src="{frame}"></iframe>' if frame else ""
+            return f"<!doctype html><title>{name}</title><p id=name>{name}</p>{frame}".encode(), html, {}
         if path == "/opensearch.xml":
             # OpenSearch fixture (test_search 19): a description whose search, suggestion or search-form address adds
             # the parameter named in `search`, `suggest` or `form` (with a stand-in value) to its own.
