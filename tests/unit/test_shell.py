@@ -776,7 +776,8 @@ class LocaleKeysTest(unittest.TestCase):
 
 def call_arguments(text: str, start: int) -> str:
     """The arguments of the call whose `(` ends just before `start`, up to its own `)`: nested calls,
-    objects and brackets included, and a bracket inside a string literal not counted."""
+    objects and brackets included, and a bracket inside a string literal, a comment or a regex literal
+    not counted. A `/` after an operator or an opening bracket starts a regex literal, otherwise it divides."""
     depth, quote, index = 1, None, start
     while index < len(text):
         char = text[index]
@@ -787,6 +788,22 @@ def call_arguments(text: str, start: int) -> str:
                 quote = None
         elif char in "\"'`":
             quote = char
+        elif text.startswith("//", index):
+            index = text.find("\n", index)
+            if index < 0:
+                break
+        elif text.startswith("/*", index):
+            index = text.find("*/", index + 2) + 1
+            if index <= 0:
+                break
+        elif char == "/" and (text[start:index].rstrip()[-1:] or "(") in "([{,;:=!&|?+-*%<>~^":
+            klass, index = False, index + 1
+            while index < len(text) and (klass or text[index] != "/"):
+                if text[index] == "\\":
+                    index += 1
+                elif text[index] in "[]":
+                    klass = text[index] == "["
+                index += 1
         elif char in "([{":
             depth += 1
         elif char in ")]}":
@@ -818,6 +835,23 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertRegex(call_arguments(missed, missed.index("(") + 1), self.ABOUT)
         quoted = 'tabs.update(tab.id, { url: ")" + "about:blank" }); other("about:x");'
         self.assertEqual(call_arguments(quoted, quoted.index("(") + 1), 'tab.id, { url: ")" + "about:blank" }')
+        # A comment or a regex literal is skipped whole: a bracket or a quote in it is not counted (OpenCodeReview, #735).
+        for early in (
+            'tabs.update(tab.id, /* ) */ { url: "about:newtab" });',
+            'tabs.update(tab.id, // )\n  { url: "about:newtab" });',
+            'tabs.update(tab.id, { url: s.replace(/[)]/, "") + "about:blank" });',
+            'tabs.update(tab.id, { url: s.replace(/\\)/g, "") + "about:blank" });',
+        ):
+            with self.subTest(early=early):
+                self.assertRegex(call_arguments(early, early.index("(") + 1), self.ABOUT)
+        for late in (
+            'tabs.update(tab.id, { url: web }); // (it\'s a web page)\nother("about:x");',
+            'tabs.update(tab.id, /* ( */ { url: web }); other("about:x");',
+            'tabs.update(tab.id, { url: web.replace(/[(]/, "") }); other("about:x");',
+            'tabs.update(tab.id, { url: n / 2 }); other("about:x");',
+        ):
+            with self.subTest(late=late):
+                self.assertNotRegex(call_arguments(late, late.index("(") + 1), self.ABOUT)
 
     def test_no_shell_script_loads_an_about_address_into_a_tab(self):
         for script in sorted(p for p in SHELL.rglob("*") if p.suffix in (".js", ".mjs")):
