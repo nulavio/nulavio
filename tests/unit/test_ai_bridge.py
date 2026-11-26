@@ -17,6 +17,7 @@ import re
 import shutil
 import socket
 import struct
+import sys
 import tempfile
 import threading
 import time
@@ -2471,6 +2472,13 @@ class PageResultsTest(Home):
     """#674: page_read and page_snapshot run their helper in the page's own realm, so a page that redefines
     document.title, document.body, querySelectorAll or getComputedStyle chooses what the helper returns. A result
     of another shape is a tool error, never an exception that ends the agent's call or the assistant's Task."""
+
+    def setUp(self):
+        super().setUp()
+        # BIGINT is past Python's default limit (4300 digits), which -X int_max_str_digits or the environment can
+        # change: pin it for these tests, so that the BigInt cases test the limit rather than the interpreter's start.
+        self.addCleanup(sys.set_int_max_str_digits, sys.get_int_max_str_digits())
+        sys.set_int_max_str_digits(4300)
 
     def reading(self, result: dict) -> tools.Bridge:
         """A Bridge whose engine answers every script call with the BiDi RemoteValue `result`."""
