@@ -22,8 +22,9 @@ fi
 if [ "$status" = "install ok installed" ]; then
     list=/etc/apt/sources.list.d/nulavio.sources
     [ -f "$list" ] || { echo "$list is missing: Nulavio's repository is not configured" >&2; exit 1; }
-    # Only Nulavio's list is refreshed; the others stay as the system last read them.
-    apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+    # Only Nulavio's list is refreshed; the others stay as the system last read them. A failed fetch fails the run
+    # (#713): without Error-Mode=any APT only warns, keeps the lists it had and exits 0, and the run reports success.
+    apt-get -q update -o Dir::Etc::sourcelist="$list" -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0 -o APT::Update::Error-Mode=any
     DEBIAN_FRONTEND=noninteractive
     export DEBIAN_FRONTEND
     # Never removes another package to make room (dnf refuses that too without --allowerasing).

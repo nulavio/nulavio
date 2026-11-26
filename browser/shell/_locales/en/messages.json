@@ -109,6 +109,7 @@
   "err_invalid_kind": {"message": "That kind of service does not exist."},
   "err_missing_text": {"message": "Put {text} where the text goes."},
   "err_missing_url": {"message": "Put {url} where the page's address goes."},
+  "err_no_way_back": {"message": "There is no page to go back to in this tab. Nothing was changed."},
   "err_bad_placeholder": {"message": "Only {text}, {url} and {lang} may go in braces, each where it fits."},
   "err_service_needs_https": {"message": "Use an https:// address."},
   "err_invalid_service": {"message": "That service could not be read. The list was refreshed."},

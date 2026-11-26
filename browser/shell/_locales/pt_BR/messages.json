@@ -109,6 +109,7 @@
   "err_invalid_kind": {"message": "Esse tipo de serviço não existe."},
   "err_missing_text": {"message": "Coloque {text} onde vai o texto."},
   "err_missing_url": {"message": "Coloque {url} onde vai o endereço da página."},
+  "err_no_way_back": {"message": "Não há página para voltar nesta aba. Nada foi alterado."},
   "err_bad_placeholder": {"message": "Só {text}, {url} e {lang} podem ir entre chaves, cada um onde cabe."},
   "err_service_needs_https": {"message": "Use um endereço https://."},
   "err_invalid_service": {"message": "Esse serviço não pôde ser lido. A lista foi atualizada."},
