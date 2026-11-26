@@ -2592,7 +2592,8 @@ class OpenProfileTest(Home):
         cases = [(tool, "own") for tool in self.HERE] + [
             ("page_read", "authenticated_sessions"),  # the profile's question (Assisted)
             ("evaluate", "cookies_storage"),  # a script's second question
-            ("type", "submit_forms"),  # Enter
+            ("type", "submit_forms"),  # Enter (submit=true)
+            ("type", "enter"),  # Enter in a single-line field, inspected after interact
             ("click", "submit_forms"),  # a submit button, before its link
             ("click", "navigate"),  # its link: the last question before the click
         ]
@@ -2604,12 +2605,15 @@ class OpenProfileTest(Home):
                 own = tools.BY_NAME[tool].capability
                 registry.grant(agent["id"], own, "ask" if question == "own" else "allow")
                 registry.grant(agent["id"], "cookies_storage", "ask" if question == "cookies_storage" else "allow")
+                asked = {"own": own, "enter": "submit_forms"}.get(question, question)
                 for other in ("submit_forms", "navigate"):
-                    registry.grant(agent["id"], other, "ask" if question == other else "allow")
-                state = self.resolving(approver, own if question == "own" else question)
+                    registry.grant(agent["id"], other, "ask" if asked == other else "allow")
+                state = self.resolving(approver, asked)
                 arguments = self.here_arguments(tool)
                 if tool == "type" and question == "submit_forms":
                     arguments["submit"] = True
+                if question == "enter":
+                    arguments["text"] = "x\n"
                 with (
                     mock.patch.object(tools.Bridge, "_earlier_forms", return_value=None),
                     mock.patch.object(tools.Bridge, "_forms_prepare"),
@@ -2618,7 +2622,7 @@ class OpenProfileTest(Home):
                     result = bridge.call(tool, arguments)
                 self.assertTrue(result["isError"], result)
                 self.assertTrue(state["local"], approver.asked)  # the question was asked
-                self.assertEqual(approver.asked[-1][0], own if question == "own" else question)  # and nothing after it
+                self.assertEqual(approver.asked[-1][0], asked)  # and nothing after it
                 self.assertFalse(self.ACTS & set(commands), commands)
                 self.read.assert_not_called()
                 self.assertFalse([c for c in called.call_args_list if c.args[1] != tools.INSPECT_FN], called.call_args_list)
