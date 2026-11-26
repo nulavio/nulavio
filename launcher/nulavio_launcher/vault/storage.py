@@ -140,19 +140,18 @@ class Container:
     def _restore_cipher_mode(self) -> None:
         """P.vault/cipher back to 0700 when it is not. gocryptfs gives the volume's root the mode of that folder, and
         two overlapping unlocks in earlier versions left it at 0500: a profile whose top folder takes no file, not
-        even the engine's lock (#620). Under the state lock, with nothing mounted; through a handle, never a link."""
+        even the engine's lock (#620). Under the state lock, with nothing mounted; through a handle, never a link. A
+        repair, not a check: when it cannot be made, the unlock goes on as before and the log says so."""
         try:
             cipher = os.open(self.cipher, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                if os.fstat(cipher).st_mode & 0o7777 != 0o700:
+                    os.fchmod(cipher, 0o700)
+                    log.event("vault.cipher-mode-restored")
+            finally:
+                os.close(cipher)
         except OSError as exc:
-            raise StorageError("storage-failed", type(exc).__name__) from None
-        try:
-            if os.fstat(cipher).st_mode & 0o7777 != 0o700:
-                os.fchmod(cipher, 0o700)
-                log.event("vault.cipher-mode-restored")
-        except OSError as exc:
-            raise StorageError("storage-failed", type(exc).__name__) from None
-        finally:
-            os.close(cipher)
+            log.event("vault.cipher-mode-not-restored", code=type(exc).__name__)
 
     def _clear_maintenance(self) -> None:
         """Unmount and remove what a change to the unlock methods left behind when its process was
