@@ -399,8 +399,9 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    chips = await keptChips(() => []); // kept by the browser while the panel was closed
     thread = await ai.assistantThread().catch(() => null);
+    chips = await keptChips(() => []); // kept by the browser while the panel was closed
+    showContext(); // drawn before any other await: Send carries only what the panel shows
     await refreshPage();
     syncMode();
     renderThread();
@@ -668,16 +669,17 @@ async function takeOffer() {
   if (!delivery) {
     return;
   }
-  chips = await keptChips(() => chips);
-  $("drift").hidden = true;
   if (delivery.draft) {
     // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
+    // Decided before the list is read: a later read must not write it over a question typed since.
     if (run) {
       laterDraft = delivery.draft;
     } else {
       $("prompt").value = delivery.draft;
     }
   }
+  chips = await keptChips(() => chips);
+  $("drift").hidden = true;
   showContext();
   const added = chips.find(c => c.chipId === delivery.chipId);
   if (added) {

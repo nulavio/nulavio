@@ -828,6 +828,7 @@ const requests = [];
 const ends = [];
 let ids = 0;
 let workspace = ""; // nulavio.ai.workspace: an agent's id while the test says an agent drives the windows
+let workspaceEnv = ""; // NULAVIO_AI_WORKSPACE, as a bridge sets it for the engine it starts ("agent:pid")
 const tabs = new Map();
 const fakes = {
   PrivateBrowsingUtils: { isWindowPrivate: () => false, isBrowserPrivate: () => false },
@@ -844,7 +845,7 @@ const fakes = {
 };
 globalThis.ChromeUtils = { defineESModuleGetters(lazy) { Object.assign(lazy, fakes); } };
 globalThis.Services = {
-  env: { get: () => "" },
+  env: { get: name => (name === "NULAVIO_AI_WORKSPACE" ? workspaceEnv : "") },
   prefs: {
     getStringPref: (name, value) => (name === "nulavio.ai.workspace" ? workspace : value),
     getIntPref: (_name, value) => value,
@@ -951,6 +952,23 @@ const out = {};
   await ai.assistantInclude(show(win, "https://e.example/lenta", "Lenta texto"), win);
   out.lateNext = left(win);
 }
+{  // An engine a bridge started for an agent and that outlived it ("agent:pid", that PID gone): the start looks for
+   // the PID on disk first. The items leave before that look, so a list the panel reads meanwhile is empty (#739).
+  const [win, page] = newWindow("https://f.example/sobra", "Sobra texto");
+  workspaceEnv = "agente:4242"; // IOUtils.exists answers false: the bridge ended, an ordinary window again
+  let chip = await ai.assistantInclude(page, win);
+  const started = ai.assistantStart("ask", { question: "E?", chips: [chip.chipId], expected }, win);
+  out.pidStartDuring = left(win); // read while the start looks for the PID
+  out.pidStart = await started.then(() => "started", e => e.code);
+  out.pidStartPage = last().page?.title ?? null;
+  ends.at(-1)({ type: "done", answer: "Diz.", chars: 1, recipient: "Provedor", model: "modelo" });
+  await settle();
+  chip = await ai.assistantInclude(page, win);
+  const asked = ai.assistantAsk("E?", { chips: [chip.chipId], expected }, win);
+  out.pidAskDuring = left(win);
+  await asked.catch(() => {}); // no tools here: only what it took matters
+  workspaceEnv = "";
+}
 console.log(JSON.stringify(out));
 """
 
@@ -993,6 +1011,13 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["workspaceStartAfter"], [])
         self.assertEqual(out["workspaceAsk"], "ai-workspace")
         self.assertEqual(out["workspaceAskAfter"], [])
+
+    def test_the_items_leave_before_the_start_looks_for_an_agent(self):
+        out = self._run()
+        self.assertEqual(out["pidStart"], "started")  # the bridge ended: an ordinary window, the page goes
+        self.assertEqual(out["pidStartPage"], "Sobra")
+        self.assertEqual(out["pidStartDuring"], [])  # a list read during the look no longer has it (#739)
+        self.assertEqual(out["pidAskDuring"], [])
 
     def test_an_include_that_ends_after_the_start_keeps_nothing(self):
         out = self._run()
@@ -1082,6 +1107,8 @@ let offer = null;
 let hold = false; // the next item-list replies wait for release(): the browser read its list, the panel gets it later
 let reads = 0;
 const held = [];
+let holdThread = false; // the same for the conversation's reply (assistantThread)
+const threadHeld = [];
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
@@ -1094,7 +1121,7 @@ globalThis.browser = {
       const list = [...kept]; // as the browser has it now
       return hold ? new Promise(resolve => held.push(() => resolve(list))) : Promise.resolve(list);
     },
-    assistantThread: async () => null,
+    assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
     assistantPage: async () => ({ ...tab }), // the tab the items came from: the panel keeps them
     assistantTakeOffer: async () => [offer, (offer = null)][0],
     assistantRuns: async () => [],
@@ -1120,8 +1147,8 @@ const idle = async () => {
     await new Promise(resolve => setImmediate(resolve));
   }
 };
-const release = async () => {
-  hold = false;
+const release = async (keepHolding = false) => {
+  hold = keepHolding; // true: the replies held now arrive, and the next ones wait again
   held.splice(0).forEach(answer => answer());
   await idle();
 };
@@ -1191,9 +1218,50 @@ out.offerRaceAnnounced = announced.some(([, text]) => text === "assistantPageAdd
 await finish();
 await send("Pergunta 5");
 out.offerNextSent = starts.at(-1).chips;
+await finish();
+
+// A render whose item list arrived while it still reads the conversation: what a Send carries then is what the
+// panel shows, never an item it has not drawn yet.
+kept = [item("c6", "Sexta")];
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.gapShown = shown();
+await send("Pergunta 6");
+out.gapSent = starts.at(-1).chips;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await finish();
+
+// An "@ia" draft whose item-list reply spans a Send: it waits for the run's end, and once the person types the
+// next question, a list read again later does not write the draft over it.
+kept = [];
+offer = { draft: "Texto do ia" };
+hold = true;
+reads = 0;
+await emit({ type: "offer" });
+await send("Pergunta 7");
+await release(true); // the list read before the Send arrives during the run; it is read again
+await finish();
+$("prompt").value = "Pergunta nova";
+await release();
+out.draftReads = reads;
+out.draftPrompt = $("prompt").value;
 out.errors = announced.filter(([level]) => level === "error");
 console.log(JSON.stringify(out));
 """
+
+
+def node_loads_js_modules() -> bool:
+    """Whether this node imports a `.js` file written as an ES module with no package.json saying so, as panel.js and
+    its lib/ files are. It needs module syntax detection (Node 22.7, 20.19); an older node fails on the first import."""
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = Path(tmp) / "probe.js"
+        probe.write_text("export const ok = 1;\n")
+        done = subprocess.run(["node", "--input-type=module", "-e", "await import(process.argv[1]);", probe.as_uri()],
+                              capture_output=True, timeout=30, check=False)  # fmt: skip
+        return done.returncode == 0
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
@@ -1202,6 +1270,11 @@ class PanelChipsTest(unittest.TestCase):
     render and takeOffer (the selection menu's delivery) discard such a reply and read the list again."""
 
     _out = None
+
+    @classmethod
+    def setUpClass(cls):
+        if not node_loads_js_modules():
+            raise unittest.SkipTest("this node does not import .js ES modules (module syntax detection: Node >= 22.7, 20.19)")
 
     @classmethod
     def _run(cls):
@@ -1236,6 +1309,15 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["offerReads"], 2)
         self.assertFalse(out["offerRaceAnnounced"])  # nor announced as added
         self.assertEqual(out["offerNextSent"], [])
+
+    def test_a_send_carries_only_items_the_panel_shows(self):
+        out = self._run()
+        self.assertEqual(out["gapSent"], out["gapShown"])
+
+    def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
+        out = self._run()
+        self.assertEqual(out["draftPrompt"], "Pergunta nova")
+        self.assertEqual(out["draftReads"], 2)  # the list was read again: the case the review found
 
 
 if __name__ == "__main__":
