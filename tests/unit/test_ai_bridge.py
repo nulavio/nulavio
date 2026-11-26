@@ -1212,7 +1212,7 @@ class AuditTest(Home):
             finally:
                 ahead.pop()
 
-        def forms_where(_self, _tab, _cancel):  # the documents that hold a form, by the realm of their sandbox
+        def forms_where(_self, _tab, _cancel, **_k):  # the documents that hold a form, by the realm of their sandbox
             if not _self._forms_ever:
                 return []
             if ahead:  # nothing happens on the page between the look and the count that follows it
@@ -1226,7 +1226,7 @@ class AuditTest(Home):
             steps.append(names[fn])
             return [1], ""
 
-        def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False):
+        def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False, **_k):
             if sandbox:  # the look before the question reads the element where the page does not see it
                 self.assertEqual(fn, tools.INSPECT_FN)
                 steps.append("look")
@@ -1860,7 +1860,7 @@ class AuditTest(Home):
         engine.mark.return_value = 0
         engine.command.side_effect = lambda method, *_a, **_k: done.append(method) or {}
 
-        def forms_where(_self, _tab, _cancel):
+        def forms_where(_self, _tab, _cancel, **_k):
             done.append("held?")
             return ["realm-1"] if page["held"] else []
 
@@ -1870,7 +1870,7 @@ class AuditTest(Home):
             sent, page["held"] = page["held"], 0
             return [sent], ""
 
-        def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False):
+        def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False, **_k):
             done.append(("look" if sandbox else "inspect") if fn == tools.INSPECT_FN else "page")
             return info
 
@@ -2047,6 +2047,8 @@ class AuditTest(Home):
         self.assertIn("that element does not take text", result["content"][0]["text"])
         self.assertEqual(approver.asked, [])
         self.assertFalse({"inspect", "guard", "input.performActions"} & set(done), done)
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual(entry["target"], "https://example.org")  # the site it was refused at, as after the question
         # Enter while submit_forms is blocked: that refusal comes first, before anything is read (#730).
         bridge, done, _page = self.element_page("restricted", approver, {"connected": True, "editable": False},
                                                 grants=(("submit_forms", "block"),))  # fmt: skip
@@ -2065,6 +2067,132 @@ class AuditTest(Home):
                     result = bridge.call("click", {"tab": "t1", "element": "e1"})
                 self.assertTrue(result["isError"], result)
                 self.assertEqual(approver.asked, [("interact", "https://example.org")])
+
+    # OpenCodeReview on #748, round 1.
+    def test_a_form_counted_in_a_page_the_tab_moved_to_is_left_held(self):
+        # The tab went to another site between the call's first look and the count: that page's form is not judged
+        # by the site the call began at, nor dropped; the move is said after the question, as before.
+        approver = Approve("once")
+        bridge, done, page = self.element_page("restricted", approver, self.FIELD, held=1,
+                                               grants=(("submit_forms", "block"),))  # fmt: skip
+        where = iter([self.CART])
+        with mock.patch.object(tools.Bridge, "_url_of", side_effect=lambda *_a, **_k: next(where, "https://elsewhere.example/")):
+            result = bridge.call("click", {"tab": "t1", "element": "e1"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("the tab moved to", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [("interact", "https://example.org")])
+        self.assertEqual((done.count("drop"), page["held"]), (0, 1))
+
+    def test_a_call_its_own_checks_refuse_leaves_a_held_form_to_the_next_call(self):
+        # What refused typing or an upload before a held form was settled (_t_type, _t_upload) still does, and the
+        # form stays held: a field that takes no text, an element gone, a newline in a single-line field (its own
+        # submit_forms), a file that is not there.
+        folder = self.home / "uploads"
+        folder.mkdir()
+        cases = (
+            ("type", "restricted", {"text": "x"}, {"connected": True, "editable": False}, [],
+             "that element does not take text"),
+            ("type", "restricted", {"text": "x"}, {"connected": False}, [("interact", "https://example.org")],
+             "the element is gone"),
+            ("type", "restricted", {"text": "x\n"}, self.FIELD, [], "'Submit forms'"),
+            ("upload", "assisted", {"file": "missing.txt"}, self.FIELD, [("files", "https://example.org")],
+             "no file named 'missing.txt'"),
+        )  # fmt: skip
+        for tool, level, extra, info, asked, said in cases:
+            with self.subTest(tool=tool, extra=extra, info=info):
+                approver = Approve("once")
+                bridge, done, page = self.element_page(level, approver, info, held=1,
+                                                       grants=(("submit_forms", "block"),))  # fmt: skip
+                bridge.workspace = mock.Mock(uploads=True, bidi=None)
+                with (
+                    mock.patch.object(tools, "_uploads", return_value=folder),
+                    mock.patch.object(tools.Bridge, "_owner", return_value=""),
+                ):
+                    result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra})
+                self.assertTrue(result["isError"], result)
+                self.assertIn(said, result["content"][0]["text"])
+                self.assertNotIn("An earlier action", result["content"][0]["text"])
+                self.assertEqual(approver.asked, asked)
+                self.assertEqual((done.count("drop"), page["held"]), (0, 1))
+
+    def test_a_key_replaced_while_the_page_is_read_is_refused_for_it(self):
+        # A new key while the sandbox read was open: the old session is refused for that (and closed), and is not
+        # told what the page decides (a field that takes no text).
+        approver = Approve("session")
+        bridge, _done, _page = self.element_page("restricted", approver, {})
+        bridge.key_sha256 = registry.get(bridge.agent_id)["token_sha256"]
+
+        def read(*_a, **_k):
+            registry.rotate_token(bridge.agent_id)
+            return {"connected": True, "editable": False}
+
+        with mock.patch.object(tools.Bridge, "_call_fn", side_effect=read):
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x"})
+        self.assertTrue(result["isError"], result)
+        self.assertNotIn("does not take text", result["content"][0]["text"])
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["decision"], entry["reason"]), ("deny", "key-replaced"))
+        self.assertEqual(approver.asked, [])
+
+    def test_a_cancelled_call_leaves_a_held_form_held(self):
+        # Cancelled while the look was open: the refusal is not answered, and nothing is sent to the page for it.
+        approver = Approve("session")
+        bridge, done, page = self.element_page("restricted", approver, self.FIELD, held=1,
+                                               grants=(("submit_forms", "block"),))  # fmt: skip
+        cancel = threading.Event()
+
+        def forms_where(_self, _tab, _cancel, **_k):
+            cancel.set()  # the client cancels while the page is read
+            return ["realm-1"]
+
+        with mock.patch.object(tools.Bridge, "_forms_where", forms_where):
+            bridge.call("click", {"tab": "t1", "element": "e1"}, cancel)
+        self.assertEqual((done.count("drop"), page["held"]), (0, 1))
+        self.assertEqual(approver.asked, [])
+
+    def test_a_links_host_is_not_looked_up_when_a_block_before_it_refuses_the_call(self):
+        # navigate blocked, or submit_forms for a submit button with that link: refused before its host is looked up.
+        for grants, info, looked in (
+            ((("navigate", "block"),), self.LINK, False),
+            ((("submit_forms", "block"),), {**self.SUBMIT, **self.LINK}, False),
+            ((), self.LINK, True),  # nothing blocked: looked up, as before, to know what it needs on this computer
+        ):
+            with self.subTest(grants=grants, info=info):
+                hosts: list[str] = []
+                approver = Approve("deny")
+                bridge, _done, _page = self.element_page("restricted", approver, info, grants=grants)
+                looks_up = mock.patch.object(policy, "_resolves_locally", side_effect=lambda h, seen=hosts: seen.append(h))
+                with looks_up:
+                    bridge.call("click", {"tab": "t1", "element": "e1"})
+                self.assertEqual("other.example" in hosts, looked, hosts)
+
+    def test_the_look_has_one_time_budget_for_all_the_documents(self):
+        # Documents that do not answer: the look stops at its budget, not after each of them, and the call goes on
+        # as before (asked, then settled after the question).
+        approver = Approve("once")
+        at_question: list[int] = []
+        approver.meanwhile = lambda: at_question.append(len(given))
+        given: list[float] = []
+
+        def in_sandbox(_self, _tab, _target, _fn, _cancel, timeout=5.0, until=None):
+            given.append(timeout)
+            time.sleep(min(timeout, 0.01))
+            raise tools.BidiError("timeout", "slow")
+
+        real_where = tools.Bridge._forms_where
+        bridge, _done, _page = self.element_page("restricted", approver, {"connected": True})
+        with (
+            mock.patch.object(tools.Bridge, "_forms_where", real_where),
+            mock.patch.object(tools.Bridge, "_frames", return_value=[f"f{i}" for i in range(tools.FORMS_FRAMES)]),
+            mock.patch.object(tools.Bridge, "_in_sandbox", in_sandbox),
+            mock.patch.object(tools, "LOOK_SECONDS", 0.05),
+        ):
+            result = bridge.call("click", {"tab": "t1", "element": "e1"})
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(approver.asked, [("interact", "https://example.org")])
+        looked = given[: at_question[0]]
+        self.assertLess(len(looked), tools.FORMS_FRAMES)
+        self.assertTrue(all(timeout <= 0.05 for timeout in looked), looked)
 
     def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
         agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])
@@ -2782,7 +2910,7 @@ class OpenProfileTest(Home):
                 at_question: list[int] = []
                 approver.meanwhile = lambda seen=commands, at=at_question: at.append(len(seen))
                 with mock.patch.object(tools.Bridge, "_forms_where", return_value=[]) as where:
-                    where.side_effect = lambda *_a, seen=commands: seen.append("held?") or []
+                    where.side_effect = lambda *_a, seen=commands, **_k: seen.append("held?") or []
                     bridge.call("click", {"tab": "w1", "element": "e1"})
                 self.assertEqual(approver.asked[0], ("authenticated_sessions", "https://mail.example"))
                 self.assertFalse({"look", "held?"} & set(commands[: at_question[0]]), commands)
