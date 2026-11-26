@@ -308,6 +308,17 @@ class AssistantUiTest(unittest.TestCase):
     def assistant_agent(self) -> str:
         return chrome_async(self.m, f"return (await {AI}.assistantState(window)).agent.id;")["ok"]
 
+    def grant(self, agent: str, capability: str, mode: str) -> None:
+        """Set one of the agent's permissions for this test only: a grant or its cleanup that fails fails the test, so a
+        permission left behind cannot change what a later test sees (#778)."""
+
+        def change(op: str, details: dict) -> None:
+            result = chrome_async(self.m, f"return await {AI}.change(args[0], args[1], args[2]);", [agent, op, details])
+            self.assertNotIn("error", result, f"{op} {capability}")
+
+        change("grant", {"capability": capability, "mode": mode})
+        self.addCleanup(change, "clear-grant", {"capability": capability})
+
     # -- settings and the module ------------------------------------------------------------
 
     def test_01_settings_store_the_key_in_the_keyring_only(self):
@@ -988,21 +999,10 @@ class AssistantUiTest(unittest.TestCase):
     def test_16_a_stopped_task_waiting_for_permission_ends_and_its_request_goes(self):
         self.close_other_tabs()
         agent = self.assistant_agent()
-        chrome_async(self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'navigate', mode: 'ask'}});", [agent])
-        self.addCleanup(
-            chrome_async, self.m, f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'navigate'}});", [agent]
-        )
+        self.grant(agent, "navigate", "ask")
         # A name that does not resolve counts as local: with local_resources blocked the call would be refused before
         # navigate is asked (#730, #737), so it asks too, after navigate, as in test_assistant_stream's twin (#746).
-        chrome_async(
-            self.m, f"return await {AI}.change(args[0], 'grant', {{capability: 'local_resources', mode: 'ask'}});", [agent]
-        )
-        self.addCleanup(
-            chrome_async,
-            self.m,
-            f"return await {AI}.change(args[0], 'clear-grant', {{capability: 'local_resources'}});",
-            [agent],
-        )
+        self.grant(agent, "local_resources", "ask")
         call = {"id": "c1", "type": "function",
                 "function": {"name": "tab_new", "arguments": json.dumps({"url": "https://example.invalid/"})}}  # fmt: skip
         self.provider.replies.append({"choices": [{"message": {"content": None, "tool_calls": [call]}}]})
