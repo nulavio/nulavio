@@ -499,9 +499,14 @@ class PhoneUnlock:
             signature = b64d(response.get("sig", ""))
         except (TypeError, ValueError):
             raise ProtocolError("bad-signature") from None
-        if not isinstance(payload, dict) or not sodium.verify(
-            psig_pk, response_signing_input(pending.request_hash, payload), signature
-        ):
+        if not isinstance(payload, dict):
+            raise ProtocolError("bad-signature")
+        try:
+            signed = response_signing_input(pending.request_hash, payload)
+        except RecursionError:
+            # Python 3.11's encoder gives up one level before its decoder: a box the link accepted (#755).
+            raise ProtocolError("bad-signature") from None
+        if not sodium.verify(psig_pk, signed, signature):
             raise ProtocolError("bad-signature")  # not from the phone: keep waiting for the real answer
         if refused:
             self.cancel(req_id)
