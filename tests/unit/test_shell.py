@@ -774,9 +774,50 @@ class LocaleKeysTest(unittest.TestCase):
                 self.assertEqual(sorted({key for key in keys if keys.count(key) > 1}), [])
 
 
+def call_arguments(text: str, start: int) -> str:
+    """The arguments of the call whose `(` ends just before `start`, up to its own `)`: nested calls,
+    objects and brackets included, and a bracket inside a string literal, a comment or a regex literal
+    not counted. A `/` after an operator or an opening bracket starts a regex literal, otherwise it divides."""
+    depth, quote, index = 1, None, start
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == "\\":
+                index += 1
+            elif char == quote:
+                quote = None
+        elif char in "\"'`":
+            quote = char
+        elif text.startswith("//", index):
+            index = text.find("\n", index)
+            if index < 0:
+                break
+        elif text.startswith("/*", index):
+            index = text.find("*/", index + 2) + 1
+            if index <= 0:
+                break
+        elif char == "/" and (text[start:index].rstrip()[-1:] or "(") in "([{,;:=!&|?+-*%<>~^":
+            klass, index = False, index + 1
+            while index < len(text) and (klass or text[index] != "/"):
+                if text[index] == "\\":
+                    index += 1
+                elif text[index] in "[]":
+                    klass = text[index] == "["
+                index += 1
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index]
+        index += 1
+    return text[start:]
+
+
 class LastTabCloseTest(unittest.TestCase):
-    """#700: Close and Cancel on a page that is its window's only tab. The engine refuses `tabs.update` to an
-    about: address from an extension page, so the button did nothing; one function closes every such page."""
+    """#700, #720: Close, Cancel and "Don't open" on a page that is its window's only tab. The engine refuses
+    `tabs.update` to an about: address from an extension page, so the button did nothing; removing the tab
+    closed the window. One function closes every such page."""
 
     PAGES = (
         "ai/request.js",
@@ -785,15 +826,39 @@ class LastTabCloseTest(unittest.TestCase):
         "guard/review.js",
         "warning/warning.js",
         "passwords/lookalike.js",
+        "routing/page.js",
     )
+    ABOUT = r"""["'`]about:"""
+
+    def test_the_scan_reads_the_whole_call(self):
+        missed = 'tabs.update(Number(id), { url: "about:newtab" });'
+        self.assertRegex(call_arguments(missed, missed.index("(") + 1), self.ABOUT)
+        quoted = 'tabs.update(tab.id, { url: ")" + "about:blank" }); other("about:x");'
+        self.assertEqual(call_arguments(quoted, quoted.index("(") + 1), 'tab.id, { url: ")" + "about:blank" }')
+        # A comment or a regex literal is skipped whole: a bracket or a quote in it is not counted (OpenCodeReview, #735).
+        for early in (
+            'tabs.update(tab.id, /* ) */ { url: "about:newtab" });',
+            'tabs.update(tab.id, // )\n  { url: "about:newtab" });',
+            'tabs.update(tab.id, { url: s.replace(/[)]/, "") + "about:blank" });',
+            'tabs.update(tab.id, { url: s.replace(/\\)/g, "") + "about:blank" });',
+        ):
+            with self.subTest(early=early):
+                self.assertRegex(call_arguments(early, early.index("(") + 1), self.ABOUT)
+        for late in (
+            'tabs.update(tab.id, { url: web }); // (it\'s a web page)\nother("about:x");',
+            'tabs.update(tab.id, /* ( */ { url: web }); other("about:x");',
+            'tabs.update(tab.id, { url: web.replace(/[(]/, "") }); other("about:x");',
+            'tabs.update(tab.id, { url: n / 2 }); other("about:x");',
+        ):
+            with self.subTest(late=late):
+                self.assertNotRegex(call_arguments(late, late.index("(") + 1), self.ABOUT)
 
     def test_no_shell_script_loads_an_about_address_into_a_tab(self):
         for script in sorted(p for p in SHELL.rglob("*") if p.suffix in (".js", ".mjs")):
             text = script.read_text(encoding="utf-8")
             for call in re.finditer(r"tabs\.update\(", text):
-                arguments = text[call.end() : text.find(")", call.end())]
                 with self.subTest(script=str(script.relative_to(SHELL))):
-                    self.assertNotRegex(arguments, r"""["'`]about:""")
+                    self.assertNotRegex(call_arguments(text, call.end()), self.ABOUT)
 
     def test_every_page_with_close_or_cancel_uses_the_one_function(self):
         for page in self.PAGES:
@@ -810,8 +875,31 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertLess(body.index("browser.tabs.create({ windowId: tab.windowId })"), body.index("browser.tabs.remove(tab.id)"))
         self.assertIn('failed(t("tabCloseFailed"))', body.split("catch", 1)[1])
         self.assertNotIn("about:", body)
+        # Only visible tabs count, as in the engine's own last-tab check (#720).
+        self.assertIn("browser.tabs.query({ windowId: tab.windowId, hidden: false })", body)
+        # A second click while the tab closes does nothing; a failure lets the page try again.
+        self.assertLess(body.index("if (closing) {"), body.index("browser.tabs.getCurrent()"))
+        self.assertLess(body.index("closing = true;"), body.index("try {"))
+        self.assertIn("closing = false;", body.split("catch", 1)[1])
         for name in ("en", "pt_BR"):
             self.assertIn("tabCloseFailed", locale(name))
+
+    def test_a_held_link_page_that_could_not_close_never_sends_the_link_twice(self):
+        # "Open in …", "Try again" and "Unlock and open" send the link, then close the tab. When only the close
+        # fails, the buttons that send it stay off for good; "Don't open" (which only closes) comes back.
+        text = (SHELL / "routing" / "page.js").read_text(encoding="utf-8")
+        sends = [m.start() for m in re.finditer(r"await (?:routing\.openIn|browser\.nulavioVault\.openUnlockPage)\(", text)]
+        self.assertEqual(len(sends), 3)
+        for start in sends:
+            after = text[start:]
+            with self.subTest(call=after[: after.index("(")]):
+                self.assertLess(after.index("sent = true;"), after.index("await closeThisTab();"))
+                self.assertLess(after.index(";"), after.index("sent = true;"))  # the next statement
+        enable = text[text.index("function enableActions(") :]
+        self.assertIn('b.disabled = !enabled || (sent && !("close" in b.dataset));', enable[: enable.index("\n}\n")])
+        dont_open = r'button\(t\("routingDontOpen"\), "button--quiet", closeThisTab\);\n\s+dontOpen\.dataset\.close = "";'
+        self.assertRegex(text, dont_open)
+        self.assertEqual(text.count("dataset.close"), 1)
 
 
 class PasswordsTest(unittest.TestCase):
