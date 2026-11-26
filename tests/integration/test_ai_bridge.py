@@ -29,6 +29,7 @@ from mcp_client import McpClient
 from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
+from nulavio_launcher import guard
 from nulavio_launcher.ai import audit, policy, registry, tools, workspace
 from nulavio_launcher.ai.bidi import Bidi, script_result
 from nulavio_launcher.vault import sodium, storage
@@ -339,6 +340,13 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(c.call("evaluate", tab=own["tab"], expression="document.cookie")["structuredContent"]["value"], "")
         c.close()
         self.assertFalse((work / "user.js").exists() and "nulavio-ai-temporary" in (work / "user.js").read_text())
+        # #639: the engine saved the temporary lines in prefs.js as it closed; they went with the session, so the
+        # profile starts again through `nulavio run` (no critical Guard finding) and its windows are ordinary ones.
+        saved = (work / "prefs.js").read_text(encoding="utf-8")
+        self.assertIn("// Mozilla User Preferences", saved)  # written by the engine, not only the lines seeded above
+        self.assertIn('user_pref("termsofuse.acceptedVersion", 4);', saved)
+        self.assertEqual(sorted(name for name in workspace.TEMPORARY_PREFS if f'"{name}"' in saved), [])
+        self.assertEqual([f.pref for f in guard.audit(work) if f.severity == "critical"], [])
 
     def test_18_profiles_the_agent_may_not_use(self):
         agent, env = self.agent("full_control")

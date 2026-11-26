@@ -4009,6 +4009,76 @@ class WorkspaceTest(Home):
         target._remove_temporary()
         self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
 
+    # What the engine leaves in prefs.js after a session: it loads user.js as user values and saves them (#639).
+    ENGINE_PREFS = (
+        "// Mozilla User Preferences\n"
+        "\n"
+        'user_pref("browser.startup.page", 3);\n'
+        'user_pref("nulavio.ai.target", "profile");\n'
+        'user_pref("nulavio.ai.target.label", "Trabalho \\"casa\\" \\u00e7");\n'
+        'user_pref("nulavio.ai.workspace", "ag-1:4242");\n'
+        'user_pref("privacy.sanitize.pending", "[]");\n'
+        'user_pref("remote.prefs.recommended", false);\n'
+    )
+    KEPT_PREFS = (
+        '// Mozilla User Preferences\n\nuser_pref("browser.startup.page", 3);\nuser_pref("privacy.sanitize.pending", "[]");\n'
+    )
+
+    def test_a_session_leaves_none_of_its_prefs_in_prefs_js(self):
+        """#639: the four values the engine saved from the temporary lines go from prefs.js when the session ends, so
+        the Guard no longer finds remote.prefs.recommended and `nulavio run` starts the profile again."""
+        from nulavio_launcher import guard
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")  # the engine, on its way out
+        self.assertIn("remote.prefs.recommended", [f.pref for f in guard.audit(folder) if f.severity == "critical"])
+        target._remove_temporary()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        self.assertEqual((folder / "prefs.js").stat().st_mode & 0o777, 0o600)
+        self.assertFalse((folder / "user.js").exists())
+        self.assertEqual([f.pref for f in guard.audit(folder) if f.severity == "critical"], [])
+
+    def test_the_next_session_clears_what_a_killed_one_left(self):
+        """A bridge killed mid-session leaves the lines; the next session in that profile removes them, from user.js
+        and prefs.js, before it writes its own."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")._write_prefs()  # killed after this
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        target = ProfileTarget("ag-2", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        self.assertEqual((folder / "user.js").read_text().count("nulavio-ai-temporary"), 4)
+        self.assertIn(f'"ag-2:{os.getpid()}"', (folder / "user.js").read_text())
+
+    def test_prefs_js_is_left_alone_when_there_is_nothing_to_remove(self):
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._remove_temporary()
+        self.assertFalse((folder / "prefs.js").exists())  # none is made
+        (folder / "prefs.js").write_text(self.KEPT_PREFS, encoding="utf-8")
+        os.utime(folder / "prefs.js", (1, 1))
+        target._remove_temporary()
+        self.assertEqual((folder / "prefs.js").stat().st_mtime, 1)  # not rewritten
+
+    def test_a_prefs_js_link_is_not_followed(self):
+        """A prefs.js that is a link is neither read nor replaced, and the session still ends."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        elsewhere = self.home / "elsewhere.js"
+        elsewhere.write_text(self.ENGINE_PREFS, encoding="utf-8")
+        (folder / "prefs.js").symlink_to(elsewhere)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        target.stop()
+        self.assertTrue((folder / "prefs.js").is_symlink())
+        self.assertEqual(elsewhere.read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertFalse((folder / "user.js").exists())
+
     def test_the_bridge_drives_only_the_nulavio_build(self):
         # The band and lock of an agent's window, the forms guard and Nulavio's pages refusing permission requests
         # live in the Nulavio build: another browser (the distribution's Firefox) is refused before the profile is

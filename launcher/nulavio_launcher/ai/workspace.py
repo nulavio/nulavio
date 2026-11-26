@@ -240,6 +240,10 @@ def die_with_parent() -> list[str]:
 
 
 TEMPORARY = "// nulavio-ai-temporary"
+# The prefs a ProfileTarget writes as TEMPORARY lines in a user's profile. The engine saves them in prefs.js too (#639):
+# remote.prefs.recommended there is a critical Guard finding (`nulavio run` refuses to start the profile), and the Shell
+# reads the nulavio.ai.* ones as "an agent drives this window".
+TEMPORARY_PREFS = frozenset({"remote.prefs.recommended", "nulavio.ai.workspace", "nulavio.ai.target", "nulavio.ai.target.label"})
 
 
 class TargetError(WorkspaceError):
@@ -253,10 +257,13 @@ class ProfileTarget(Workspace):
 
     It opens in its own engine instance only while it is not open elsewhere and
     not locked: an agent never gets a profile's keys, and never takes over a
-    window the user is using. Temporary lines go into its user.js (no
+    window the user is using. Four temporary lines go into its user.js (no
     remote-agent test preferences; this window is driven by an agent, and it is
-    the user's profile by this name) and are removed when the agent's session
-    ends.
+    the user's profile by this name; TEMPORARY_PREFS). The engine loads them as
+    user values and saves them in prefs.js, so when the agent's session ends
+    they are removed from both files once the engine has exited (#639). A bridge
+    that is killed leaves them in both until the next agent session in that
+    profile, which removes them before it writes its own (R36).
     """
 
     def __init__(self, agent_id: str, label: str, path: Path, *, downloads_dir: Path, headless: bool = False, engine=None):
@@ -274,6 +281,7 @@ class ProfileTarget(Workspace):
         self.profile_dir = Path(path)
         self.downloads_dir = downloads_dir
         self.uploads_dir = None
+        self.wrote_prefs = False  # this target put its lines in the profile: stop() takes them out of prefs.js too
 
     def check(self) -> None:
         from ..profile import Profile
@@ -292,7 +300,8 @@ class ProfileTarget(Workspace):
 
     def _write_prefs(self) -> None:
         user_js = self.profile_dir / "user.js"
-        self._remove_temporary()
+        self._remove_temporary()  # after check(): the profile is not open, so what a killed session left goes too
+        self.wrote_prefs = True
         lines = [
             f'user_pref("remote.prefs.recommended", false); {TEMPORARY}',
             f'user_pref("nulavio.ai.workspace", "{self.marker()}"); {TEMPORARY}',
@@ -305,16 +314,34 @@ class ProfileTarget(Workspace):
             existing += "\n"
         paths.write_private_file(user_js, existing + "\n".join(lines) + "\n")
 
-    def _remove_temporary(self) -> None:
+    def _remove_temporary(self, *, saved: bool = True) -> None:
+        """The temporary lines out of user.js and, with `saved`, the values the engine saved from them out of prefs.js.
+
+        Only while no engine uses the profile: the engine writes prefs.js as it exits and would put them back."""
         (self.profile_dir / GUARD_READY).unlink(missing_ok=True)
         user_js = self.profile_dir / "user.js"
-        if not user_js.exists():
-            return
-        kept = [line for line in user_js.read_text(encoding="utf-8").splitlines() if TEMPORARY not in line]
-        if kept:
-            paths.write_private_file(user_js, "\n".join(kept) + "\n")
-        else:
-            user_js.unlink()
+        if user_js.exists():
+            kept = [line for line in user_js.read_text(encoding="utf-8").splitlines() if TEMPORARY not in line]
+            if kept:
+                paths.write_private_file(user_js, "\n".join(kept) + "\n")
+            else:
+                user_js.unlink()
+        if saved:
+            self._remove_saved()
+
+    def _remove_saved(self) -> None:
+        """The lines of prefs.js that set one of TEMPORARY_PREFS; every other line stays as the engine wrote it."""
+        prefs_js = self.profile_dir / "prefs.js"
+        if profile.Profile(name=self.label, path=self.profile_dir).running_pid():
+            return  # opened again meanwhile: that engine owns prefs.js now, and the next agent session clears it
+        try:
+            data = paths.read_private_file(prefs_js)
+        except (FileNotFoundError, paths.UnsafePathError):
+            return  # none, or a link or a file not the user's: never followed or replaced (I9)
+        lines = data.splitlines(keepends=True)
+        kept = [line for line in lines if not _sets_temporary(line)]
+        if len(kept) != len(lines):
+            paths.write_private_file(prefs_js, b"".join(kept))
 
     def start(self, timeout: float = 60.0) -> Bidi:
         if self.bidi is not None:
@@ -343,5 +370,13 @@ class ProfileTarget(Workspace):
             yield
 
     def stop(self) -> None:
-        super().stop()
-        self._remove_temporary()
+        super().stop()  # the engine has exited (or was never started): prefs.js is as it left it
+        try:
+            self._remove_temporary(saved=self.wrote_prefs)
+        except (OSError, paths.UnsafePathError):
+            pass  # the next agent session in this profile clears them (R36); the Bridge still closes its other engines
+        self.wrote_prefs = False
+
+
+def _sets_temporary(line: bytes) -> bool:
+    return prefs.line_pref_name(line.decode("utf-8", errors="replace").rstrip("\r\n")) in TEMPORARY_PREFS
