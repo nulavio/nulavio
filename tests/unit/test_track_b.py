@@ -830,18 +830,90 @@ class PackagingTest(unittest.TestCase):
         )
         # An image that already has Nulavio's APT list fails the probe, instead of the list being taken for a missing
         # repository, then overwritten and removed (OCR on #751).
-        guard = '[ ! -e "$list" ] || fail "$list is there before the checks'
+        guard = 'if [ -n "$deb" ] && { [ -e "$list" ] || [ -L "$list" ]; }; then'
         self.assertIn(guard, probe)
         self.assertLess(probe.index(guard), probe.index("if /usr/libexec/nulavio/update-nulavio >/tmp/update.out"))
         # Straight to the refusing address, so a proxy's 403 cannot stand in for the failure, and in English for the grep.
-        self.assertIn("printf 'Acquire::http::Proxy::127.0.0.1 \"DIRECT\";\\n' >/tmp/direct.conf", probe)
-        self.assertIn("if APT_CONFIG=/tmp/direct.conf LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out", probe)
+        self.assertIn('printf \'Acquire::http::Proxy::127.0.0.1 "DIRECT";\\n\' >"$conf/direct.conf"', probe)
+        self.assertIn('if APT_CONFIG="$conf/direct.conf" LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out', probe)
         self.assertNotRegex(update, r"(?m)^[^#]*\b(curl|wget)\b")
         for weaker in ("gpgcheck", "allowerasing", "AllowUnauthenticated", "allow-unauthenticated",
                        "allow-downgrades", "force-yes", "trusted=yes"):  # fmt: skip
             self.assertNotIn(weaker, " ".join(commands))
         timer_fields = dict(line.split("=", 1) for line in timer.splitlines() if "=" in line and not line.startswith("#"))
         self.assertEqual((timer_fields["OnCalendar"], timer_fields["Persistent"]), ("*-*-* 00,12:00:00", "true"))
+
+    def _run_updates_probe(self, *, rpm: bool, plant=None):
+        """Runs updates_probe.sh with /etc, /usr and /tmp moved under a temporary root and stub package tools, as the
+        package check containers would after a clean install; plant(root) adds what an image could already hold."""
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        root = tmp / "root"
+        text = (ROOT / "scripts" / "release" / "updates_probe.sh").read_text(encoding="utf-8")
+        probe = tmp / "updates_probe.sh"
+        probe.write_text(re.sub(r"(?<![\w.:/])/(etc|usr|tmp)/", lambda m: f"{root}/{m.group(1)}/", text), encoding="utf-8")
+        units = root / "usr/lib/systemd/system"
+        libexec = root / "usr/libexec/nulavio"
+        for d in (units / "timers.target.wants", libexec, root / "usr/share/polkit-1/actions", root / "usr/share/nulavio",
+                  root / "etc/nulavio", root / "etc/apt/sources.list.d", root / "tmp", tmp / "bin"):  # fmt: skip
+            d.mkdir(parents=True)
+        for f in (units / "nulavio-update.timer", units / "nulavio-update.service",
+                  root / "usr/share/polkit-1/actions/net.nulavio.automatic-updates.policy",
+                  root / "usr/share/nulavio/nulavio-packages.asc"):  # fmt: skip
+            f.write_text("x\n", encoding="utf-8")
+        (units / "timers.target.wants/nulavio-update.timer").symlink_to("../nulavio-update.timer")
+        flag = root / "etc/nulavio/automatic-updates"
+        listed = root / "etc/apt/sources.list.d/nulavio.sources"
+        scripts = {
+            libexec / "automatic-updates": f'case "$1" in on) : >"{flag}"; echo on;; off) rm -f "{flag}"; echo off;; esac\n',
+            # The fixed updater: no list, it refuses; a list, its refresh of 127.0.0.1:9 is refused and fails the run.
+            libexec / "update-nulavio": f'[ -f "{listed}" ] || {{ echo "missing" >&2; exit 1; }}\n'
+            'echo "E: Failed to fetch http://127.0.0.1:9/apt/dists/stable/InRelease  Could not connect to 127.0.0.1:9'
+            ' (127.0.0.1). - connect (111: Connection refused)"; exit 100\n',
+            tmp / "bin/rpm": "exit 0\n" if rpm else "exit 1\n",
+            tmp / "bin/dpkg-query": "echo 1.0\n",
+            tmp / "bin/systemd-analyze": "exit 0\n",
+        }
+        for path, body in scripts.items():
+            path.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+            path.chmod(0o755)
+        if plant:
+            plant(root)
+        shipped = [units / "nulavio-update.timer", units / "nulavio-update.service", units / "timers.target.wants",
+                   libexec, root / "usr/share/polkit-1", root / "usr/share/nulavio"]  # fmt: skip
+        remove = "rm -rf " + " ".join(f"'{p}'" for p in shipped)
+        env = {"PATH": f"{tmp / 'bin'}:/usr/bin:/bin", "TMPDIR": str(root / "tmp"), "LC_ALL": "C"}
+        return root, subprocess.run(["sh", str(probe), "sh", "-c", remove], env=env, capture_output=True, text=True)
+
+    def test_the_updates_probe_leaves_what_the_image_holds_alone(self):
+        """OCR round 3 on #751: the probe's APT-only steps stay on a .deb install, never write through a link the image
+        holds at Nulavio's list, and keep APT's configuration in a private directory, not at a fixed /tmp name."""
+        with self.subTest("a clean .deb install"):
+            root, done = self._run_updates_probe(rpm=False)
+            self.assertEqual(done.returncode, 0, done)
+            self.assertIn("or when the refresh of its index fails;", done.stdout)
+            self.assertEqual([p.name for p in (root / "tmp").iterdir()], ["update.out"])
+        with self.subTest("an APT list in a Fedora image"):  # an RPM install never reads it
+            listed = "etc/apt/sources.list.d/nulavio.sources"
+            root, done = self._run_updates_probe(rpm=True, plant=lambda r: (r / listed).write_text("x", encoding="utf-8"))
+            self.assertEqual(done.returncode, 0, done)
+            self.assertNotIn("refresh of its index", done.stdout)
+        with self.subTest("a dangling link at Nulavio's list"):  # refused, and nothing written where it points
+            root, done = self._run_updates_probe(
+                rpm=False, plant=lambda r: (r / "etc/apt/sources.list.d/nulavio.sources").symlink_to(r / "etc/x.sources")
+            )
+            self.assertEqual(done.returncode, 1, done)
+            self.assertIn("is there before the checks", done.stdout)
+            self.assertFalse((root / "etc/x.sources").exists())
+        with self.subTest("a link at the old fixed name /tmp/direct.conf"):  # not written through
+
+            def direct(r):
+                (r / "etc/sentinel").write_text("kept\n", encoding="utf-8")
+                (r / "tmp/direct.conf").symlink_to(r / "etc/sentinel")
+
+            root, done = self._run_updates_probe(rpm=False, plant=direct)
+            self.assertEqual(done.returncode, 0, done)
+            self.assertEqual((root / "etc/sentinel").read_text(encoding="utf-8"), "kept\n")
 
     def test_automatic_updates_on_fedora_take_signing_keys_only_from_the_packaged_key(self):
         """The unattended dnf run imports signing keys from the key file the RPM installed, never from the repository
