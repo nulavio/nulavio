@@ -174,6 +174,8 @@ class AI {
   // The assistant's context items, per window (UX5-B): what was read at "Incluir", kept in memory
   // only, until it is sent, removed, or the window closes. The panel gets sizes, never the text.
   #contexts = new WeakMap(); // window -> Map<chipId, {kind, tabId, url, title, text, chars, truncated}>
+  // How many times each window's items were taken (#678): an Include that began before a take keeps nothing.
+  #takes = new WeakMap(); // window -> count
   // Assistant runs (UX5-C2): runId -> {win, kind, owner, handle, state, sent, steps, cutBy}. Events go
   // only to the pages of the run's window (the panel there); a run never starts in a private window.
   #runs = new Map();
@@ -650,9 +652,14 @@ class AI {
       next message (the size shown is what goes: Q4). A later Send sends this copy, not the page then. */
   async assistantInclude(source, win) {
     this.#userWindow(win);
+    // A message that starts while this one reads takes the window's items: this page was not for it, nor for
+    // the next one, and no panel may be left to remove it (#678). It is kept only if no take came meanwhile.
+    const takes = this.#takes.get(win) ?? 0;
+    const current = () => (this.#takes.get(win) ?? 0) === takes || fail("page-changed");
     if (await this.workspaceAgent()) {
       fail("ai-workspace");
     }
+    current();
     if (source?.kind !== "page") {
       fail("bad-request");
     }
@@ -661,6 +668,7 @@ class AI {
     const extracted = await browser.browsingContext.currentWindowGlobal
       .getActor("PageExtractor")
       .getText({ sufficientLength: MAX_PAGE_CHARS + 1 });
+    current();
     this.#includedBrowser(source, win); // it navigated while being read: refuse rather than keep another page
     const [text, truncated] = cutCodePoints(String(extracted?.text ?? ""), MAX_PAGE_CHARS);
     const items = this.#contextOf(win);
@@ -689,6 +697,7 @@ class AI {
       the ones it names from what this returns, a Task or "Tentar de novo" takes none. The panel empties
       its own list at Send, so no copy stays here to come back in a later message, sent or refused. */
   #takeIncluded(win) {
+    this.#takes.set(win, (this.#takes.get(win) ?? 0) + 1); // an Include still reading keeps nothing either
     const context = this.#contextOf(win);
     const items = new Map(context);
     context.clear();
@@ -782,6 +791,7 @@ class AI {
   async assistantAsk(question, options, win) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
+      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
       fail("ai-workspace");
     }
     return this.#assistant(this.#askRequest(question, options, this.#takeIncluded(win), win), 180000);
@@ -835,9 +845,10 @@ class AI {
   async assistantStart(kind, details, win, owner = null) {
     this.#userWindow(win);
     if (await this.workspaceAgent()) {
+      this.#takeIncluded(win); // refused, and the items go all the same: the panel's list is empty (#678)
       fail("ai-workspace");
     }
-    // Before anything that can refuse the start: the panel's list is already empty (#678).
+    // Before anything else that can refuse the start: the panel's list is already empty (#678).
     const included = this.#takeIncluded(win);
     let request;
     let turn = null;

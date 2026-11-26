@@ -827,6 +827,7 @@ SHELL_CONTEXT = """
 const requests = [];
 const ends = [];
 let ids = 0;
+let workspace = ""; // nulavio.ai.workspace: an agent's id while the test says an agent drives the windows
 const tabs = new Map();
 const fakes = {
   PrivateBrowsingUtils: { isWindowPrivate: () => false, isBrowserPrivate: () => false },
@@ -844,7 +845,10 @@ const fakes = {
 globalThis.ChromeUtils = { defineESModuleGetters(lazy) { Object.assign(lazy, fakes); } };
 globalThis.Services = {
   env: { get: () => "" },
-  prefs: { getStringPref: (_name, value) => value, getIntPref: (_name, value) => value },
+  prefs: {
+    getStringPref: (name, value) => (name === "nulavio.ai.workspace" ? workspace : value),
+    getIntPref: (_name, value) => value,
+  },
   uuid: { generateUUID: () => `{00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}}` },
   dirsvc: { get: () => ({ path: "/profile" }) },
   obs: { notifyObservers() {} },
@@ -857,10 +861,10 @@ globalThis.PathUtils = { join: (...parts) => parts.join("/") };
 const { NulavioAI: ai } = await import(process.argv[1]);
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
-function show(win, url, text) {
+function show(win, url, text, read = async () => ({ text })) {
   const tab = win.gBrowser.selectedTab;
   tab.linkedBrowser = { currentURI: { spec: url }, contentTitle: text.split(" ")[0],
-    browsingContext: { currentWindowGlobal: { getActor: () => ({ getText: async () => ({ text }) }) } } };
+    browsingContext: { currentWindowGlobal: { getActor: () => ({ getText: read }) } } };
   return { kind: "page", tabId: tab.id, url };
 }
 function newWindow(url, text) {
@@ -914,6 +918,39 @@ const out = {};
   out.refused = await ai.assistantStart("ask", { retry: true, expected }, win).then(() => "started", e => e.code);
   out.refusedAfter = left(win);
 }
+{  // An AI Workspace refuses both entry points, and the items go all the same: the panel's list is empty too.
+  const [win, page] = newWindow("https://d.example/espaco", "Espaço texto");
+  const chip = await ai.assistantInclude(page, win);
+  workspace = "agente";
+  out.workspaceStart = await ai.assistantStart("ask", { question: "E?", chips: [chip.chipId], expected }, win)
+    .then(() => "started", e => e.code);
+  workspace = "";
+  out.workspaceStartAfter = left(win);
+  await ai.assistantInclude(page, win);
+  workspace = "agente";
+  out.workspaceAsk = await ai.assistantAsk("E?", { chips: [], expected }, win).then(() => "asked", e => e.code);
+  workspace = "";
+  out.workspaceAskAfter = left(win);
+}
+{  // An Include still reading when the message starts keeps nothing, even with no panel left to remove it.
+  const [win] = newWindow("https://e.example/lenta", "Lenta texto");
+  for (const kind of ["task", "ask"]) {
+    let read;
+    const reading = new Promise(resolve => { read = resolve; });
+    const late = ai.assistantInclude(show(win, "https://e.example/lenta", "Lenta texto", () => reading), win);
+    await settle();
+    const details = kind === "task" ? { task: "Abra algo", expected } : { question: "E?", chips: [], expected };
+    await ai.assistantStart(kind, details, win);
+    read({ text: "Lenta texto" });
+    out[`lateInclude_${kind}`] = await late.then(() => "kept", e => e.code);
+    out[`late_${kind}`] = left(win);
+    ends.at(-1)({ type: "done", answer: "Feito.", chars: 1, recipient: "Provedor", model: "modelo" });
+    await settle();
+  }
+  // Later Includes are kept as before.
+  await ai.assistantInclude(show(win, "https://e.example/lenta", "Lenta texto"), win);
+  out.lateNext = left(win);
+}
 console.log(JSON.stringify(out));
 """
 
@@ -923,11 +960,19 @@ class ShellContextTest(unittest.TestCase):
     """#678: an included page goes with one message at most. A Task, "Tentar de novo" and a refused start empty
     the window's items in the browser too, so nothing comes back in a later message unseen."""
 
+    _out = None
+
+    @classmethod
+    def _run(cls):
+        if cls._out is None:
+            module = (ROOT / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").as_uri()
+            done = subprocess.run(["node", "--input-type=module", "-e", SHELL_CONTEXT, module],
+                                  capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+            cls._out = json.loads(done.stdout)
+        return cls._out
+
     def test_no_included_item_outlives_a_task_a_retry_or_a_refused_start(self):
-        module = (ROOT / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").as_uri()
-        done = subprocess.run(["node", "--input-type=module", "-e", SHELL_CONTEXT, module],
-                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
-        out = json.loads(done.stdout)
+        out = self._run()
         self.assertEqual(out["taskBefore"], ["Tarefa"])  # the fakes work: the page was included
         self.assertEqual(out["taskRequest"]["op"], "task")
         self.assertNotIn("page", out["taskRequest"])
@@ -941,6 +986,21 @@ class ShellContextTest(unittest.TestCase):
         self.assertEqual(out["retryAfter"], [])
         self.assertEqual(out["refused"], "bad-request")
         self.assertEqual(out["refusedAfter"], [])
+
+    def test_an_ai_workspace_refusal_empties_the_items_too(self):
+        out = self._run()
+        self.assertEqual(out["workspaceStart"], "ai-workspace")
+        self.assertEqual(out["workspaceStartAfter"], [])
+        self.assertEqual(out["workspaceAsk"], "ai-workspace")
+        self.assertEqual(out["workspaceAskAfter"], [])
+
+    def test_an_include_that_ends_after_the_start_keeps_nothing(self):
+        out = self._run()
+        self.assertEqual(out["lateInclude_task"], "page-changed")  # refused: it was for no message
+        self.assertEqual(out["lateInclude_ask"], "page-changed")
+        self.assertEqual(out["late_task"], [])
+        self.assertEqual(out["late_ask"], [])
+        self.assertEqual(out["lateNext"], ["Lenta"])  # a later Include still counts
 
 
 if __name__ == "__main__":

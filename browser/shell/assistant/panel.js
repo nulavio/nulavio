@@ -302,6 +302,9 @@ async function includeCurrent() {
   try {
     chip = await ai.assistantInclude({ kind: "page", tabId: page.tabId, url: page.url });
   } catch (e) {
+    if (version !== contextVersion) {
+      return false; // a Send or a change came first: the refusal is not about this message either
+    }
     announce(errorText(e), "error");
     await refreshPage();
     return false;
