@@ -785,13 +785,15 @@ async function finishRun(result) {
     result = { ...result, steps }; // the timeline as it went, with what happened to each step
   }
   const task = kind === "task";
+  if (!result.cancelled && !task) {
+    // The question is in the conversation now; after an error or a stop it stays. Emptied before any await: an
+    // "@ia" draft written in while the conversation is on its way is the next question, not this one.
+    $("prompt").value = "";
+  }
   endRun();
   // The conversation first, so the panel is whole when it says the answer is ready.
   thread = await ai.assistantThread().catch(() => thread);
   if (!result.cancelled) {
-    if (!task) {
-      $("prompt").value = ""; // the question is in the conversation now; after an error or a stop it stays
-    }
     applyLaterDraft();
     showResult(result, task);
     renderThread();
@@ -870,6 +872,7 @@ async function send(question, { retry = false } = {}) {
     endRun();
     await showError(e, task);
     await refreshThread();
+    applyLaterDraft(); // an "@ia" draft that came while the start was on its way, as after a run's error
   }
 }
 

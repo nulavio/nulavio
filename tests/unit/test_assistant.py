@@ -1111,6 +1111,11 @@ let holdThread = false; // the same for the conversation's reply (assistantThrea
 const threadHeld = [];
 let holdPage = false; // and for the selected tab's (assistantPage)
 const pageHeld = [];
+let holdOffer = false; // and for an entry point's delivery (assistantTakeOffer)
+const offerHeld = [];
+let holdStart = false; // and for a start's answer (assistantStart), which refuses with `refuse` when set
+const startHeld = [];
+let refuse = null;
 const starts = [];
 const events = [];
 const noEvent = { addListener() {} };
@@ -1127,12 +1132,19 @@ globalThis.browser = {
     // The tab the items came from: the panel keeps them.
     assistantPage: () => (holdPage ? new Promise(resolve => pageHeld.push(() => resolve({ ...tab })))
       : Promise.resolve({ ...tab })),
-    assistantTakeOffer: async () => [offer, (offer = null)][0],
+    assistantTakeOffer() {
+      const delivery = offer;
+      offer = null;
+      return holdOffer ? new Promise(resolve => offerHeld.push(() => resolve(delivery))) : Promise.resolve(delivery);
+    },
     assistantRuns: async () => [],
-    assistantStart: async (kind, details) => {
+    assistantStart(kind, details) {
       starts.push({ kind, chips: details.chips ?? null });
-      kept = []; // every start empties the window's items (#678)
-      return { runId: `run-${starts.length}` };
+      kept = []; // every start empties the window's items (#678), refused or not
+      const runId = `run-${starts.length}`;
+      const code = refuse;
+      const answer = () => (code ? Promise.reject(new Error(code)) : Promise.resolve({ runId }));
+      return holdStart ? new Promise((resolve, reject) => startHeld.push(() => answer().then(resolve, reject))) : answer();
     },
     assistantAllow: async () => {},
     assistantRemove: async () => {},
@@ -1265,20 +1277,54 @@ $("prompt").value = "Pergunta nova";
 await release();
 out.draftReads = reads;
 out.draftPrompt = $("prompt").value;
-out.errors = announced.filter(([level]) => level === "error");
+out.errors = announced.filter(([level]) => level === "error"); // before the refused start below, which says one
+
+// An "@ia" draft delivered while an Ask ends, before the conversation's reply: the end empties the question it
+// sent, never the draft written since. The replies arrive in the order the panel asked for them.
+await send("Pergunta 9");
+offer = { draft: "Rascunho do ia" };
+holdOffer = true;
+hold = true;
+holdThread = true;
+await emit({ type: "offer" }); // its delivery is on its way while the run goes on
+await finish(); // the run ends; the conversation is asked for
+holdOffer = false;
+offerHeld.splice(0).forEach(answer => answer());
+await idle();
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await release();
+out.endDraftPrompt = $("prompt").value;
+
+// An "@ia" draft that came while a start was on its way, and the start is refused: the draft is written in, as
+// after a run that ends with an error, and does not wait for some later run.
+holdStart = true;
+refuse = "page-changed";
+await send("Pergunta 10");
+offer = { draft: "Outro rascunho" };
+await emit({ type: "offer" }); // the run has no id yet: the draft waits for its end
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle();
+refuse = null;
+out.refusedDraftPrompt = $("prompt").value;
 console.log(JSON.stringify(out));
 """
 
 
-def node_loads_js_modules() -> bool:
-    """Whether this node imports a `.js` file written as an ES module with no package.json saying so, as panel.js and
-    its lib/ files are. It needs module syntax detection (Node 22.7, 20.19); an older node fails on the first import."""
-    with tempfile.TemporaryDirectory() as tmp:
-        probe = Path(tmp) / "probe.js"
-        probe.write_text("export const ok = 1;\n")
-        done = subprocess.run(["node", "--input-type=module", "-e", "await import(process.argv[1]);", probe.as_uri()],
-                              capture_output=True, timeout=30, check=False)  # fmt: skip
-        return done.returncode == 0
+def shell_package(tmp: Path) -> Path:
+    """A copy of the Shell's panel files in a package that says they are ES modules, as the browser loads them. A
+    node without module syntax detection (before 22.7 and 20.19) reads a `.js` file with no package.json saying so
+    as CommonJS; with this one, every node the unit job may use imports panel.js and its lib/ files. Copied, not
+    linked: node looks for the package.json beside a file's real path."""
+    shell = ROOT / "browser" / "shell"
+    (tmp / "package.json").write_text('{"type": "module"}\n')
+    for part in ("assistant", "lib"):
+        shutil.copytree(shell / part, tmp / part)
+    (tmp / "modules").mkdir()
+    shutil.copy2(shell / "modules" / "NulavioAvatars.sys.mjs", tmp / "modules")  # ui.js imports it
+    return tmp / "assistant" / "panel.js"
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
@@ -1289,17 +1335,14 @@ class PanelChipsTest(unittest.TestCase):
     _out = None
 
     @classmethod
-    def setUpClass(cls):
-        # A clear failure, not a skip (I12): CI's node runs these tests, and a contributor's older node is told why.
-        if not node_loads_js_modules():
-            raise AssertionError("this node does not import panel.js: it needs module syntax detection (Node >= 22.7, 20.19)")
-
-    @classmethod
     def _run(cls):
         if cls._out is None:
-            panel = (ROOT / "browser" / "shell" / "assistant" / "panel.js").as_uri()
-            done = subprocess.run(["node", "--input-type=module", "-e", PANEL_CHIPS, panel],
-                                  capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+            with tempfile.TemporaryDirectory() as tmp:
+                panel = shell_package(Path(tmp)).as_uri()
+                done = subprocess.run(["node", "--input-type=module", "-e", PANEL_CHIPS, panel],
+                                      capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+            if done.returncode:
+                raise AssertionError(f"the panel script failed ({done.returncode}): {done.stderr[-2000:]}")
             cls._out = json.loads(done.stdout)
         return cls._out
 
@@ -1339,6 +1382,12 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["draftPrompt"], "Pergunta nova")
         self.assertEqual(out["draftLine"], "assistantSendLine|Provedor|modelo|111")  # 100 + "Texto do ia"
         self.assertEqual(out["draftReads"], 2)  # the list was read again: the case the review found
+
+    def test_the_end_of_an_ask_does_not_empty_a_draft_written_since(self):
+        self.assertEqual(self._run()["endDraftPrompt"], "Rascunho do ia")
+
+    def test_a_refused_start_writes_in_the_draft_that_waited_for_it(self):
+        self.assertEqual(self._run()["refusedDraftPrompt"], "Outro rascunho")
 
 
 if __name__ == "__main__":
