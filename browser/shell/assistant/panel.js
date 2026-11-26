@@ -811,7 +811,8 @@ async function send(question, { retry = false } = {}) {
   const items = task || retry ? [] : chips.map(c => c.chipId);
   const chars = retry ? Number($("retry").dataset.chars) : requestChars();
   ++contextVersion;
-  // Consent is per message: what was included goes with this one only (the browser drops it too).
+  // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
+  // The browser drops its copy too, whatever the start (#678).
   chips = [];
   $("drift").hidden = true;
   showContext();

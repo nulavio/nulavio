@@ -756,8 +756,14 @@ class AssistantUiTest(unittest.TestCase):
         self.wait_view(lambda v: v["state"] == "ready")
 
     def test_10_a_task_never_claims_more_than_it_knows(self):
+        self.addCleanup(self.close_other_tabs)
+        self.select_new_tab(self.server.url("/page/Antes"))
         self.show_sidebar()
-        self.wait_view(lambda v: v["state"] == "ready")
+        self.wait_view(lambda v: v["state"] == "ready" and v["offer"])
+        # A page included before switching to Task does not go with the task, nor stay for a later message (#678).
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
+        before = self.provider.count
         self.mode("task")
         self.addCleanup(self.mode, "ask")
         local = {
@@ -775,6 +781,8 @@ class AssistantUiTest(unittest.TestCase):
         self.assertEqual(view["level"], "error")
         self.assertTrue(view["activity"])
         self.assertNotIn("Nada foi alterado", view["status"])
+        self.assertNotIn("<<<PAGE", self.sent_since(before))
+        self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])  # no copy left (#678)
         # The tools end before an answer (as when the time limit stops them): never "nothing was changed".
         self.provider.delay = 5.0
         self.provider.replies.append({"choices": [{"message": {"content": "Feito."}}]})
@@ -1705,12 +1713,20 @@ class AssistantUiTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: not self.thread_view()["leave"], 10))
         hint = harness.wait_until(lambda: self.thread_view()["retry"], 10)
         announced = int(re.search(r"Reenvia ([\d.]+) caracteres", hint).group(1).replace(".", ""))
+        # The page included again before "Tentar de novo": the retry does not take it (#678).
+        self.wait_view(lambda v: v["offer"])
+        self.panel("document.getElementById('include-page').click();")
+        self.wait_view(lambda v: v["attached"])
         self.provider.replies.append({"choices": [{"message": {"content": "Sem a página."}}]})
         before = self.provider.count
         self.panel("document.getElementById('retry').click();")
         view = self.wait_view(lambda v: v["answered"] and self.provider.count == before + 1)
         sent = json.dumps(self.provider.requests[-1][2], ensure_ascii=False)
-        self.assertNotIn("<<<PAGE", sent)  # neither the failed turn's copy nor the earlier one
+        self.assertNotIn("<<<PAGE", sent)  # neither the failed turn's copy, the earlier one nor the one included now
+        # Nor does the browser keep it for a later message: the panel opened again shows no item (#678).
+        self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])
+        self.show_sidebar(reload=True)
+        self.assertIsNone(self.wait_view(lambda v: v["offer"])["attached"])
         self.assertIn("PERGUNTA-B?", sent)
         self.assertEqual(self.provider.chars[-1], announced)
         self.assertIn(" da conversa)", view["receipt"])  # the conversation went with it, and the receipt says so

@@ -821,5 +821,127 @@ class ShellAddressTest(unittest.TestCase):
                          ["https://docs.example:8443/doc/1", "http://127.0.0.1:5000/long-page"])  # fmt: skip
 
 
+# The browser side of the assistant (NulavioAI.sys.mjs) with fakes for the engine: a window with one tab, the
+# page text its extractor gives, and a tools stream whose requests are recorded and whose end the script decides.
+SHELL_CONTEXT = """
+const requests = [];
+const ends = [];
+let ids = 0;
+const tabs = new Map();
+const fakes = {
+  PrivateBrowsingUtils: { isWindowPrivate: () => false, isBrowserPrivate: () => false },
+  ExtensionParent: { apiManager: { global: { tabTracker: { getTab: id => tabs.get(id) ?? null, getId: tab => tab.id } } } },
+  callToolStream(_argv, request) {
+    requests.push(JSON.parse(JSON.stringify(request)));
+    let end;
+    const result = new Promise(resolve => { end = resolve; });
+    ends.push(end);
+    return { result, cancel() {}, holdIdle() {} };
+  },
+  setTimeout: () => 0,
+  stateDir: () => "/state",
+};
+globalThis.ChromeUtils = { defineESModuleGetters(lazy) { Object.assign(lazy, fakes); } };
+globalThis.Services = {
+  env: { get: () => "" },
+  prefs: { getStringPref: (_name, value) => value, getIntPref: (_name, value) => value },
+  uuid: { generateUUID: () => `{00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}}` },
+  dirsvc: { get: () => ({ path: "/profile" }) },
+  obs: { notifyObservers() {} },
+  focus: { activeWindow: null },
+};
+globalThis.Ci = { nsIFile: {}, nsITimer: { TYPE_REPEATING_SLACK: 1 } };
+globalThis.Cc = { "@mozilla.org/timer;1": { createInstance: () => ({ initWithCallback() {}, cancel() {} }) } };
+globalThis.IOUtils = { readJSON: () => Promise.reject(new Error("absent")), exists: async () => false };
+globalThis.PathUtils = { join: (...parts) => parts.join("/") };
+const { NulavioAI: ai } = await import(process.argv[1]);
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+function show(win, url, text) {
+  const tab = win.gBrowser.selectedTab;
+  tab.linkedBrowser = { currentURI: { spec: url }, contentTitle: text.split(" ")[0],
+    browsingContext: { currentWindowGlobal: { getActor: () => ({ getText: async () => ({ text }) }) } } };
+  return { kind: "page", tabId: tab.id, url };
+}
+function newWindow(url, text) {
+  const win = { closed: false, addEventListener() {}, removeEventListener() {} };
+  const tab = { id: tabs.size + 1, ownerGlobal: win };
+  tabs.set(tab.id, tab);
+  win.gBrowser = { selectedTab: tab };
+  return [win, show(win, url, text)];
+}
+const expected = { recipient: "Provedor", model: "modelo", chars: 1 };
+const left = win => ai.assistantChips(win).map(chip => chip.title);
+const last = () => requests.at(-1);
+const out = {};
+
+{  // A Task carries no included page, and the browser keeps none for later.
+  const [win, page] = newWindow("https://a.example/tarefa?t=1", "Tarefa texto");
+  await ai.assistantInclude(page, win);
+  out.taskBefore = left(win);
+  await ai.assistantStart("task", { task: "Abra algo", expected }, win);
+  out.taskRequest = last();
+  out.taskAfter = left(win);
+}
+{  // An Ask carries the item it names; one it does not name leaves too, unsent.
+  const [win, page] = newWindow("https://b.example/pergunta", "Pergunta texto");
+  const chip = await ai.assistantInclude(page, win);
+  await ai.assistantStart("ask", { question: "O que diz?", chips: [chip.chipId], expected }, win);
+  out.askPage = last().page;
+  out.askAfter = left(win);
+  ends.at(-1)({ type: "done", answer: "Diz algo.", chars: 1, recipient: "Provedor", model: "modelo" });
+  await settle();
+  await ai.assistantInclude(show(win, "https://b.example/outra", "Outra texto"), win);
+  await ai.assistantStart("ask", { question: "E agora?", chips: [], expected }, win);
+  out.unnamedPage = last().page;
+  out.unnamedAfter = left(win);
+}
+{  // "Tentar de novo" sends the failed turn's copy; a page included before it does not go and does not stay.
+  const [win, first] = newWindow("https://c.example/primeira", "Primeira texto");
+  const chip = await ai.assistantInclude(first, win);
+  await ai.assistantStart("ask", { question: "Resuma", chips: [chip.chipId], expected }, win);
+  ends.at(-1)({ type: "error", code: "timeout" });
+  await settle();
+  await ai.assistantInclude(show(win, "https://c.example/segunda", "Segunda texto"), win);
+  out.retryBefore = left(win);
+  await ai.assistantStart("ask", { retry: true, expected }, win);
+  out.retryPage = last().page;
+  out.retryAfter = left(win);
+  // A start that is refused (nothing to try again now) leaves nothing behind either.
+  ends.at(-1)({ type: "done", answer: "Resumo.", chars: 1, recipient: "Provedor", model: "modelo" });
+  await settle();
+  await ai.assistantInclude(show(win, "https://c.example/terceira", "Terceira texto"), win);
+  out.refused = await ai.assistantStart("ask", { retry: true, expected }, win).then(() => "started", e => e.code);
+  out.refusedAfter = left(win);
+}
+console.log(JSON.stringify(out));
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class ShellContextTest(unittest.TestCase):
+    """#678: an included page goes with one message at most. A Task, "Tentar de novo" and a refused start empty
+    the window's items in the browser too, so nothing comes back in a later message unseen."""
+
+    def test_no_included_item_outlives_a_task_a_retry_or_a_refused_start(self):
+        module = (ROOT / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").as_uri()
+        done = subprocess.run(["node", "--input-type=module", "-e", SHELL_CONTEXT, module],
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        out = json.loads(done.stdout)
+        self.assertEqual(out["taskBefore"], ["Tarefa"])  # the fakes work: the page was included
+        self.assertEqual(out["taskRequest"]["op"], "task")
+        self.assertNotIn("page", out["taskRequest"])
+        self.assertEqual(out["taskAfter"], [])
+        self.assertEqual(out["askPage"], {"url": "https://b.example/pergunta", "title": "Pergunta", "text": "Pergunta texto"})
+        self.assertEqual(out["askAfter"], [])
+        self.assertIsNone(out["unnamedPage"])
+        self.assertEqual(out["unnamedAfter"], [])
+        self.assertEqual(out["retryBefore"], ["Segunda"])
+        self.assertEqual(out["retryPage"], {"url": "https://c.example/primeira", "title": "Primeira", "text": "Primeira texto"})
+        self.assertEqual(out["retryAfter"], [])
+        self.assertEqual(out["refused"], "bad-request")
+        self.assertEqual(out["refusedAfter"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
