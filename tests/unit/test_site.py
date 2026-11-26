@@ -1415,8 +1415,10 @@ class DownloadPagesTest(unittest.TestCase):
                 # Also as dnf prints it, without spaces, and the red "Signing key not found" it shows first (#120).
                 self.assertIn(self.fpr, html)
                 self.assertIn("Signing key not found", html)
-                # The key from the release assets is checked against that fingerprint before import (audit R5).
-                self.assertLess(html.index("gpg --show-keys --with-fingerprint"), html.index("gpg --import"))
+                # The key from the release assets is checked against that fingerprint before import (audit R5),
+                # by the block itself, not only by the reader's eyes (#744).
+                self.assertLess(html.index("gpg --show-keys --with-colons"), html.index("gpg --import"))
+                self.assertLess(html.index(f'f == "{self.fpr}")'), html.index("gpg --import"))
                 self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
                 self.assertIn("159.0.1-0.1", html)
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
@@ -1501,21 +1503,43 @@ class DownloadPagesTest(unittest.TestCase):
             html = (built / page).read_text(encoding="utf-8")
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
             blocks.add(block)
+            before = primary_keys(env)
             ran = subprocess.run([shell], input=html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
+            keyrings[case, page, shell] = (before, primary_keys(env))
             return ran.stdout
 
+        def primary_keys(env: dict[str, str]) -> list[str]:
+            """The fingerprints of the primary keys in the reader's keyring, in order."""
+            listing = subprocess.run(["gpg", "--batch", "--with-colons", "--list-keys"], env=env,
+                                     capture_output=True, text=True).stdout  # fmt: skip
+            lines = listing.splitlines()
+            return [lines[i + 1].split(":")[9] for i, line in enumerate(lines)
+                    if line.startswith("pub:") and i + 1 < len(lines) and lines[i + 1].startswith("fpr:")]  # fmt: skip
+
         blocks: set[str] = set()
+        keyrings: dict[tuple[str, str, str], tuple[list[str], list[str]]] = {}
         # The block is pasted into bash, and into Fish where it is installed (test_the_manual_check_is_plain_commands).
         shells = ["bash", *(["fish"] if shutil.which("fish") else [])]
         for page, sh in itertools.product(build_site.DOWNLOAD_PAGES, shells):
             with self.subTest(page=page, shell=sh):
                 ours = self.tmp / "gnupg"
                 self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored, shell=sh))
+                # The key file is imported once its fingerprint matched, and only then (#744).
+                self.assertEqual(keyrings["good", page, sh], ([], [self.fpr]))
                 # Signed by a key the reader already has: gpg says "Good signature", the list is still not ours.
                 self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other, shell=sh))
                 # The key file swapped for another one, with that key's signature.
                 self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other, shell=sh))
+                # #744: the swapped key is not imported, so the reader's keyring stays as it was: empty, ...
+                self.assertEqual(keyrings["swapped", page, sh], ([], []))
+                # ... or holding the release key already.
+                self.assertNotIn("nulavio.rpm", run(page, "swapped-with-key", other_home, other, keyring=self.armored,
+                                                    shell=sh))  # fmt: skip
+                self.assertEqual(keyrings["swapped-with-key", page, sh], ([self.fpr], [self.fpr]))
+                # #744: the release key with another key beside it in the file: the block stops before the import.
+                self.assertNotIn("nulavio.rpm", run(page, "bundled", ours, self.armored + other, shell=sh))
+                self.assertEqual(keyrings["bundled", page, sh], ([], []))
                 # The list changed after it was signed.
                 self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True, shell=sh))
                 # gpg found our valid signature but failed on another one, and exited non-zero.
