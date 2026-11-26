@@ -35,7 +35,10 @@ function loginManager({ origins = ["https://paypal.example"], primaryPassword = 
         store.prompts++;
         throw new Error("Primary password locked"); // the prompt, cancelled
       }
-      return store.origins.map(origin => ({ origin, username: "secret", password: "secret" }));
+      const logins = store.origins.map(origin => ({ origin, username: "secret", password: "secret" }));
+      store.onRead?.(); // what happens elsewhere while the read is on its way back
+      await flush();
+      return logins;
     },
   };
   return store;
@@ -59,6 +62,7 @@ globalThis.Services = {
     },
   },
   prefs: {
+    getIntPref: (name, fallback) => (prefs.has(name) ? prefs.get(name) : fallback),
     getStringPref: (name, fallback) => (prefs.has(name) ? prefs.get(name) : fallback),
     setStringPref: (name, value) => prefs.set(name, value),
     clearUserPref: name => prefs.delete(name),
@@ -76,6 +80,18 @@ async function module(store) {
 }
 
 const LOOKALIKE = "https://paypa1.example/login";
+const WARNING = "moz-extension://shell/passwords/lookalike.html?url=https%3A%2F%2Fpaypa1.example%2F&in=frame";
+
+/** A tab's browser at entry `index` of its session history, showing `address`. */
+function tab(index, address) {
+  return at({ browsingContext: { sessionHistory: { index } } }, index, address);
+}
+
+function at(browser, index, address) {
+  browser.browsingContext.sessionHistory.index = index;
+  browser.currentURI = { spec: address, specIgnoringRef: address.split("#")[0] };
+  return browser;
+}
 
 async function check(passwords) {
   try {
@@ -112,6 +128,81 @@ const cases = {
     store.entered = true;
     const entered = await check(passwords);
     return result(store, { locked, entered });
+  },
+  // "Continue" that goes back to the tab's page: only from the warning the engine's actor opened in that tab, while
+  // the tab still shows that entry of its history (the index it got, and its address without a fragment).
+  dismiss_back: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const remembered = () => passwords.listConfirmed().length;
+    const dismiss = browser =>
+      passwords
+        .dismissFor(LOOKALIKE, { back: true, browser })
+        .then(answer => ({ ...answer, remembered: remembered() }))
+        .catch(e => ({ threw: e.code, remembered: remembered() }));
+    const answers = {};
+    answers.unbound = await dismiss(tab(1, WARNING)); // a warning another extension opened
+    answers.none = await dismiss(null);
+    const bound = tab(3, WARNING);
+    passwords.bindWarning(bound, { index: 3, url: WARNING });
+    const can = {
+      bound: passwords.canGoBack(bound),
+      fragment: passwords.canGoBack(at(bound, 4, `${WARNING}#x`)), // a same-document entry after the warning
+      other_entry: passwords.canGoBack(at(bound, 2, WARNING)),
+      other_page: passwords.canGoBack(at(bound, 3, "https://paypal.example/")),
+      unbound: passwords.canGoBack(tab(3, WARNING)),
+      no_history: passwords.canGoBack({}),
+    };
+    answers.can = can;
+    answers.bound = await dismiss(at(bound, 3, WARNING)); // back at the warning's own entry
+    return result(store, answers);
+  },
+  // The tab leaves the warning while the saved logins are read: nothing is remembered.
+  dismiss_back_left_during_the_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const browser = tab(3, WARNING);
+    passwords.bindWarning(browser, { index: 3, url: WARNING });
+    store.onRead = () => at(browser, 4, "https://elsewhere.example/");
+    const answer = await passwords.dismissFor(LOOKALIKE, { back: true, browser }).catch(e => ({ threw: e.code }));
+    return result(store, { answer, remembered: passwords.listConfirmed().length });
+  },
+  // Two checks at once (two frames of one tab) share one read of the saved logins.
+  concurrent_checks: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const [first, second] = await Promise.all([check(passwords), check(passwords)]);
+    return result(store, { first, second });
+  },
+  // The saved logins change during every read (a burst of changes): a check reads them at most 3 times and answers.
+  storage_changed_during_every_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    let changes = 0;
+    store.onRead = () => {
+      if (changes++ < 5) {
+        for (const fn of observers.get("passwordmgr-storage-changed") ?? []) {
+          fn();
+        }
+      }
+    };
+    const first = await check(passwords);
+    return result(store, { first });
+  },
+  // A change to the saved logins while they are read: the next check reads them again.
+  storage_changed_during_the_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    store.onRead = () => {
+      store.onRead = null;
+      store.origins = [];
+      for (const fn of observers.get("passwordmgr-storage-changed") ?? []) {
+        fn();
+      }
+    };
+    const first = await check(passwords);
+    const after = await check(passwords);
+    return result(store, { first, after });
   },
   // "Continue anyway" while locked remembers nothing and asks nothing.
   locked_dismiss: async () => {

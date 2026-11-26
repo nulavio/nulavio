@@ -30,7 +30,7 @@ this.nulavioPasswords = class extends ExtensionAPI {
     }
   }
 
-  getAPI() {
+  getAPI(context) {
     const passwords = this.module();
     const call = fn => async (...args) => {
       try {
@@ -48,7 +48,8 @@ this.nulavioPasswords = class extends ExtensionAPI {
         state: call(() => passwords.state()),
         choose: call(key => passwords.choose(key)),
         check: call(url => passwords.checkLogin(url)),
-        dismiss: call(url => passwords.dismissFor(url)),
+        dismiss: call((url, back) => passwords.dismissFor(url, { back: Boolean(back), browser: context.xulBrowser })),
+        canGoBack: call(() => passwords.canGoBack(context.xulBrowser)),
       },
     };
   }
