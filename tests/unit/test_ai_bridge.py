@@ -2247,6 +2247,21 @@ class OpenProfileTest(Home):
                         reason = "grant" if grants else "preset:autonomous"
                         self.assertEqual((entry["capability"], entry["reason"], entry["target"]),
                                          (capability, reason, policy.origin(url)))  # fmt: skip
+        # A profile's tab now outside the agent's sites (a redirect or the page took it there): refused whatever the
+        # answer, as out of scope, so nothing is asked first either.
+        for tool in self.HERE:
+            with self.subTest(case="outside its sites", tool=tool):
+                agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="session",
+                                                                         url="https://elsewhere.example/")  # fmt: skip
+                registry.set_domains(agent["id"], ["mail.example"])
+                self.with_workspace(bridge)
+                result = bridge.call(tool, self.arguments(tools.BY_NAME[tool]))
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(approver.asked, [])
+                self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+                self.assertFalse(self.ACTS & set(commands), commands)
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://elsewhere.example"))
         # Navigating from a profile's tab to an address whose permission is blocked: Assisted asked about the
         # signed-in session for the site the tab was at, then refused local_resources.
         agent, bridge, approver, _target, commands = self.opened(level="assisted", answer="session")

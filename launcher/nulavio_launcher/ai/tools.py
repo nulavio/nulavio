@@ -494,21 +494,20 @@ class Bridge:
         would come before it, that one is refused now, through require() (decide() refuses it without a question):
         asking first could only end in that refusal, and an answer "until the agent disconnects" would stay (#725,
         #730). Each is looked up with the scope require() gives decide(), so a session answer counts here as it does
-        there, and nothing that an answer could allow is refused. Without a question before it, the call goes on as
-        it did: what it checks then refuses it there, with the same activity record. A stop, a pause, a revocation or
-        an address outside the agent's sites refuses the call where decide() meets it, before any question, as before.
-        The activity record names the address the refusal would have come at."""
+        there, and nothing that an answer could allow is refused. An address outside the agent's sites is refused the
+        same way (decide() refuses it whatever the answer). Without a question before it, the call goes on as it did:
+        what it checks then refuses it there, with the same activity record. A stop, a pause or a revocation refuses
+        the call at its next check, before any question, as before. The activity record names the address the
+        refusal would have come at."""
         agent = self._agent()
         if agent is None or agent.get("revoked") or agent.get("paused") or registry.stopped():
             return  # require() refuses at once, as before
         at, asks = self._target, False
         for capability, url, place in needs:
             at = url or at
-            if not policy.in_scope(agent, policy.host_of(url)):
-                return  # decide() refuses this one before any question
             target, where = policy.origin(url), self._place() if place is None else place
             mode = policy.effective_mode(agent, capability, self.session_id, scope=(target, where))[0]
-            if mode == "block":
+            if mode == "block" or not policy.in_scope(agent, policy.host_of(url)):
                 if asks:
                     self._target = at
                     self.require(capability, url, checked=checked, place=place)  # refused by decide(), nothing asked
