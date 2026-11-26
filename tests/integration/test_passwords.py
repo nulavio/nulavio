@@ -204,11 +204,7 @@ class PasswordsTest(unittest.TestCase):
         )
         framed = "return document.documentElement.dataset.framed === 'yes';"
         self.assertTrue(harness.wait_until(lambda: self.m.execute(framed), 10), "the frame did not load")
-        self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
-        try:
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
-        finally:
-            self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+        self.click_frames_field()
 
     def warning_params(self) -> dict:
         return self.m.execute("return Object.fromEntries(new URLSearchParams(location.search));")
@@ -306,6 +302,48 @@ class PasswordsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url()[:200])
         self.assertTrue(harness.wait_until(lambda: self.m.execute("return document.body.dataset.state === 'ready';"), 10))
         self.assertEqual(self.m.execute("return document.getElementById('address').textContent;"), long)
+
+    def mark_page(self) -> None:
+        """Marks the tab's page: the same document, shown again from the back-forward cache, still has the mark."""
+        self.m.execute("document.documentElement.dataset.kept = 'yes';")
+
+    def back_from_warning_to(self, page: str) -> None:
+        """Back from the warning to `page`, as the person would."""
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        self.m.send("WebDriver:Back")
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == page, 10), self.m.current_url())
+        # Whether the engine showed the same document again from its back-forward cache or loaded the page again:
+        # either way the next use of the field is checked. Printed for the record of the run.
+        kept = self.m.execute("return document.documentElement.dataset.kept === 'yes';")
+        print(f"{self.id().rsplit('.', 1)[-1][:8]}: back-forward cache kept the page: {kept}", file=sys.stderr)
+
+    def click_frames_field(self) -> None:
+        """Clicks the password field (#password) of the tab's page's frame #f, as the person would."""
+        self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
+        try:
+            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        finally:
+            self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+
+    def test_01k_back_from_the_warning_to_the_page_warns_again_on_the_next_use_of_its_field(self):
+        page = self.fake + "/login"
+        self.m.navigate(page)
+        self.mark_page()
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.back_from_warning_to(page)
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
+        self.assertEqual(self.warning_params(), {"url": page})
+
+    def test_01l_back_from_a_frames_warning_to_the_page_warns_again_on_the_next_use_of_the_frames_field(self):
+        home = self.real + "/page/home?" + urllib.parse.urlencode({"frame": self.fake + "/login"})
+        self.m.navigate(home)  # its load waits for the frame's
+        self.mark_page()
+        self.click_frames_field()
+        self.back_from_warning_to(home)
+        self.click_frames_field()
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
+        self.assertEqual(self.warning_params(), {"url": self.fake + "/", "in": "frame"})
 
     def test_02_lookalike_site_shows_the_warning_and_continue_is_remembered(self):
         url = self.focus_password(self.fake)
