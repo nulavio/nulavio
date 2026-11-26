@@ -119,10 +119,40 @@ class Container:
         """
         try:
             if self.exists() and self.mountpoint.is_dir() and not self.mounted():
-                os.chmod(self.mountpoint, LOCKED_MODE)
+                self._lock_bare_mountpoint()
         except OSError:
             pass
         self._clear_maintenance()
+
+    def _lock_bare_mountpoint(self) -> None:
+        """The profile's folder read-only (0500), through a handle on the folder itself and only when no volume is
+        mounted on it. Its path reaches the root of a volume mounted there, and gocryptfs keeps that root's mode as
+        the mode of P.vault/cipher: a chmod by path just after another request unlocked the profile would leave its
+        encrypted folder read-only, and every later unlock a profile the engine cannot write to (#620). With a volume
+        mounted, nothing is changed: mount() left the folder underneath it read-only."""
+        bare = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            if os.fstat(bare).st_dev == os.stat(self.mountpoint.parent).st_dev:
+                os.fchmod(bare, LOCKED_MODE)
+        finally:
+            os.close(bare)
+
+    def _restore_cipher_mode(self) -> None:
+        """P.vault/cipher back to 0700 when it is not. gocryptfs gives the volume's root the mode of that folder, and
+        two overlapping unlocks in earlier versions left it at 0500: a profile whose top folder takes no file, not
+        even the engine's lock (#620). Under the state lock, with nothing mounted; through a handle, never a link."""
+        try:
+            cipher = os.open(self.cipher, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        except OSError as exc:
+            raise StorageError("storage-failed", type(exc).__name__) from None
+        try:
+            if os.fstat(cipher).st_mode & 0o7777 != 0o700:
+                os.fchmod(cipher, 0o700)
+                log.event("vault.cipher-mode-restored")
+        except OSError as exc:
+            raise StorageError("storage-failed", type(exc).__name__) from None
+        finally:
+            os.close(cipher)
 
     def _clear_maintenance(self) -> None:
         """Unmount and remove what a change to the unlock methods left behind when its process was
@@ -176,10 +206,17 @@ class Container:
             raise StorageError("not-encrypted")
         if self.mounted():
             return
-        if any(self.mountpoint.iterdir()):
-            raise StorageError("mountpoint-not-empty", "plaintext files appeared in a locked profile")
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
+            # Checked again, and only now for files in the folder: another unlock of this profile (a second tab,
+            # the chooser, the phone, the command line) may have mounted it while this one waited for the lock.
+            # The profile is then open, which is what this request asked for; going on would fail on the mounted
+            # folder, or take the volume's own files for plaintext in a locked profile (#620).
+            if self.mounted():
+                log.event("vault.unlocked-meanwhile")
+                return
+            if any(self.mountpoint.iterdir()):
+                raise StorageError("mountpoint-not-empty", "plaintext files appeared in a locked profile")
             # A new key that was interrupted is finished or undone first (ADR 0015): never the old volume
             # opened while the new one waits to take its place. If it was finished, the key file changed.
             self._settle_new_key()
@@ -189,6 +226,7 @@ class Container:
                 # A change to the unlock methods finished while this waited for the lock: what was
                 # read is no longer the key file (checking it would look like a rollback).
                 raise StorageError("changed", "the profile's key file changed since it was read; try again")
+            self._restore_cipher_mode()
             # The mount point's mode is changed through a handle on the bare directory, taken before
             # anything is mounted there: never through the path, which would reach the root of a volume
             # mounted on it. fusermount needs it writable while it mounts; right after, it is read-only
@@ -539,7 +577,7 @@ class Container:
                         break
                 raise StorageError("busy", result.stderr.decode(errors="replace").strip()[:200])
             time.sleep(0.3)  # engine helper processes still closing files
-        os.chmod(self.mountpoint, LOCKED_MODE)
+        self._lock_bare_mountpoint()
 
     def destroy(self) -> None:
         """Delete the profile and its container (unmounted first)."""

@@ -385,6 +385,128 @@ class ContainerTest(StorageCase):
         self.assertEqual(storage.mounted_paths() & {str(plain)}, set())
 
 
+def mode(path: Path) -> int:
+    return os.stat(path).st_mode & 0o777
+
+
+class OverlappingUnlockTest(StorageCase):
+    """Two unlocks of one profile at once (#620): two unlock tabs, the chooser and a tab, a phone approval during a
+    password unlock, `nulavio vault unlock` beside the browser. gocryptfs keeps the mode of the volume's root as the
+    mode of P.vault/cipher, so a chmod of the profile's folder by its path while the volume is mounted there makes
+    the encrypted folder read-only, and every later unlock opens a profile the engine cannot write to."""
+
+    def hold_at_the_lock(self, callers: int = 2) -> None:
+        """The first `callers` calls to the state lock wait for each other: all have passed the checks made before
+        it, as when the requests come at the same moment. Later calls go straight through."""
+        gate = threading.Barrier(callers, timeout=20)
+        count = []
+        guard = threading.Lock()
+        real = storage.Container._state_lock
+
+        def held(box, *args, **kwargs):
+            with guard:
+                count.append(1)
+                first = len(count) <= callers
+            if first:
+                gate.wait()
+            return real(box, *args, **kwargs)
+
+        patcher = mock.patch.object(storage.Container, "_state_lock", held)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_two_unlocks_at_once_both_open_the_profile_and_leave_it_writable(self):
+        prof, _code = self.encrypted_profile()
+        box = profiles.container(prof)
+        self.hold_at_the_lock()
+        opened, failed = [], []
+
+        def unlock() -> None:
+            try:
+                opened.append(profiles.unlock(prof, password=PASSWORD))
+            except BaseException as exc:  # reported by the assertion below
+                failed.append(f"{getattr(exc, 'code', type(exc).__name__)}: {exc}")
+
+        threads = [threading.Thread(target=unlock, daemon=True) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(60)
+        for vault in opened:
+            self.addCleanup(vault.lock)
+        self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertEqual(failed, [])  # the one that did not mount says the profile is open, which it is
+        self.assertEqual(len(opened), 2)
+        self.assertTrue(all(vault.unlocked for vault in opened))
+        self.assertTrue(box.mounted())
+        self.assertEqual(mode(box.cipher), 0o700)
+        (prof.path / "prefs.js").write_text("inside")
+        profiles.lock(prof)
+        self.assertEqual(mode(box.cipher), 0o700)
+        self.assertEqual(mode(prof.path), 0o500)
+        profiles.unlock(prof, password=PASSWORD).lock()
+        self.assertEqual((prof.path / "prefs.js").read_text(), "inside")
+        (prof.path / "prefs.js").write_text("again")  # the profile's own folder still takes writes
+        profiles.lock(prof)
+
+    def test_a_volume_mounted_after_the_first_check_is_not_taken_for_plaintext(self):
+        # The other request mounted the volume between this one's check for a mounted volume and its check for
+        # files in the folder: those are the volume's own files, not plaintext in a locked profile.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("inside")
+        second = box.load_vault()
+        second.unlock_password(PASSWORD)
+        self.addCleanup(second.lock)
+        real = storage.Container.mounted
+        asked = []
+
+        def mounted(box) -> bool:
+            asked.append(1)
+            return False if len(asked) == 1 else real(box)
+
+        with mock.patch.object(storage.Container, "mounted", mounted):
+            box.mount(second)
+        self.assertTrue(box.mounted())
+        self.assertEqual(mode(box.cipher), 0o700)
+        self.assertEqual((box.mountpoint / "prefs.js").read_text(), "inside")
+        box.unmount()
+
+    def test_an_unlock_restores_an_encrypted_folder_left_read_only(self):
+        # What the overlapping unlocks of earlier versions left behind: P.vault/cipher at 0500.
+        box, vault = self.new_container()
+        box.mount(vault)
+        (box.mountpoint / "prefs.js").write_text("inside")
+        box.unmount()
+        os.chmod(box.cipher, 0o500)
+        box.mount(vault)
+        self.assertEqual(mode(box.cipher), 0o700)
+        (box.mountpoint / "lock").write_text("engine")
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_securing_a_locked_folder_never_reaches_a_volume_mounted_meanwhile(self):
+        box, vault = self.new_container()
+        box.mount(vault)
+        with mock.patch.object(storage.Container, "mounted", return_value=False):  # mounted right after the check
+            box.secure_if_locked()
+        self.assertEqual(mode(box.cipher), 0o700)
+        (box.mountpoint / "prefs.js").write_text("inside")
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_the_end_of_a_lock_never_reaches_a_volume_mounted_meanwhile(self):
+        box, vault = self.new_container()
+        box.mount(vault)
+        with mock.patch.object(storage.Container, "mounted", return_value=False):  # mounted again after the unmount
+            box.unmount()
+        self.assertTrue(box.mounted())
+        self.assertEqual(mode(box.cipher), 0o700)
+        (box.mountpoint / "prefs.js").write_text("inside")
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+
 INTERRUPTED_MIGRATION = """
 import os, shutil, signal, sys
 sys.path.insert(0, sys.argv[1])
