@@ -791,10 +791,13 @@ async function finishRun(result) {
     $("prompt").value = "";
   }
   endRun();
+  if (!result.cancelled) {
+    // Written in as the composer opens, before any await: text typed or delivered since stays on top of it.
+    applyLaterDraft();
+  }
   // The conversation first, so the panel is whole when it says the answer is ready.
   thread = await ai.assistantThread().catch(() => thread);
   if (!result.cancelled) {
-    applyLaterDraft();
     showResult(result, task);
     renderThread();
     if (stopping) {
@@ -870,9 +873,11 @@ async function send(question, { retry = false } = {}) {
     waiting.forEach(onRunEvent);
   } catch (e) {
     endRun();
+    // An "@ia" draft that came while the start was on its way, written in as the composer opens (before any
+    // await): what the person types during the error's handling stays.
+    applyLaterDraft();
     await showError(e, task);
     await refreshThread();
-    applyLaterDraft(); // an "@ia" draft that came while the start was on its way, as after a run's error
   }
 }
 

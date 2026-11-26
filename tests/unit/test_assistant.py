@@ -1309,6 +1309,40 @@ startHeld.splice(0).forEach(answer => answer());
 await idle();
 refuse = null;
 out.refusedDraftPrompt = $("prompt").value;
+
+// The same refusal, and the person types in the question while the panel still reads the conversation: the waiting
+// draft was written in when the run ended, so it never lands over what was typed after.
+holdStart = true;
+refuse = "page-changed";
+await send("Pergunta 11");
+offer = { draft: "Rascunho tardio" };
+await emit({ type: "offer" });
+holdThread = true;
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle(); // the start is refused; the composer is editable, the conversation on its way
+refuse = null;
+$("prompt").value = "Digitado depois";
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+out.refusedTypedPrompt = $("prompt").value;
+
+// An "@ia" draft that waited for an Ask's end, and a second "@ia" delivered while the end reads the conversation:
+// the newer one stays, even when the conversation arrives before the second delivery's item list.
+await send("Pergunta 12");
+offer = { draft: "Rascunho antigo" };
+await emit({ type: "offer" }); // during the run: it waits for the end
+holdThread = true;
+hold = true;
+await finish(); // the run ends; the conversation is asked for
+offer = { draft: "Rascunho novo" };
+await emit({ type: "offer" }); // its item list is on its way
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+await release();
+out.secondDraftPrompt = $("prompt").value;
 console.log(JSON.stringify(out));
 """
 
@@ -1388,6 +1422,11 @@ class PanelChipsTest(unittest.TestCase):
 
     def test_a_refused_start_writes_in_the_draft_that_waited_for_it(self):
         self.assertEqual(self._run()["refusedDraftPrompt"], "Outro rascunho")
+
+    def test_a_waiting_draft_never_lands_over_text_written_after_the_run_ends(self):
+        out = self._run()
+        self.assertEqual(out["refusedTypedPrompt"], "Digitado depois")  # typed during a refused start's error
+        self.assertEqual(out["secondDraftPrompt"], "Rascunho novo")  # a second "@ia" during an Ask's end
 
 
 if __name__ == "__main__":
