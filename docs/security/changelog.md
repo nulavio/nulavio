@@ -29,6 +29,9 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 ## Unreleased (on `main`, after 160.0.1-0.3)
 
+**Nulavio fixes**:
+
+- **Look-alike login warning and the Primary Password** (#708): with a Primary Password set and not yet entered, using a password field on any site could ask for it, as the check read every saved login to learn their sites. The check now reads nothing until the person has entered the Primary Password where the engine asks for it (a site with a matching login); the next use of a password field after that is checked. Before that, a look-alike is not caught (R41). Nothing to do.
 - **Release process** (#656): a release run after a failed publish no longer uploads other bytes under a revision an earlier run already uploaded. The build job counts the version the package bucket serves, and `upload_repo.sh` stops before it writes a package over one with other bytes. A revision that only the dnf repository serves still needs the maintainer (#723).
 
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25

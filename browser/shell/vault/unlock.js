@@ -11,6 +11,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { qrSvg } from "../lib/qr.js";
+import { closeOwnTabSoon } from "../lib/tabs.js";
 import { announce, chip, errorText, h } from "../lib/ui.js";
 
 const vault = browser.nulavioVault;
@@ -62,12 +63,10 @@ function showRecovery(show) {
   (show ? byId("recovery") : byId("password"))?.focus();
 }
 
-async function closeSoon() {
-  const tab = await browser.tabs.getCurrent();
-  const siblings = await browser.tabs.query({ windowId: tab.windowId });
-  // Closing the last tab would close the window (and maybe the browser): show a new tab instead.
-  // Long enough to read when the profile locks again (the success message says it).
-  setTimeout(() => (siblings.length > 1 ? browser.tabs.remove(tab.id) : browser.tabs.update(tab.id, { url: "about:newtab" })), 2500);
+function closeSoon() {
+  // Long enough to read when the profile locks again (the success message says it). In a window's
+  // only tab, the window stays open on a new tab (lib/tabs.js).
+  closeOwnTabSoon(2500);
 }
 
 // A recovery code replacement left unfinished is settled by the unlock (#187); the page says which
@@ -82,7 +81,7 @@ async function unlocked(settled, warning) {
     return;
   }
   setState("unlocked", t("vaultUnlocked", [profile.name]), "ok");
-  await closeSoon();
+  closeSoon();
 }
 
 async function attempt(method, secret = null) {
