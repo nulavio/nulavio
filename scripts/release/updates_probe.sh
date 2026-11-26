@@ -43,7 +43,10 @@ refresh=""
 if ! rpm -q nulavio >/dev/null 2>&1; then
     list=/etc/apt/sources.list.d/nulavio.sources
     printf 'Types: deb\nURIs: http://127.0.0.1:9/apt\nSuites: stable\nComponents: main\n' >"$list"
-    if /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
+    # Straight to that address, past any proxy the container got from podman (a proxy's 403 also fails the fetch, even
+    # without Error-Mode=any), and with APT's messages in English for the check below.
+    printf 'Acquire::http::Proxy::127.0.0.1 "DIRECT";\n' >/tmp/direct.conf
+    if APT_CONFIG=/tmp/direct.conf LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
         fail "update-nulavio succeeded when the refresh of Nulavio's index failed: $(cat /tmp/update.out)"
     fi
     grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out ||

@@ -822,6 +822,9 @@ class PackagingTest(unittest.TestCase):
         self.assertIn("URIs: http://127.0.0.1:9/apt", probe)
         self.assertIn("fail \"update-nulavio succeeded when the refresh of Nulavio's index failed", probe)
         self.assertIn('grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out', probe)
+        # Straight to the refusing address, so a proxy's 403 cannot stand in for the failure, and in English for the grep.
+        self.assertIn("printf 'Acquire::http::Proxy::127.0.0.1 \"DIRECT\";\\n' >/tmp/direct.conf", probe)
+        self.assertIn("if APT_CONFIG=/tmp/direct.conf LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out", probe)
         self.assertNotRegex(update, r"(?m)^[^#]*\b(curl|wget)\b")
         for weaker in ("gpgcheck", "allowerasing", "AllowUnauthenticated", "allow-unauthenticated",
                        "allow-downgrades", "force-yes", "trusted=yes"):  # fmt: skip
