@@ -24,6 +24,11 @@
    the system asks, so that pages cannot tell, and only the set itself undoes that. When the system has either
    preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way. */
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
+});
+
 /** The permission of a site whose pages read the system's time zone. Kept for the site's registrable domain. */
 export const TIME_ZONE = "nulavio-timezone";
 
@@ -240,12 +245,29 @@ function applyAccessibility(changed) {
     Services.prefs.clearUserPref(OVERRIDES);
   } else if (next !== user) {
     Services.prefs.setStringPref(OVERRIDES, next);
+    if (user !== null && !own) {
+      ownWrite(user, next);
+    }
   }
   // Remembered only for a value made from the build's default.
   if (next !== null && !own) {
     Services.prefs.setStringPref(WRITTEN, next);
   } else {
     Services.prefs.clearUserPref(WRITTEN);
+  }
+}
+
+/** Tell the Guard that this module replaced its own earlier set (`before`, the one it remembered writing) with
+    `after`: at a start, with a build whose default changed, that is Nulavio's change, not one made outside the
+    browser (#654). Only that: a set it did not write (the person's, or one put in the closed profile) is not
+    told, even when this module then takes the three entries out of it, nor is a set it writes where there was
+    none (the setting turned on). The Guard goes by the two values, not by the name. A failure costs a finding
+    in the Guard, never the set. */
+function ownWrite(before, after) {
+  try {
+    lazy.NulavioGuard.ownPrefWrite(OVERRIDES, before, after);
+  } catch (e) {
+    console.error("Nulavio fingerprinting", e);
   }
 }
 

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -297,6 +299,75 @@ class MotionAndContrastTest(unittest.TestCase):
             for key in ("accessibilityOffer", "accessibilityOfferShare", "accessibilityOfferKeep"):
                 with self.subTest(locale=locale, key=key):
                     self.assertTrue(words[key]["message"].strip())
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class GuardAndTheShellsOwnSetTest(unittest.TestCase):
+    """#654: at each start with "let sites see my motion and contrast preferences" on, the Shell writes the engine's
+    set again from the build's default. After a build whose default changed, the Guard took that for a change made
+    outside the browser. The module now tells the Guard that one write, by its two values; anything else about the set
+    is still reported (tests/lib/guard_own_writes_driver.mjs runs both modules; test_guard 07 the real engine)."""
+
+    @classmethod
+    def setUpClass(cls):
+        modules = [str(SHELL / "modules" / name) for name in ("NulavioGuard.sys.mjs", "NulavioFingerprinting.sys.mjs")]
+        done = subprocess.run(
+            ["node", str(ROOT / "tests" / "lib" / "guard_own_writes_driver.mjs"), *modules],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        cls.out = json.loads(done.stdout)
+
+    def test_the_shells_own_update_after_a_new_build_is_not_reported(self):
+        case = self.out["ownUpdate"]
+        self.assertEqual(case["set"], self.out["current"])
+        self.assertEqual(len(case["findings"]), 1, "the case the issue is about did not happen: nothing was tested")
+        self.assertEqual(case["reported"], [])
+        self.assertEqual([(t["before"], t["after"]) for t in case["told"]], [tuple(case["findings"][0][1:])])
+        self.assertEqual(self.out["sameBuild"], {"set": self.out["current"], "told": [], "findings": [], "reported": []})
+
+    def test_a_set_changed_while_closed_is_still_reported(self):
+        for name in ("outsidePlain", "outsideStripped"):
+            with self.subTest(name):
+                case = self.out[name]
+                self.assertEqual(case["told"], [])  # the module did not write it before: not its own
+                self.assertEqual(case["reported"], case["findings"])
+                self.assertEqual(len(case["reported"]), 1)
+        # The Shell took the accessibility entry out of the set put there, and that is still reported.
+        self.assertEqual(self.out["outsideStripped"]["reported"][0][2], "+CanvasRandomization")
+
+    def test_a_forged_memory_of_the_shells_set_does_not_hide_a_change(self):
+        # The module rewrites what it takes for its own set, and says so; the record held another value.
+        case = self.out["forgedWritten"]
+        self.assertEqual(len(case["told"]), 1)
+        self.assertEqual(case["reported"], case["findings"])
+        self.assertEqual(len(case["reported"]), 1)
+
+    def test_the_setting_turned_on_outside_is_reported_with_the_set_it_brings(self):
+        case = self.out["shareOutside"]
+        self.assertEqual(case["told"], [])
+        self.assertEqual(
+            {f[0] for f in case["reported"]},
+            {"nulavio.fingerprinting.shareAccessibility", "privacy.fingerprintingProtection.overrides"},
+        )
+        self.assertEqual(self.out["shareOff"]["told"], [])
+
+    def test_the_guard_goes_by_both_values_and_the_name(self):
+        self.assertEqual(
+            self.out["filter"], {"same": 0, "otherBefore": 1, "otherAfter": 1, "otherName": 1, "otherKind": 1, "none": 1}
+        )
+        guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        check = guard[guard.index("  async #check() {") : guard.index("  /** The engine's notice, or a change")]
+        self.assertIn("const fresh = Guard.withoutOwnWrites(found, this.#ownWrites);", check)
+        # Only the module's rewrite of a set it remembered writing is told, and only after the set is written.
+        apply = MODULE[MODULE.index("function applyAccessibility(changed) {") : MODULE.index("/** Tell the Guard")]
+        self.assertIn(
+            "Services.prefs.setStringPref(OVERRIDES, next);\n    if (user !== null && !own) {\n      ownWrite(user, next);", apply
+        )
+        self.assertEqual(MODULE.count("ownWrite("), 2)  # the call and the function
+        self.assertNotIn("ownPrefChanges", MODULE)  # by name, it would hide a change made outside
 
 
 if __name__ == "__main__":

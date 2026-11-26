@@ -193,6 +193,7 @@ class Guard {
   #barObserver = null;
   #bar = null; // { textFor(count, theOnlyFinding), button }
   #own = []; // prefs (names or "branch." prefixes) Nulavio itself changed at this start
+  #ownWrites = []; // { name, before, after }: a setting Nulavio itself rewrote at this start, from one value to another
   #timer = null;
   #checked = null;
   #wanted = false; // a look at the record was asked for while the start-up check was still at work
@@ -629,10 +630,11 @@ class Guard {
     }
     // What the engine announced for an extension since this check began listening is not consumed here: the
     // look that follows (asked for by the same announcement) still counts it, and follows the result.
-    const fresh = Guard.withoutOwnDoings(
+    const found = Guard.withoutOwnDoings(
       Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed),
       this.#touched
     ).filter(f => f.kind !== "pref-changed" || !own(f.key));
+    const fresh = Guard.withoutOwnWrites(found, this.#ownWrites);
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
@@ -668,6 +670,27 @@ class Guard {
   /** Settings Nulavio itself changes at this start (its own defaults): not changes made outside the browser. */
   ownPrefChanges(entries) {
     this.#own.push(...entries);
+  }
+
+  /**
+   * A setting Nulavio itself rewrote at this start, from `before` to `after` (its value in the profile, null for
+   * none), as the record keeps it. Not by name, as ownPrefChanges: only that very change is Nulavio's (#654). The
+   * fingerprinting module rewrites its own set at each start from the build's default, which can change between
+   * builds; a set changed while the browser was closed is not one it wrote, and stays reported.
+   */
+  ownPrefWrite(name, before, after) {
+    this.#ownWrites.push({ name: String(name), before: before ?? null, after: after ?? null });
+  }
+
+  /**
+   * Findings without the settings Nulavio itself rewrote (`writes`, from ownPrefWrite): a setting whose value went
+   * from what the record held to what it holds now by one of those writes. A setting the record held at another
+   * value (changed while the browser was closed, and then rewritten), or that holds another value now, is still
+   * reported.
+   */
+  static withoutOwnWrites(findings, writes = []) {
+    const own = f => writes.some(w => w.name === f.key && w.before === f.before && w.after === f.after);
+    return findings.filter(f => f.kind !== "pref-changed" || !own(f));
   }
 
   findings() {
