@@ -1429,6 +1429,14 @@ class DownloadPagesTest(unittest.TestCase):
                 ids.append([n.attrs["id"] for n in Tree(html).all() if "id" in n.attrs])
         self.assertEqual(ids[0], ids[1])
 
+    def test_gpgs_english_message_on_the_pt_page_is_marked_english(self):
+        # #651: a screen reader reads the quoted terminal text in English, as the terminal prints it.
+        html = (ROOT / "site/baixar/index.html").read_text(encoding="utf-8")
+        tags = re.findall(r"<code([^>]*)>Good signature</code>", html)
+        self.assertTrue(tags)
+        for attrs in tags:
+            self.assertIn('lang="en"', attrs)
+
     def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
         # #651: pasted as a block, the check must print no checksum result after a failed signature or one
         # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
@@ -1451,11 +1459,12 @@ class DownloadPagesTest(unittest.TestCase):
                                capture_output=True, text=True, check=True).stdout  # fmt: skip
 
         def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
-                built: Path = out) -> str:  # fmt: skip
+                built: Path = out, extra_sig: bool = False) -> str:  # fmt: skip
             work = self.tmp / f"check-{case}-{page.split('/')[0]}"
             home = work / "gnupg"
             home.mkdir(parents=True, mode=0o700)
-            (work / "nulavio-packages.asc").write_text(key, encoding="ascii")
+            if key:
+                (work / "nulavio-packages.asc").write_text(key, encoding="ascii")
             sums = work / "SHA256SUMS"
 
             def package(data: bytes) -> None:
@@ -1464,7 +1473,13 @@ class DownloadPagesTest(unittest.TestCase):
 
             package(b"the package\n")
             gpg = ["gpg", "--homedir", str(signer), "--batch", "--quiet", "--yes"]
-            subprocess.run([*gpg, "--armor", "--detach-sign", "-o", str(work / "SHA256SUMS.asc"), str(sums)], check=True)
+            armor = [] if extra_sig else ["--armor"]  # binary signatures concatenate into one file
+            subprocess.run([*gpg, *armor, "--detach-sign", "-o", str(work / "SHA256SUMS.asc"), str(sums)], check=True)
+            if extra_sig:  # a second signature, over other bytes: gpg prints our VALIDSIG, then BADSIG, and exits 1
+                other_sig = subprocess.run([*gpg, "--detach-sign", "-o", "-"], input=b"other bytes\n",
+                                           capture_output=True, check=True).stdout  # fmt: skip
+                with (work / "SHA256SUMS.asc").open("ab") as f:
+                    f.write(other_sig)
             if tamper:  # another package, and the list changed to match it, under the old signature
                 package(b"another package\n")
             env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(work), "GNUPGHOME": str(home), "LC_ALL": "C"}
@@ -1472,10 +1487,12 @@ class DownloadPagesTest(unittest.TestCase):
                 subprocess.run(["gpg", "--batch", "--quiet", "--import"], input=keyring, text=True, env=env, check=True)
             html = (built / page).read_text(encoding="utf-8")
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
+            blocks.add(block)
             ran = subprocess.run(["bash"], input=html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
             return ran.stdout
 
+        blocks: set[str] = set()
         for page in build_site.DOWNLOAD_PAGES:
             with self.subTest(page=page):
                 ours = self.tmp / "gnupg"
@@ -1486,6 +1503,11 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other))
                 # The list changed after it was signed.
                 self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True))
+                # gpg found our valid signature but failed on another one, and exited non-zero.
+                self.assertNotIn("nulavio.rpm", run(page, "gpg-failed", ours, self.armored, extra_sig=True))
+                # No key file: the key setup fails, and the block stops there, even with the key already in the keyring.
+                self.assertNotIn("nulavio.rpm", run(page, "no-key-file", ours, "", keyring=self.armored))
+        self.assertEqual(len(blocks), 1, "both languages give the same commands")
 
         # A key that signs with a subkey: VALIDSIG names the subkey first and the pinned primary key last.
         sub_home = self.tmp / "gnupg-subkey"
