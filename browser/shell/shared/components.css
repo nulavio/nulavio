@@ -667,6 +667,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 .assistant__turn { display: grid; gap: var(--nv-space-1); padding: var(--nv-space-3); border-radius: var(--nv-radius-md); background: var(--nv-color-bg-sunken); }
 .assistant__turn > .button { justify-self: start; }
 .assistant__turn-question { margin: 0; font-weight: var(--nv-font-weight-semibold); overflow-wrap: anywhere; }
+.assistant__turn > .hint { overflow-wrap: anywhere; } /* the page's address, which may be long and unbroken */
 .assistant__turn-answer { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Answers in safe Markdown (lib/markdown.js): only these elements ever appear. */
 :is(.assistant__answer, .assistant__turn-answer):has(> :is(p, ul, ol, blockquote, pre)) { white-space: normal; } /* rendered; a partial answer keeps its line breaks */

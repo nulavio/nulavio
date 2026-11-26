@@ -7,6 +7,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -379,6 +380,53 @@ class AssistantTest(unittest.TestCase):
         assistant.ask("E agora?", PROFILE, None, None, None, history)
         self.assertIn("<<<SELECTION", self.provider.requests[-1][2]["messages"][1]["content"])
 
+    def test_an_included_page_goes_without_the_user_part_query_or_fragment_of_its_address(self):
+        """#653: the provider gets the page's origin and path, never `user:password@`, `?query` or `#fragment`
+        (a reset token, a signed download, a key a browser never sends), in the page, the selection and its
+        frame, and the conversation's page copy; the source and the activity name no more than that."""
+        self.configure()
+        assistant.allow_profile(PROFILE, True)
+        url = "https://ANA-USER:S3NHA@docs.example:8443/doc/1?token=RESET-TOKEN#key=FRAGMENT-KEY"
+        frame = "https://BIA-USER:FRAME-PASS@frame.example/f?sig=SIGNED-URL#k=FRAME-KEY"
+        text = "O prazo de inscrição termina em 30 de novembro de 2026."
+        page = {"url": url, "title": "Doc", "text": text}
+        selection = {"url": url, "frameUrl": frame, "title": "Doc", "text": "Texto selecionado aqui."}
+        history = [{"question": "Antes?", "page": page, "selection": selection, "answer": "Sim."}]
+        self.provider.replies.append({"choices": [{"message": {"content": f"A página diz “{text[:46]}”."}}]})
+        result = assistant.ask("Quando acaba?", PROFILE, page, None, None, history, selection)
+        sent = json.dumps(self.provider.requests[-1][2], ensure_ascii=False)
+        secrets = ("ANA-USER", "S3NHA", "RESET-TOKEN", "FRAGMENT-KEY", "BIA-USER", "FRAME-PASS", "SIGNED-URL", "FRAME-KEY")
+        for secret in (*secrets, "token=", "#"):
+            self.assertNotIn(secret, sent)
+        self.assertIn("from https://docs.example:8443/doc/1, title", sent)
+        self.assertIn("from https://docs.example:8443/doc/1, in a frame from https://frame.example/f, title", sent)
+        self.assertEqual(result["chars"], self.provider.chars[-1])
+        self.assertEqual([s["url"] for s in result["sources"]], ["https://docs.example:8443/doc/1"])
+        entries = audit.read(agent=assistant.load()["agent"])
+        self.assertEqual(entries[-1]["target"], "https://docs.example:8443")
+        self.assertNotIn("S3NHA", json.dumps(entries))
+        # A frame that differs from the page only in what is left out is the page itself: no "in a frame from".
+        same = {**selection, "frameUrl": "https://docs.example:8443/doc/1?other=1"}
+        assistant.ask("E isso?", PROFILE, None, None, None, None, same)
+        self.assertNotIn("in a frame from", json.dumps(self.provider.requests[-1][2]))
+
+    def test_the_address_the_shell_sends_comes_back_unchanged(self):
+        """The Shell counts the block with the address it reduced (NulavioAI.sys.mjs, sentAddress: the WHATWG
+        origin and path); reducing it again must change nothing, or every Send would be refused as size-changed."""
+        for address in ("https://ex.example/", "http://127.0.0.1:5000/a/b", "https://[::1]:8443/x",
+                        "https://ex.example/%C3%A1/b@c;d", "https://xn--nulvio-sta.example/a%20b/"):  # fmt: skip
+            with self.subTest(address=address):
+                self.assertEqual(assistant.sent_address(address), address)
+        for given, kept in (
+            ("https://u:p@ex.example/a?b=c#d", "https://ex.example/a"),
+            ("https://u@ex.example:444/?#", "https://ex.example:444/"),
+            ("http://[::1]:8080/p?q", "http://[::1]:8080/p"),
+            ("ftp://ex.example/a", ""),
+            ("", ""),
+        ):
+            with self.subTest(given=given):
+                self.assertEqual(assistant.sent_address(given), kept)
+
     def test_page_text_is_sent_only_when_given_and_marked_untrusted(self):
         self.configure()
         assistant.allow_profile(PROFILE, True)
@@ -726,6 +774,51 @@ class AssistantTest(unittest.TestCase):
         with mock.patch.object(sys, "stdin", io.StringIO("not json")), redirect_stdout(out):
             cli.main(["ai", "assistant"])
         self.assertEqual(json.loads(out.getvalue())["error"], "bad-request")
+
+
+# The Shell's side of #653 under Node: the module, with a stand-in for the one engine call it makes when loaded.
+SHELL_COUNTS = """
+globalThis.ChromeUtils = { defineESModuleGetters() {} };
+const ai = await import(process.argv[1]);
+const cases = JSON.parse(process.argv[2]);
+console.log(JSON.stringify(cases.map(c => ({
+  address: ai.sentAddress(c.url),
+  frame: ai.sentAddress(c.frameUrl),
+  page: ai.pageBlockChars({ url: c.url, title: c.title, chars: [...c.text].length }),
+  selection: ai.selectionBlockChars({ url: c.url, frameUrl: c.frameUrl, title: c.title, chars: [...c.text].length }),
+}))));
+"""
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class ShellAddressTest(unittest.TestCase):
+    """#653: the Shell reduces the address as the tools do, and counts the blocks the tools then send."""
+
+    def test_the_shell_sends_and_counts_the_address_as_the_tools_do(self):
+        cases = [
+            {"url": "https://ANA-USER:S3NHA@docs.example:8443/doc/1?token=RESET-TOKEN#key=FRAGMENT-KEY",
+             "frameUrl": "https://BIA-USER:PASS@frame.example/f?sig=SIGNED#k=KEY", "title": "Doc 🙂", "text": "Ção 👩‍💻"},
+            {"url": "http://127.0.0.1:5000/long-page?n=200", "frameUrl": "http://127.0.0.1:5000/long-page#x",
+             "title": "long-page", "text": "texto"},
+            {"url": "https://xn--b-tfa.example/%C3%A1%20b?q", "frameUrl": "", "title": "", "text": ""},
+            {"url": "http://u@[::1]:8080/", "frameUrl": "about:blank", "title": "t", "text": "x"},
+        ]  # fmt: skip
+        module = (ROOT / "browser" / "shell" / "modules" / "NulavioAI.sys.mjs").as_uri()
+        done = subprocess.run(["node", "--input-type=module", "-e", SHELL_COUNTS, module, json.dumps(cases)],
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        for case, shell in zip(cases, json.loads(done.stdout), strict=True):
+            with self.subTest(url=case["url"]):
+                for secret in ("USER", "S3NHA", "PASS", "TOKEN", "SIGNED", "KEY", "?", "#"):
+                    self.assertNotIn(secret, shell["address"] + shell["frame"])
+                self.assertEqual(assistant.sent_address(shell["address"]), shell["address"])  # unchanged by the tools
+                page = {"url": shell["address"], "title": case["title"], "text": case["text"]}
+                self.assertEqual(shell["page"], len(assistant._page_block(page)) + len("\n\n"))
+                selection = {**page, "frameUrl": shell["frame"] or None}
+                self.assertEqual(shell["selection"], len(assistant._selection_block(selection)) + len("\n\n"))
+                # The tools reduce the full address (as the engine writes it) the same way, should one reach them.
+                self.assertEqual(assistant.sent_address(case["url"]), shell["address"])
+        self.assertEqual([s["address"] for s in json.loads(done.stdout)][:2],
+                         ["https://docs.example:8443/doc/1", "http://127.0.0.1:5000/long-page"])  # fmt: skip
 
 
 if __name__ == "__main__":
