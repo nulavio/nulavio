@@ -37,6 +37,10 @@ FAKE_AWS = """#!/bin/sh
   printf '%s ' "$@"
   printf '\\n'
 } >> "$FAKE_AWS_LOG"
+# A write that fails (a network error, a cancelled run): FAKE_AWS_FAIL_ON is a destination the call names.
+case " $* " in
+  *" ${FAKE_AWS_FAIL_ON:-no such destination} "*) exit 1 ;;
+esac
 # The bucket, for upload_repo.sh's check before it writes (#656): FAKE_AWS_LISTING is what list-objects-v2 prints
 # (the empty listing's shape of aws-cli 2 otherwise), and a download copies from FAKE_AWS_BUCKET.
 case " $* " in
@@ -60,6 +64,17 @@ def hold(test, bucket: Path, key: str, data: str):
     entry = {"Key": key, "LastModified": "2026-11-20T10:00:00+00:00", "Size": len(data)}
     listing.write_text(json.dumps({"Contents": [entry], "RequestCharged": None}))
     test.env.update(FAKE_AWS_LISTING=str(listing), FAKE_AWS_BUCKET=str(bucket))
+
+
+# #740: the signed pair under its revision's keys (<firefox>-<release>, the tag without its v: the release number
+# alone starts again with each Firefox version), then the served pair, signature first as before. A publish that
+# stops between the served repomd.xml.asc and repomd.xml leaves a matching signed pair that the runbook copies.
+PAIR_THEN_SERVED = [
+    ("repodata/repomd.xml.asc", "rpm/repodata/160.0-0.3/repomd.xml.asc"),
+    ("repodata/repomd.xml", "rpm/repodata/160.0-0.3/repomd.xml"),
+    ("repodata/repomd.xml.asc", "rpm/repodata/repomd.xml.asc"),
+    ("repodata/repomd.xml", "rpm/repodata/repomd.xml"),
+]
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
@@ -98,7 +113,7 @@ class UploadRepoTest(unittest.TestCase):
         out = self.run_upload()
         self.assertEqual(out.returncode, 0, out.stderr)
         calls = self.log.read_text().splitlines()
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(calls), 6)
         for call in calls:
             self.assertIn("key=r2-key secret=r2-secret token=none region=auto checksums=when_required", call)
             self.assertIn("--endpoint-url https://acct.r2.cloudflarestorage.com s3", call)
@@ -109,8 +124,58 @@ class UploadRepoTest(unittest.TestCase):
         calls = calls[1:]
         self.assertIn("sync", calls[0])
         self.assertIn("--exclude repodata/repomd.xml --exclude repodata/repomd.xml.asc", calls[0])
-        self.assertIn("repomd.xml.asc s3://nulavio-packages/rpm/repodata/repomd.xml.asc", calls[1])
-        self.assertTrue(calls[2].rstrip().endswith("s3://nulavio-packages/rpm/repodata/repomd.xml --only-show-errors"))
+        self.assertEqual(self.writes()[1:], PAIR_THEN_SERVED)
+
+    def writes(self) -> list[tuple[str, str]]:
+        """The writes to the bucket in order, as (staged file, key); a sync is ("sync", its prefix)."""
+        found = []
+        for call in self.uploads():
+            words = call.split()
+            if "sync" in words:
+                found.append(("sync", words[words.index("sync") + 2].removeprefix("s3://nulavio-packages/")))
+            else:
+                source, destination = words[words.index("cp") + 1 : words.index("cp") + 3]
+                found.append((Path(source).relative_to(self.repo).as_posix(),
+                              destination.removeprefix("s3://nulavio-packages/")))  # fmt: skip
+        return found
+
+    def test_the_revision_pair_is_written_before_the_served_pair(self):
+        out = self.run_upload()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(self.writes(), [("sync", "rpm/"), *PAIR_THEN_SERVED])
+
+    def test_a_publish_stopped_before_the_served_repomd_leaves_the_revision_pair(self):
+        # The state of #740: the served signature is the new one, the served repomd.xml the old one.
+        self.env["FAKE_AWS_FAIL_ON"] = "s3://nulavio-packages/rpm/repodata/repomd.xml"
+        out = self.run_upload()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertEqual(self.writes()[1:], PAIR_THEN_SERVED)  # the last one is the write that failed
+
+    def test_a_revision_pair_that_fails_to_upload_leaves_the_served_pair_alone(self):
+        for key in ("rpm/repodata/160.0-0.3/repomd.xml.asc", "rpm/repodata/160.0-0.3/repomd.xml"):
+            with self.subTest(key=key):
+                self.log.unlink(missing_ok=True)
+                self.env["FAKE_AWS_FAIL_ON"] = f"s3://nulavio-packages/{key}"
+                out = self.run_upload()
+                self.assertNotEqual(out.returncode, 0)
+                self.assertEqual(self.writes()[-1][1], key)
+                self.assertNotIn("rpm/repodata/repomd.xml.asc", [written for _, written in self.writes()])
+
+    def test_the_staged_packages_name_one_revision(self):
+        # The revision goes into the keys: the packages' names must give one, in the form of the tag.
+        for names in (["nulavio-160.0-0.3.fc44.x86_64.rpm", "nulavio-160.0-0.4.fc44.x86_64.rpm"],
+                      ["nulavio-160.0-0.3.x86_64.rpm"], ["nulavio-160.0-0.3.fc44.noarch.rpm"],
+                      ["nulavio-160.0-x.fc44.x86_64.rpm"], ["nulavio-160.0-0..3.fc44.x86_64.rpm"]):  # fmt: skip
+            with self.subTest(names=names):
+                for old in (self.repo / "x86_64").iterdir():
+                    old.unlink()
+                for name in names:
+                    (self.repo / "x86_64" / name).write_text("x")
+                self.log.unlink(missing_ok=True)
+                out = self.run_upload()
+                self.assertEqual(out.returncode, 2, out.stderr)
+                self.assertIn("revision", out.stderr)
+                self.assertFalse(self.log.exists())  # not even the listing
 
     def test_refuses_an_unsigned_repository(self):
         (self.repo / "repodata" / "repomd.xml.asc").unlink()
@@ -142,7 +207,7 @@ class UploadRepoTest(unittest.TestCase):
         hold(self, self.tmp / "bucket", "rpm/x86_64/nulavio-160.0-0.3.fc44.x86_64.rpm", "x")
         out = self.run_upload()
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertEqual(len(self.uploads()), 3)
+        self.assertEqual(len(self.uploads()), 5)
         # Another package in the pool (an older release) is neither downloaded nor in the way.
         hold(self, self.tmp / "bucket", "rpm/x86_64/nulavio-160.0-0.2.fc44.x86_64.rpm", "older")
         self.log.unlink()

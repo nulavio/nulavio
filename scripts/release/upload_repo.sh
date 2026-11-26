@@ -11,7 +11,11 @@
 # environment; any AWS credentials already set (the KMS signing role) are not used.
 # Order: the packages and the hash-named metadata files first, the signed metadata
 # last, so the signed metadata never names a file that is not there yet:
-# - dnf: everything else, then repomd.xml.asc, then repomd.xml;
+# - dnf: everything else, then the signed pair under keys named after the revision
+#   (repodata/<firefox>-<release>/repomd.xml.asc and repomd.xml, #740), then the served
+#   repomd.xml.asc, then repomd.xml. A publish that stops between those two leaves the new
+#   signature beside the old repomd.xml, which dnf and the build job refuse; the revision's
+#   pair is still in the bucket, and the runbook copies it onto the served keys;
 # - APT: pool/ and the indexes (apt fetches them by hash, from by-hash/), then
 #   Release and Release.gpg, then InRelease, which apt reads first.
 # Nothing is deleted: older packages and indexes stay, and the new metadata no longer
@@ -35,6 +39,21 @@ case $kind in
             [[ -s $repo/$file ]] || { echo "upload_repo: $repo/$file is missing: not a signed repository" >&2; exit 2; }
         done
         compgen -G "$repo/x86_64/nulavio-*.rpm" >/dev/null || { echo "upload_repo: no package in $repo/x86_64" >&2; exit 2; }
+        # The revision names the pair's keys: <firefox>-<release> from nulavio-<firefox>-<release>.<dist>.x86_64.rpm,
+        # as release_manifest.py's tag gives it (without the v), one for every package staged here.
+        revision=
+        for package in "$repo"/x86_64/nulavio-*.rpm; do
+            name=$(basename "$package")
+            if [[ ! $name =~ ^nulavio-([0-9]+(\.[0-9]+)+-[0-9]+(\.[0-9]+)*)\.[[:lower:]][[:lower:][:digit:]_]*\.x86_64\.rpm$ ]]; then
+                echo "upload_repo: $name does not name a revision (nulavio-<firefox>-<release>.<dist>.x86_64.rpm)" >&2
+                exit 2
+            fi
+            if [[ -n $revision && ${BASH_REMATCH[1]} != "$revision" ]]; then
+                echo "upload_repo: the packages in $repo/x86_64 carry more than one revision ($revision, ${BASH_REMATCH[1]})" >&2
+                exit 2
+            fi
+            revision=${BASH_REMATCH[1]}
+        done
         ;;
     apt)
         pool=pool/main/n/nulavio
@@ -92,6 +111,8 @@ done
 
 if [[ $kind == rpm ]]; then
     s3 sync "$repo" "s3://$bucket/rpm/" --exclude "repodata/repomd.xml" --exclude "repodata/repomd.xml.asc"
+    s3 cp "$repo/repodata/repomd.xml.asc" "s3://$bucket/rpm/repodata/$revision/repomd.xml.asc"
+    s3 cp "$repo/repodata/repomd.xml" "s3://$bucket/rpm/repodata/$revision/repomd.xml"
     s3 cp "$repo/repodata/repomd.xml.asc" "s3://$bucket/rpm/repodata/repomd.xml.asc"
     s3 cp "$repo/repodata/repomd.xml" "s3://$bucket/rpm/repodata/repomd.xml"
 else
