@@ -94,6 +94,55 @@ class IdentifiersTest(unittest.TestCase):
         self.assertEqual(engine["purl"], "pkg:generic/mozilla/firefox@158.0.1")
 
 
+# The keys the CycloneDX 1.6 JSON schema (bom-1.6.schema.json) allows in the objects the engine's
+# pedigree uses. Each definition there has "additionalProperties": false, so any other key makes the
+# whole SBOM invalid (issue #634). Copied from the schema's "definitions"; no validator or schema is
+# vendored here.
+CDX16_PATCH_KEYS = {"type", "diff", "resolves"}  # definitions.patch, "required": ["type"]
+CDX16_PATCH_TYPES = {"unofficial", "monkey", "backport", "cherry-pick"}  # definitions.patch.properties.type.enum
+CDX16_DIFF_KEYS = {"text", "url"}  # definitions.diff
+CDX16_PROPERTY_KEYS = {"name", "value"}  # definitions.property, "required": ["name"]
+
+
+class PackagePedigreeTest(unittest.TestCase):
+    """The engine's patches in a package SBOM: only what CycloneDX 1.6 allows, and each patch's
+    SHA-256 still recorded, as a property of the engine component."""
+
+    @classmethod
+    def setUpClass(cls):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "nulavio-158.0.1-1.x86_64.rpm"
+            package.write_bytes(b"package")
+            cls.engine = run("--package", str(package), "--engine-version", "158.0.1")["components"][0]
+        cls.series = [
+            line.strip()
+            for line in (ROOT / "browser" / "patches" / "series").read_text().splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+
+    def test_patches_use_only_the_keys_the_schema_allows(self):
+        patches = self.engine["pedigree"]["patches"]
+        self.assertEqual([p["diff"]["url"] for p in patches], [f"browser/patches/{name}" for name in self.series])
+        for patch in patches:
+            with self.subTest(patch=patch["diff"]["url"]):
+                self.assertLessEqual(set(patch), CDX16_PATCH_KEYS)
+                self.assertIn(patch["type"], CDX16_PATCH_TYPES)
+                self.assertLessEqual(set(patch["diff"]), CDX16_DIFF_KEYS)
+
+    def test_each_patch_sha256_is_a_property_of_the_engine(self):
+        for prop in self.engine["properties"]:
+            self.assertLessEqual(set(prop), CDX16_PROPERTY_KEYS)
+        recorded = {
+            prop["name"].removeprefix("nulavio:patch-sha256:"): prop["value"]
+            for prop in self.engine["properties"]
+            if prop["name"].startswith("nulavio:patch-sha256:")
+        }
+        self.assertEqual(list(recorded), self.series)
+        for name in self.series:
+            digest = hashlib.sha256((ROOT / "browser" / "patches" / name).read_bytes()).hexdigest()
+            self.assertEqual(recorded[name], digest, name)
+
+
 RELEASE_LIBRARIES = sorted([
     "project:nv1",
     "pkg:maven/androidx.annotation/annotation-jvm@1.8.2",
