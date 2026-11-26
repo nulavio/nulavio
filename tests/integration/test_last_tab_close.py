@@ -213,16 +213,18 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertTrue(both, f"no second tab: {self.m.chrome(WINDOW_TABS, [opened])}")
         buttons = {self.base + first: first_button, self.base + second: second_button}
         handles = {}
-        for handle in set(self.m.window_handles()) - before:
-            self.m.switch_to(handle)
 
-            def loaded():
+        def loaded():
+            # Marionette's handle list can lag behind the tabs (tests/lib/marionette.py): read it again each time,
+            # until both pages are loaded behind handles of their own.
+            for handle in set(self.m.window_handles()) - before - set(handles.values()):
+                self.m.switch_to(handle)
                 href = self.m.execute("return location.href;")
-                return href if href in buttons and self.m.execute(PAGE_STATE, [buttons[href]]) is not None else None
+                if href in buttons and self.m.execute(PAGE_STATE, [buttons[href]]) is not None:
+                    handles[href] = handle
+            return set(handles) == set(buttons)
 
-            href = harness.wait_until(loaded, timeout=20)
-            if href:
-                handles[href] = handle
+        harness.wait_until(loaded, timeout=30)
         self.assertEqual(set(handles), set(buttons), f"the pages did not load: {handles}")
         at = self.m.execute("return Date.now();") + 1500
         for href, handle in handles.items():

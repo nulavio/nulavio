@@ -926,7 +926,8 @@ class LastTabCloseTest(unittest.TestCase):
 # together interleave the same way every run. A window whose last visible tab is removed closes, as in the engine.
 # Each tab shows `page:<id>` until the test navigates it. `hold` keeps a removal pending (as a page that warns
 # before it is left does while the person answers) until the test lets it go; `fail` makes one removal fail once;
-# `afterQuery` runs once, right after a count. The module is read as a data: address, which is always a module,
+# `beforeQuery` runs once, as a count starts, and `afterQuery` once, right after one. A window left with no visible
+# tab closes, whether its last one was removed or dragged out. The module is read as a data: address, which is always a module,
 # so a node that does not tell a .js file's kind by its syntax runs it too.
 TAB_CLOSER = r"""
 const { readFileSync } = await import("node:fs");
@@ -942,7 +943,7 @@ function world(windows) {
   const closed = [];
   const hold = new Map();
   const fail = new Set();
-  const w = { closed, hold, fail, afterQuery: null };
+  const w = { closed, hold, fail, beforeQuery: null, afterQuery: null };
   let next = 100;
   const find = id => {
     for (const [windowId, list] of state) {
@@ -954,6 +955,9 @@ function world(windows) {
   w.tabs = {
     async get(id) { await later(); const f = find(id); return { id, windowId: f.windowId, url: f.tab.url }; },
     async query({ windowId, hidden }) {
+      const first = w.beforeQuery;
+      w.beforeQuery = null;
+      first?.();
       await later();
       const found = (state.get(windowId) ?? []).filter(t => Boolean(t.hidden) === hidden).map(t => ({ id: t.id, windowId }));
       const then = w.afterQuery;
@@ -975,11 +979,20 @@ function world(windows) {
       if (fail.delete(id)) throw new Error("the engine refused");
       const { windowId, list, tab } = find(id);
       list.splice(list.indexOf(tab), 1);
-      if (!list.some(t => !t.hidden)) { state.delete(windowId); closed.push(windowId); }
+      emptied(windowId, list);
     },
   };
   w.tabsOf = id => state.has(id) ? state.get(id).map(t => t.fresh ? "new" : t.id) : null;
-  w.move = (id, to) => { const { list, tab } = find(id); list.splice(list.indexOf(tab), 1); state.get(to).push(tab); };
+  const emptied = (windowId, list) => {
+    if (!list.some(t => !t.hidden)) { state.delete(windowId); closed.push(windowId); }
+  };
+  w.move = (id, to) => {
+    const { windowId, list, tab } = find(id);
+    list.splice(list.indexOf(tab), 1);
+    state.get(to).push(tab);
+    emptied(windowId, list);
+  };
+  w.drop = id => { const { list, tab } = find(id); list.splice(list.indexOf(tab), 1); }; // the person closes it
   w.navigate = (id, url) => { find(id).tab.url = url; };
   return w;
 }
@@ -1075,6 +1088,25 @@ const out = {};
   const left = await second.then(() => "removed", e => String(e.message));
   out.navigated = { left, closed: w.closed, one: w.tabsOf(1) };
 }
+{ // The window's other tab closed by the person right after the count: counted again, a new tab keeps the window.
+  const w = world({ 1: [{ id: 1 }, { id: 3 }] });
+  w.afterQuery = () => w.drop(3);
+  const answer = await tabCloser(w.tabs)(1, page(1));
+  out.otherClosedWhileCounted = { answer, closed: w.closed, one: w.tabsOf(1) };
+}
+{ // Navigated as it was counted, alone in its window: the same look sees it, and no new tab is opened for it.
+  const w = world({ 1: [{ id: 1 }] });
+  w.beforeQuery = () => w.navigate(1, "https://work.example/");
+  const left = await tabCloser(w.tabs)(1, page(1)).then(() => "removed", e => String(e.message));
+  out.navigatedWhileCounted = { left, closed: w.closed, one: w.tabsOf(1) };
+}
+{ // Dragged out alone right after the count, so its old window closed and the new tab could not open there:
+  // counted again in the window it went to.
+  const w = world({ 1: [{ id: 1 }], 2: [{ id: 9, hidden: true }] });
+  w.afterQuery = () => w.move(1, 2);
+  const answer = await tabCloser(w.tabs)(1, page(1)).then(String, e => String(e.message));
+  out.movedOutAlone = { answer, closed: w.closed, two: w.tabsOf(2) };
+}
 console.log(JSON.stringify(out));
 """
 
@@ -1123,6 +1155,16 @@ class TabCloserTest(unittest.TestCase):
 
     def test_a_tab_moved_while_it_was_counted_is_counted_again_where_it_is(self):
         self.assertEqual(self.out["movedWhileCounted"], {"closed": [], "one": [3], "two": [9, "new"]})
+
+    def test_the_other_tab_closed_while_it_was_counted_is_counted_again(self):
+        self.assertEqual(self.out["otherClosedWhileCounted"], {"answer": True, "closed": [], "one": ["new"]})
+
+    def test_a_tab_navigated_as_it_was_counted_opens_nothing(self):
+        left = "the page that asked left its tab"
+        self.assertEqual(self.out["navigatedWhileCounted"], {"left": left, "closed": [], "one": [1]})
+
+    def test_a_tab_dragged_out_alone_while_it_was_counted_is_closed_where_it_went(self):
+        self.assertEqual(self.out["movedOutAlone"], {"answer": "true", "closed": [1], "two": [9, "new"]})
 
     def test_a_tab_that_left_the_page_is_never_removed(self):
         self.assertEqual(self.out["navigated"], {"left": "the page that asked left its tab", "closed": [], "one": [2, 3]})

@@ -11,6 +11,7 @@
    No imports and no `browser` global: `tabs` is the extension's `browser.tabs`, or a fake in the unit tests. */
 
 const MOVED = Symbol("moved");
+const LEFT = "the page that asked left its tab";
 
 /** Returns `close(tabId, url)`: closes that tab, leaving its window open on a new tab when it is the last visible
     one, as long as the tab still shows `url` (the page that asked). Resolves when the tab was removed; rejects
@@ -23,25 +24,42 @@ export function tabCloser(tabs) {
   async function where(tabId, url) {
     const tab = await tabs.get(tabId);
     if (tab.url !== url) {
-      throw new Error("the page that asked left its tab");
+      throw new Error(LEFT);
     }
     return tab.windowId;
   }
 
+  // Each look reads the tab that asked (page, window) and its window's visible tabs together. A removal follows
+  // only a look that found another visible tab and came after an earlier look: a tab moved, navigated or left
+  // alone while it was counted is decided again, and nothing is opened or removed for a tab that left the page.
+  // The engine has no atomic count-and-remove, so a change after the last look still lands after the decision.
   async function closeIn(windowId, tabId, url) {
-    if ((await where(tabId, url)) !== windowId) {
-      return MOVED; // dragged to another window while it waited: counted there, after the closes queued there
+    for (let look = 0; look < 3; look++) {
+      const [tab, visible] = await Promise.all([tabs.get(tabId), tabs.query({ windowId, hidden: false })]);
+      if (tab.url !== url) {
+        throw new Error(LEFT);
+      }
+      if (tab.windowId !== windowId) {
+        return MOVED; // dragged to another window while it waited: counted there, after the closes queued there
+      }
+      const others = visible.some(other => other.id !== tabId);
+      if (others && look > 0) {
+        await tabs.remove(tabId);
+        return true;
+      }
+      if (!others) {
+        try {
+          await tabs.create({ windowId });
+        } catch (e) {
+          // Its window may have closed because the tab left it (dragged out alone): counted where it is now.
+          if ((await where(tabId, url)) !== windowId) {
+            return MOVED;
+          }
+          throw e;
+        }
+      }
     }
-    const visible = await tabs.query({ windowId, hidden: false });
-    if (!visible.some(other => other.id !== tabId)) {
-      await tabs.create({ windowId });
-    }
-    // Once more just before the removal: a tab moved or navigated while it was counted is decided again.
-    if ((await where(tabId, url)) !== windowId) {
-      return MOVED;
-    }
-    await tabs.remove(tabId);
-    return true;
+    throw new Error("the window kept changing while the tab closed");
   }
 
   // A close waits for the whole of the one before it in its window, however long that takes: a removal that asks
