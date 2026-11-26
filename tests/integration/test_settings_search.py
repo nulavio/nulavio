@@ -269,7 +269,8 @@ class SettingsSearchTest(unittest.TestCase):
                 and any(row["name"] == "Mojeek" and row["says"] == "Em uso nas janelas normais." for row in n["choices"])
             )
         )
-        self.assertEqual(done["chose"], "Mojeek é a pesquisa deste perfil nas janelas normais.")
+        # The name isolated (#796): U+2068 ... U+2069.
+        self.assertEqual(done["chose"], "\u2068Mojeek\u2069 é a pesquisa deste perfil nas janelas normais.")
         self.assertEqual(next(row for row in done["choices"] if row["name"] == "Mojeek")["says"], "Em uso nas janelas normais.")
         defaults = self.m.chrome(
             S + "return S.list().then(list => [list.find(e => e.isDefault).name, list.find(e => e.isDefaultPrivate).name]);"
@@ -288,10 +289,10 @@ class SettingsSearchTest(unittest.TestCase):
         self.assertNotIn("Sugestões marcadas", next(row for row in ticked["choices"] if row["name"] == "Mojeek")["says"])
         brave = next(row for row in now["choices"] if row["name"] == "Brave Search")
         self.m.chrome(CLICK, [f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{brave["key"]}"]'])
-        told = self.seen(lambda n: (n["chose"] or "").startswith("Brave Search") and n["suggest"] is False)
+        told = self.seen(lambda n: (n["chose"] or "").startswith("\u2068Brave Search") and n["suggest"] is False)
         self.assertEqual(
             told["chose"],
-            "Brave Search é a pesquisa deste perfil nas janelas normais."
+            "\u2068Brave Search\u2069 é a pesquisa deste perfil nas janelas normais."
             " Ligado: o que você digita é enviado a search.brave.com enquanto você digita.",
         )
         self.assertIs(told["suggest"], False)
@@ -357,8 +358,8 @@ class SettingsSearchTest(unittest.TestCase):
         said = self.seen(lambda n: n["aliasReserved"])
         self.assertEqual(
             said["aliasReserved"],
-            "“@ia” deixou de ser o atalho de pesquisa de “Arquivo, Biblioteca”: ele é a palavra-chave do assistente na barra de"
-            " endereços. Escolha outro atalho em Atalhos de pesquisa.",
+            "“@ia” deixou de ser o atalho de pesquisa de “\u2068Arquivo, Biblioteca\u2069”: ele é a palavra-chave do assistente"
+            " na barra de endereços. Escolha outro atalho em Atalhos de pesquisa.",
         )
         self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "")
         # Under the engine's Search Shortcuts, where the alias is given, not with the suggestion switches.
@@ -372,6 +373,25 @@ class SettingsSearchTest(unittest.TestCase):
         self.m.chrome(engine + "e.alias = arguments[1];", [own, "@arquivo"])
         self.seen(lambda n: n["aliasReserved"] is None)
         self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "@arquivo")
+
+    def test_06_an_engine_name_with_direction_controls_does_not_reorder_the_sentence(self):
+        """#796: an engine names itself, and its name may hold U+202E RIGHT-TO-LEFT OVERRIDE, which would show the
+        words after it in reverse. Each sentence that carries the name gets it without direction controls and
+        isolated (U+2068 ... U+2069); tests/unit/test_name_isolation.py fills every such sentence."""
+        name = "\u202eArquivo\u202c Mal"
+        own = self.m.chrome(S + "return S.addCustom({name: arguments[0], url: 'https://arquivo.example/?q=%s'});", [name])
+        self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [own])
+        self.assertEqual(next(e["name"] for e in self.state()["engines"] if e["id"] == own), name, "the module keeps the name")
+        self.open()
+        key = f"engine-{own}"
+        button = f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{key}"]'
+        self.seen(lambda n: any(row["key"] == key for row in n["choices"]))
+        named = DOC + "return d.querySelector(arguments[0])?.shadowRoot?.querySelector('button')?.getAttribute('aria-label');"
+        harness.wait_until(lambda: self.m.chrome(named, [button]), 10)
+        self.assertEqual(self.m.chrome(named, [button]), "Usar \u2068Arquivo Mal\u2069 como pesquisa deste perfil")
+        self.assertTrue(self.m.chrome(CLICK, [button]))
+        done = self.seen(lambda n: n["chose"])
+        self.assertEqual(done["chose"], "\u2068Arquivo Mal\u2069 é a pesquisa deste perfil nas janelas normais e nas privadas.")
 
 
 if __name__ == "__main__":
