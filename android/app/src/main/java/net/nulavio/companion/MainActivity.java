@@ -502,12 +502,16 @@ public final class MainActivity extends Activity {
     }
 
     /**
-     * What to show when the code just scanned is refused: a malformed one is "not a Nulavio code", whatever
-     * the check threw, so a camera read never crashes the app (#676).
+     * What to show when the code just scanned is refused: a malformed one (bad-message, a key of the wrong
+     * size, or anything else the checks threw) is "not a Nulavio code", so a camera read never crashes the
+     * app (#676).
      */
     private String scannedCodeProblem(RuntimeException e) {
-        if (e instanceof PhoneRejected && !"bad-message".equals(((PhoneRejected) e).code)) {
-            return errorText(((PhoneRejected) e).code);
+        if (e instanceof PhoneRejected) {
+            String code = ((PhoneRejected) e).code;
+            if (!"bad-message".equals(code) && !"bad-key".equals(code)) {
+                return errorText(code);
+            }
         }
         return getString(R.string.not_a_nulavio_code);
     }
