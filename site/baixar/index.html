@@ -100,7 +100,7 @@ sudo apt install nulavio</code></pre></div>
 <!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Conferir um download manual</h2>
-<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: confira antes de importar. Os comandos rodam em sequência e param no primeiro que falhar.</p>
+<p class="prose">Os mesmos pacotes, com a lista <code translate="no">SHA256SUMS</code> assinada pela chave acima, o SBOM e o manifesto do build, ficam na página da versão no GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. A chave que vem junto só vale se a impressão digital for a mostrada acima: o primeiro comando a mostra, para você comparar. Os comandos rodam em sequência e param no primeiro que falhar.</p>
 <div class="pre-scroll" role="region" aria-label="Comandos de verificação" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc &amp;&amp;
   gpg --import nulavio-packages.asc &amp;&amp;
   sig=$(gpg --status-fd 1 --verify SHA256SUMS.asc SHA256SUMS) &amp;&amp;
