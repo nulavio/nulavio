@@ -182,6 +182,8 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
             data = json.loads(paths.read_private_file(registry).decode("utf-8"))
         except (OSError, ValueError, paths.UnsafePathError):
             data = {}
+        if not isinstance(data, dict):  # read as unreadable, like a registry that is not JSON
+            data = {}
         for addon in data.get("addons", []):
             if addon.get("type") != "extension" or addon.get("location") != "app-profile":
                 continue

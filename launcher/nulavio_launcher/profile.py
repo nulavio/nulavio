@@ -113,6 +113,8 @@ class Profile:
             data = json.loads(paths.read_private_file(self.settings_path).decode("utf-8"))
         except FileNotFoundError:
             raise ProfileError(f"profile '{self.name}' has no Nulavio settings; run `nulavio setup`") from None
+        except ValueError:  # not UTF-8, or not JSON
+            raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}") from None
         if data.get("schema") != SETTINGS_SCHEMA:
             raise ProfileError(f"unsupported settings schema in {self.settings_path}")
         return data
@@ -395,6 +397,8 @@ def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]])
         existing = paths.read_private_file(target).decode("utf-8")
     except FileNotFoundError:
         existing = ""
+    except UnicodeDecodeError:
+        raise ProfileError(f"{target} is not valid UTF-8; the launcher does not append to it") from None
     stamp = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
     block = [f"// Nulavio launcher: applied {len(items)} pref(s) at {stamp}"]
     block += [prefs.format_pref(name, value) for name, value in items]

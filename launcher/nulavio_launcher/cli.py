@@ -208,6 +208,12 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
             _err(str(exc))
             return 1
     if pid is None:
+        try:
+            # user.js is replaced below, before the audit: one the audit refused (a symlink, a FIFO, another
+            # user's file) still stops the start, and is left as it is.
+            paths.read_private_file(prof.path / "user.js")
+        except FileNotFoundError:
+            pass
         locale = prof.load_settings().get("locale", "en")
         if locale != "en":
             profile.sync_langpack(prof, engine_mod.langpack(eng, locale))

@@ -570,6 +570,43 @@ class GuardAtLaunchTest(TempHome):
         self.assertEqual(code, 3, said)
         self.assertIn("guard [critical] xpinstall.signatures.required=False", said)
 
+    def test_a_user_js_the_audit_refused_still_stops_the_start(self):
+        # The launcher replaces user.js before the audit: one that is not the person's own regular file is refused
+        # first, as the audit refused it before the order changed, and is left as it was.
+        elsewhere = self.home / "elsewhere.js"
+        elsewhere.write_text(self.PROTECTIVE)
+        self.prof.path.joinpath("prefs.js").write_text("")
+        user_js = self.prof.path / "user.js"
+        for make, reason in ((lambda: os.symlink(elsewhere, user_js), "symlink"), (lambda: os.mkfifo(user_js), "regular")):
+            with self.subTest(reason):
+                user_js.unlink()
+                make()
+                code, said = self.run_cli()
+                self.assertEqual(code, 1, said)
+                self.assertIn(reason, said)
+                self.assertFalse(user_js.is_file() and not user_js.is_symlink(), "user.js was replaced")
+        self.assertEqual(elsewhere.read_text(), self.PROTECTIVE)
+
+    def test_a_malformed_profile_file_is_reported_not_a_traceback(self):
+        # Preparing now comes before the audit: a file it cannot read ends the start with a message, not a crash.
+        settings = self.prof.load_settings()
+        settings["pending_prefs"] = {"browser.startup.page": 1}
+        self.prof.save_settings(settings)
+        self.prof.path.joinpath("prefs.js").write_bytes(b'user_pref("a", "\xff");\n' + self.WEAK.encode())
+        code, said = self.run_cli()
+        self.assertEqual(code, 1, said)
+        self.assertIn("prefs.js", said)
+        paths.write_private_file(self.prof.settings_path, '{"schema": ')
+        code, said = self.run_cli()
+        self.assertEqual(code, 1, said)
+        self.assertIn("settings", said)
+
+    def test_an_extension_registry_that_is_not_an_object_does_not_stop_the_audit(self):
+        self.prof.path.joinpath("extensions.json").write_text("[]")
+        code, said = self.run_cli()
+        self.assertEqual(code, 3, said)
+        self.assertIn("guard [critical] security.sandbox.content.level=0", said)
+
     def test_an_open_profile_is_audited_as_it_is_and_not_prepared(self):
         os.symlink(f"127.0.0.1:+{os.getpid()}", self.prof.path / "lock")
         code, said = self.run_cli()
