@@ -49,18 +49,6 @@ const {AboutNewTab} = ChromeUtils.importESModule("resource:///modules/AboutNewTa
 return AboutNewTab.newTabURL;
 """
 
-# The browser window showing `url`, by its browsing context id, with the address of each of its tabs.
-FIND_WINDOW = """
-const [url] = arguments;
-for (const w of Services.wm.getEnumerator("navigator:browser")) {
-  const tabs = w.gBrowser.tabs.map(t => t.linkedBrowser.currentURI.spec);
-  if (!w.closed && tabs.some(u => u.startsWith(url))) {
-    return {id: w.browsingContext.id, tabs};
-  }
-}
-return null;
-"""
-
 OPEN_WINDOW = """
 const w = OpenBrowserWindow();
 await new Promise(resolve => {
@@ -146,20 +134,19 @@ class LastTabCloseTest(unittest.TestCase):
         else:
             loaded = harness.wait_until(lambda: self.m.execute(PAGE_STATE, [button]) is not None, timeout=20)
             self.assertTrue(loaded, f"{page} did not load")
-        window = self.m.chrome(FIND_WINDOW, [self.base + page])
-        self.assertTrue(window, f"{page}: its window was not found")
-        self.assertEqual(window["id"], opened, f"{page} did not load in the window opened for it")
-        self.assertEqual(len(window["tabs"]), 1, f"{page} is not its window's only tab: {window['tabs']}")
+        # The window opened for this case, by its id: a page an earlier failed case left open has the same path.
+        alone = self.m.chrome(WINDOW_TABS, [opened])
+        self.assertEqual(alone, [self.base + page + query], f"{page}{query} is not its window's only tab: {alone}")
         self.m.execute("document.querySelector(arguments[0]).click();", [button])
         self.m.switch_to(self.main)  # the page's tab goes away: drive from a tab that stays
         # The new-tab page, by the address the override gives it (or its about: name while it loads).
         new_tab = {self.new_tab, "about:newtab"}
 
         def settled():
-            tabs = self.m.chrome(WINDOW_TABS, [window["id"]])
+            tabs = self.m.chrome(WINDOW_TABS, [opened])
             return tabs if tabs and len(tabs) == 1 and tabs[0] in new_tab else None
 
-        tabs = harness.wait_until(settled, timeout=20) or self.m.chrome(WINDOW_TABS, [window["id"]])
+        tabs = harness.wait_until(settled, timeout=20) or self.m.chrome(WINDOW_TABS, [opened])
         self.assertIsNotNone(tabs, f"{page}: {button} closed the window")
         self.assertEqual(len(tabs), 1, f"{page}: {button} left {tabs}")
         self.assertIn(tabs[0], new_tab, f"{page}: {button} left {tabs}, not the new-tab page")
