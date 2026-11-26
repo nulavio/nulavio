@@ -1497,6 +1497,36 @@ holdThread = false;
 threadHeld.splice(0).forEach(answer => answer());
 await idle();
 out.resumedAfter = $("send-line").textContent.split("|").slice(0, 2);
+// #773 (OpenCodeReview, round 3): an item from the selected tab is shown. The panel renders again, another tab is
+// selected while it reads the conversation, and the tab event's reply arrives before the render's own reads: the item
+// leaves then, so a Send before those reads come back carries nothing from the tab the person left.
+selected = tab;
+kept = [item("c21", "Vigésima primeira")];
+$("allow-profile").fire("click");
+await idle();
+out.tabEventBefore = shown();
+holdThread = true;
+holdPage = true;
+hold = true;
+$("allow-profile").fire("click");
+await idle();
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+pageHeld.shift()(); // the tab event's reply first
+await idle();
+out.tabEventShown = shown();
+out.tabEventRemoved = removed.includes("c21");
+holdPage = false;
+await send("Pergunta 17");
+out.tabEventSent = starts.at(-1).chips;
+pageHeld.splice(0).forEach(answer => answer());
+await release();
+out.tabEventAfter = shown();
+await finish();
 console.log(JSON.stringify(out));
 """
 
@@ -1630,6 +1660,14 @@ class PanelChipsTest(unittest.TestCase):
         self.assertTrue(out["resumedIncludeHidden"])
         self.assertTrue(out["resumedNoPageHidden"])
         self.assertEqual(out["resumedAfter"], ["assistantSendLine", "Terceiro"])
+
+    def test_a_render_does_not_cancel_a_tab_event_check_on_its_way(self):
+        out = self._run()  # #773 (OpenCodeReview, round 3): the tab event's reply drops the item it does not hold
+        self.assertEqual(out["tabEventBefore"], ["c21"])
+        self.assertEqual(out["tabEventShown"], [])
+        self.assertTrue(out["tabEventRemoved"])
+        self.assertEqual(out["tabEventSent"], [])
+        self.assertEqual(out["tabEventAfter"], [])
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
         out = self._run()

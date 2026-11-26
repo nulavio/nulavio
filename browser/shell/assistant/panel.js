@@ -369,8 +369,9 @@ async function checkedChips(version, fallback) {
   }
 }
 
-/** The items the browser kept while the panel was closed (a new revision: what was on its way is not for them). */
-const restoreChips = () => checkedChips(++contextVersion, () => []);
+/** The items the browser kept while the panel was closed. The revision is not bumped: a tab event's check on its way
+    still drops what the tab it read does not hold, before these reads come back (#773). */
+const restoreChips = () => checkedChips(contextVersion, () => []);
 
 function syncMode() {
   const task = mode() === "task";
