@@ -43,6 +43,7 @@ class PageFrameTest(unittest.TestCase):
             "http://127.0.0.1:1/login#field",
             "http://127.0.0.1:1/a%2Fb?x=1&y=two+words%20here",
             'https://localhost:1/page/x?q="<b>"&amp=1',
+            "HTTPS://localhost:1/login",  # the scheme in any case, kept as written
         ):
             with self.subTest(address=address):
                 srcs, body = self.frames(address)
@@ -53,8 +54,9 @@ class PageFrameTest(unittest.TestCase):
         body, _ctype, _extra = self.server.route("/page/home")
         self.assertNotIn(b"<iframe", body)
 
-    def test_an_address_that_is_not_http_or_https_is_refused(self):
+    def test_an_address_that_is_not_http_or_https_with_a_host_is_refused(self):
         refused = ("javascript:alert(1)", "JavaScript:alert(1)", "\tjavascript:alert(1)", " javascript:x", "data:text/html,x")
+        refused += ("", "https://", "http:///login", "http://:1/login", "http://[::1/login")  # given, but no usable host
         for address in refused:
             with self.subTest(address=address):
                 srcs, body = self.frames(address)
