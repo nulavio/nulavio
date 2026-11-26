@@ -342,7 +342,7 @@ class PasswordsTest(unittest.TestCase):
         chrome_async(
             self.m,
             "const login = (await Services.logins.getAllLogins()).find(l => l.origin === args[0]);"
-            "Services.logins.removeLogin(login); return true;",
+            "await Services.logins.removeLoginAsync(login); return true;",
             [self.real],
         )
         try:
