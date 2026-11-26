@@ -129,11 +129,12 @@ class Container:
         mounted on it. Its path reaches the root of a volume mounted there, and gocryptfs keeps that root's mode as
         the mode of P.vault/cipher: a chmod by path just after another request unlocked the profile would leave its
         encrypted folder read-only, and every later unlock a profile the engine cannot write to (#620). With a volume
-        mounted, nothing is changed: mount() left the folder underneath it read-only."""
-        bare = os.open(self.mountpoint, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        mounted, nothing is changed: mount() left the folder underneath it read-only. A path handle (O_PATH), changed
+        through /proc: it needs no read permission on the folder, as a chmod by path did not (#783 review)."""
+        bare = os.open(self.mountpoint, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             if os.fstat(bare).st_dev == os.stat(self.mountpoint.parent).st_dev:
-                os.fchmod(bare, LOCKED_MODE)
+                os.chmod(f"/proc/self/fd/{bare}", LOCKED_MODE)  # the handle's folder, also if a volume is mounted on it now
         finally:
             os.close(bare)
 
@@ -143,7 +144,11 @@ class Container:
         even the engine's lock (#620). Under the state lock, with nothing mounted; through a handle, never a link. A
         repair, not a check: when it cannot be made, the unlock goes on as before and the log says so."""
         try:
-            cipher = os.open(self.cipher, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            root = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)  # P.vault itself, not a link
+            try:
+                cipher = os.open("cipher", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root)
+            finally:
+                os.close(root)
             try:
                 if os.fstat(cipher).st_mode & 0o7777 != 0o700:
                     os.fchmod(cipher, 0o700)
@@ -203,19 +208,18 @@ class Container:
     def mount(self, vault: Vault, idle_minutes: int | None = None) -> None:
         if not self.vault_path.exists():
             raise StorageError("not-encrypted")
-        if self.mounted():
-            self._refuse_changed(vault)
-            return
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
-            # Checked again, and only now for files in the folder: another unlock of this profile (a second tab,
-            # the chooser, the phone, the command line) may have mounted it while this one waited for the lock.
-            # The profile is then open, which is what this request asked for; going on would fail on the mounted
-            # folder, or take the volume's own files for plaintext in a locked profile (#620). Not with a key
-            # file that changed since this request read it, as when nothing is mounted (#783 review).
+            # Checked only under the lock, and only then for files in the folder: another unlock of this profile (a
+            # second tab, the chooser, the phone, the command line) may have mounted it while this one waited. The
+            # profile is then open, which is what this request asked for; going on would fail on the mounted folder,
+            # or take the volume's own files for plaintext in a locked profile (#620). Never before the lock: the
+            # other unlock holds it until its volume's generation is checked, and takes away a volume it refuses
+            # (U-T21). Not with a key file that changed since this request read it, as when nothing is mounted
+            # (#783 review).
             if self.mounted():
                 self._refuse_changed(vault)
-                log.event("vault.unlocked-meanwhile")
+                log.event("vault.already-unlocked")
                 return
             if any(self.mountpoint.iterdir()):
                 raise StorageError("mountpoint-not-empty", "plaintext files appeared in a locked profile")
