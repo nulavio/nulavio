@@ -1,7 +1,8 @@
 """ADR 0009: Immersive. The toolbar and the tab list leave the view; the band stays, with the site.
 
 The window decides where the mode applies: never where the band cannot name the page, never in a
-pop-up, never while a device is shared; and a panel anchored on the toolbar keeps it shown."""
+pop-up, never while the camera, the microphone or the screen is shared, nor while the engine draws its in-use icon
+for the location or a serial port on the selected tab; and a panel anchored on the toolbar keeps it shown."""
 
 from __future__ import annotations
 
@@ -402,6 +403,55 @@ class ImmersiveTest(unittest.TestCase):
         self.assertEqual(self.window()["off"], "sharing", self.window())
         self.m.chrome("gBrowser.updateBrowserSharing(gBrowser.tabs[0].linkedBrowser, {webRTC: null});")
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+
+    def test_06d_the_location_or_a_serial_port_in_use_keeps_the_toolbar(self):
+        """#627: with a stored allow the engine asks nothing; it draws its in-use icon for the location in the
+        identity box, which is in the toolbar, for the selected tab, until the page goes. The toolbar stays while it
+        does. A serial port in use is drawn the same way."""
+        self.assertFalse(self.settled(False)["toolbar"])
+        # The engine's network provider is given no address, so no location service is asked (it answers an error).
+        self.m.chrome("Services.prefs.setStringPref('geo.provider.network.url', '');")
+        self.addCleanup(self.m.chrome, "Services.prefs.clearUserPref('geo.provider.network.url');")
+        site = "gBrowser.tabs[0].linkedBrowser.contentPrincipal"
+        self.m.chrome(f"Services.perms.addFromPrincipal({site}, 'geo', Services.perms.ALLOW_ACTION);")
+        self.addCleanup(
+            self.m.chrome,
+            f"Services.perms.removeFromPrincipal({site}, 'geo');"
+            "for (const tab of gBrowser.tabs) gBrowser.updateBrowserSharing(tab.linkedBrowser, {geo: false, serial: null});",
+        )
+        icon = "return document.getElementById(arguments[0]).getAttribute('sharing');"
+        prompt = "return !!PopupNotifications.getNotification('geolocation', gBrowser.selectedBrowser);"
+        self.m.execute("navigator.geolocation.getCurrentPosition(() => {}, () => {});")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(icon, ["geo-sharing-icon"]), 15), "no location icon")
+        self.assertFalse(self.m.chrome(prompt), "the engine asked: this is the prompt's hold, not the icon's")
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 10), self.window())
+        state = self.settled(True)
+        self.assertEqual((state["on"], state["hold"], state["toolbar"]), (False, None, True), state)
+        # Another tab selected: the engine draws no icon for it, and the mode is back; the first tab again: not.
+        self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);", [self.page])
+        self.addCleanup(self.m.chrome, "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+        self.assertIsNone(self.m.chrome(icon, ["geo-sharing-icon"]))
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 10), self.window())
+        # The page goes (the engine forgets its use of the location on a new document): the mode is back.
+        self.m.chrome("gBrowser.removeTab(gBrowser.tabs.at(-1));")
+        self.m.navigate(self.page)
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+        self.assertIsNone(self.m.chrome(icon, ["geo-sharing-icon"]))
+        # A serial port opened and closed by the page, as the engine reports it (SerialDeviceSharingHelper).
+        serial = (
+            "const bag = Cc['@mozilla.org/hash-property-bag;1'].createInstance(Ci.nsIWritablePropertyBag2);"
+            "bag.setPropertyAsUint64('browserId', gBrowser.selectedBrowser.browserId);"
+            "bag.setPropertyAsBool('connected', arguments[0]);"
+            "Services.obs.notifyObservers(bag, 'serial-device-state-changed');"
+        )
+        self.m.chrome(serial, [True])
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 10), self.window())
+        self.assertEqual(self.m.chrome(icon, ["serial-sharing-icon"]), "serial")
+        self.assertTrue(self.settled(True)["toolbar"])
+        self.m.chrome(serial, [False])
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
 
     def test_06b_a_prompt_on_the_tab_brings_the_full_window_back(self):
         """Independent review (2026-11-11): the engine's tab prompts are not panels. For a cross-site HTTP
