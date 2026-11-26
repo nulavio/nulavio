@@ -10,8 +10,9 @@ fonts are referenced, not bundled, so they are not listed.
 
 With --package, the SBOM of a Nulavio package (RPM or .deb) instead: the
 engine is then redistributed, built from Mozilla's source release with the
-patches in browser/patches (each listed with its SHA-256 in the pedigree),
-and the package file's own SHA-256 identifies what it describes.
+patches in browser/patches (each listed in the pedigree, with its SHA-256 as
+a "nulavio:patch-sha256:<patch>" property of the engine), and the package
+file's own SHA-256 identifies what it describes.
 
     python3 -I scripts/release/sbom.py --package dist/packages/x86_64/nulavio-158.0.1-0.1.fc44.x86_64.rpm \
         --engine-version 158.0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
@@ -116,17 +117,12 @@ def engine_built(version: str) -> dict:
         "externalReferences": [
             {"type": "distribution", "url": f"https://archive.mozilla.org/pub/firefox/releases/{version}/source/"},
         ],
-        "properties": [{"name": "nulavio:role", "value": "redistributed, built by scripts/build/build_nulavio.sh"}],
+        # CycloneDX 1.6 allows only type, diff and resolves in a patch (issue #634), so each patch's
+        # SHA-256 is a property of the engine, named after the patch its diff.url points to.
+        "properties": [{"name": "nulavio:role", "value": "redistributed, built by scripts/build/build_nulavio.sh"}]
+        + [{"name": f"nulavio:patch-sha256:{name}", "value": sha256(PATCHES / name)} for name in names],
         "pedigree": {
-            "patches": [
-                {
-                    "type": "unofficial",
-                    "diff": {"url": f"browser/patches/{name}"},
-                    "resolves": [],
-                }
-                | {"properties": [{"name": "sha256", "value": sha256(PATCHES / name)}]}
-                for name in names
-            ]
+            "patches": [{"type": "unofficial", "diff": {"url": f"browser/patches/{name}"}, "resolves": []} for name in names]
         },
     }
 
