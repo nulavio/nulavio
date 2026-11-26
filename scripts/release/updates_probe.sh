@@ -1,7 +1,8 @@
 #!/bin/sh
 # Check Nulavio's automatic updates on a clean package install (#241), as root inside the package check containers:
 # they are off after the install, the helper turns them on and off, the units are valid where systemd-analyze is
-# there, and removing the package takes the units away (the flag file stays, empty, read by nothing).
+# there, the update fails without Nulavio's repository and, on APT, when the refresh of its index fails, and removing
+# the package takes the units away (the flag file stays, empty, read by nothing).
 #
 #   updates_probe.sh <command that removes the nulavio package>...
 set -eu
@@ -29,13 +30,48 @@ fi
 # No systemd runs in the container: the helper says the timer starts at the next boot, and still sets the state.
 [ "$("$helper" on 2>/dev/null)" = on ] && [ -f "$flag" ] && [ ! -s "$flag" ] || fail "on did not create $flag"
 [ "$("$helper" off 2>/dev/null)" = off ] && [ ! -e "$flag" ] || fail "off did not remove $flag"
-# What the service runs, with no Nulavio repository configured in the container: it refuses, and changes nothing.
+# What the service runs, with no Nulavio repository configured in the container: it refuses, and changes nothing. On a
+# .deb install, an image that already has Nulavio's APT list, or a link at its place, would make this case, and the
+# next one, check something else (an RPM install never reads that list).
+deb=""
+rpm -q nulavio >/dev/null 2>&1 || deb=1
+list=/etc/apt/sources.list.d/nulavio.sources
+if [ -n "$deb" ] && { [ -e "$list" ] || [ -L "$list" ]; }; then
+    fail "$list is there before the checks: the image must not configure Nulavio's repository"
+fi
 before=$(rpm -q nulavio 2>/dev/null || dpkg-query -W -f='${Version}' nulavio)
 if /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
     fail "update-nulavio succeeded without Nulavio's repository: $(cat /tmp/update.out)"
 fi
 after=$(rpm -q nulavio 2>/dev/null || dpkg-query -W -f='${Version}' nulavio)
 [ "$before" = "$after" ] || fail "update-nulavio changed the package without Nulavio's repository"
+# On APT, with Nulavio's list pointing at an address that refuses the connection: the failed refresh of its index fails
+# the run (#713), instead of a warning and an install from the lists APT had before.
+refresh=""
+if [ -n "$deb" ]; then
+    printf 'Types: deb\nURIs: http://127.0.0.1:9/apt\nSuites: stable\nComponents: main\n' >"$list"
+    # Straight to that address, past any proxy the container got from podman (a proxy's 403 also fails the fetch, even
+    # without Error-Mode=any), and with APT's messages in English for the check below. The setting goes in a private
+    # directory, not at a fixed name in /tmp that the image or the earlier checks could already hold.
+    conf=$(mktemp -d)
+    trap 'rm -rf "$conf"' EXIT
+    printf 'Acquire::http::Proxy::127.0.0.1 "DIRECT";\n' >"$conf/direct.conf"
+    if APT_CONFIG="$conf/direct.conf" LC_ALL=C /usr/libexec/nulavio/update-nulavio >/tmp/update.out 2>&1; then
+        fail "update-nulavio succeeded when the refresh of Nulavio's index failed: $(cat /tmp/update.out)"
+    fi
+    rm -rf "$conf"
+    trap - EXIT
+    # The refused connection to that address itself, not a proxy's answer for it (a proxy set for 127.0.0.1 in
+    # apt.conf.d, read after APT_CONFIG, would win over the DIRECT setting).
+    if ! grep -q "^E: Failed to fetch http://127.0.0.1:9/apt/" /tmp/update.out ||
+        ! grep -qF "Could not connect to 127.0.0.1:9 (127.0.0.1). - connect (111: Connection refused)" /tmp/update.out; then
+        fail "update-nulavio did not fail on the refresh of Nulavio's index: $(cat /tmp/update.out)"
+    fi
+    rm -f "$list"
+    after=$(dpkg-query -W -f='${Version}' nulavio)
+    [ "$before" = "$after" ] || fail "update-nulavio changed the package when the refresh of Nulavio's index failed"
+    refresh=" or when the refresh of its index fails"
+fi
 "$helper" on >/dev/null 2>&1
 "$@" >/dev/null 2>&1 || fail "removing the package failed"
 for f in $shipped; do
@@ -43,4 +79,4 @@ for f in $shipped; do
 done
 [ ! -L "$link" ] || fail "the timer's link is still there after removal"
 [ -f "$flag" ] || fail "$flag went with the package"
-echo "automatic updates: off after install, the helper turns them on and off$verified, update-nulavio refuses without Nulavio's repository; removal takes the units, leaves $flag"
+echo "automatic updates: off after install, the helper turns them on and off$verified, update-nulavio refuses without Nulavio's repository$refresh; removal takes the units, leaves $flag"
