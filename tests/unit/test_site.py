@@ -985,6 +985,108 @@ class WaitlistRemovalTest(unittest.TestCase):
         self.assertNotRegex(contributing, r"(?i)DELETE FROM waitlist", "the address is never pasted into SQL by hand")
 
 
+# What scripts/site/build_site.py reads, traced while it builds (#661). The hook logs every file a
+# process opens (Python's "open" audit event, imports included) and every process it starts. The
+# build runs in a child of the test with the hook installed first; the python3 -c child the build
+# starts for `prefs explain` gets the same hook put ahead of its own code.
+TRACE_HOOK = """import json as _json, os as _os, sys as _sys
+def _nulavio_trace(event, args, _log=open({log!r}, "a", encoding="utf-8", buffering=1)):
+    try:
+        if event == "open" and isinstance(args[0], (str, bytes)):
+            _log.write("open\\t" + _os.path.abspath(_os.fsdecode(args[0])) + "\\n")
+        elif event == "subprocess.Popen":
+            cwd = _os.path.abspath(_os.fsdecode(args[2])) if args[2] is not None else _os.getcwd()
+            _log.write("run\\t" + _json.dumps([cwd, [_os.fsdecode(a) for a in args[1]]]) + "\\n")
+        elif event in ("os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork"):
+            _log.write("other\\t" + event + "\\n")
+    except Exception:
+        pass  # an exception in an audit hook would abort the call it audits
+_sys.addaudithook(_nulavio_trace)
+"""
+TRACE_BUILD = """import pathlib, subprocess, sys
+root, out, hook = sys.argv[1:4]
+exec(hook)
+_run = subprocess.run
+def _traced(argv, *args, **kwargs):
+    argv = [str(a) for a in argv]
+    if pathlib.Path(argv[0]).name.startswith("python") and "-c" in argv:
+        argv[argv.index("-c") + 1] = hook + argv[argv.index("-c") + 1]
+    return _run(argv, *args, **kwargs)
+subprocess.run = _traced
+sys.path.insert(0, str(pathlib.Path(root) / "scripts" / "site"))
+import build_site
+build_site.build(pathlib.Path(out))
+"""
+
+
+def traced_build_inputs(test: unittest.TestCase) -> set[str]:
+    """The files of this tree that a build of the site reads, relative to the root.
+
+    What the trace cannot see: directory listings (the import system lists every directory on
+    sys.path, so counting them would demand a glob over each), a file only checked for existence,
+    what git and gpg read (git reads .git; gpg is handed its file, which counts), and branches of
+    the build this tree does not take (a file read only once release.json names something else).
+    """
+    with tempfile.TemporaryDirectory(prefix="nulavio-site-trace-") as tmp:
+        log, out = Path(tmp) / "trace.log", Path(tmp) / "site"
+        hook = TRACE_HOOK.format(log=str(log))
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", TRACE_BUILD, str(ROOT), str(out), hook],
+            capture_output=True, text=True, timeout=300, cwd=tmp,
+        )  # fmt: skip
+        test.assertEqual(result.returncode, 0, result.stderr[-2000:])
+        lines = log.read_text(encoding="utf-8").splitlines()
+    read, other = set(), []
+    for line in lines:
+        kind, _, value = line.partition("\t")
+        if kind == "open":
+            read.add(value)
+        elif kind == "run":
+            cwd, argv = json.loads(value)
+            name = Path(argv[0]).name
+            if name.startswith("python") and not ("-c" in argv and "_nulavio_trace" in argv[argv.index("-c") + 1]):
+                other.append(f"untraced python: {argv[:4]}")
+            elif not name.startswith("python") and name not in ("git", "gpg"):
+                other.append(f"unknown program: {argv[0]}")
+            read.update(str(Path(cwd, arg)) for arg in argv[1:] if "\n" not in arg)
+        else:
+            other.append(value)
+    test.assertEqual(other, [], "the build starts a process this trace does not follow: teach traced_build_inputs about it")
+    inputs = set()
+    for name in read:
+        path = Path(os.path.realpath(name))
+        if path.parent.name == "__pycache__" and path.suffix == ".pyc":
+            path = path.parent.parent / (path.name.split(".", 1)[0] + ".py")  # x.cpython-312.pyc is x.py
+        if not path.is_relative_to(ROOT) or not path.is_file():
+            continue
+        relative = path.relative_to(ROOT).as_posix()
+        if not relative.startswith(".git/"):
+            inputs.add(relative)
+    return inputs
+
+
+def path_filter_matches(patterns: list[str], path: str) -> bool:
+    """GitHub's paths filter: * and ? stop at "/", ** crosses it; the last matching pattern decides, "!" excludes.
+
+    The same reading as test_ai_review.github_path_filter_matches; fnmatch would let * cross "/".
+    """
+    included = False
+    for pattern in patterns:
+        negative = pattern.startswith("!")
+        glob = pattern[1:] if negative else pattern
+        regex = "".join(
+            ".*" if token == "**" else "[^/]*" if token == "*" else "[^/]" if token == "?" else re.escape(token)
+            for token in re.findall(r"\*\*|\*|\?|[^*?]+", glob)
+        )
+        if re.fullmatch(regex, path):
+            included = not negative
+    return included
+
+
+def unwatched(inputs: set[str], patterns: list[str]) -> list[str]:
+    return sorted(path for path in inputs if not path_filter_matches(patterns, path))
+
+
 class SiteWorkflowTest(unittest.TestCase):
     """.github/workflows/site.yml: only main deploys, in the site environment, and the workflow hands the token to one step.
 
@@ -1019,6 +1121,25 @@ class SiteWorkflowTest(unittest.TestCase):
         triggers = self.block(self.lines, "on:")
         self.assertEqual(self.keys(triggers), ["push:", "workflow_dispatch:"])
         self.assertEqual(self.keys(self.block(triggers, "push:"))[0], "branches: [main]")
+
+    def push_paths(self):
+        paths = self.block(self.block(self.block(self.lines, "on:"), "push:"), "paths:")
+        return [line.strip().removeprefix("- ").strip('"') for line in paths]
+
+    def test_a_push_that_changes_anything_the_build_reads_runs_it(self):
+        # #661: the build counted the defaults in browser/config/prefs/baseline.js and ran the
+        # launcher, which reads it, but a push that changed only that file deployed nothing.
+        inputs = traced_build_inputs(self)
+        for known in ("browser/config/prefs/baseline.js", "launcher/nulavio_launcher/cli.py", "scripts/release/whats_new.py"):
+            self.assertIn(known, inputs, "the trace no longer sees what the build reads")
+        self.assertEqual(unwatched(inputs, self.push_paths()), [], "add these to the push paths of site.yml")
+
+    def test_the_paths_check_finds_an_input_the_workflow_does_not_watch(self):
+        patterns = [p for p in self.push_paths() if not p.startswith("browser/config/")]
+        inputs = {"browser/config/prefs/baseline.js", "launcher/nulavio_launcher/cli.py", "site/en/index.html"}
+        self.assertEqual(unwatched(inputs, patterns), ["browser/config/prefs/baseline.js"])
+        self.assertFalse(path_filter_matches(["site/*"], "site/en/index.html"), "* stops at /")
+        self.assertFalse(path_filter_matches(["launcher/**", "!launcher/x.py"], "launcher/x.py"))
 
     def test_the_deploy_job_runs_on_main_in_the_site_environment_with_read_access_only(self):
         self.assertIn("permissions: {}", self.keys(self.lines))
