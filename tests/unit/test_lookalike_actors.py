@@ -165,15 +165,24 @@ class LookalikeActorsTest(unittest.TestCase):
         # A full history keeps its length: the warning takes the last entry.
         case = self.cases["frame_history_full"]
         self.assertEqual(case["bound"], {"index": 49, "url": case["warning"]}, case)
+        # A max_entries below the engine's default: the engine keeps 50 entries, and the warning takes entry 21.
+        case = self.cases["frame_history_pref_below_the_default"]
+        self.assertEqual(case["bound"], {"index": 21, "url": case["warning"]}, case)
         # A field in the tab's page goes on to its own address: nothing to bind.
         self.assertIsNone(self.cases["parent_warns"]["bound"])
 
     def test_two_documents_of_one_tab_open_one_warning(self):
         case = self.cases["parent_two_frames_at_once"]
         self.assertEqual(case["loads"], 1, case)
-        self.assertEqual(case["answers"], [True, True], case)
+        # The one held back is told nothing was decided: its next input asks again.
+        self.assertEqual(case["answers"], [True, False], case)
         # Once that warning took its entry, the page shown again by Back warns again.
         self.assertEqual(self.cases["parent_warns_again_after_back"], {"loads": 2, "answers": [True, True]})
+        case = self.cases["parent_warns_again_after_back_with_a_forward_entry"]
+        self.assertEqual(case, {"loads": 2, "answers": [True, True], "count": 4})
+
+    def test_a_document_held_back_by_a_warning_never_shown_asks_again_and_warns(self):
+        self.assertEqual(self.cases["parent_first_warning_never_shown"], {"loads": 2, "answers": [True, False, True]})
 
     def test_a_frame_site_gives_only_its_origin_to_the_warnings_address(self):
         # Its path, query and fragment stay out of the tab's address; the check itself had the whole address.

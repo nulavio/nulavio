@@ -27,6 +27,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
 const DATA_URL = "resource://builtin-addons/nulavio-shell/shared/providers.json";
 const ORDER = ["builtin", "proton-pass", "keepassxc", "bitwarden", "1password"];
 export const PREF_DISMISSED = "nulavio.passwords.lookalikeDismissed";
+const READS = 3; // reads of the saved logins for one check, when they change while being read
 // The engine's own permission name (LoginManager.sys.mjs); test_vault_ui checks it still decides.
 const PERMISSION_SAVE_LOGINS = "login-saving";
 const LOGIN_WORDS = ["login", "signin", "secure", "account", "verify", "update", "support", "auth", "conta", "seguro", "acesso", "entrar", "senha"];
@@ -260,7 +261,7 @@ class Passwords {
      no other call lists the logins' sites without decrypting them. So the check waits for the person to
      unlock the token where the engine asks for it, and nothing is kept meanwhile (R41). isLoggedIn is
      also false while the store starts, which is why its start is awaited first. */
-  async #sites() {
+  async #sites(attempt = 0) {
     if (this.#savedSites) {
       return this.#savedSites;
     }
@@ -273,7 +274,7 @@ class Passwords {
     }
     // Checks that start while the logins are read (several frames of one tab) wait for the same read.
     if (!this.#reading) {
-      const reading = this.#readSites().finally(() => {
+      const reading = this.#readSites(attempt).finally(() => {
         if (this.#reading === reading) {
           this.#reading = null;
         }
@@ -283,7 +284,7 @@ class Passwords {
     return this.#reading;
   }
 
-  async #readSites() {
+  async #readSites(attempt) {
     const generation = this.#generation;
     await Services.logins.initializationPromise;
     if (!Services.logins.isLoggedIn) {
@@ -297,7 +298,9 @@ class Passwords {
       } catch {}
     }
     if (generation !== this.#generation) {
-      return this.#sites(); // the saved logins changed meanwhile: read them again
+      // The saved logins changed meanwhile: read them again, up to READS times in all for one check; then answer
+      // with this read, not kept, so a burst of changes cannot hold the check back.
+      return attempt + 1 < READS ? this.#sites(attempt + 1) : [...sites];
     }
     this.#savedSites = [...sites];
     return this.#savedSites;

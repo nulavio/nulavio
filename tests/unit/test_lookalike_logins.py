@@ -56,6 +56,10 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["first"], case["second"]), (FOUND, FOUND))
         self.assertEqual(case["reads"], 1, case)
 
+    def test_a_burst_of_changes_does_not_hold_a_check_back(self):
+        case = self.cases["storage_changed_during_every_read"]
+        self.assertEqual((case["first"], case["reads"]), (FOUND, 3), case)
+
     def test_a_change_during_the_read_is_read_again(self):
         case = self.cases["storage_changed_during_the_read"]
         self.assertEqual(case["after"], {"suspicious": False}, case)

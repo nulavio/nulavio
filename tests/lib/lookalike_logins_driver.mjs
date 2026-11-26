@@ -174,6 +174,21 @@ const cases = {
     const [first, second] = await Promise.all([check(passwords), check(passwords)]);
     return result(store, { first, second });
   },
+  // The saved logins change during every read (a burst of changes): a check reads them at most 3 times and answers.
+  storage_changed_during_every_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    let changes = 0;
+    store.onRead = () => {
+      if (changes++ < 5) {
+        for (const fn of observers.get("passwordmgr-storage-changed") ?? []) {
+          fn();
+        }
+      }
+    };
+    const first = await check(passwords);
+    return result(store, { first });
+  },
   // A change to the saved logins while they are read: the next check reads them again.
   storage_changed_during_the_read: async () => {
     const store = loginManager();

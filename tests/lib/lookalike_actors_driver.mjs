@@ -74,6 +74,28 @@ globalThis.JSWindowActorParent = class {
 };
 
 let passwords = null;
+let maxEntries = 50;
+let now = 1_000_000; // Date.now(), moved by the cases that need time to pass
+Date.now = () => now;
+
+/** A tab's session history: entries by id, the one shown at `index`. Loading a page drops the entries after it. */
+function sessionHistory(index, count) {
+  let next = 100;
+  return {
+    index,
+    entries: Array.from({ length: count }, () => next++),
+    get count() {
+      return this.entries.length;
+    },
+    getEntryAtIndex(i) {
+      return { ID: this.entries[i] };
+    },
+    load() {
+      this.entries = [...this.entries.slice(0, this.index + 1), next++];
+      this.index++;
+    },
+  };
+}
 globalThis.ChromeUtils = {
   defineESModuleGetters(lazy) {
     Object.defineProperty(lazy, "NulavioPasswords", { get: () => passwords });
@@ -83,7 +105,11 @@ globalThis.WebExtensionPolicy = { getByID: () => ({ getURL: path => `moz-extensi
 globalThis.Services = {
   io: { newURI: spec => new URI(spec) },
   scriptSecurityManager: { getSystemPrincipal: () => ({ system: true }) },
-  prefs: { getIntPref: (name, fallback) => (name === "browser.sessionhistory.max_entries" ? 50 : fallback) },
+  // browser.sessionhistory.max_entries: the user's value (`maxEntries`), and the default the engine keeps as a floor.
+  prefs: {
+    getIntPref: (name, fallback) => (name === "browser.sessionhistory.max_entries" ? maxEntries : fallback),
+    getDefaultBranch: () => ({ getIntPref: (name, fallback) => (name === "browser.sessionhistory.max_entries" ? 50 : fallback) }),
+  },
 };
 
 const { NulavioLookalikeChild } = await import(pathToFileURL(process.argv[2]).href);
@@ -164,7 +190,7 @@ function tab(docs, loads) {
   }
   const browser = { browsingContext: contexts[0], loadURI: uri => loads.push(uri.spec) };
   contexts[0].embedderElement = browser;
-  contexts[0].sessionHistory = { index: 2, count: 3 }; // the tab's page is its third and last entry
+  contexts[0].sessionHistory = sessionHistory(2, 3); // the tab's page is its third and last entry
   return { contexts, browser };
 }
 
@@ -391,7 +417,16 @@ const cases = {
     }),
   // The tab's history is full (browser.sessionhistory.max_entries): the warning takes the last entry, the oldest goes.
   frame_history_full: () =>
-    parent({ docs: [doc(REAL), doc(FAKE)], during: ({ contexts }) => (contexts[0].sessionHistory.index = 49) }),
+    parent({ docs: [doc(REAL), doc(FAKE)], during: ({ contexts }) => (contexts[0].sessionHistory = sessionHistory(49, 50)) }),
+  // A max_entries set below the engine's default: the engine keeps the default (50), and so does the warning's entry.
+  frame_history_pref_below_the_default: async () => {
+    maxEntries = 10;
+    try {
+      return await parent({ docs: [doc(REAL), doc(FAKE)], during: ({ contexts }) => (contexts[0].sessionHistory = sessionHistory(20, 21)) });
+    } finally {
+      maxEntries = 50;
+    }
+  },
   // A frame's address with a port, a query and a fragment: only its origin goes in the warning's address.
   frame_address_with_a_query: () =>
     parent({ docs: [doc(REAL), doc("https://paypa1.example:8443/login?token=s3cret&state=x#frag")] }),
@@ -437,9 +472,60 @@ cases.parent_warns_again_after_back = async () => {
     checkLogin: async url => ({ suspicious: true, site: new URL(url).hostname, similar: "paypal.example" }),
   };
   const first = await actor.receiveMessage({ name: "PasswordFieldFocused" });
-  contexts[0].sessionHistory = { index: 2, count: 4 }; // the warning is entry 3; Back shows entry 2 again
+  contexts[0].sessionHistory.load(); // the warning took entry 3
+  contexts[0].sessionHistory.index = 2; // Back shows entry 2 again (the same document)
   const again = await actor.receiveMessage({ name: "PasswordFieldFocused" });
   return { loads: loads.length, answers: [first, again] };
+};
+
+// The tab's page had one entry ahead of it (reached by Back): the warning replaces that entry, so after it and Back the
+// history has the same index and count; the page shown again still warns again.
+cases.parent_warns_again_after_back_with_a_forward_entry = async () => {
+  const loads = [];
+  const { contexts, browser } = tab([doc(REAL), doc(FAKE)], loads);
+  contexts[0].sessionHistory = sessionHistory(2, 4);
+  const actor = new NulavioLookalikeParent();
+  actor.globalState = contexts[1].currentWindowGlobal;
+  passwords = {
+    bindWarning: () => {},
+    checkLogin: async url => ({ suspicious: true, site: new URL(url).hostname, similar: "paypal.example" }),
+  };
+  const first = await actor.receiveMessage({ name: "PasswordFieldFocused" });
+  contexts[0].sessionHistory.load(); // the warning took entry 3, in place of the one that was ahead
+  contexts[0].sessionHistory.index = 2; // Back
+  const again = await actor.receiveMessage({ name: "PasswordFieldFocused" });
+  return { loads: loads.length, answers: [first, again], count: contexts[0].sessionHistory.count };
+};
+
+// The first warning never takes its entry (the page's beforeunload kept it, or the load was stopped): another document
+// of that page held back meanwhile is told nothing was decided, and asks again; later it opens its warning.
+cases.parent_first_warning_never_shown = async () => {
+  const loads = [];
+  const { contexts, browser } = tab([doc(REAL), doc(FAKE)], loads);
+  const sibling = { parent: contexts[0], top: contexts[0], embedderElement: null, parentWindowContext: contexts[0].currentWindowGlobal };
+  sibling.currentWindowGlobal = {
+    documentURI: new URI("https://paypa1-login.example/form"),
+    documentPrincipal: principal("content https://paypa1-login.example/form"),
+    isCurrentGlobal: true,
+    browsingContext: sibling,
+  };
+  const make = context => {
+    const actor = new NulavioLookalikeParent();
+    actor.globalState = context.currentWindowGlobal;
+    return actor;
+  };
+  passwords = {
+    bindWarning: () => {},
+    checkLogin: async url => {
+      const similar = LOOKALIKES.get(new URL(url).hostname);
+      return similar ? { suspicious: true, site: new URL(url).hostname, similar } : { suspicious: false };
+    },
+  };
+  const first = await make(contexts[1]).receiveMessage({ name: "PasswordFieldFocused" });
+  const blocked = await make(sibling).receiveMessage({ name: "PasswordFieldFocused" });
+  now += 11_000; // the first warning's load never committed
+  const later = await make(sibling).receiveMessage({ name: "PasswordFieldFocused" });
+  return { loads: loads.length, answers: [first, blocked, later] };
 };
 
 const results = {};

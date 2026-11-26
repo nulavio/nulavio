@@ -29,9 +29,42 @@ ChromeUtils.defineESModuleGetters(lazy, {
 
 // The tab's browser -> the tab's page for which a warning is being opened, where its history stood, and when: a
 // second document of that page that finds a look-alike before that warning is shown does not open another one over
-// it. Once the warning took its entry (and the page is shown again, by Back), the history has one entry more.
+// it, and is told nothing was decided (it asks again on the next input). The entry ends once the warning took its
+// entry in the history (the entry after the page changed: the page shown again by Back warns again), the tab shows
+// another page, or after OPENING_MS (a load the page's beforeunload kept, or one that was stopped).
 const opening = new WeakMap();
 const OPENING_MS = 10_000;
+const MAX_ENTRIES = "browser.sessionhistory.max_entries";
+
+/** The id of the entry after the one the tab shows, or null. */
+function nextEntry(history) {
+  try {
+    return history && history.index + 1 < history.count ? history.getEntryAtIndex(history.index + 1).ID : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the tab's history stands, to tell whether the warning opened for `page` is still on its way. */
+function historyState(page, history) {
+  return { page, index: history?.index, count: history?.count, next: nextEntry(history) };
+}
+
+function onItsWay(browser, page, history) {
+  const pending = opening.get(browser);
+  if (!pending) {
+    return false;
+  }
+  const now = historyState(page, history);
+  if (
+    Object.entries(now).every(([key, value]) => pending[key] === value) &&
+    Date.now() - pending.at < OPENING_MS
+  ) {
+    return true;
+  }
+  opening.delete(browser);
+  return false;
+}
 
 const web = uri => Boolean(uri && (uri.schemeIs("http") || uri.schemeIs("https")));
 
@@ -91,14 +124,8 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
       return true;
     }
     const history = top.sessionHistory;
-    const pending = opening.get(browser);
-    if (
-      pending?.page === page &&
-      pending.index === history?.index &&
-      pending.count === history?.count &&
-      Date.now() - pending.at < OPENING_MS
-    ) {
-      return true; // this page's warning is already on its way
+    if (onItsWay(browser, page, history)) {
+      return false; // this page's warning is already on its way: not decided for this document
     }
     // Only an address: the page asks the module again which saved site `url` imitates. A field in the tab's
     // page, at a site's address, gives that address as it is. A field in a frame gives only the origin of the
@@ -115,11 +142,15 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     if (!own) {
       // The warning takes the entry after the tab's page (the last one when the history is full): its "continue"
       // goes back from there only (NulavioPasswords.canGoBack).
-      const max = Services.prefs.getIntPref("browser.sessionhistory.max_entries", 50);
+      // The engine keeps at least the default number of entries, whatever the pref says (nsSHistory::Startup).
+      const max = Math.max(
+        Services.prefs.getIntPref(MAX_ENTRIES, 50),
+        Services.prefs.getDefaultBranch("").getIntPref(MAX_ENTRIES, 50)
+      );
       const index = Math.min((history?.index ?? -1) + 1, max - 1);
       lazy.NulavioPasswords.bindWarning(browser, { index, url: warning });
     }
-    opening.set(browser, { page, index: history?.index, count: history?.count, at: Date.now() });
+    opening.set(browser, { ...historyState(page, history), at: Date.now() });
     browser.loadURI(Services.io.newURI(warning), {
       triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
     });
