@@ -29,6 +29,7 @@ const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
+let drawn = false; // a ready render read the conversation and the items since the panel was last in another state
 
 const $ = id => document.getElementById(id);
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
@@ -417,14 +418,19 @@ async function render() {
     $("footer").textContent = t("assistantFooter", [state.provider.model, state.recipient]);
   }
   if (view === "ready") {
-    // The line above Send and the items' heading name the recipient Send would use now, before any await (#773).
-    syncMode();
+    // A render while the composer shows: the line above Send and the items' heading name the recipient Send would use
+    // now, before any await (#773). When the panel opens, or after another state, they wait for the reads: until then
+    // it knows neither the conversation's size nor the selected tab, so it draws no size and no "no page" hint.
+    if (drawn) {
+      syncMode();
+    }
     // Set before any await: an entry point's delivery meanwhile waits for these items to be checked (takeOffer).
     restoring = (async () => {
       thread = await ai.assistantThread().catch(() => null);
       await restoreChips();
     })();
     await restoring;
+    drawn = document.body.dataset.state === "ready";
     syncMode();
     renderThread();
     await takeOffer();
@@ -432,6 +438,8 @@ async function render() {
   } else {
     ++contextVersion;
     chips = [];
+    drawn = false;
+    $("send-line").textContent = ""; // hidden now; when the composer shows again, it waits for the reads
   }
 }
 

@@ -1124,9 +1124,10 @@ const events = [];
 const noEvent = { addListener() {} };
 const activated = []; // the panel's tabs.onActivated listener: another tab selected in this window
 let recipient = "Provedor"; // where the assistant sends now (assistantState)
+let blocked = null; // why the assistant is stopped, if it is (assistantState)
 globalThis.browser = {
   nulavioAI: {
-    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked: null,
+    assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked,
       recipient, provider: { model: "modelo" }, systemChars: 100, agent: { autonomy: "restricted" } }),
     assistantChips() {
       ++reads;
@@ -1194,7 +1195,16 @@ const out = {};
 
 // The panel opens with an item the browser kept: it shows it, and Send takes it (the fakes work).
 kept = [item("c1", "Primeira")];
+// #773 (OpenCodeReview, round 2): while it first reads the conversation, the panel draws neither the line above Send
+// nor the "no page" hint: it knows neither the conversation's size nor the selected tab yet. As in panel.html:
+$("no-page").hidden = true;
+holdThread = true;
 await import(process.argv[1]);
+await idle();
+out.firstNoPageHidden = $("no-page").hidden;
+out.firstLine = $("send-line").textContent;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
 await idle();
 out.openShown = shown();
 await send("Pergunta 1");
@@ -1469,6 +1479,20 @@ out.recipientHeading = $("attached-heading").textContent;
 holdThread = false;
 threadHeld.splice(0).forEach(answer => answer());
 await idle();
+// After a pause the composer shows again: while the conversation is read, its line names no recipient from before.
+blocked = "assistant-paused";
+$("allow-profile").fire("click");
+await idle();
+blocked = null;
+recipient = "Terceiro";
+holdThread = true;
+$("allow-profile").fire("click");
+await idle();
+out.resumedLine = $("send-line").textContent;
+holdThread = false;
+threadHeld.splice(0).forEach(answer => answer());
+await idle();
+out.resumedAfter = $("send-line").textContent.split("|").slice(0, 2);
 console.log(JSON.stringify(out));
 """
 
@@ -1587,6 +1611,17 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()
         self.assertEqual(out["recipientLine"].split("|")[:2], ["assistantSendLine", "Outro"])
         self.assertEqual(out["recipientHeading"], "assistantAttachedHeading|Outro")
+
+    def test_the_first_open_draws_no_size_or_page_hint_before_the_reads(self):
+        out = self._run()  # #773 (OpenCodeReview, round 2): neither the conversation's size nor the tab is known yet
+        self.assertTrue(out["firstNoPageHidden"])
+        self.assertEqual(out["firstLine"], "")
+        self.assertEqual(out["openShown"], ["c1"])
+
+    def test_after_a_pause_the_line_waits_for_the_reads(self):
+        out = self._run()  # neither the recipient from before the pause nor a size read before it
+        self.assertEqual(out["resumedLine"], "")
+        self.assertEqual(out["resumedAfter"], ["assistantSendLine", "Terceiro"])
 
     def test_a_list_read_again_does_not_write_a_draft_over_the_next_question(self):
         out = self._run()
