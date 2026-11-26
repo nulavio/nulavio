@@ -896,7 +896,7 @@ class LastTabCloseTest(unittest.TestCase):
         self.assertIn("sender.id === browser.runtime.id", listener)
         self.assertIn('String(sender.url ?? "").startsWith(browser.runtime.getURL(""))', listener)
         self.assertIn("if (!page || !sender.tab || sender.frameId) {", listener)
-        self.assertIn("return closeTab(sender.tab.id);", listener)
+        self.assertIn("return closeTab(sender.tab.id, sender.url);", listener)
         self.assertNotIn("message.tab", listener)
         # The one place that removes a Shell page's tab: no other Shell script counts and removes for a close.
         closer = (SHELL / "lib" / "tab-closer.js").read_text(encoding="utf-8")
@@ -924,17 +924,25 @@ class LastTabCloseTest(unittest.TestCase):
 
 # lib/tab-closer.js against fake tabs: each call settles one turn of the event loop later, so two closes started
 # together interleave the same way every run. A window whose last visible tab is removed closes, as in the engine.
-# `hold` keeps a removal waiting until the test lets it go; `fail` makes one removal fail once.
+# Each tab shows `page:<id>` until the test navigates it. `hold` keeps a removal pending (as a page that warns
+# before it is left does while the person answers) until the test lets it go; `fail` makes one removal fail once;
+# `afterQuery` runs once, right after a count. The module is read as a data: address, which is always a module,
+# so a node that does not tell a .js file's kind by its syntax runs it too.
 TAB_CLOSER = r"""
-const { tabCloser } = await import(process.argv[1]);
+const { readFileSync } = await import("node:fs");
+const source = readFileSync(process.argv[1], "utf8");
+const { tabCloser } = await import("data:text/javascript;charset=utf-8," + encodeURIComponent(source));
 const later = () => new Promise(resolve => setImmediate(resolve));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+const page = id => `page:${id}`;
 
 function world(windows) {
-  const state = new Map(Object.entries(windows).map(([id, list]) => [Number(id), list.map(tab => ({ ...tab }))]));
+  const shown = list => list.map(tab => ({ url: page(tab.id), ...tab }));
+  const state = new Map(Object.entries(windows).map(([id, list]) => [Number(id), shown(list)]));
   const closed = [];
   const hold = new Map();
   const fail = new Set();
+  const w = { closed, hold, fail, afterQuery: null };
   let next = 100;
   const find = id => {
     for (const [windowId, list] of state) {
@@ -943,17 +951,21 @@ function world(windows) {
     }
     throw new Error(`no tab ${id}`);
   };
-  const tabs = {
-    async get(id) { await later(); const f = find(id); return { id, windowId: f.windowId, hidden: Boolean(f.tab.hidden) }; },
+  w.tabs = {
+    async get(id) { await later(); const f = find(id); return { id, windowId: f.windowId, url: f.tab.url }; },
     async query({ windowId, hidden }) {
       await later();
-      return (state.get(windowId) ?? []).filter(t => Boolean(t.hidden) === hidden).map(t => ({ id: t.id, windowId }));
+      const found = (state.get(windowId) ?? []).filter(t => Boolean(t.hidden) === hidden).map(t => ({ id: t.id, windowId }));
+      const then = w.afterQuery;
+      w.afterQuery = null;
+      then?.();
+      return found;
     },
     async create({ windowId }) {
       await later();
       const list = state.get(windowId);
       if (!list) throw new Error(`no window ${windowId}`);
-      const tab = { id: next++, fresh: true };
+      const tab = { id: next++, url: "new", fresh: true };
       list.push(tab);
       return { id: tab.id, windowId };
     },
@@ -966,9 +978,10 @@ function world(windows) {
       if (!list.some(t => !t.hidden)) { state.delete(windowId); closed.push(windowId); }
     },
   };
-  const tabsOf = id => state.has(id) ? state.get(id).map(t => t.fresh ? "new" : t.id) : null;
-  const move = (id, to) => { const { list, tab } = find(id); list.splice(list.indexOf(tab), 1); state.get(to).push(tab); };
-  return { tabs, closed, hold, fail, tabsOf, move };
+  w.tabsOf = id => state.has(id) ? state.get(id).map(t => t.fresh ? "new" : t.id) : null;
+  w.move = (id, to) => { const { list, tab } = find(id); list.splice(list.indexOf(tab), 1); state.get(to).push(tab); };
+  w.navigate = (id, url) => { find(id).tab.url = url; };
+  return w;
 }
 
 // What each page did from its own document before #741: count, then remove, with nothing shared.
@@ -989,58 +1002,78 @@ const out = {};
 { // Now: the second close counts after the first removal, and opens the new tab.
   const w = world({ 1: [{ id: 1 }, { id: 2 }] });
   const close = tabCloser(w.tabs);
-  out.together = { answers: await Promise.all([close(1), close(2)]), closed: w.closed, tabs: w.tabsOf(1) };
+  out.together = { answers: await Promise.all([close(1, page(1)), close(2, page(2))]), closed: w.closed, tabs: w.tabsOf(1) };
 }
 { // Three at once, and a window with other tabs: nothing extra is opened there.
   const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 4 }, { id: 5 }] });
   const close = tabCloser(w.tabs);
-  await Promise.all([close(1), close(2), close(3), close(4)]);
+  await Promise.all([1, 2, 3, 4].map(id => close(id, page(id))));
   out.three = { closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
 }
 { // Only visible tabs count (#720): a window whose other tab is hidden keeps a new tab.
   const w = world({ 1: [{ id: 1 }, { id: 2, hidden: true }] });
-  await tabCloser(w.tabs)(1);
+  await tabCloser(w.tabs)(1, page(1));
   out.hidden = { closed: w.closed, tabs: w.tabsOf(1) };
 }
 { // A removal that fails is reported to its page, and the next close in that window still runs.
   const w = world({ 1: [{ id: 1 }, { id: 2 }] });
   w.fail.add(1);
   const close = tabCloser(w.tabs);
-  const [first, second] = await Promise.allSettled([close(1), close(2)]);
+  const [first, second] = await Promise.allSettled([close(1, page(1)), close(2, page(2))]);
   const reason = String(first.reason?.message);
   out.failed = { first: first.status, reason, second: second.value, closed: w.closed, tabs: w.tabsOf(1) };
 }
-{ // A close in one window does not wait for another window's; a stuck one holds its own window only for `wait`.
-  const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 4 }, { id: 5 }] });
+{ // A removal still pending (the person has not answered a page's warning yet) holds the next close in its window
+  // for as long as it takes, `wait` or not, and only there; once it is done, the next one counts without it.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }], 2: [{ id: 4 }, { id: 5 }] });
   let release;
   w.hold.set(1, new Promise(resolve => (release = resolve)));
-  const close = tabCloser(w.tabs, { wait: 200 });
-  const stuck = close(1);
-  await pause(20);
+  const close = tabCloser(w.tabs, { wait: 20 }); // the bound an earlier version had, which let the next one count
   const order = [];
-  const other = close(4).then(() => order.push("other window"));
-  const same = close(2).then(() => order.push("same window"));
-  await other;
+  const pending = close(1, page(1)).then(() => order.push("held"));
   await pause(20);
-  const sameBeforeWait = order.includes("same window");
-  await same;
+  const same = close(2, page(2)).then(() => order.push("same window"));
+  await close(4, page(4)).then(() => order.push("other window"));
+  await pause(200);
+  const whileHeld = { order: [...order], one: w.tabsOf(1) };
   release();
-  await stuck;
-  out.windows = { order, sameBeforeWait, closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+  await Promise.all([pending, same]);
+  out.held = { whileHeld, order, closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
 }
 { // A tab moved to another window while its close waited is counted in the window it is now in.
   const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }], 2: [{ id: 9, hidden: true }] });
   let release;
   w.hold.set(1, new Promise(resolve => (release = resolve)));
   const close = tabCloser(w.tabs);
-  const first = close(1);
+  const first = close(1, page(1));
   await pause(20);
-  const second = close(2); // queued behind tab 1, in window 1
+  const second = close(2, page(2)); // queued behind tab 1, in window 1
   await pause(20);
   w.move(2, 2); // window 2's only visible tab now
   release();
   await Promise.all([first, second]);
   out.moved = { closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+}
+{ // Moved while it was being counted: the window it left had another tab, the one it went to has none.
+  const w = world({ 1: [{ id: 1 }, { id: 3 }], 2: [{ id: 9, hidden: true }] });
+  w.afterQuery = () => w.move(1, 2);
+  await tabCloser(w.tabs)(1, page(1));
+  out.movedWhileCounted = { closed: w.closed, one: w.tabsOf(1), two: w.tabsOf(2) };
+}
+{ // A tab navigated to another page while its close waited is never removed for the page that left.
+  const w = world({ 1: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+  let release;
+  w.hold.set(1, new Promise(resolve => (release = resolve)));
+  const close = tabCloser(w.tabs);
+  const first = close(1, page(1));
+  await pause(20);
+  const second = close(2, page(2));
+  await pause(20);
+  w.navigate(2, "https://work.example/");
+  release();
+  await first;
+  const left = await second.then(() => "removed", e => String(e.message));
+  out.navigated = { left, closed: w.closed, one: w.tabsOf(1) };
 }
 console.log(JSON.stringify(out));
 """
@@ -1053,7 +1086,7 @@ class TabCloserTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        module = (SHELL / "lib" / "tab-closer.js").as_uri()
+        module = str(SHELL / "lib" / "tab-closer.js")
         done = subprocess.run(["node", "--input-type=module", "-e", TAB_CLOSER, module],
                               capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
         cls.out = json.loads(done.stdout)
@@ -1075,16 +1108,24 @@ class TabCloserTest(unittest.TestCase):
             {"first": "rejected", "reason": "the engine refused", "second": True, "closed": [], "tabs": [1]},
         )
 
-    def test_windows_do_not_wait_for_each_other_and_a_stuck_close_holds_only_for_a_while(self):
-        windows = self.out["windows"]
-        self.assertEqual(windows["order"], ["other window", "same window"])
-        self.assertFalse(windows["sameBeforeWait"], "a close in the same window ran before the one before it")
-        self.assertEqual(windows["closed"], [])
-        self.assertEqual(windows["one"], [3])
-        self.assertEqual(windows["two"], [5])
+    def test_a_pending_removal_holds_its_window_until_it_is_done_and_no_other(self):
+        held = self.out["held"]
+        # While tab 1's removal is pending, tab 2 waits (however long), and window 2 does not.
+        self.assertEqual(held["whileHeld"], {"order": ["other window"], "one": [1, 2]})
+        self.assertEqual(held["order"], ["other window", "held", "same window"])
+        # Tab 2 counted after tab 1 went: window 1 stays, on a new tab.
+        self.assertEqual(held["closed"], [])
+        self.assertEqual(held["one"], ["new"])
+        self.assertEqual(held["two"], [5])
 
     def test_a_tab_moved_while_it_waited_is_counted_where_it_is(self):
         self.assertEqual(self.out["moved"], {"closed": [], "one": [3], "two": [9, "new"]})
+
+    def test_a_tab_moved_while_it_was_counted_is_counted_again_where_it_is(self):
+        self.assertEqual(self.out["movedWhileCounted"], {"closed": [], "one": [3], "two": [9, "new"]})
+
+    def test_a_tab_that_left_the_page_is_never_removed(self):
+        self.assertEqual(self.out["navigated"], {"left": "the page that asked left its tab", "closed": [], "one": [2, 3]})
 
 
 class PasswordsTest(unittest.TestCase):

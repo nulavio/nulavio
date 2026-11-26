@@ -10,41 +10,47 @@
 
    No imports and no `browser` global: `tabs` is the extension's `browser.tabs`, or a fake in the unit tests. */
 
-// How long a close waits for the one before it in the same window. A removal that never settles (a page that
-// asks before it is left, and the person stays) must not keep every later close in that window waiting.
-const WAIT_MS = 5000;
-
 const MOVED = Symbol("moved");
 
-/** Returns `close(tabId)`: closes that tab, leaving its window open on a new tab when it is the last visible
-    one. Resolves when the tab was removed; rejects with the engine's error, and the tab then stays. */
-export function tabCloser(tabs, { wait = WAIT_MS } = {}) {
+/** Returns `close(tabId, url)`: closes that tab, leaving its window open on a new tab when it is the last visible
+    one, as long as the tab still shows `url` (the page that asked). Resolves when the tab was removed; rejects
+    with the engine's error, or when the tab no longer shows that page, and the tab then stays. */
+export function tabCloser(tabs) {
   const last = new Map(); // window id -> the last close queued in that window
 
-  async function closeIn(windowId, tabId) {
+  // Where the tab is now, refused when it no longer shows the page that asked: a tab navigated to another page
+  // while its close waited holds that page now, and is never removed for the one that left.
+  async function where(tabId, url) {
     const tab = await tabs.get(tabId);
-    if (tab.windowId !== windowId) {
+    if (tab.url !== url) {
+      throw new Error("the page that asked left its tab");
+    }
+    return tab.windowId;
+  }
+
+  async function closeIn(windowId, tabId, url) {
+    if ((await where(tabId, url)) !== windowId) {
       return MOVED; // dragged to another window while it waited: counted there, after the closes queued there
     }
     const visible = await tabs.query({ windowId, hidden: false });
     if (!visible.some(other => other.id !== tabId)) {
       await tabs.create({ windowId });
     }
+    // Once more just before the removal: a tab moved or navigated while it was counted is decided again.
+    if ((await where(tabId, url)) !== windowId) {
+      return MOVED;
+    }
     await tabs.remove(tabId);
     return true;
   }
 
-  return async function close(tabId) {
-    const { windowId } = await tabs.get(tabId);
-    const before = last.get(windowId);
-    let timer;
-    const turn = before
-      ? Promise.race([before.catch(() => {}), new Promise(resolve => (timer = setTimeout(resolve, wait)))])
-      : Promise.resolve();
-    const mine = turn.then(() => {
-      clearTimeout(timer);
-      return closeIn(windowId, tabId);
-    });
+  // A close waits for the whole of the one before it in its window, however long that takes: a removal that asks
+  // first (a page that warns before it is left) is still pending while the person answers, and a close counted
+  // before that answer would count that tab as staying.
+  return async function close(tabId, url) {
+    const windowId = await where(tabId, url);
+    const before = last.get(windowId) ?? Promise.resolve();
+    const mine = before.catch(() => {}).then(() => closeIn(windowId, tabId, url));
     last.set(windowId, mine);
     const done = () => {
       if (last.get(windowId) === mine) {
@@ -52,6 +58,6 @@ export function tabCloser(tabs, { wait = WAIT_MS } = {}) {
       }
     };
     mine.then(done, done);
-    return (await mine) === MOVED ? close(tabId) : true;
+    return (await mine) === MOVED ? close(tabId, url) : true;
   };
 }

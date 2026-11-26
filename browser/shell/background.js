@@ -18,7 +18,8 @@ browser.runtime.onStartup.addListener(() => {});
 
 // -- A Shell page's Close or Cancel (lib/tabs.js): one place decides, one close at a time per window (#741) --
 // Only a Shell page in a tab of its own may ask, and only for that tab: not a popup or the sidebar (no tab),
-// a frame, or anything that is not this extension's page. The answer is true once the tab was removed.
+// a frame, or anything that is not this extension's page, and only while that tab still shows the page that
+// asked. The answer is true once the tab was removed.
 
 const closeTab = tabCloser(browser.tabs);
 
@@ -30,7 +31,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (!page || !sender.tab || sender.frameId) {
     return Promise.reject(new Error("only a Shell page can close its own tab"));
   }
-  return closeTab(sender.tab.id);
+  return closeTab(sender.tab.id, sender.url); // only while the tab still shows the page that asked
 });
 
 async function windowFor(incognito) {
