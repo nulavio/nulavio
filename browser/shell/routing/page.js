@@ -26,14 +26,18 @@ function webUrl(raw) {
   }
 }
 
+// Set once the link went to the other profile, or to its unlock page. From then on a failed close gives back
+// only "Don't open", which just closes the tab: "Open in …" again would send the link a second time.
+let sent = false;
+
 function enableActions(enabled) {
   for (const b of document.querySelectorAll("#actions button")) {
-    b.disabled = !enabled;
+    b.disabled = !enabled || (sent && !("close" in b.dataset));
   }
 }
 
 // "Don't open", and the end of "Open in …": in a window's only tab the window stays, on a new tab, as it
-// does for every Shell page (#720). A tab that could not close says so and gives its buttons back.
+// does for every Shell page (#720). A tab that could not close says so and gives back the buttons it may use.
 function closeThisTab() {
   return closeOwnTab(text => {
     announce(text, "error", { control: null });
@@ -54,6 +58,7 @@ async function openThere(url, rule, remember) {
     await routing.setRuleAction(rule.id, "open-in");
   }
   await routing.openIn(rule.profileId, url.href);
+  sent = true;
   await closeThisTab();
 }
 
@@ -77,6 +82,7 @@ async function unlockThere(url, rule, remember) {
   }
   // The Vault's own page unlocks it and then opens the link there; nothing loads here.
   await browser.nulavioVault.openUnlockPage(rule.profileId, url.href);
+  sent = true;
   await closeThisTab();
 }
 
@@ -158,6 +164,7 @@ async function render() {
     if (launch) {
       actions.push(button(t("routingTryAgain", [chosen.name]), "button--primary", async () => {
         await routing.openIn(chosen.id, url.href);
+        sent = true;
         await closeThisTab();
       }));
     }
@@ -183,7 +190,9 @@ async function render() {
     }
     actions.push(button(here ?? t("routingOpenHereAnyway"), "button--secondary", () => openHere(url, null, false)));
   }
-  actions.push(button(t("routingDontOpen"), "button--quiet", closeThisTab));
+  const dontOpen = button(t("routingDontOpen"), "button--quiet", closeThisTab);
+  dontOpen.dataset.close = "";
+  actions.push(dontOpen);
   actions[0].setAttribute("aria-describedby", "explain");
   document.getElementById("actions").replaceChildren(...actions);
 }

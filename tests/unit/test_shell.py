@@ -850,6 +850,23 @@ class LastTabCloseTest(unittest.TestCase):
         for name in ("en", "pt_BR"):
             self.assertIn("tabCloseFailed", locale(name))
 
+    def test_a_held_link_page_that_could_not_close_never_sends_the_link_twice(self):
+        # "Open in …", "Try again" and "Unlock and open" send the link, then close the tab. When only the close
+        # fails, the buttons that send it stay off for good; "Don't open" (which only closes) comes back.
+        text = (SHELL / "routing" / "page.js").read_text(encoding="utf-8")
+        sends = [m.start() for m in re.finditer(r"await (?:routing\.openIn|browser\.nulavioVault\.openUnlockPage)\(", text)]
+        self.assertEqual(len(sends), 3)
+        for start in sends:
+            after = text[start:]
+            with self.subTest(call=after[: after.index("(")]):
+                self.assertLess(after.index("sent = true;"), after.index("await closeThisTab();"))
+                self.assertLess(after.index(";"), after.index("sent = true;"))  # the next statement
+        enable = text[text.index("function enableActions(") :]
+        self.assertIn('b.disabled = !enabled || (sent && !("close" in b.dataset));', enable[: enable.index("\n}\n")])
+        dont_open = r'button\(t\("routingDontOpen"\), "button--quiet", closeThisTab\);\n\s+dontOpen\.dataset\.close = "";'
+        self.assertRegex(text, dont_open)
+        self.assertEqual(text.count("dataset.close"), 1)
+
 
 class PasswordsTest(unittest.TestCase):
     """Flows B and D: pinned providers, and a content script that never reads what is typed."""
