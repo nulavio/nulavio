@@ -5,7 +5,7 @@ unlock all go through openIn. It sends the link with the routed flag, so no rule
 `--nulavio-route-by explicit` (#791), as the engine's "Move tab to profile" is since #785: the receiving profile then
 tracks no routed arrival, and its band never says "Aberto pela sua regra" for it, even in the profile the site's rule
 names. A rule's own send and the default destination's are still tracked, for their notices (D-UX19, UX6). The real
-engine runs this in tests/integration/test_routing.py (test_14c, test_04b, test_24).
+engine runs this in tests/integration/test_routing.py (test_07b, test_04b, test_24).
 """
 
 from __future__ import annotations

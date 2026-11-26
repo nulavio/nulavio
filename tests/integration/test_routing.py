@@ -580,6 +580,44 @@ class RoutingTest(unittest.TestCase):
         finally:
             self.call("await R.setEnabled(true);")
 
+    def test_07b_a_link_opened_in_its_rules_profile_from_the_menu_is_not_credited_to_the_rule(self):
+        """#791: choosing, in the link menu, the very profile the site's rule names is the person's explicit choice.
+        NulavioRouting.openIn marks it --nulavio-route-by explicit (as #785 does for the engine's "Move tab to
+        profile", test_06c), so the band there does not say "Aberto pela sua regra". test_04b shows the notice for a
+        link the rule did send there. It runs before test_08 removes Bancos, as the menu offers only live profiles."""
+        # localhost has the bank rule (open in Bancos); the page's link points to a localhost address of its own.
+        rule = self.call("return R.ruleFor(args[0]);", self.local("/page/menu-to-rule"))["rule"]
+        self.assertEqual((rule["id"], rule["action"], rule["profileId"]), (self.bank_rule, "open-in", self.ids["Bancos"]))
+        listed = {r["id"]: r for r in self.call("return R.state();")["rules"]}
+        self.assertFalse(listed[self.bank_rule]["missing"], "Bancos is gone, so the menu cannot offer it")
+        self.assertTrue(self.call("return R.enabled();"))
+        self.m.navigate(self.local("/links"))
+        self.m.execute("document.getElementById('go').href = '/page/menu-to-rule';")
+        self.open_from_link_menu("Bancos")
+        bank = self.instance("Bancos")
+        self.assertTrue(
+            harness.wait_until(lambda: any(u.endswith("/page/menu-to-rule") for u in self.tabs(bank)), timeout=30),
+            self.tabs(bank),
+        )
+        for handle in bank.window_handles():
+            bank.switch_to(handle)
+            if bank.current_url().endswith("/page/menu-to-rule"):
+                break
+        self.assertTrue(
+            harness.wait_until(
+                lambda: bank.chrome("return gBrowser.selectedBrowser.currentURI.spec;").endswith("/page/menu-to-rule"),
+                timeout=15,
+            )
+        )
+        notice = (
+            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
+            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
+        )
+        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=10)
+        self.assertFalse(shown, "a link the person opened from the menu was credited to the rule")
+        self.assertEqual(self.hits("/page/menu-to-rule"), 1, "the link was requested more than once")
+        self.assertFalse(any("/page/menu-to-rule" in u for u in self.own_tabs()), "it was opened here too")
+
     def test_08_a_missing_profile_never_falls_back_silently(self):
         self.stop("Bancos")
         # The engine's profile lock can outlive the process by a moment on a busy machine.
@@ -793,42 +831,6 @@ class RoutingTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.hits(path), timeout=20), f"{name}: never loaded")
         time.sleep(1)
         self.assertFalse(any(path in u for u in self.tabs(self.others["Trabalho"])), f"{name}: routed")
-
-    def test_14c_a_link_opened_in_its_rules_profile_from_the_menu_is_not_credited_to_the_rule(self):
-        """#791: choosing, in the link menu, the very profile the site's rule names is the person's explicit choice.
-        NulavioRouting.openIn marks it --nulavio-route-by explicit (as #785 does for the engine's "Move tab to
-        profile", test_06c), so the band there does not say "Aberto pela sua regra". test_04b shows the notice for a
-        link the rule did send there."""
-        # localhost has the bank rule (open in Bancos); the page's link points to a localhost address of its own.
-        rule = self.call("return R.ruleFor(args[0]);", self.local("/page/menu-to-rule"))["rule"]
-        self.assertEqual((rule["id"], rule["action"], rule["profileId"]), (self.bank_rule, "open-in", self.ids["Bancos"]))
-        self.assertTrue(self.call("return R.enabled();"))
-        self.m.navigate(self.local("/links"))
-        self.m.execute("document.getElementById('go').href = '/page/menu-to-rule';")
-        self.open_from_link_menu("Bancos")
-        bank = self.instance("Bancos")
-        self.assertTrue(
-            harness.wait_until(lambda: any(u.endswith("/page/menu-to-rule") for u in self.tabs(bank)), timeout=30),
-            self.tabs(bank),
-        )
-        for handle in bank.window_handles():
-            bank.switch_to(handle)
-            if bank.current_url().endswith("/page/menu-to-rule"):
-                break
-        self.assertTrue(
-            harness.wait_until(
-                lambda: bank.chrome("return gBrowser.selectedBrowser.currentURI.spec;").endswith("/page/menu-to-rule"),
-                timeout=15,
-            )
-        )
-        notice = (
-            "const n = document.querySelector('#nulavio-band-widget .nv-band-route');"
-            "return n && !n.hidden ? {text: n.textContent, label: n.getAttribute('aria-label')} : null;"
-        )
-        shown = harness.wait_until(lambda: bank.chrome(notice), timeout=10)
-        self.assertFalse(shown, "a link the person opened from the menu was credited to the rule")
-        self.assertEqual(self.hits("/page/menu-to-rule"), 1, "the link was requested more than once")
-        self.assertFalse(any("/page/menu-to-rule" in u for u in self.own_tabs()), "it was opened here too")
 
     def test_15_in_page_routing_is_off_by_default(self):
         self.m5_setup()
