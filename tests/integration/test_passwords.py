@@ -313,6 +313,33 @@ class PasswordsTest(unittest.TestCase):
         """Marks the tab's page: the same document, shown again from the back-forward cache, still has the mark."""
         self.m.execute("document.documentElement.dataset.kept = 'yes';")
 
+    def person_clicks_field(self, frame: bool = False) -> None:
+        """A click in the password field (#password) of the tab's page, or of its frame #f, sent from the window like
+        the person's own. Marionette's element click keeps an unload listener in the page while it runs, and the engine
+        never keeps a page with one in its back-forward cache."""
+        where = "const r = document.getElementById('password').getBoundingClientRect();"
+        where += "return [r.left + r.width / 2, r.top + r.height / 2];"
+        if frame:
+            self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
+            try:
+                x, y = self.m.execute(where)
+            finally:
+                self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+            fx, fy = self.m.execute(
+                "const f = document.getElementById('f'); const r = f.getBoundingClientRect();"
+                "return [r.left + f.clientLeft, r.top + f.clientTop];"
+            )
+            x, y = x + fx, y + fy
+        else:
+            x, y = self.m.execute(where)
+        self.m.chrome(
+            "const r = gBrowser.selectedBrowser.getBoundingClientRect();"
+            "const [x, y] = [r.left + arguments[0], r.top + arguments[1]];"
+            "for (const type of ['mousedown', 'mouseup']) {"
+            " window.synthesizeMouseEvent(type, x, y, { button: 0, clickCount: 1 }, {}); }",
+            [x, y],
+        )
+
     def back_from_warning_to(self, page: str) -> None:
         """Back from the warning to `page`, the same document, kept in the back-forward cache meanwhile."""
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
@@ -347,23 +374,26 @@ class PasswordsTest(unittest.TestCase):
         page = self.fake + "/login?cacheable=1"  # a page the back-forward cache keeps (no "no-store")
         self.m.navigate(page)
         self.mark_page()
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.person_clicks_field()
         self.back_from_warning_to(page)
-        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
+        self.person_clicks_field()
         self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
 
     def test_01l_back_from_a_frames_warning_to_the_page_warns_again_on_the_next_use_of_the_frames_field(self):
         home = self.real + "/page/home?cacheable=1"
         self.m.navigate(home)
+        self.m.execute(
+            "const f = document.createElement('iframe'); f.id = 'f'; f.src = arguments[0];"
+            "f.addEventListener('load', () => { document.documentElement.dataset.framed = 'yes'; }, { once: true });"
+            "document.body.append(f);",
+            [self.fake + "/login?cacheable=1"],
+        )
+        framed = "return document.documentElement.dataset.framed === 'yes';"
+        self.assertTrue(harness.wait_until(lambda: self.m.execute(framed), 10), "the frame did not load")
         self.mark_page()
-        self.click_in_frame(None, f"f.src = {self.fake + '/login?cacheable=1'!r};")
+        self.person_clicks_field(frame=True)
         self.back_from_warning_to(home)
-        # The same frame, kept with its page: the person uses its field again.
-        self.m.send("WebDriver:SwitchToFrame", {"element": self.m.find_element("#f")})
-        try:
-            self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#password")})
-        finally:
-            self.assertTrue(harness.wait_until(self.to_top, 10), "could not go back to the tab's page")
+        self.person_clicks_field(frame=True)  # the same frame, kept with its page
         self.assertTrue(harness.wait_until(self.on_warning, 10), f"no warning after Back: {self.m.current_url()}")
         self.assertEqual(self.warning_params(), {"url": self.fake + "/", "in": "frame"})
 
