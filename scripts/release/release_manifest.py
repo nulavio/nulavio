@@ -3,7 +3,7 @@
 
     python3 -I scripts/release/release_manifest.py verify <rehearsal-out> [--repo DIR] [--on REF]
     python3 -I scripts/release/release_manifest.py packages <manifest.json> <packages-dir>
-    python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR]
+    python3 -I scripts/release/release_manifest.py next-release <firefox-version> [--repo DIR] [--also TAG ...]
     python3 -I scripts/release/release_manifest.py not-older <tag> [--repo DIR] [--also TAG ...]
 
 ``verify`` refuses a rehearsal that is not fit to publish: not finished, built
@@ -27,6 +27,13 @@ main before it signs (#455); the record in the repository is not part of it.
 the manifest does not list with the same SHA-256. sign_repo.sh and sign_apt_repo.sh
 run it when NULAVIO_RELEASE_MANIFEST is set, so only what the rehearsal checked is
 signed.
+
+``next-release`` prints the package release to build: one above every revision of
+that Firefox version that is tagged, recorded in packaging/release.json or named
+with ``--also``. The build job names the version the bucket's APT index serves, so
+a run that uploaded and stopped before its draft (no tag, no draft) does not hand
+its revision to the next run (#656); upload_repo.sh refuses to overwrite a package
+with other bytes in any case.
 
 ``not-older`` refuses a release when a newer one is tagged, recorded in
 packaging/release.json or named with ``--also``. The publish job runs it before
@@ -298,10 +305,13 @@ def release_versions(repo: Path) -> list[tuple[str, str]]:
     return versions
 
 
-def next_release(firefox: str, repo: Path) -> str:
+def next_release(firefox: str, repo: Path, others: list[str] | tuple[str, ...] = ()) -> str:
+    """One above every revision of `firefox` that is tagged, recorded as published or among `others` (the version
+    the bucket serves: a run that uploaded and stopped before its draft left neither a tag nor a draft, #656)."""
     if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)+", firefox):
         raise ManifestError("invalid Firefox version")
-    revisions = [release for version, release in release_versions(repo) if version == firefox]
+    known = release_versions(repo) + [(m[1], m[2]) for tag in others if (m := RELEASE_TAG.fullmatch(tag))]
+    revisions = [release for version, release in known if version == firefox]
     if not revisions:
         return "0.1"
     parts = list(_numbers(max(revisions, key=_numbers)))
@@ -374,6 +384,7 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("next-release", help="the package release to build for a Firefox version")
     n.add_argument("firefox")
     n.add_argument("--repo", type=Path, default=ROOT)
+    n.add_argument("--also", action="append", default=[], help="a release's tag to count as taken, such as the served one")
     c = sub.add_parser("networking-claim", help="the claim whose attestation the signing job requires (bytes on stdout)")
     c.add_argument("out", type=Path)
     c.add_argument("--repo", type=Path, default=ROOT)
@@ -390,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "not-older":
             check_not_older(args.tag, args.repo, args.also)
         elif args.command == "next-release":
-            print(next_release(args.firefox, args.repo))
+            print(next_release(args.firefox, args.repo, args.also))
         else:
             print("\n".join(check_packages(args.manifest, args.packages)))
     except ManifestError as e:
