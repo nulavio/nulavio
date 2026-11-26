@@ -28,6 +28,7 @@ ChromeUtils.defineESModuleGetters(lazy, {
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
   ENABLED_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   ROUTED_FLAG: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
+  ROUTE_BY_FLAG: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   RULES_PREF: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   normalizeHost: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
   parseRules: "resource://builtin-addons/nulavio-shell/modules/NulavioRouter.sys.mjs",
@@ -916,7 +917,8 @@ class NulavioProfilesClass {
    * state cannot be read, gets the unlock page in this window and no engine on its folder; any other profile
    * starts as the engine meant, except that the addresses it is sent carry the routed flag (#715): moving a tab to
    * a profile is the person's explicit choice, which ADR 0003's precedence puts before any rule, so the other
-   * profile opens them and its rules do not send them back or ask. The state is read at each launch, from the
+   * profile opens them and its rules do not send them back or ask; marked "explicit", its band does not credit them to
+   * a rule either. The state is read at each launch, from the
    * profile's files, as switchTo() and routing read it. Of several addresses meant for a locked profile, the
    * unlock page carries the first. In an engine an agent drives, they start nothing (agent-window, as switchTo()).
    */
@@ -959,7 +961,8 @@ class NulavioProfilesClass {
       // The engine's launchInstance with the routed flag in front of its "-new-tab <address>" pairs, as Nulavio's
       // own "Open link in profile" sends them (NulavioRouting.openIn): to the running instance through the remote
       // service, or to a new one started on the profile's folder with an argument list, no shell.
-      const args = [`--${lazy.ROUTED_FLAG}`, ...urls.flatMap(url => ["-new-tab", url])];
+      // "explicit": the band of the other profile does not credit the tab to a rule there (#785 review).
+      const args = [`--${lazy.ROUTED_FLAG}`, `--${lazy.ROUTE_BY_FLAG}`, "explicit", ...urls.flatMap(url => ["-new-tab", url])];
       try {
         this.#service.sendCommandLine(profile.path, args, true);
         return;

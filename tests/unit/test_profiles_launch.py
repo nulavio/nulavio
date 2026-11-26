@@ -29,6 +29,9 @@ AGENT_NETWORK = ROOT / "browser" / "shell" / "modules" / "NulavioAgentNetwork.sy
 ROUTER = ROOT / "browser" / "shell" / "modules" / "NulavioRouter.sys.mjs"
 # The flag NulavioRouting.handleCommandLine takes as "sent by routing or by an explicit choice: open here".
 ROUTED_FLAG = re.search(r'export const ROUTED_FLAG = "([^"]+)";', ROUTER.read_text(encoding="utf-8")).group(1)
+# With it, who sent the command line: "explicit" means the person chose the profile, so its band credits no rule.
+ROUTE_BY_FLAG = re.search(r'export const ROUTE_BY_FLAG = "([^"]+)";', ROUTER.read_text(encoding="utf-8")).group(1)
+EXPLICIT = [f"--{ROUTED_FLAG}", f"--{ROUTE_BY_FLAG}", "explicit"]
 
 
 def drive(driver: str, module: Path, *extra: str) -> dict:
@@ -46,7 +49,7 @@ def drive(driver: str, module: Path, *extra: str) -> dict:
 class ProfilesLaunchGuardTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cases = drive("profiles_launch_driver.mjs", MODULE, ROUTED_FLAG)
+        cls.cases = drive("profiles_launch_driver.mjs", MODULE, ROUTED_FLAG, ROUTE_BY_FLAG)
 
     def test_a_profile_without_a_password_starts_as_the_engine_meant(self):
         self.assertEqual(self.cases["plain"], {"launched": 1, "sent": [], "started": [], "unlockPages": 0, "logged": []})
@@ -59,7 +62,7 @@ class ProfilesLaunchGuardTest(unittest.TestCase):
         self.assertEqual(case["started"], [], case)
         self.assertEqual(case["unlockPages"], 0, case)
         self.assertEqual(case["logged"], [], case)
-        args = [f"--{ROUTED_FLAG}", "-new-tab", "https://example.org/a", "-new-tab", "https://example.org/b"]
+        args = [*EXPLICIT, "-new-tab", "https://example.org/a", "-new-tab", "https://example.org/b"]
         self.assertEqual(case["sent"], [{"path": "/profiles/other", "args": args, "activate": True}], case)
 
     def test_a_moved_tab_starts_a_profile_that_is_not_running_with_the_routed_flag(self):
@@ -67,14 +70,14 @@ class ProfilesLaunchGuardTest(unittest.TestCase):
         case = self.cases["moved_cold"]
         self.assertEqual(case["launched"], 0, case)
         self.assertEqual(case["sent"], [], case)
-        args = ["--profile", "/profiles/other", f"--{ROUTED_FLAG}", "-new-tab", "https://example.org/moved"]
+        args = ["--profile", "/profiles/other", *EXPLICIT, "-new-tab", "https://example.org/moved"]
         self.assertEqual(case["started"], [args], case)
 
     def test_a_moved_tab_to_an_unlocked_protected_profile_carries_the_flag_too(self):
         case = self.cases["moved_unlocked"]
         self.assertEqual(case["launched"], 0, case)
         self.assertEqual(case["unlockPages"], 0, case)
-        self.assertEqual([s["args"][0] for s in case["sent"]], [f"--{ROUTED_FLAG}"], case)
+        self.assertEqual([s["args"][:3] for s in case["sent"]], [EXPLICIT], case)
 
     def test_a_locked_or_unreadable_profile_gets_the_unlock_page_and_no_engine(self):
         for name in ("locked", "unreadable"):

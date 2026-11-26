@@ -6,7 +6,7 @@
 // tests/unit/test_profiles_launch.py; the real engine is exercised by tests/integration/test_vault_profiles.py
 // and tests/integration/test_routing.py.
 //
-//     node tests/lib/profiles_launch_driver.mjs <NulavioProfiles module> <routed flag>
+//     node tests/lib/profiles_launch_driver.mjs <NulavioProfiles module> <routed flag> <route-by flag>
 
 import { pathToFileURL } from "node:url";
 
@@ -49,6 +49,7 @@ const stand = {
   },
   SelectableProfileService: service,
   ROUTED_FLAG: process.argv[3],
+  ROUTE_BY_FLAG: process.argv[4],
 };
 
 globalThis.ChromeUtils = {
