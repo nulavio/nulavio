@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .. import paths, profile
 from ..log import event as log_event
-from . import link, profiles
+from . import link, profiles, storage
 from .coordinator import Coordinator, State, Transport
 from .core import VaultError, b64e, canonical
 from .phone import DesktopIdentity, Pairing, PhoneUnlock, ProtocolError, add_phone, phone_part
@@ -300,8 +300,17 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
                     raise link.LinkError("bad-message")
                 state = coordinator.receive({k: v for k, v in message.items() if k != "t"})
                 if state is State.UNLOCKED:
-                    box.mount(vault, request.get("idle_minutes"))
-                    _send_quietly(channel, {"t": "ok"})
+                    try:
+                        # A cancel while the mount waits for the state lock (the auto-lock watcher closing the
+                        # profile, another unlock) opens nothing either (#783 review, round 3).
+                        box.mount(vault, request.get("idle_minutes"), cancelled=session.cancelled.is_set)
+                    except storage.StorageError as exc:
+                        if exc.code != "cancelled":
+                            raise
+                        outcome = "cancelled"
+                        _send_quietly(channel, {"t": "error", "code": "cancelled"})
+                    else:
+                        _send_quietly(channel, {"t": "ok"})
                 elif state in (State.WAITING_FOR_PHONE, State.WAITING_FOR_BIOMETRIC):
                     _send_quietly(channel, {"t": "error", "code": "bad-signature"})  # not the paired phone: keep waiting
                     session.set("waiting-for-phone")
@@ -314,6 +323,10 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
     except Exception:
         vault.lock()
         raise
+    if outcome == "cancelled" and coordinator.state is State.UNLOCKED:  # approved, then cancelled before the mount
+        session.set("cancelled")
+        vault.lock()
+        return
     if coordinator.state is not State.UNLOCKED and outcome == "unreachable":
         session.set("unreachable")
         vault.lock()

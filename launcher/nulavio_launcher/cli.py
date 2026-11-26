@@ -174,10 +174,8 @@ def _run_temporary(args: argparse.Namespace, eng) -> int:
         temp.release()
 
 
-def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
-    if not prof.exists():
-        _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
-        return 1
+def _guard_allows(args: argparse.Namespace, prof) -> bool:
+    """Report the Guard's findings on the profile's prefs; False when a critical one refuses the start."""
     findings = guard.audit(prof.path)
     for finding in findings:
         if finding.severity != "info":
@@ -186,27 +184,57 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
     if critical and not args.allow_weakened:
         _err("refusing to start a profile with critical findings; fix them or pass --allow-weakened")
         log.event("launch.refused", profile=prof.name, critical=[f.pref for f in critical])
-        return 3
-    command = engine_mod.build_command(eng, prof.path, url=args.url, private=args.private)
+        return False
+    return True
+
+
+def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
+    if not prof.exists():
+        _err(f"profile '{prof.name}' does not exist yet; run `nulavio setup` first")
+        return 1
     pid = prof.running_pid()
-    if getattr(args, "confined", False):
-        if pid is not None:
-            # The engine would hand this request to the running instance, which is not confined by this command.
-            _err(f"profile '{prof.name}' is already open; close it, then start it again with --confined")
-            return 1
+    if pid is not None:
+        # An open profile is not prepared again: its files as they are now are audited before anything else.
+        if not _guard_allows(args, prof):
+            return 3
+        # It may have closed during the audit: then it is started afresh, prepared and audited below.
+        pid = prof.running_pid()
+    command = engine_mod.build_command(eng, prof.path, url=args.url, private=args.private)
+    confined = bool(getattr(args, "confined", False))
+    if confined and pid is not None:
+        # The engine would hand this request to the running instance, which is not confined by this command.
+        _err(f"profile '{prof.name}' is already open; close it, then start it again with --confined")
+        return 1
+    applied: list[str] = []
+    if pid is None:
+        try:
+            # user.js is replaced below, before the audit: one the audit refused (a symlink, a FIFO, another
+            # user's file) still stops the start, and is left as it is.
+            paths.read_private_file(prof.path / "user.js")
+        except FileNotFoundError:
+            pass
+        locale = prof.load_settings().get("locale", "en")
+        if locale != "en":
+            profile.sync_langpack(prof, engine_mod.langpack(eng, locale))
+        applied = profile.prepare_for_launch(prof, {"engine": eng.label, **_filter_context(prof)})
+        # After the launcher has written prefs.js and replaced user.js: the Guard audits the prefs the engine is
+        # about to load, not a user.js line that is gone at start (#704). A refusal leaves the profile prepared.
+        if not _guard_allows(args, prof):
+            return 3
+    if confined:
+        # Only once the Guard allows the start: setting up the confinement makes the Downloads folder.
         try:
             command = confine.wrap(command, profile_dir=prof.path, engine_dir=eng.path.resolve().parent, supervised=supervise)
         except confine.ConfineError as exc:
             _err(str(exc))
             return 1
     if pid is None:
-        locale = prof.load_settings().get("locale", "en")
-        if locale != "en":
-            profile.sync_langpack(prof, engine_mod.langpack(eng, locale))
-        applied = profile.prepare_for_launch(prof, {"engine": eng.label, **_filter_context(prof)})
+        # Preparing checked the lock, and the audit and the confinement came after it: a profile another start
+        # opened meanwhile is refused as in use, as it was when preparing came last.
+        prof.require_not_running()
         log.event(
             "launch", profile=prof.name, engine=eng.label, private=args.private, url_given=bool(args.url), seeded=len(applied),
-            confined=bool(getattr(args, "confined", False)),
+            confined=confined,
         )  # fmt: skip
     else:
         # The engine forwards the request to the instance already using this profile.
