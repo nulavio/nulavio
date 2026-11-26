@@ -17,7 +17,7 @@ Autonomy levels (`nulavio ai capabilities` shows the full table):
 |---|---|
 | `restricted` | Reads and moves around; asks before clicking or typing |
 | `assisted` | Clicks and types; asks before submitting forms, using files and using signed-in sessions |
-| `autonomous` | Completes tasks without asking, forms included, even one that pays or changes an account, and uses signed-in sessions in the profiles you give it; working in two places at once (a profile beside its AI Workspace, or two profiles) and the local network still ask, and scripts stay off until you allow them |
+| `autonomous` | Completes tasks without asking, forms included, even one that pays or changes an account, and uses signed-in sessions in the profiles you give it; working in two places at once (a profile beside its AI Workspace, or two profiles) and the local network still ask, and scripts stay off until you allow both `execute_js` and `cookies_storage` |
 | `full-control` | Everything you select, without asking. Needs `--accept-full-control` after reading the warning |
 
 Options: `--site DOMAIN` (repeatable) limits the agent to those sites; `--disposable` deletes the workspace when the agent disconnects; `--headless` runs without a window.
@@ -42,6 +42,7 @@ Allow the tools in Claude Code when it asks, or with `--allowedTools mcp__nulavi
 nulavio ai agents                                   # who is connected, with what
 nulavio ai grant ag-1234 submit_forms allow          # stop asking for this
 nulavio ai grant ag-1234 execute_js allow --minutes 30
+nulavio ai grant ag-1234 cookies_storage allow --minutes 30   # a script needs both
 nulavio ai grant ag-1234 navigate block
 nulavio ai autonomy ag-1234 restricted
 nulavio ai revoke ag-1234                            # next call refused, workspace closed

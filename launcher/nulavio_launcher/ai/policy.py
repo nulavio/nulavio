@@ -77,7 +77,8 @@ PRESETS: dict[str, dict[str, str]] = {
     # any other (no tool tells them apart, AI-T13, R88), and signed-in sessions in the profiles on its list. This
     # computer and the local network, and a second place at once (a profile beside the AI Workspace, or two
     # profiles: multiple_profiles), still ask until the user allows them explicitly. Scripts ask, but `evaluate`
-    # also needs cookies_storage, which stays blocked: no script runs until the user allows both.
+    # also needs cookies_storage, which stays blocked: no script runs until the user allows both, and while
+    # cookies_storage is blocked `evaluate` is refused before execute_js is asked (#725).
     "autonomous": _preset(
         {"read_pages", "navigate", "screenshots", "interact", "submit_forms", "files", "authenticated_sessions"},
         {"local_resources", "execute_js", "multiple_profiles"},

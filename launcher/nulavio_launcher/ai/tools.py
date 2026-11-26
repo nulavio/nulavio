@@ -516,10 +516,13 @@ class Bridge:
             site = self._profile_site(self._agent() or {}, url)
             self.require("authenticated_sessions", site, checked=checked, place=place)
 
-    def require_here(self, capability: str, url: str, *, checked: list[str]) -> None:
+    def require_here(self, capability: str, url: str, *, checked: list[str], also: tuple[str, ...] = ()) -> None:
         """A tool acting on the tab where it is. An address agents never act on (data:, blob:, an internal page) is
         refused before the tool's own question: asking first could only end in a refusal, and a "for this session"
-        answer would stay (#508; the internal pages since the independent review of #504)."""
+        answer would stay (#508; the internal pages since the independent review of #504).
+
+        `also`: what the tool needs besides its own capability, asked after it. One of them blocked for this agent is
+        refused before any question, for the same reason (#725); the tool's own capability, blocked too, still wins."""
         if url:
             try:
                 target = policy.classify_url(url)
@@ -527,8 +530,22 @@ class Bridge:
                 self._target = url  # the activity record names the address, as for an internal page
                 raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
             self._refuse_internal(target, url, checked)
+        if also and not self._blocked(capability, url):
+            for other in also:
+                if self._blocked(other, url):
+                    self.require(other, url, checked=checked)  # refused by decide() without a question
         self.require(capability, url, checked=checked)
         self.require_needs(url, checked=checked)
+        for other in also:
+            self.require(other, url, checked=checked)
+
+    def _blocked(self, capability: str, url: str) -> bool:
+        """The capability is blocked for this agent at that address in this call: no answer could allow it."""
+        agent = self._agent()
+        if agent is None:
+            return False  # revoked meanwhile: require() says so
+        scope = (policy.origin(url), self._place())
+        return policy.effective_mode(agent, capability, self.session_id, scope=scope)[0] == "block"
 
     def still_at(self, tab: str, url: str, cancel) -> None:
         """After an approval (which can wait for minutes): the tab is still on the origin the
@@ -1695,9 +1712,8 @@ class Bridge:
     def _t_evaluate(self, args, cancel, checked):
         tab = args["tab"]
         url = self._url_of(tab, cancel)
-        self.require_here("execute_js", url, checked=checked)
         # A page script reads document.cookie and the site's storage: the same as cookies_storage (audit A9).
-        self.require("cookies_storage", url, checked=checked)
+        self.require_here("execute_js", url, checked=checked, also=("cookies_storage",))
         self.still_at(tab, url, cancel)
         value = self._eval(tab, args["expression"], cancel)
         text = json.dumps(value, ensure_ascii=False, default=str)
