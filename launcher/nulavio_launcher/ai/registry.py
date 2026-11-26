@@ -479,6 +479,8 @@ class BrowserApprover(Approver):
                 "place": {"kind": "profile", "profile": place} if place else {"kind": "workspace"},
                 "created": now().isoformat(timespec="seconds"),
                 "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
+        if cancel is not None and cancel.is_set():
+            return "deny"  # cancelled while the registry was read above: still never written (#764)
         paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
         try:
             if self.on_request:

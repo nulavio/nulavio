@@ -478,15 +478,22 @@ class Bridge:
             self.close()
         raise Denied(policy.Decision(False, "block", capability, held))
 
-    def _go_on(self, capability: str | None = None, checked: list[str] | None = None) -> None:
-        """Before a question, and before and after a host is looked up on this computer (#764): what may have changed
-        while the call read the page or waited on the lookup, which watches neither. A call cancelled meanwhile stops
-        there, as an engine command does (Cancelled), so it asks and looks up nothing more; a session stopped, revoked,
-        paused or re-keyed meanwhile is refused there, as require() refuses it. `capability`: what the refusal names,
-        the one the call checks next (by default the tool's own); `checked`: the call's list (by default its own)."""
-        if self._cancel is not None and self._cancel.is_set():
-            raise Cancelled()
-        self._refuse_if_held(capability or self._capability, self._checked if checked is None else checked)
+    def _go_on(self, capability: str | None = None, checked: list[str] | None = None, *, at: str | None = None) -> None:
+        """Before a question, before and after a host is looked up on this computer, and after the tab's address is read
+        again before acting (still_at) (#764): what may have changed while the call read the page or waited on the
+        lookup, which watches neither. A call cancelled meanwhile stops there, as an engine command does (Cancelled), so
+        it asks, looks up and does nothing more; a session stopped, revoked, paused or re-keyed meanwhile is refused
+        there, as require() refuses it. `capability`: what the refusal names, the one the call checks next (by default
+        the tool's own); `checked`: the call's list (by default its own); `at`: the address the next check would have
+        been made at, which the activity record then names."""
+        try:
+            if self._cancel is not None and self._cancel.is_set():
+                raise Cancelled()
+            self._refuse_if_held(capability or self._capability, self._checked if checked is None else checked)
+        except (Cancelled, Denied):
+            if at:
+                self._target = at
+            raise
 
     def require(self, capability: str, url: str | None = None, *, checked: list[str], place: str | None = None) -> None:
         """`place`: where the call acts ("" or a profile's label), when it is not the one its arguments name."""
@@ -606,14 +613,14 @@ class Bridge:
         A host is looked up only for a call that goes on, and the call is checked again after the lookup (_go_on): the
         refusal names navigate, which every caller checks next."""
         if resolve:
-            self._go_on("navigate")
+            self._go_on("navigate", at=url)
         try:
             target = policy.classify_url(url, resolve)
         except policy.UrlRefused as exc:
             self._target = url
             raise ToolError(str(exc)) from None
         if resolve:
-            self._go_on("navigate")
+            self._go_on("navigate", at=url)
         return target
 
     def _url_needs(self, target: policy.Target, url: str) -> list[Need]:
@@ -645,13 +652,13 @@ class Bridge:
         if not url:
             return None
         if resolve:
-            self._go_on(checked=checked)
+            self._go_on(checked=checked, at=url)
         try:
             target = policy.classify_url(url, resolve)
         except policy.UrlRefused as exc:
             raise ToolError(f"the tab is at an address agents do not act on: {exc}") from None
         if resolve:
-            self._go_on(checked=checked)
+            self._go_on(checked=checked, at=url)
         self._refuse_internal(target, url, checked)
         return target
 
@@ -793,8 +800,11 @@ class Bridge:
         person approved. A page that navigated meanwhile would otherwise get the action. Returns where it is.
         An address the call was asked about as it is (tab_close at a Reader View page) is not a move.
         Also after a read of the page whose result the call acts on (#764): what was read is of the page the call
-        was judged at, or of one it moved to then and is dropped. `during`: what the call was doing, for the error."""
+        was judged at, or of one it moved to then and is dropped. `during`: what the call was doing, for the error.
+        The call is checked again too, before anything is looked up for the error or done after it (_go_on): a cancel,
+        a stop, a pause, a revocation or a new key that came during the read."""
         now = self._url_of(tab, cancel, timeout=timeout)
+        self._go_on()
         moved = self._moved(url, now)
         if moved == "site":
             where = "another site" if self._hidden(now) else policy.origin(now)
@@ -1507,7 +1517,7 @@ class Bridge:
                 realms.append(realm)
         return realms
 
-    def _forms_settle(self, tab: str, url: str, what: str, checked: list[str], cancel) -> bool:
+    def _forms_settle(self, tab: str, url: str, what: str, checked: list[str], cancel, *, earlier: bool = False) -> bool:
         """After an action, and before the next one: forms the page tried to send are held in it,
         whenever it tried. Sending them needs submit_forms: with it they go as they were (True);
         without it they are dropped and the call is denied.
@@ -1520,12 +1530,16 @@ class Bridge:
         that leads to a page that sends a form as it loads): that address is checked as if it had
         been asked for, and submit_forms counts for it only if it was allowed for it in this call.
         And the answer can take minutes, in which the page can move on: only the documents counted
-        are sent, and when they are gone by then the call stops there."""
+        are sent, and when they are gone by then the call stops there.
+
+        `earlier`: forms held from an earlier action, before this call acts (_earlier_forms). Nothing of this call took
+        the tab elsewhere then, so forms counted in a page it moved to meanwhile are neither asked about, sent nor
+        dropped: they stay held, and the move is said (still_at, #764)."""
         realms = self._forms_where(tab, cancel)
         if not realms:
             return False
         # Read after the count: these documents' address, or a later one's (their realms are then gone).
-        here = self._url_of(tab, cancel)
+        here = self.still_at(tab, url, cancel, during=READING) if earlier else self._url_of(tab, cancel)
         if policy.origin(here) != policy.origin(url):
             elsewhere = f"{what} was done and took the tab elsewhere; the form that page then tried to send was not sent"
             try:
@@ -1985,7 +1999,7 @@ class Bridge:
         agent = self._agent()
         if agent is None:
             return None  # removed while the element was read: require() refuses the call, and closes its engines
-        self._go_on(checked=checked)  # cancelled or held while it was read: nothing is looked up for it (#764)
+        self._go_on(checked=checked, at=here)  # cancelled or held while it was read: nothing is looked up for it (#764)
         before = [("submit_forms", here)] if needs else []
         if any(self._blocks(agent, capability, at) for capability, at in [*before, ("navigate", href)]):
             resolve = False
@@ -1996,7 +2010,7 @@ class Bridge:
         except policy.UrlRefused as exc:
             return needs, self._fails(str(exc), at=href)
         if resolve:
-            self._go_on(checked=checked)  # cancelled or held during the lookup: nothing is asked after it
+            self._go_on(checked=checked, at=here)  # cancelled or held during the lookup: nothing is asked after it
         _left(deadline)  # a lookup that answered after the budget adds nothing: checked after the question, as before
         if policy.INTERNAL_CAPABILITY in target.needs:
             return needs, lambda: self._refuse_internal(target, href, checked)
@@ -2021,7 +2035,7 @@ class Bridge:
         """Forms the page tried to send since the last call (a timer, an answer to a dialog) are
         still held in it. They are settled first: sent with the permission (the page then moved on,
         so this call does nothing else), dropped and denied without it."""
-        if not self._forms_settle(tab, url, "An earlier action", checked, cancel):
+        if not self._forms_settle(tab, url, "An earlier action", checked, cancel, earlier=True):
             # Counted in the page the call was judged at, or the tab moved meanwhile: nothing more is read or set up
             # there (the forms guard, the element), and the move is said (#764).
             self.still_at(tab, url, cancel, during=READING)
