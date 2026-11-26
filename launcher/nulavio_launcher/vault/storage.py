@@ -205,11 +205,16 @@ class Container:
         self._gocryptfs(["-init", "-q", "-xchacha", "-scryptn", "10", str(self.cipher)], storage_password(vault))
         self.new_volume = True
 
-    def mount(self, vault: Vault, idle_minutes: int | None = None) -> None:
+    def mount(self, vault: Vault, idle_minutes: int | None = None, cancelled=None) -> None:
+        """`cancelled`: asked once the state lock is had, before anything else. When it answers true (the person
+        cancelled the phone session while this waited, for the auto-lock watcher closing the profile or another
+        unlock), this raises "cancelled" and opens nothing (#783 review, round 3)."""
         if not self.vault_path.exists():
             raise StorageError("not-encrypted")
         # The state lock before the volume is mounted: if it cannot be had, nothing is opened.
         with self._state_lock():
+            if cancelled is not None and cancelled():
+                raise StorageError("cancelled", "the request was cancelled while it waited")
             # Checked only under the lock, and only then for files in the folder: another unlock of this profile (a
             # second tab, the chooser, the phone, the command line) may have mounted it while this one waited. The
             # profile is then open, which is what this request asked for; going on would fail on the mounted folder,
