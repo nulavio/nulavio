@@ -451,6 +451,16 @@ class WatcherTest(unittest.TestCase):
         # a versions list not read back to the pin: a lower bound, which fails once it is over the limit
         self.assertEqual(verdict(newer, newer=first, complete=False), "fail")
         self.assertEqual(verdict(newer, newer={**first, "created": "2026-02-20T00:00:00Z"}, complete=False), "error")
+        # AMO's current version counts only when it came after the pin, in number and in date (OCR on #820)
+        backport = {**same, "version": "0.9.1", "created": "2026-01-02T00:00:00Z"}
+        self.assertEqual(verdict(backport), "warn")
+        self.assertIn("is not newer than the pin", watch.extension_verdict(entry, same, backport, None, None, now)[1])
+        self.assertEqual(verdict({**same, "version": "1.1", "created": "2025-12-01T00:00:00Z"}), "warn")
+        self.assertEqual(verdict(backport, complete=False), "error")
+        # a lock written in upper-case hex, as the launcher accepts it, is the same file
+        upper = {**entry, "sha256": "A" * 64}
+        self.assertEqual(watch.extension_verdict(upper, same, same, None, None, now)[0], "ok")
+        self.assertEqual(watch.extension_verdict(upper, same, newer, None, None, now)[0], "warn")
 
     def test_a_blocked_extension_fails_the_run(self):
         guid = "uBlock0@raymondhill.net"
@@ -536,8 +546,9 @@ AMO_FIXTURES = ROOT / "tests" / "fixtures" / "amo"
 class RecordedAmo:
     """AMO's replies recorded on 2026-11-26 (tests/fixtures/amo/<key>.json), keyed by the path the watch requests."""
 
-    def __init__(self, keys, change=None):
+    def __init__(self, keys, change=None, down=()):
         self.records = [json.loads((AMO_FIXTURES / f"{key}.json").read_text()) for key in keys]
+        self.down = down  # path prefixes that fail as if AMO were unreachable there
         self.replies = {}
         for record in self.records:
             self.replies.update(record["replies"])
@@ -557,6 +568,8 @@ class RecordedAmo:
         if not url.startswith(watch.AMO):
             raise AssertionError(f"unexpected URL {url}")
         path = url[len(watch.AMO) :]
+        if path.startswith(tuple(self.down)):
+            raise OSError(f"test: {path} is down")
         if path not in self.replies:
             raise AssertionError(f"not recorded: {path}")
         reply = self.replies[path]
@@ -641,6 +654,8 @@ class ExtensionLagTest(unittest.TestCase):
         pinned = UBLOCK + "versions/1.76.4/"
         reply = RecordedAmo(["ublock-origin"]).replies[pinned]
         listed = UBLOCK + "versions/?page=1&page_size=50"
+        page = RecordedAmo(["ublock-origin"]).replies[listed]
+        first = page["results"][0]  # 1.77.2, newer than the pin
         for change in (
             {pinned: {**reply, "file": {**reply["file"], "hash": "md5:" + "a" * 32}}},
             {pinned: {**reply, "file": {**reply["file"], "size": "6332093"}}},
@@ -650,9 +665,60 @@ class ExtensionLagTest(unittest.TestCase):
             {listed: {"next": None, "results": [{"version": 1.77, "file": {"created": "2026-11-26T00:00:00Z"}}]}},
             {listed: {"next": None, "results": [{"version": "1.77", "file": {"created": 1}}]}},
             {pinned: {**reply, "file": {**reply["file"], "created": None}}},
+            {pinned: {**reply, "file": {**reply["file"], "size": 0}}},
+            {pinned: {**reply, "file": {**reply["file"], "size": -1}}},
+            {listed: {k: v for k, v in page.items() if k != "next"}},  # no "next": the end of the list is not known
+            {listed: {**page, "next": 2}},
+            {listed: {**page, "results": [{k: v for k, v in first.items() if k != "channel"}, *page["results"][1:]]}},
+            {listed: {**page, "results": [{**first, "file": {**first["file"], "status": None}}, *page["results"][1:]]}},
         ):
             row = self.rows(RecordedAmo(["ublock-origin"], change), at("2026-11-26T20:00:00Z"))["ublock-origin"]
             self.assertEqual(row.state, "error", (change, row.text))
+
+    def test_an_upper_case_digest_from_amo_is_the_same_file(self):
+        pinned = UBLOCK + "versions/1.76.4/"
+        reply = RecordedAmo(["ublock-origin"]).replies[pinned]
+        change = {pinned: {**reply, "file": {**reply["file"], "hash": reply["file"]["hash"].upper().replace("SHA256", "sha256")}}}
+        row = self.rows(RecordedAmo(["ublock-origin"], change), at("2026-11-26T20:00:00Z"))["ublock-origin"]
+        self.assertEqual(row.state, "warn", row.text)
+
+    def test_a_confirmed_failure_stands_when_another_amo_reply_is_missing(self):
+        # OCR on #820: the blocklist, the pinned file and the lag are judged apart, so one endpoint down hides no failure
+        now = at("2026-11-26T20:00:00Z")
+        guid = "uBlock0%40raymondhill.net"
+        pinned = UBLOCK + "versions/1.76.4/"
+        listed = UBLOCK + "versions/?"
+        block = f"blocklist/block/{guid}/"
+        blocked = {block: {"blocked": ["1.76.4"], "soft_blocked": [], "is_all_versions": False}}
+        reply = RecordedAmo(["ublock-origin"]).replies[pinned]
+        replaced = {pinned: {**reply, "file": {**reply["file"], "hash": "sha256:" + "b" * 64}}}
+        for change, down, expect in (
+            (blocked, [UBLOCK + "versions/"], "blocklist"),  # the pin and the versions list down
+            (blocked, [UBLOCK], "blocklist"),  # every add-on reply down
+            (replaced, [listed], "different file"),
+            (replaced, [block], "different file"),
+            ({pinned: None}, [block, listed], "no longer serves"),
+        ):
+            row = self.rows(RecordedAmo(["ublock-origin"], change, down), now)["ublock-origin"]
+            self.assertEqual(row.state, "fail", (down, row.text))
+            self.assertIn(expect, row.text)
+        # a lag already over the limit stands when only the blocklist is down
+        row = self.rows(RecordedAmo(["ublock-origin"], down=[block]), at("2026-12-22T20:00:00Z"))["ublock-origin"]
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("for 32 days", row.text)
+        # nothing confirmed: unavailable data, never a pass or a warning
+        for down in ([block], [listed], [pinned], [UBLOCK]):
+            row = self.rows(RecordedAmo(["ublock-origin"], down=down), now)["ublock-origin"]
+            self.assertEqual(row.state, "error", (down, row.text))
+            self.assertIn("no data from addons.mozilla.org", row.text)
+
+    def test_a_backport_as_current_is_not_a_lag(self):
+        # the pin (1.0) is AMO's newest number; AMO's current is a backport (0.9.1) made after it, 60 days ago
+        versions = self.stream(0)
+        backport = {**versions[0], "version": "0.9.1", "file": {**versions[0]["file"], "created": "2026-05-02T00:00:00Z"}}
+        row, _ = self.stream_row([backport, *versions], at("2026-07-01T00:00:00Z"))
+        self.assertEqual(row.state, "warn", row.text)
+        self.assertIn("0.9.1 is not newer than the pin", row.text)
 
     def stream(self, count, every_days=10):
         """A pin (1.0, 2026-05-01) followed by `count` releases, one every `every_days` days, newest first."""
