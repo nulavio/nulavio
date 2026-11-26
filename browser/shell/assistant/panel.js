@@ -27,6 +27,7 @@ let thread = null;
 let shownAnswer = ""; // the latest answer as the model wrote it (for "Copiar")
 const MAX_REQUEST_CHARS = 200000; // assistant.py MAX_REQUEST_CHARS (Q20)
 let contextVersion = 0; // late page replies cannot restore consent after a send or context change
+let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 
 const $ = id => document.getElementById(id);
 const count = n => new Intl.NumberFormat(browser.i18n.getUILanguage()).format(n);
@@ -289,6 +290,7 @@ function removeChip(chip) {
     Resolves to true when the page is in the message. */
 async function includeCurrent() {
   const version = ++contextVersion;
+  const sent = sends;
   const page = await ai.assistantPage().catch(() => null); // what the tab shows at this moment
   if (version !== contextVersion || document.body.dataset.state !== "ready") {
     return false;
@@ -302,8 +304,8 @@ async function includeCurrent() {
   try {
     chip = await ai.assistantInclude({ kind: "page", tabId: page.tabId, url: page.url });
   } catch (e) {
-    if (version !== contextVersion) {
-      return false; // a Send or a change came first: the refusal is not about this message either
+    if (sends !== sent) {
+      return false; // a Send came first: the browser dropped the item it was reading (page-changed), not an error
     }
     announce(errorText(e), "error");
     await refreshPage();
@@ -814,6 +816,7 @@ async function send(question, { retry = false } = {}) {
   const items = task || retry ? [] : chips.map(c => c.chipId);
   const chars = retry ? Number($("retry").dataset.chars) : requestChars();
   ++contextVersion;
+  ++sends;
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
   // The browser drops its copy too, whatever the start (#678).
   chips = [];
