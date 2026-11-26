@@ -2318,6 +2318,53 @@ class AuditTest(Home):
         self.assertEqual((entry["decision"], entry["reason"]), ("deny", "revoked"))
         self.assertEqual(approver.asked, [])
 
+    # OpenCodeReview on #748, round 3.
+    def test_enter_refused_while_the_page_is_read_leaves_a_held_form_held(self):
+        # submit_forms blocked while the look counted a held form: Enter (submit=true) asks it first, at the same
+        # address, so the refusal is Enter's own. The held form is not dropped for it: on main, Enter refused after
+        # the question leaves it held for the next call too.
+        approver = Approve("once")
+        bridge, done, page = self.element_page("restricted", approver, self.FIELD, held=1)
+
+        def forms_where(_self, _tab, _cancel, **kwargs):
+            if "deadline" in kwargs:  # the look's count, before the question
+                registry.grant(bridge.agent_id, "submit_forms", "block")
+                done.append("look")
+            return ["realm-1"] if page["held"] else []
+
+        with mock.patch.object(tools.Bridge, "_forms_where", forms_where):
+            result = bridge.call("type", {"tab": "t1", "element": "e1", "text": "x", "submit": True})
+        self.assertIn("look", done)
+        self.assert_refused_before_asking(result, approver, bridge, done, "submit_forms", "grant", "https://example.org")
+        self.assertNotIn("An earlier action", result["content"][0]["text"])
+        self.assertEqual((done.count("drop"), page["held"]), (0, 1))
+
+    def test_a_file_name_that_cannot_be_resolved_before_the_question_adds_nothing(self):
+        # A loop of links in the uploads folder makes Path.resolve raise RuntimeError before Python 3.13: before the
+        # question that is not known to be a file, so the call asks files as on main, and a refusal is said as such.
+        folder = self.home / "uploads"
+        folder.mkdir()
+        approver = Approve("deny")
+        bridge, done, page = self.element_page("assisted", approver, self.FIELD, held=1)
+        bridge.workspace = mock.Mock(uploads=True, bidi=None)
+        real = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path.name == "loop.txt":
+                raise RuntimeError(f"Symlink loop from {path}")
+            return real(path, *args, **kwargs)
+
+        with (
+            mock.patch.object(tools, "_uploads", return_value=folder),
+            mock.patch.object(tools.Bridge, "_owner", return_value=""),
+            mock.patch.object(Path, "resolve", resolve),
+        ):
+            result = bridge.call("upload", {"tab": "t1", "element": "e1", "file": "loop.txt"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn(f"'{policy.CAPABILITIES['files']}'", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [("files", "https://example.org")])
+        self.assertEqual((done.count("drop"), page["held"], "input.setFiles" in done), (0, 1, False))
+
     def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
         agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())

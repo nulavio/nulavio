@@ -1883,7 +1883,9 @@ class Bridge:
         try:
             return self.require_here(capability, url, checked=checked, then=then, look=look)
         except Denied as denied:
-            if held and denied.decision.capability == "submit_forms":
+            # Enter (submit=true) needs submit_forms at the same address before the held form: a refusal for it is the
+            # call's own, and the form stays held for the next call, as when Enter is refused after the question.
+            if held and denied.decision.capability == "submit_forms" and "submit_forms" not in then:
                 # A session ended meanwhile (a stop, a revocation, a new key) has no engine any more (_forms_settle).
                 # A call cancelled meanwhile sends nothing more to the page: the form stays for the next call.
                 if not self._held() and not cancel.is_set():
@@ -2129,7 +2131,16 @@ class Bridge:
         # A form held from an earlier action, before the question; refused after it, as before, when the file is not
         # there (a call refused for that leaves the form to the next one). The name is resolved again after the
         # question: what is uploaded is what it points to then.
-        url = self._act_here("files", url, checked, cancel, ready=lambda: there() is not None)
+        def ready() -> bool:
+            """Whether the file is there before the question. A name that cannot be resolved now (a loop of links on
+            Python before 3.13, a folder it may not read) is not known to be: it is resolved again after the
+            question, as before."""
+            try:
+                return there() is not None
+            except (OSError, RuntimeError):
+                return False
+
+        url = self._act_here("files", url, checked, cancel, ready=ready)
         self.still_at(tab, url, cancel)
         if (path := there()) is None:
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")
