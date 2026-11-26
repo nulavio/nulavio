@@ -48,7 +48,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **New protections and their limits**:
 
-- **Look-alike login warning in frames**: the check covers password fields in every frame of a tab's page, with the site of the field's document and of each document around it up to the tab's page; "continue" goes back to the tab's page. Its limits: [R41](residual-risks.md).
+- **Look-alike login warning in frames**: the check covers password fields in every frame of a tab's page, with the site of the field's document and of each document around it up to the tab's page; for a field in a frame, "continue" goes back to the tab's page. Its limits: [R41](residual-risks.md).
 
 ## Nulavio 160.0.1-0.3 (Firefox 160.0.1), published 2026-11-25
 
