@@ -466,7 +466,10 @@ class BrowserApprover(Approver):
     def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
             cancel: threading.Event | None = None) -> str | None:  # fmt: skip
         """Denies as soon as the emergency stop is on, the agent is paused or revoked, or the call was
-        cancelled: the request page then closes as expired, and nothing waits for an answer."""
+        cancelled: the request page then closes as expired, and nothing waits for an answer. One called off already
+        is never written, so the person never sees a request that is moot (#764)."""
+        if _called_off(agent["id"], cancel):
+            return "deny"
         folder = requests_dir()
         request_id = secrets.token_hex(8)
         base = folder / request_id
