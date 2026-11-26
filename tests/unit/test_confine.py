@@ -242,11 +242,11 @@ class WrapTest(unittest.TestCase):
         args = self.wrap()
         self.assertFalse([d for d in self.destinations(args) if Path(d).is_symlink()], self.destinations(args))
         self.assertEqual(self.binds(args)[1:], [(str(self.profile.resolve()),) * 2, (str(real.resolve()),) * 2])
-        # Seen from the walk: a link under a folder put back is followed; one in a folder still hidden is not.
-        restored = [(self.profile.resolve(), True), (real.resolve(), True)]
-        self.assertIsNone(confine.seen_inside(self.profile / "Downloads", [self.home.resolve()], restored))
+        # Seen from the walk: a link under a folder bound writable is followed; one in a folder still hidden is not.
+        writable = [self.profile.resolve(), real.resolve()]
+        self.assertIsNone(confine.seen_inside(self.profile / "Downloads", [self.home.resolve()], [], writable))
         (self.home / "Downloads").symlink_to(real)
-        found = confine.seen_inside(self.home / "Downloads", [self.home.resolve()], restored)
+        found = confine.seen_inside(self.home / "Downloads", [self.home.resolve()], [], writable)
         self.assertEqual(found, self.home.resolve() / "Downloads")
 
     def test_a_downloads_link_inside_a_profile_reached_through_a_hidden_link_is_never_mounted_on(self):
@@ -270,35 +270,95 @@ class WrapTest(unittest.TestCase):
                                                         (str((disk / "x/p").resolve()), str(home / "link/p")),
                                                         (str(real),) * 2, *extra])  # fmt: skip
 
-    def test_a_downloads_folder_in_a_linked_read_only_folder_is_bound_writable_where_the_browser_looks(self):
-        # ~/.fonts is a link and is put back read-only, so ~/.fonts/Downloads is there inside but not writable: the
-        # folder is bound writable at that path too, never on a link that the read-only put-back shows.
-        fonts = self.tmp / "disk/fonts"
+    def test_a_downloads_folder_through_a_read_only_put_back_is_refused_with_what_to_do(self):
+        # ~/.fonts is a link and is put back read-only, so ~/.fonts/Downloads is there inside but not writable. Binding
+        # it there would mean emulating the read-only put-back (where a relative link with '..' leaves it differently
+        # inside and outside): refused instead, with the path, the reason and what to do.
+        fonts = self.home / "dotfiles/gui/fonts"  # '../../../data/dl' from there is ~/data/dl
         fonts.mkdir(parents=True)
-        (self.home / ".fonts").symlink_to(fonts)
+        (self.home / ".fonts").symlink_to("dotfiles/gui/fonts")
         (self.home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
-        home, fonts = self.home.resolve(), fonts.resolve()
-        layouts = {
-            "a plain folder": (None, fonts / "Downloads", home / ".fonts/Downloads"),
-            "an absolute link": (fonts.parent / "dl2", fonts.parent / "dl2", None),  # writable where it points
-            "a relative link": ("dl2", fonts / "dl2", home / ".fonts/dl2"),
-        }
-        for layout, (target, real, extra) in layouts.items():
+        layouts = {"a plain folder": None, "an absolute link": fonts.parent / "dl2", "a relative link": "dl2",
+                   "a relative link with '..'": "../../../data/dl"}  # fmt: skip
+        for layout, target in layouts.items():
             with self.subTest(layout):
-                for leftover in (fonts / "Downloads", fonts / "dl2", fonts.parent / "dl2"):
-                    if leftover.is_symlink():
-                        leftover.unlink()
+                downloads = fonts / "Downloads"
+                if downloads.is_symlink():
+                    downloads.unlink()
+                elif downloads.is_dir():
+                    downloads.rmdir()
                 if target is None:
-                    (fonts / "Downloads").mkdir(exist_ok=True)
+                    downloads.mkdir()
                 else:
-                    if (fonts / "Downloads").is_dir():
-                        (fonts / "Downloads").rmdir()
-                    real.mkdir(exist_ok=True)
-                    (fonts / "Downloads").symlink_to(target)
+                    (fonts / target if isinstance(target, str) else target).mkdir(parents=True, exist_ok=True)
+                    downloads.symlink_to(target)
+                with self.assertRaises(confine.ConfineError) as refused:
+                    self.wrap()
+                message = str(refused.exception)
+                self.assertIn(f"{self.home.resolve()}/.fonts/Downloads goes through {self.home.resolve()}/.fonts", message)
+                self.assertIn("puts back read-only", message)
+                self.assertIn("Point the folder at a path outside it, or run without --confined", message)
+
+    def test_a_writable_bind_over_a_hidden_or_put_back_folder_or_over_root_is_refused(self):
+        # A writable bind over a folder hidden or put back before would undo it (the whole home folder writable, the
+        # other profiles back): refused, never started.
+        cases = {
+            "the profile is the home folder": (self.home, None, f"put back writable at {self.home.resolve()}"),
+            "Downloads holds the profile": (self.profile, "$HOME/.local/share", f"over {self.profile.resolve()}"),
+            "Downloads is /": (self.profile, "/", "put back writable at /, over /"),
+            "Downloads is a link to the home folder": (self.profile, "link-home", "over "),
+            "Downloads is a link above the home folder": (self.profile, "link-up", "over "),
+        }
+        for case, (profile, downloads, expected) in cases.items():
+            with self.subTest(case):
+                link = self.home / "Downloads"
+                if link.is_symlink():
+                    link.unlink()
+                dirs = self.home / ".config/user-dirs.dirs"
+                dirs.unlink(missing_ok=True)
+                if downloads in ("link-home", "link-up"):
+                    if link.is_dir():
+                        link.rmdir()
+                    link.symlink_to(self.home if downloads == "link-home" else self.home.parent)
+                elif downloads is not None:
+                    dirs.write_text(f'XDG_DOWNLOAD_DIR="{downloads}"\n')
+                with self.assertRaises(confine.ConfineError) as refused:
+                    confine.wrap(["/engine/nulavio"], profile_dir=profile, engine_dir=self.engine, home=self.home,
+                                 binary="/usr/bin/bwrap")  # fmt: skip
+                self.assertIn(expected, str(refused.exception))
+                self.assertIn("confined mode hides or puts back on its own", str(refused.exception))
+                self.assertIn("run without --confined", str(refused.exception))
+            if link.is_symlink():
+                link.unlink()
+
+    def test_layouts_that_keep_working_bind_the_folder_where_the_browser_looks(self):
+        # Links in hidden folders, nested, relative and absolute; Downloads as the profile itself or inside it.
+        disk = self.tmp / "disk"
+        (disk / "dl").mkdir(parents=True)
+        (disk / "nested").mkdir()
+        home, profile = self.home.resolve(), str(self.profile.resolve())
+        downloads = self.home / "Downloads"
+        cases = {
+            "a relative link": ("../disk/dl", None, [(str(disk / "dl"), str(home / "Downloads"))]),
+            "a link to a link": (str(self.home / "middle"), disk / "nested", [(str(disk / "nested"), str(home / "Downloads"))]),
+            "Downloads is the profile": (None, "$HOME/.local/share/nulavio/data/profiles/p", []),
+            "Downloads is inside the profile": (None, "$HOME/.local/share/nulavio/data/profiles/p/dl", []),
+        }  # fmt: skip
+        (self.home / "middle").symlink_to(disk / "nested")  # ~/Downloads -> ~/middle -> disk/nested
+        for case, (target, value, extra) in cases.items():
+            with self.subTest(case):
+                if downloads.is_symlink():
+                    downloads.unlink()
+                dirs = self.home / ".config/user-dirs.dirs"
+                dirs.unlink(missing_ok=True)
+                if target is not None:
+                    downloads.symlink_to(target)
+                if isinstance(value, str):
+                    dirs.write_text(f'XDG_DOWNLOAD_DIR="{value}"\n')
                 args = self.wrap()
-                self.assertIn(("--ro-bind", str(home / ".fonts"), str(home / ".fonts")), self.triples(args))
-                expected = [(str(real), str(real))] + ([(str(real), str(extra))] if extra else [])
-                self.assertEqual(self.binds(args)[2:], expected)
+                real = str(confine.download_dir(self.home).resolve())
+                first = [(profile, profile)] + ([] if real == profile else [(real, real)])
+                self.assertEqual(self.binds(args)[1:], first + extra)
 
     def test_a_link_still_there_inside_adds_no_bind(self):
         # A home folder reached through a link outside the hidden folders (/home -> var/home): the link is there
@@ -306,10 +366,12 @@ class WrapTest(unittest.TestCase):
         users = self.tmp / "var/home/u"
         (users / ".local/share/p").mkdir(parents=True)
         (self.tmp / "home-link").symlink_to("var/home")
-        bound = [(users.resolve() / ".local/share/p", True)]  # the resolved path, bound writable at itself
-        self.assertIsNone(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], bound))
-        self.assertEqual(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], [(users, False)]),
-                         users.resolve() / ".local/share/p", "reached, but only read-only: bound writable there")  # fmt: skip
+        bound = [users.resolve() / ".local/share/p"]  # the resolved path, bound writable at itself
+        self.assertIsNone(confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], [], bound))
+        with self.assertRaisesRegex(confine.ConfineError, "would lead to .* not to the folder put back writable"):
+            confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users])  # nothing bound there
+        with self.assertRaisesRegex(confine.ConfineError, "puts back read-only"):
+            confine.seen_inside(self.tmp / "home-link/u/.local/share/p", [users], [users / ".local"], bound)
         (self.tmp / "disk").mkdir()
         (users / "Downloads").symlink_to(self.tmp / "disk")
         self.assertEqual(confine.seen_inside(self.tmp / "home-link/u/Downloads", [users]), users / "Downloads")
@@ -579,33 +641,78 @@ class RealBubblewrapTest(unittest.TestCase):
                 self.assertTrue((profile.resolve() / "written").exists())
                 self.assertTrue((disk / "Downloads/written").exists())
 
-    def test_a_downloads_folder_in_a_linked_fonts_folder_is_writable(self):
-        # ~/.fonts is a link put back read-only: without a writable bind at ~/.fonts/Downloads a download fails with
-        # "Read-only file system"; a bind on a link there would stop the start. A plain folder, then links to others.
-        for target in (None, "dl2", "/abs"):
-            with self.subTest(target=target):
+    def refusal(self, profile: Path, home: Path, downloads: Path) -> str:
+        """The refusal's message; a start that bubblewrap runs instead fails the test with what bubblewrap said."""
+        write = [sys.executable, "-I", "-c", WRITE, "downloads", str(downloads)]
+        try:
+            args = confine.wrap(write, profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent,
+                                home=home, binary=confine.bwrap())  # fmt: skip
+        except confine.ConfineError as refused:
+            return str(refused)
+        run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+        self.fail(f"not refused; bubblewrap exit {run.returncode}: {run.stderr.strip()} {run.stdout.strip()}")
+
+    def linked_home(self, name: str) -> tuple[Path, Path, str]:
+        """A home with ~/<name> a link to a folder k levels down, where k '..' lead to the home on the host but to
+        / inside (from the put-back's mount point): the layouts the independent review found (#719)."""
+        tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        home = tmp / "home"
+        k = len(home.parts)  # the home folder's depth, plus one
+        folder = home.joinpath("dotfiles", *["gui"] * (k - 2), name.lstrip("."))
+        folder.mkdir(parents=True)
+        (home / ".config").mkdir()
+        (home / name).symlink_to(folder)
+        return home, folder, "/".join([".."] * k)
+
+    def test_a_relative_link_with_dots_in_a_read_only_put_back_is_refused_not_started(self):
+        # F1: ~/.fonts -> dotfiles/.../fonts and Downloads -> ../../../data/dl there: on the host it is ~/data/dl, but
+        # inside it leaves the read-only put-back from its mount point and leads to /data/dl, under the read-only /.
+        home, fonts, up = self.linked_home(".fonts")
+        (home / "data/dl").mkdir(parents=True)
+        (home / ".local/share/nulavio/data/profiles/p").mkdir(parents=True)
+        (fonts / "Downloads").symlink_to(f"{up}/data/dl")
+        (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
+        message = self.refusal(home / ".local/share/nulavio/data/profiles/p", home, home / ".fonts/Downloads")
+        self.assertIn(f"goes through {home}/.fonts, which confined mode puts back read-only", message)
+        self.assertIn("run without --confined", message)
+
+    def test_a_profile_that_would_cover_the_root_is_refused_not_started(self):
+        # F2: the profile is the home folder, reached through ~/.icons/l2 with l2 -> ../../..: on the host that is the
+        # home folder, inside it is /, so a bind there would put the home folder over the whole system.
+        home, icons, up = self.linked_home(".icons")
+        (icons / "l2").symlink_to(up)
+        (home / "Downloads").mkdir()
+        message = self.refusal(home / ".icons/l2", home, home / "Downloads")
+        self.assertIn(f"the profile folder {home}/.icons/l2 would be put back writable at {home}, over {home}", message)
+        self.assertIn("confined mode hides or puts back on its own", message)
+
+    def test_layouts_that_keep_working_start_and_write_to_the_real_folder(self):
+        # ~/Downloads as a relative link, as a link to a link, and Downloads as the profile itself or inside it.
+        for layout in ("a relative link", "a link to a link", "the profile", "inside the profile"):
+            with self.subTest(layout):
                 tmp = Path(tempfile.mkdtemp(prefix="nv-confine-real-"))
                 self.addCleanup(shutil.rmtree, tmp, True)
-                home, fonts = tmp / "home", tmp / "disk/fonts"
+                home, disk = tmp / "home", tmp / "disk"
                 profile = home / ".local/share/nulavio/data/profiles/p"
-                for folder in (profile, home / ".config", fonts):
+                for folder in (profile, home / ".config", disk / "dl"):
                     folder.mkdir(parents=True)
-                (home / ".fonts").symlink_to(fonts)
-                if target is None:
-                    real = fonts / "Downloads"
-                    real.mkdir()
+                if layout == "a relative link":
+                    (home / "Downloads").symlink_to("../disk/dl")
+                elif layout == "a link to a link":
+                    (home / "middle").symlink_to(disk / "dl")
+                    (home / "Downloads").symlink_to(home / "middle")
                 else:
-                    real = fonts / "dl2" if target == "dl2" else tmp / "disk/dl2"
-                    real.mkdir()
-                    (fonts / "Downloads").symlink_to("dl2" if target == "dl2" else real)
-                (home / ".config/user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/.fonts/Downloads"\n')
-                write = [sys.executable, "-I", "-c", WRITE, "downloads", str(home / ".fonts/Downloads")]
+                    value = profile if layout == "the profile" else profile / "dl"
+                    (home / ".config/user-dirs.dirs").write_text(f'XDG_DOWNLOAD_DIR="{value}"\n')
+                downloads = confine.download_dir(home)
+                write = [sys.executable, "-I", "-c", WRITE, "profile", str(profile), "downloads", str(downloads)]
                 args = confine.wrap(write, profile_dir=profile, engine_dir=Path(sys.executable).resolve().parent,
                                     home=home, binary=confine.bwrap())  # fmt: skip
                 run = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
                 self.assertEqual(run.returncode, 0, run.stderr)
-                self.assertEqual(run.stdout.split(), ["downloads-ok"])
-                self.assertTrue((real / "written").exists())
+                self.assertEqual(run.stdout.split(), ["profile-ok", "downloads-ok"])
+                self.assertTrue((downloads.resolve() / "written").exists())
 
 
 if __name__ == "__main__":

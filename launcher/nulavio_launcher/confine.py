@@ -8,6 +8,8 @@ folder names, registered native-messaging hosts). The profile and Downloads
 are put back at the paths the browser is given too, when those go through a
 symlink in a hidden folder (a `~/Downloads` link to another disk, a data
 folder reached through a link), since that link is not there inside (#711).
+Refused instead: such a path through a folder put back read-only (a linked ~/.fonts), and a profile or Downloads
+folder that is / or would cover a folder hidden or put back (the home folder, a Downloads folder above the profiles).
 A home folder that is itself such a link is not handled yet: Downloads and the
 read-only settings are bound under the resolved home only (#722).
 The rest of the system is
@@ -185,25 +187,21 @@ def _inside_hidden(path: Path, hidden: list[Path]) -> bool:
     return any(path != folder and path.is_relative_to(folder) for folder in folders)
 
 
-def seen_inside(path: Path, hidden: list[Path], restored: list[tuple[Path, bool]] = ()) -> Path | None:
-    """Where a folder must also be bound so that `path` reaches it writable inside, or None when it already does.
+def seen_inside(path: Path, hidden: list[Path], read_only: list[Path] = (), writable: list[Path] = ()) -> Path | None:
+    """Where a folder must also be bound so that `path` reaches it inside, or None when its resolved path does.
 
-    `restored` lists the destinations of the binds made before, each with whether it is writable. A hidden folder is
-    empty inside, so a symlink in it is not there, except where one of those binds puts it back. `path` is followed as
-    the kernel would follow it inside:
-    - a destination is a mount point inside, a folder, even where the host has a link at that path;
-    - a link that is still visible, or put back, is followed;
-    - a hidden link above a destination is the plain folder bubblewrap made there on the way to it, holding nothing
-      else;
-    - the first link met in a hidden folder ends the walk, and the path from there on is returned (bubblewrap makes
-      plain folders for it in the empty one).
-    A walk that ends outside every writable destination (in a read-only put-back such as ~/.fonts) returns where it
-    ends, so the folder is bound writable there too; that holds because every writable bind comes after the
-    read-only ones. bubblewrap refuses to mount on a link, so a link that is there inside is never returned.
+    A hidden folder is empty inside, so a symlink in it is not there (#711). `path` is followed as the kernel would
+    follow it inside, given the folders already bound writable (`writable`):
+    - a link that is still visible, or inside one of those folders, is followed;
+    - a hidden link above one of them is the plain folder bubblewrap made there on the way to it;
+    - the first other link met in a hidden folder ends the walk, and the path from there on is returned (bubblewrap
+      makes plain folders for it in the empty one).
+    Refused: a path through a folder put back read-only (`read_only`, such as ~/.fonts), a link and then '..', and a
+    walk that does not end in a folder bound writable. What the browser finds there inside is not the folder, and
+    putting it back would mean emulating more of bubblewrap's mounts than this checks.
     """
     if not path.is_absolute():
         raise ConfineError(f"not starting: {path} is not an absolute path")
-    destinations = [d for d, _ in restored]
     pending = list(reversed(path.parts[1:]))
     current, links = Path("/"), 0
     while pending:
@@ -214,11 +212,17 @@ def seen_inside(path: Path, hidden: list[Path], restored: list[tuple[Path, bool]
             current = current.parent
             continue
         candidate = current / name
-        if candidate in destinations:
-            current = candidate  # a mount point: never a link inside, whatever the host has there
+        through = next((folder for folder in read_only if candidate.is_relative_to(folder)), None)
+        if through is not None:
+            raise ConfineError(
+                f"not starting: {path} goes through {through}, which confined mode puts back read-only, so the browser "
+                "could not keep files there. Point the folder at a path outside it, or run without --confined"
+            )
+        if candidate in writable:
+            current = candidate  # a mount point: a folder inside, whatever the host has at that path
             continue
-        if _inside_hidden(candidate, hidden) and not any(candidate.is_relative_to(d) for d in destinations):
-            if any(d.is_relative_to(candidate) for d in destinations):
+        if _inside_hidden(candidate, hidden) and not any(candidate.is_relative_to(f) for f in writable):
+            if any(folder.is_relative_to(candidate) for folder in writable):
                 current = candidate  # a folder bubblewrap made on the way to an earlier bind
                 continue
             # A link, or anything in such a made folder (`current` then still goes through the link outside).
@@ -237,7 +241,12 @@ def seen_inside(path: Path, hidden: list[Path], restored: list[tuple[Path, bool]
         if target.is_absolute():
             current = Path("/")
         pending.extend(reversed(target.parts[1:] if target.is_absolute() else target.parts))
-    return None if any(current.is_relative_to(d) for d, writable in restored if writable) else current
+    if not any(current.is_relative_to(folder) for folder in writable):
+        raise ConfineError(
+            f"not starting: inside confinement {path} would lead to {current}, not to the folder put back writable, so "
+            "the browser could not keep files there. Give the folder's own path (no link), or run without --confined"
+        )
+    return None
 
 
 def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised: bool = False,
@@ -272,7 +281,8 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     # Writable /proc: the engine maps user ids for its own content sandboxes there. bubblewrap's own /dev, with
     # only the GPU and cameras put back (--dev-bind: device nodes work only on such a mount); its own System V IPC.
     args = [binary, "--ro-bind", "/", "/", "--dev", "/dev", "--bind", "/proc", "/proc", "--unshare-ipc"]
-    for node in device_nodes():
+    nodes = device_nodes()
+    for node in nodes:
         args += ["--dev-bind", str(node), str(node)]
     # Hidden: empty in-memory folders. A socket under a read-only mount still accepts connections, so the runtime
     # folder is hidden whole rather than left read-only.
@@ -288,30 +298,45 @@ def wrap(command: list[str], *, profile_dir: Path, engine_dir: Path, supervised:
     sockets = [wayland] if wayland else []
     if socket_dir is not None:
         sockets += [socket_dir / name for name in RUNTIME_SOCKETS if (socket_dir / name).exists()]
+    read_only: list[Path] = []
     for path in sockets:
         args += ["--ro-bind", str(path.resolve()), str(path)]
+        read_only.append(path)
     for relative in READ_ONLY_HOME:
         path = home / relative
         if path.exists():
             args += ["--ro-bind", str(path), str(path)]
+            read_only.append(path)
     engine_dir = Path(engine_dir).resolve()
     args += ["--ro-bind", str(engine_dir), str(engine_dir)]  # it may live under a hidden folder
+    read_only.append(engine_dir)
     # Writable: the profile and Downloads, at their resolved paths, and also at the paths the browser is given when
     # those go through a link that is hidden inside: otherwise the engine would make an empty folder there, in
-    # memory, and a download or a whole profile would be lost when it closes (#711). A link that an earlier writable
-    # bind puts back (a Downloads link inside the profile) is there inside and needs nothing more. Downloads is found
-    # from the resolved home, so a home folder that is itself such a link still loses it (#722).
-    # A link put back read-only (a Downloads folder in a linked ~/.fonts) is there but not writable: bound there too.
-    binds = ("--bind", "--ro-bind")
-    restored = [(Path(args[i + 2]), a == "--bind") for i, a in enumerate(args) if a in binds and args[i + 2] != "/"]
-    for path in (profile_dir, downloads):
+    # memory, and a download or a whole profile would be lost when it closes (#711). A link inside a folder bound
+    # writable before (a Downloads link inside the profile) is there inside and needs nothing more. Refused: a path
+    # through a folder put back read-only, and a bind over a folder hidden or put back before, or over /. Downloads
+    # is found from the resolved home, so a home folder that is itself such a link still loses it (#722).
+    earlier = [Path("/proc"), Path("/dev"), *nodes, *emptied, *read_only]
+    bound: dict[Path, Path] = {}  # destination: source
+
+    def put_back(name: str, path: Path, real: Path, at: Path) -> None:
+        if bound.get(at) == real:
+            return  # Downloads is the profile folder, or reached the same way
+        covered = Path("/") if at == Path("/") else next((f for f in [*earlier, *bound] if f.is_relative_to(at)), None)
+        if covered is not None:
+            raise ConfineError(
+                f"not starting: the {name} folder {path} would be put back writable at {at}, over {covered}, which "
+                "confined mode hides or puts back on its own. Use a folder of its own there, or run without --confined"
+            )
+        args.extend(["--bind", str(real), str(at)])
+        bound[at] = real
+
+    for name, path in (("profile", profile_dir), ("Downloads", downloads)):
         real = path.resolve()
-        args += ["--bind", str(real), str(real)]
-        restored.append((real, True))
-        seen = seen_inside(path, emptied, restored)
+        put_back(name, path, real, real)
+        seen = seen_inside(path, emptied, read_only, list(bound))
         if seen is not None and seen != real:
-            args += ["--bind", str(real), str(seen)]
-            restored.append((seen, True))
+            put_back(name, path, real, seen)
     for name in UNSET_ENV:
         args += ["--unsetenv", name]
     args += ["--chdir", str(home), "--new-session"]
