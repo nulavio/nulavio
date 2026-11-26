@@ -2453,6 +2453,30 @@ class OpenProfileTest(Home):
         self.assertIn("moved", result["content"][0]["text"])
         self.assertNotIn("browsingContext.close", commands)
 
+    def test_a_tab_that_moved_while_the_profile_was_entered_quietly_is_checked_where_it_is(self):
+        # OpenCodeReview of #737 at 4a01fde3: with the profile and navigate both allowed, nothing is asked, and the tab
+        # went outside the agent's sites while the profile's checks ran. The address read before them was checked, and
+        # the tab was closed at its new site; before #730 the address was read after entering the profile.
+        agent, bridge, approver, _target, commands = self.opened(level="autonomous", answer="once")
+        registry.set_domains(agent["id"], ["mail.example"])
+        registry.grant(agent["id"], "authenticated_sessions", "allow")
+        registry.grant(agent["id"], "navigate", "allow")
+        decide = registry.decide
+
+        def checked_meanwhile(agent_id, capability, **kwargs):
+            decision = decide(agent_id, capability, **kwargs)
+            if capability == "authenticated_sessions" and kwargs.get("place") == "Trabalho":
+                self.tabs["w1"] = "https://elsewhere.example/"
+            return decision
+
+        with mock.patch.object(registry, "decide", side_effect=checked_meanwhile):
+            result = bridge.call("tab_close", {"tab": "w1"})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(approver.asked, [])
+        self.assertNotIn("browsingContext.close", commands)
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["reason"], entry["target"]), ("out-of-scope", "https://elsewhere.example"))
+
     def test_a_profiles_tab_outside_the_agents_sites_is_not_looked_up(self):
         # Finding 3: the host of a tab outside the agent's sites went to this computer's resolver (the local network
         # check) before the site list refused the call: a profile with encrypted DNS would not have asked it.

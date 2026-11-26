@@ -897,14 +897,14 @@ class Bridge:
     def _enter_for(self, tab: str, url: str, needs: list[Need], checked: list[str]) -> str:
         """Before a tool on a tab asks anything: what entering the tab's profile asks and then `needs` (what the tool
         asks next, in order) are looked at, the first one blocked is refused (_refuse_blocked), and only then is the
-        profile entered. Returns where the tab is then: read again if the person was asked meanwhile."""
+        profile entered. Returns where the tab is then, read again after entering, with or without a question: the tab
+        can move while the profile's checks run, and what the tool checks next names where it is (as before #730)."""
         entry = self._entry_needs(tab, url)
         self._refuse_blocked(entry + needs, checked=checked)
         if not entry:
             return url
-        asked = self._questions
         self._enter_profile(self.owner[tab], tab, url)
-        return self._url_of(tab, self._cancel) if self._questions != asked else url
+        return self._url_of(tab, self._cancel)
 
     def _profile_needs(self, agent: dict, label: str, url: str) -> list[str]:
         """What acting in this profile's tab would ask the user first (_enter_profile): described only without it."""
