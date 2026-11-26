@@ -1804,15 +1804,17 @@ class Bridge:
         tab = args["tab"]
         url = self._url_of(tab, cancel, enter=False)
         element = self._element(tab, args["element"])
+        # Both known from the first look at the tab (_url_of): checked before any question, which could only end in
+        # them, and before entering a profile, which asks about its signed-in session (#730).
         if self._owner(tab):
-            # Known from the first look at the tab (_url_of): before any question, which could only end here, and
-            # before entering the profile, which asks about its signed-in session (#730).
+            self._target = url  # the activity record names the address, as for one agents do not act on
             raise ToolError("uploads work only in the AI Workspace, from its uploads folder")
-        self.require_here("files", url, checked=checked)
-        self.still_at(tab, url, cancel)
         folder = _uploads(self).resolve()
         if not self.workspace.uploads:
+            self._target = url
             raise ToolError("uploads were not allowed when this workspace started; reconnect the agent after allowing files")
+        self.require_here("files", url, checked=checked)
+        self.still_at(tab, url, cancel)
         path = (folder / args["file"]).resolve()
         if path.parent != folder or not path.is_file():
             raise ToolError(f"no file named {args['file']!r} in this agent's uploads folder ({folder})")

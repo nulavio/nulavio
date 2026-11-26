@@ -2297,6 +2297,28 @@ class OpenProfileTest(Home):
                 self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
                 self.assertFalse(self.ACTS & set(commands), commands)
                 self.read.assert_not_called()
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["outcome"], entry["target"]), ("error:tool", "https://mail.example"))
+
+    def test_an_upload_the_workspace_was_started_without_asks_nothing(self):
+        # The AI Workspace started while files was blocked has no uploads folder: an upload, once files asks, asked and
+        # then always failed. It fails first now, as the profile's tab does.
+        agent, _ = registry.add("u-1", "other", "assisted")
+        approver = Approve("session")
+        bridge = tools.Bridge(agent["id"], "s-1", approver=approver)
+        bridge.elements["t1"] = {"e1": "shared-1"}
+        bridge.owner["t1"] = ""
+        self.with_workspace(bridge)
+        bridge.workspace.uploads = False
+        bridge.workspace.uploads_dir = Path(self.PATH) / "uploads"
+        with mock.patch.object(tools.Bridge, "_url_of", return_value="https://example.org/"):
+            result = bridge.call("upload", {"tab": "t1", "element": "e1", "file": "a.txt"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("uploads were not allowed when this workspace started", result["content"][0]["text"])
+        self.assertEqual(approver.asked, [])
+        self.assertEqual(registry.get(agent["id"]).get("session_grants", {}), {})
+        entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+        self.assertEqual((entry["outcome"], entry["target"]), ("error:tool", "https://example.org"))
 
     def test_a_profiles_tab_is_asked_about_in_the_same_order_when_an_answer_can_allow_it(self):
         # I7: with those permissions on ask or allowed, the same questions as before, in the same order.
