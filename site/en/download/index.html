@@ -100,8 +100,12 @@ sudo apt install nulavio</code></pre></div>
 <!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Check a manual download</h2>
-<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: the first command prints it, for you to compare. The commands run in sequence and stop at the first one that fails.</p>
+<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: the commands before <code translate="no">gpg --import</code> check that, and stop everything if the key file holds another key, or more than one, or if gpg cannot read it, before anything reaches your GnuPG keyring. The commands run in sequence and stop at the first one that fails.</p>
 <div class="pre-scroll" role="region" aria-label="Verification commands" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc &amp;&amp;
+  gpg --show-keys --with-colons nulavio-packages.asc | awk -F: '$1 == "pub" || $1 == "sec" {n++}
+    $1 == "fpr" &amp;&amp; last == "pub" {f = $10} {last = $1}
+    END {if (n == 1 &amp;&amp; f == "{{key_fpr_plain}}") exit 0
+    exit 1}' &amp;&amp;
   gpg --import nulavio-packages.asc &amp;&amp;
   gpg --status-file SHA256SUMS.status --verify SHA256SUMS.asc SHA256SUMS &amp;&amp;
   grep -q '^\[GNUPG:\] VALIDSIG .* {{key_fpr_plain}}$' SHA256SUMS.status &amp;&amp;

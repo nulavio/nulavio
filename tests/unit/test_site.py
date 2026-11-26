@@ -1415,8 +1415,10 @@ class DownloadPagesTest(unittest.TestCase):
                 # Also as dnf prints it, without spaces, and the red "Signing key not found" it shows first (#120).
                 self.assertIn(self.fpr, html)
                 self.assertIn("Signing key not found", html)
-                # The key from the release assets is checked against that fingerprint before import (audit R5).
-                self.assertLess(html.index("gpg --show-keys --with-fingerprint"), html.index("gpg --import"))
+                # The key from the release assets is checked against that fingerprint before import (audit R5),
+                # by the block itself, not only by the reader's eyes (#744).
+                self.assertLess(html.index("gpg --show-keys --with-colons"), html.index("gpg --import nulavio-packages.asc"))
+                self.assertLess(html.index(f'f == "{self.fpr}")'), html.index("gpg --import nulavio-packages.asc"))
                 self.assertIn("dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo", html)
                 self.assertIn("159.0.1-0.1", html)
                 for url in re.findall(r'(?:src|href|srcset)="(https?://[^"]+)"', html):
@@ -1450,6 +1452,17 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("$(", block)
                 self.assertNotIn("`", block)
 
+    def test_the_key_recovery_keeps_a_secret_key_the_reader_had(self):
+        # Review of #752 (round 3): an old key file could hold only the public part of a key whose secret part
+        # the reader already had, and `--delete-secret-and-public-key` deletes that secret part as well. The
+        # recovery deletes public keys first, says how to tell whether the file brought a secret part, and keeps
+        # a secret part when in doubt.
+        changelog = (ROOT / "docs/security/changelog.md").read_text(encoding="utf-8")
+        entry = next(line for line in changelog.splitlines() if "the key before the import** (#744)" in line)
+        self.assertIn("gpg --show-keys nulavio-packages.asc", entry)
+        self.assertLess(entry.index("gpg --delete-key <fingerprint>"), entry.index("--delete-secret-and-public-key"))
+        self.assertIn("leave it in place", entry)
+
     def test_the_manual_check_prints_checksums_only_for_the_release_key(self):
         # #651: pasted as a block, the check must print no checksum result after a failed signature or one
         # by another key, even one already in the reader's keyring. The block is run as a paste runs it.
@@ -1470,12 +1483,31 @@ class DownloadPagesTest(unittest.TestCase):
             throwaway_key(other_home)
         other = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--armor", "--export"],
                                capture_output=True, text=True, check=True).stdout  # fmt: skip
+        other_secret = subprocess.run(["gpg", "--homedir", str(other_home), "--batch", "--quiet", "--pinentry-mode",
+                                       "loopback", "--passphrase", "", "--armor", "--export-secret-keys"],
+                                      capture_output=True, text=True, check=True).stdout  # fmt: skip
+        self.assertIn("PRIVATE KEY BLOCK", other_secret)
+        # The release key, then a block holding it and three bytes that are no OpenPGP packet.
+        binary = subprocess.run(["gpg", "--homedir", str(self.tmp / "gnupg"), "--batch", "--export", self.fpr],
+                                capture_output=True, check=True).stdout  # fmt: skip
+        enarmored = subprocess.run(["gpg", "--batch", "--enarmor"], input=binary + b"\x01\x02\x03", env={
+            "PATH": os.environ.get("PATH", os.defpath), "GNUPGHOME": str(self.tmp / "gnupg")},
+            capture_output=True, check=True).stdout.decode("ascii")  # fmt: skip
+        unreadable = self.armored + enarmored.replace("PGP ARMORED FILE", "PGP PUBLIC KEY BLOCK")
+        # The case's precondition: gpg lists the release key alone, and then exits non-zero.
+        listed = subprocess.run(["gpg", "--batch", "--show-keys", "--with-colons", "-"], input=unreadable,
+                                capture_output=True, text=True, env={"PATH": os.environ.get("PATH", os.defpath),
+                                "GNUPGHOME": str(self.tmp / "gnupg"), "LC_ALL": "C"})  # fmt: skip
+        self.assertNotEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual([line.split(":")[0] for line in listed.stdout.splitlines() if line[:4] in ("pub:", "sec:")],
+                         ["pub"], listed.stdout)  # fmt: skip
 
         def run(page: str, case: str, signer: Path, key: str, tamper: bool = False, keyring: str = "",
-                built: Path = out, extra_sig: bool = False, shell: str = "bash") -> str:  # fmt: skip
+                built: Path = out, extra_sig: bool = False, shell: str = "bash", prelude: str = "") -> str:  # fmt: skip
             work = self.tmp / f"check-{case}-{page.split('/')[0]}-{shell}"
             home = work / "gnupg"
             home.mkdir(parents=True, mode=0o700)
+            (work / "nulavio-packages.keys").write_text("the reader's own file\n", encoding="ascii")
             if key:
                 (work / "nulavio-packages.asc").write_text(key, encoding="ascii")
             sums = work / "SHA256SUMS"
@@ -1501,21 +1533,57 @@ class DownloadPagesTest(unittest.TestCase):
             html = (built / page).read_text(encoding="utf-8")
             block = re.search(r'<section id="verify".*?<code>(.*?)</code>', html, re.S).group(1)
             blocks.add(block)
-            ran = subprocess.run([shell], input=html_module.unescape(block) + "\n", cwd=work, env=env,
+            before = primary_keys(env)
+            ran = subprocess.run([shell], input=prelude + html_module.unescape(block) + "\n", cwd=work, env=env,
                                  capture_output=True, text=True, timeout=60)  # fmt: skip
+            keyrings[case, page, shell] = (before, primary_keys(env))
+            # Review of #752: the block writes no file of its own, so a file the reader had keeps its content.
+            self.assertEqual((work / "nulavio-packages.keys").read_text(encoding="ascii"), "the reader's own file\n")
             return ran.stdout
 
+        def primary_keys(env: dict[str, str]) -> list[str]:
+            """The fingerprints of the primary keys in the reader's keyring, in order."""
+            listing = subprocess.run(["gpg", "--batch", "--with-colons", "--list-keys"], env=env,
+                                     capture_output=True, text=True).stdout  # fmt: skip
+            lines = listing.splitlines()
+            return [lines[i + 1].split(":")[9] for i, line in enumerate(lines)
+                    if line.startswith("pub:") and i + 1 < len(lines) and lines[i + 1].startswith("fpr:")]  # fmt: skip
+
         blocks: set[str] = set()
+        keyrings: dict[tuple[str, str, str], tuple[list[str], list[str]]] = {}
         # The block is pasted into bash, and into Fish where it is installed (test_the_manual_check_is_plain_commands).
         shells = ["bash", *(["fish"] if shutil.which("fish") else [])]
         for page, sh in itertools.product(build_site.DOWNLOAD_PAGES, shells):
             with self.subTest(page=page, shell=sh):
                 ours = self.tmp / "gnupg"
                 self.assertIn("nulavio.rpm: OK", run(page, "good", ours, self.armored, shell=sh))
+                # The key file is imported once its fingerprint matched, and only then (#744).
+                self.assertEqual(keyrings["good", page, sh], ([], [self.fpr]))
+                if sh == "bash":  # Review of #752: with noclobber set, no redirection into a file stops the block.
+                    self.assertIn("nulavio.rpm: OK", run(page, "noclobber", ours, self.armored, prelude="set -o noclobber\n"))
                 # Signed by a key the reader already has: gpg says "Good signature", the list is still not ours.
                 self.assertNotIn("nulavio.rpm", run(page, "foreign", other_home, self.armored, keyring=other, shell=sh))
                 # The key file swapped for another one, with that key's signature.
                 self.assertNotIn("nulavio.rpm", run(page, "swapped", other_home, other, shell=sh))
+                # #744: the swapped key is not imported, so the reader's keyring stays as it was: empty, ...
+                self.assertEqual(keyrings["swapped", page, sh], ([], []))
+                # ... or holding the release key already.
+                self.assertNotIn("nulavio.rpm", run(page, "swapped-with-key", other_home, other, keyring=self.armored,
+                                                    shell=sh))  # fmt: skip
+                self.assertEqual(keyrings["swapped-with-key", page, sh], ([self.fpr], [self.fpr]))
+                # #744: the release key with another key beside it in the file: the block stops before the import.
+                self.assertNotIn("nulavio.rpm", run(page, "bundled", ours, self.armored + other, shell=sh))
+                self.assertEqual(keyrings["bundled", page, sh], ([], []))
+                # Review of #752: a secret key beside the release key is listed as "sec", not "pub"; in either order
+                # it stops the block, and neither key reaches the keyring.
+                secret_cases = (("bundled-secret", self.armored + other_secret), ("secret-first", other_secret + self.armored))
+                for case, key in secret_cases:
+                    self.assertNotIn("nulavio.rpm", run(page, case, ours, key, shell=sh))
+                    self.assertEqual(keyrings[case, page, sh], ([], []))
+                # Review of #752: gpg lists the release key, then fails on the rest of the file. The listing's exit
+                # status stops the block too, as it did before #744; awk alone would have passed it.
+                self.assertNotIn("nulavio.rpm", run(page, "unreadable", ours, unreadable, shell=sh))
+                self.assertEqual(keyrings["unreadable", page, sh], ([], []))
                 # The list changed after it was signed.
                 self.assertNotIn("nulavio.rpm", run(page, "tampered", ours, self.armored, tamper=True, shell=sh))
                 # gpg found our valid signature but failed on another one, and exited non-zero.
