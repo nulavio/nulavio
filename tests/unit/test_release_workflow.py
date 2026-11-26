@@ -268,6 +268,10 @@ LEAK
 args = sys.argv[1:]
 with open(os.environ["FAKE_CURL_LOG"], "a") as log:
     print(json.dumps(args), file=log)
+if os.environ.get("FAKE_FSIZE_LOG"):
+    import resource
+    with open(os.environ["FAKE_FSIZE_LOG"], "a") as log:
+        print(json.dumps(resource.getrlimit(resource.RLIMIT_FSIZE)), file=log)
 path = args[-1].removeprefix("https://packages.nulavio.net/")
 held = [os.path.join(root, path) for root in (os.environ.get("FAKE_CDN"), os.environ["FAKE_BUCKET"]) if root]
 held = [src for src in held if os.path.isfile(src)]
@@ -386,6 +390,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
         self.served = self.rpm / "repodata"
         (self.served / self.REVISION).mkdir(parents=True)
         self.new, new_sig, href, primary = repodata("the failed run's", self.REVISION)
+        self.href, self.primary = href, primary
         self.old, _, old_href, old_primary = repodata("the run before", "160.0.1-0.3")
         (self.served / self.REVISION / "repomd.xml").write_bytes(self.new)
         (self.served / self.REVISION / "repomd.xml.asc").write_bytes(new_sig)
@@ -412,8 +417,12 @@ class FailedPublishRunbookTest(unittest.TestCase):
                     "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
                     "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
-    def run_block(self, *options: str):
-        return subprocess.run(["bash", *options, str(self.tmp / "block.sh")], cwd=self.repo, env=self.env,
+    def run_block(self, *options: str, file_size_limit: str = ""):
+        # file_size_limit: the soft and hard limit (in KiB, ulimit -f) of the shell the block is pasted into.
+        shell = ["bash"]
+        if file_size_limit:
+            shell = ["bash", "-c", 'ulimit -f "$1" && exec bash "${@:2}"', "bash", file_size_limit]
+        return subprocess.run([*shell, *options, str(self.tmp / "block.sh")], cwd=self.repo, env=self.env,
                               capture_output=True, text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
 
     def cache(self, key: str, data: bytes):
@@ -437,6 +446,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
         b, rev, local = self.BUCKET, self.REVISION, self.LOCAL
         self.assertEqual([[arg if arg.startswith("s3://") else local for arg in call["args"][9:]] for call in self.calls()], [
             [f"{b}/{rev}/repomd.xml", local], [f"{b}/{rev}/repomd.xml.asc", local], [f"{b}/repomd.xml.asc", local],
+            [f"s3://nulavio-packages/rpm/{self.href}", local],  # the primary file it names, from R2 too
             [local, f"{b}/repomd.xml.asc"], [local, f"{b}/repomd.xml"],  # the signature first, as upload_repo.sh
             [f"{b}/repomd.xml.asc", local], [f"{b}/repomd.xml", local],
         ])  # fmt: skip
@@ -480,8 +490,8 @@ class FailedPublishRunbookTest(unittest.TestCase):
         out = self.run_block()
         self.assertEqual(out.returncode, 0, out.stderr)
         curls = self.curls()
-        # The revision's pair and the served signature, the primary it names, the served pair and its primary.
-        self.assertEqual(len(curls), 7)
+        # The revision's pair and the served signature, then the served pair and the primary file it names.
+        self.assertEqual(len(curls), 6)
         for args in curls:
             self.assertEqual(args[:10], ["-fsS", "--proto", "=https", "--retry", "3", "--max-time", "60",
                                          "--retry-max-time", "180", "--max-filesize"])  # fmt: skip
@@ -490,7 +500,24 @@ class FailedPublishRunbookTest(unittest.TestCase):
             self.assertEqual(call["args"][:9], ["--endpoint-url", "https://acct.r2.cloudflarestorage.com",
                                                 "--cli-connect-timeout", "30", "--cli-read-timeout", "60",
                                                 "s3", "cp", "--only-show-errors"])  # fmt: skip
-        self.assertIn("\nulimit -f 32768\n", self.block)  # every file the block writes, aws's downloads included
+
+    def test_every_file_the_block_writes_is_capped_at_32_mib(self):
+        # ulimit -f: what aws reads from R2 and the decompressed primary file included.
+        self.env["FAKE_FSIZE_LOG"] = str(self.tmp / "fsize.json")
+        out = self.run_block()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        for soft, _ in map(json.loads, (self.tmp / "fsize.json").read_text().splitlines()):
+            self.assertNotEqual(soft, -1)  # RLIM_INFINITY
+            self.assertLessEqual(soft, 32 << 20)
+
+    def test_a_lower_file_size_limit_of_the_shell_stays(self):
+        # A shell with a lower limit, hard and soft: raising it fails (or, as root, loosens it).
+        self.env["FAKE_FSIZE_LOG"] = str(self.tmp / "fsize.json")
+        out = self.run_block(file_size_limit="16384")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn(f"restored: dnf is served {self.REVISION}'s pair", out.stdout)
+        limits = {tuple(json.loads(line)) for line in (self.tmp / "fsize.json").read_text().splitlines()}
+        self.assertEqual(limits, {(16 << 20, 16 << 20)})
 
     def test_a_download_past_its_size_limit_stops_it(self):
         big, big_sig, _, _ = repodata("x" * (1 << 20), self.REVISION)  # signed, and past 1 MiB
@@ -561,9 +588,21 @@ class FailedPublishRunbookTest(unittest.TestCase):
         self.assert_stopped_before_any_write(out)
 
     def test_a_primary_file_past_its_size_limit_fails_it(self):
-        href = self.new.decode().splitlines()[1].split()[0]
-        self.cache(f"rpm/{href}", b"x" * ((8 << 20) + 1))
+        # The site serves one past 8 MiB: R2's passed before the upload, so it fails at the public check.
+        self.cache(f"rpm/{self.href}", b"x" * ((8 << 20) + 1))
+        self.assert_restored_in_r2_only(self.run_block())
+
+    def test_a_primary_file_missing_from_r2_stops_it_while_the_cdn_shows_it(self):
+        self.cache(f"rpm/{self.href}", self.primary)
+        (self.rpm / self.href).unlink()
         self.assert_stopped_before_any_write(self.run_block())
+
+    def test_a_damaged_primary_file_in_r2_stops_it_while_the_cdn_shows_a_good_one(self):
+        self.cache(f"rpm/{self.href}", self.primary)
+        (self.rpm / self.href).write_bytes(b"nulavio 160.0.1-0.4, damaged")
+        out = self.run_block()
+        self.assertNotIn("the dnf index lists", out.stdout)  # refused by its checksum, before it is read
+        self.assert_stopped_before_any_write(out)
 
     def test_a_served_pair_that_does_not_verify_after_the_copy_fails_it(self):
         self.env["FAKE_AWS_CORRUPT"] = "1"

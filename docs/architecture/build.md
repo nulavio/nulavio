@@ -312,10 +312,10 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
 4. **The build job stops at the signature of `repomd.xml`** (`repomd.xml.asc is not a good signature`): the upload stopped between `repomd.xml.asc` and `repomd.xml`, so the bucket serves a new signature beside the old file. dnf refuses the repository too (`repo_gpgcheck=1`), so it is urgent. The route of state 3 does not work here: a new run stops at that signature before it can upload a pair of its own, and the build job does not fall back to another pair (it stays fail-closed). Re-run the failed `publish` job while it can; otherwise copy the signed pair `upload_repo.sh` left under the failed run's revision onto the served keys (#740). From the repository's root, paste the block below with `<firefox>-<release>` set to the failed run's revision (the `v<firefox>-<release>` its `publish` log names) and `<account id>` to the Cloudflare account id. It needs `curl`, `python3`, `zstd` and the AWS CLI. It runs in a subshell that stops at the first failure, so nothing is written unless every check before it passed:
    - Over HTTPS, before it asks for anything: the revision's pair verifies with the release key, and the served signature is that run's.
    - It then asks for the R2 upload token (`nulavio-packages-upload`, the key pair the `release-upload` environment holds as `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; GitHub does not show a secret again, so use the maintainer's own copy of that token), with `read -rs`, into shell variables that are never exported (it turns `set -a` off first: left on, it would export them). Each `aws` call gets it from `r2()`, a subshell that exports it and becomes `aws`: it is never on a command line, in the shell history, or in the environment of `curl`, `python3` or `zstd`.
-   - The live objects in R2, read with that token, pass the same checks: a CDN cache can serve other bytes than the bucket holds. The primary file that pair names, checked against its checksum, lists that revision: a pair that lists another one is never written.
+   - The live objects in R2, read with that token, pass the same checks: a CDN cache can serve other bytes than the bucket holds. The primary file that pair names, read from R2 too and checked against its checksum, lists that revision: a pair that lists another one, or names a primary file R2 does not hold, is never written.
    - It uploads that verified pair onto the served keys, in the upload's order (the signature, then `repomd.xml`), and reads the served pair back from R2.
    - What `https://packages.nulavio.net` now serves, as dnf and the build job read it: the same pair, which verifies, naming a primary file that lists that revision.
-   - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file, and 32 MiB for any file the block writes (`ulimit -f`, the decompressed primary file included).
+   - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file over HTTPS (`curl --max-filesize`), and 32 MiB for any file the block writes, what `aws` reads from R2 and the decompressed primary file included (`ulimit -f`; a lower limit the shell already has stays).
 
    ```sh
    (
@@ -323,10 +323,11 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    set +a  # a shell left in allexport would export what read assigns
    rev=<firefox>-<release>
    rpm=https://packages.nulavio.net/rpm
-   bucket=s3://nulavio-packages/rpm/repodata
+   bucket=s3://nulavio-packages/rpm
    r2=https://<account id>.r2.cloudflarestorage.com
    fpr=298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1  # site/keys/nulavio-packages.asc
-   ulimit -f 32768
+   soft=$(ulimit -S -f)  # a lower limit the shell already has stays: it may not be raised
+   if [[ $soft == unlimited ]] || (( soft > 32768 )); then ulimit -f 32768; fi
    tmp=$(mktemp -d)
    trap 'rm -rf "$tmp"' EXIT
    mkdir "$tmp/https" "$tmp/r2" "$tmp/after" "$tmp/public"
@@ -341,10 +342,11 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
        cmp "$1/repomd.xml.asc" "$2/repomd.xml.asc"
        cmp "$1/repomd.xml" "$2/repomd.xml"
    }
-   lists() {  # <dir>: the primary file its repomd.xml names, as the site serves it, matches its checksum and lists $rev
-       local primary served
-       primary=$(python3 -I scripts/release/release_manifest.py dnf-primary "$1/repomd.xml")
-       get 8M "$1/primary.xml.zst" "$rpm/$primary"
+   primary() {  # <dir>: the key of the primary file its repomd.xml names, repodata/<sha256>-primary.xml.zst
+       python3 -I scripts/release/release_manifest.py dnf-primary "$1/repomd.xml"
+   }
+   lists() {  # <dir>: its primary.xml.zst matches the checksum its repomd.xml gives and lists $rev
+       local served
        python3 -I scripts/release/release_manifest.py dnf-compressed "$1/repomd.xml" "$1/primary.xml.zst"
        zstd -q -d -o "$1/primary.xml" "$1/primary.xml.zst"
        served=$(python3 -I scripts/release/release_manifest.py dnf-served "$1/repomd.xml" "$1/primary.xml")
@@ -370,17 +372,19 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
        )
    }
    # The live objects in R2, which a CDN cache may not show: the same checks.
-   r2 "$bucket/$rev/repomd.xml" "$tmp/r2/repomd.xml"
-   r2 "$bucket/$rev/repomd.xml.asc" "$tmp/r2/repomd.xml.asc"
-   r2 "$bucket/repomd.xml.asc" "$tmp/r2/served.asc"
+   r2 "$bucket/repodata/$rev/repomd.xml" "$tmp/r2/repomd.xml"
+   r2 "$bucket/repodata/$rev/repomd.xml.asc" "$tmp/r2/repomd.xml.asc"
+   r2 "$bucket/repodata/repomd.xml.asc" "$tmp/r2/served.asc"
    verify "$tmp/r2"
    cmp "$tmp/r2/repomd.xml.asc" "$tmp/r2/served.asc"
+   href=$(primary "$tmp/r2")
+   r2 "$bucket/$href" "$tmp/r2/primary.xml.zst"
    lists "$tmp/r2"
    # Those verified bytes onto the served keys, in the upload's order: the signature, then repomd.xml.
-   r2 "$tmp/r2/repomd.xml.asc" "$bucket/repomd.xml.asc"
-   r2 "$tmp/r2/repomd.xml" "$bucket/repomd.xml"
-   r2 "$bucket/repomd.xml.asc" "$tmp/after/repomd.xml.asc"
-   r2 "$bucket/repomd.xml" "$tmp/after/repomd.xml"
+   r2 "$tmp/r2/repomd.xml.asc" "$bucket/repodata/repomd.xml.asc"
+   r2 "$tmp/r2/repomd.xml" "$bucket/repodata/repomd.xml"
+   r2 "$bucket/repodata/repomd.xml.asc" "$tmp/after/repomd.xml.asc"
+   r2 "$bucket/repodata/repomd.xml" "$tmp/after/repomd.xml"
    same "$tmp/r2" "$tmp/after"
    echo "the bucket serves $rev's pair; checking what https://packages.nulavio.net serves"
    # What dnf and the build job read: that pair, which verifies with the committed key alone and lists $rev.
@@ -388,6 +392,8 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    get 1M "$tmp/public/repomd.xml.asc" "$rpm/repodata/repomd.xml.asc"
    same "$tmp/r2" "$tmp/public"
    verify "$tmp/public"
+   href=$(primary "$tmp/public")
+   get 8M "$tmp/public/primary.xml.zst" "$rpm/$href"
    lists "$tmp/public"
    echo "restored: dnf is served $rev's pair, which verifies and lists $rev"
    )
