@@ -163,6 +163,8 @@
   "err_credentials_in_url": {"message": "Tire o usuário ou a senha do endereço."},
   "err_invalid_alias": {"message": "Aliases usam letras, números, ponto, hífen ou sublinhado (até 20)."},
   "err_alias_taken": {"message": "Outro mecanismo já usa esse alias."},
+  "err_alias_reserved": {"message": "“@ia” é a palavra-chave do assistente na barra de endereços. Escolha outro alias."},
+  "searchAliasReserved": {"message": "“@ia” deixou de ser o atalho de pesquisa de $NAMES$: ele é a palavra-chave do assistente na barra de endereços. Escolha outro atalho em Atalhos de pesquisa.", "placeholders": {"names": {"content": "$1"}}},
   "err_invalid_name": {"message": "Informe um nome (até 60 caracteres)."},
   "err_name_taken": {"message": "Esse nome já está em uso."},
   "err_suggest_other_host": {"message": "O endereço de sugestões precisa ser do mesmo site que o de busca."},

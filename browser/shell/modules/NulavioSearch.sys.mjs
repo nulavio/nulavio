@@ -215,6 +215,17 @@ export function validateSearxngBase(raw) {
   return url.href;
 }
 
+/* #663: keywords of Nulavio's own that no search engine may take. "@ia" is the assistant's address-bar keyword
+   (`omnibox.keyword` in the Shell's manifest.json): an engine with that alias would get what is typed for the
+   assistant, and its suggestion address with it once suggestions are allowed for that engine. The address bar
+   matches aliases whatever their case. */
+export const RESERVED_ALIASES = Object.freeze(["@ia"]);
+
+/** Whether an alias, as an engine stores it (any case, with or without spaces around it), is one Nulavio keeps. */
+export function isReservedAlias(alias) {
+  return RESERVED_ALIASES.includes(String(alias ?? "").trim().toLowerCase());
+}
+
 /** Aliases are short keywords; "@" is added so the address bar treats them as engine shortcuts. */
 export function normalizeAlias(raw) {
   if (raw === undefined || raw === null || raw === "") {
@@ -223,6 +234,9 @@ export function normalizeAlias(raw) {
   const alias = String(raw).trim().toLowerCase().replace(/^@?/, "@");
   if (!/^@[a-z0-9][a-z0-9_.-]{0,19}$/.test(alias)) {
     fail("invalid-alias");
+  }
+  if (isReservedAlias(alias)) {
+    fail("alias-reserved");
   }
   return alias;
 }
@@ -281,6 +295,10 @@ class NulavioSearchClass {
   #observing = false;
   #writingSuggestPref = false;
   #started = null;
+  /** #663: ids of the engines whose alias was a reserved one and was taken off in this session. */
+  #released = new Set();
+  #releasing = null;
+  #releaseAgain = false;
 
   // -- consent ----------------------------------------------------------
 
@@ -345,6 +363,54 @@ class NulavioSearchClass {
       }
     }
     return false;
+  }
+
+  /**
+   * #663: an engine whose own alias is a reserved one loses it. The engine's Settings dialogs (add an engine, edit
+   * one) write the alias themselves, past `normalizeAlias`; so do older profiles. Runs at start-up and after each
+   * change to an engine. One pass at a time; a change during a pass gets one more pass. Taking an alias off is
+   * itself a change, so it ends with a pass that finds nothing.
+   */
+  releaseReservedAliases() {
+    this.#releaseAgain = true;
+    this.#releasing ??= (async () => {
+      try {
+        await lazy.SearchService.init();
+        while (this.#releaseAgain) {
+          this.#releaseAgain = false;
+          for (const engine of await lazy.SearchService.getEngines()) {
+            if (isReservedAlias(engine.alias)) {
+              const taken = engine.alias;
+              // Listed first: taking it off tells the Settings page, which reads the list right then.
+              this.#released.add(engine.id);
+              engine.alias = "";
+              console.warn(`Nulavio Search: the alias ${taken} of ${engine.name} was removed: it is the assistant's keyword`);
+            }
+          }
+        }
+      } finally {
+        this.#releasing = null;
+      }
+    })();
+    return this.#releasing;
+  }
+
+  /** #663: the engines that lost a reserved alias in this session and have no other alias yet, for Settings to say so. */
+  async releasedAliases() {
+    if (!this.#released.size) {
+      return [];
+    }
+    await lazy.SearchService.init();
+    const names = [];
+    for (const id of this.#released) {
+      const engine = lazy.SearchService.getEngineById(id);
+      if (engine && !engine.hidden && !engine.alias) {
+        names.push(engine.name);
+      } else {
+        this.#released.delete(id);
+      }
+    }
+    return names;
   }
 
   async list() {
@@ -685,6 +751,7 @@ class NulavioSearchClass {
       } else {
         await this.#dropPending();
       }
+      await this.releaseReservedAliases().catch(e => console.error("Nulavio Search: reserved aliases", e));
       return result;
     })();
     return this.#started;
@@ -757,6 +824,12 @@ class NulavioSearchClass {
   observe(_subject, topic, data) {
     if (topic === "nsPref:changed" && data === PREF_SUGGEST && !this.#writingSuggestPref) {
       this.#onSuggestSwitchedElsewhere().catch(e => console.error("Nulavio Search: consent sync", e));
+    }
+    if (
+      topic === lazy.SearchUtils.TOPIC_ENGINE_MODIFIED &&
+      (data === lazy.SearchUtils.MODIFIED_TYPE.ADDED || data === lazy.SearchUtils.MODIFIED_TYPE.CHANGED)
+    ) {
+      this.releaseReservedAliases().catch(e => console.error("Nulavio Search: reserved aliases", e));
     }
     for (const listener of this.#listeners) {
       try {

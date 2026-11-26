@@ -163,6 +163,8 @@
   "err_credentials_in_url": {"message": "Remove the user name or password from the address."},
   "err_invalid_alias": {"message": "Aliases use letters, numbers, dot, dash or underscore (up to 20)."},
   "err_alias_taken": {"message": "Another engine already uses this alias."},
+  "err_alias_reserved": {"message": "“@ia” is the assistant's keyword in the address bar. Choose another alias."},
+  "searchAliasReserved": {"message": "“@ia” is no longer the search shortcut of $NAMES$: it is the assistant's keyword in the address bar. Choose another keyword under Search Shortcuts.", "placeholders": {"names": {"content": "$1"}}},
   "err_invalid_name": {"message": "Enter a name (up to 60 characters)."},
   "err_name_taken": {"message": "That name is already in use."},
   "err_suggest_other_host": {"message": "The suggestions address must be on the same site as the search address."},

@@ -44,7 +44,7 @@ return {
   none: el("nulavio-search-providers")?.querySelector("moz-box-item.nulavio-search-provider-none")?.label ?? null,
   searxng: shown(el("nulavio-search-searxng-url")) ? el("nulavio-search-searxng-url").value : null,
   opensearch: shown(el("nulavio-search-opensearch-url")) ? el("nulavio-search-opensearch-url").value : null,
-  said: bar("nulavio-search-said"), error: bar("nulavio-search-error"),
+  said: bar("nulavio-search-said"), error: bar("nulavio-search-error"), aliasReserved: bar("nulavio-search-alias-reserved"),
   choices: rows("nulavio-search-choose", "nulavio-search-choice").map(row => ({ key: row.dataset.choice, name: row.label,
     says: row.description, buttons: [...row.querySelectorAll("moz-button")].map(b => [b.dataset.action, b.label]) })),
   privateToo: shown(el("nulavio-search-choose-privateToo")) ? el("nulavio-search-choose-privateToo").checked : null,
@@ -339,6 +339,31 @@ class SettingsSearchTest(unittest.TestCase):
             " Com conta: Kagi. Nas janelas privadas e nos perfis temporários o perfil não estará conectado a eles."
             " Sem conta: Brave Search, DuckDuckGo, Ecosia, Mojeek, Qwant, Startpage.",
         )
+
+    def test_05_an_engine_given_the_assistants_keyword_loses_it_and_the_page_says_so(self):
+        """#663: "@ia" is the assistant's keyword. The engine's own dialogs write an engine's alias themselves, so
+        Nulavio Search takes "@ia" off right after, and this page says which engine lost it until it has another."""
+        own = self.m.chrome(S + "return S.addCustom({name: 'Arquivo', url: 'https://arquivo.example/?q=%s'});")
+        self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [own])
+        now = self.open()
+        self.assertIsNone(now["aliasReserved"])
+        engine = (
+            'const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");'
+            "const e = SearchService.getEngineById(arguments[0]);"
+        )
+        # As the edit dialog does for an engine that is not a user engine: the value as typed, case kept.
+        self.m.chrome(engine + "e.alias = arguments[1];", [own, "@IA"])
+        said = self.seen(lambda n: n["aliasReserved"])
+        self.assertEqual(
+            said["aliasReserved"],
+            "“@ia” deixou de ser o atalho de pesquisa de Arquivo: ele é a palavra-chave do assistente na barra de"
+            " endereços. Escolha outro atalho em Atalhos de pesquisa.",
+        )
+        self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "")
+        # Another alias: the page stops naming it.
+        self.m.chrome(engine + "e.alias = arguments[1];", [own, "@arquivo"])
+        self.seen(lambda n: n["aliasReserved"] is None)
+        self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "@arquivo")
 
 
 if __name__ == "__main__":
