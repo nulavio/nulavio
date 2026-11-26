@@ -100,11 +100,13 @@ sudo apt install nulavio</code></pre></div>
 <!--/companion:on-->
 <section id="verify" aria-labelledby="verify-h">
 <h2 id="verify-h">Check a manual download</h2>
-<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: check it before importing.</p>
-<div class="pre-scroll" role="region" aria-label="Verification commands" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc
-gpg --import nulavio-packages.asc
-gpg --verify SHA256SUMS.asc SHA256SUMS
-sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
+<p class="prose">The same packages, with a <code translate="no">SHA256SUMS</code> list signed by the key above, the SBOM and the build manifest, are on the release page on GitHub: <code translate="no">github.com/nulavio/nulavio/releases</code>. The key that comes with them counts only if its fingerprint is the one shown above: the first command prints it, for you to compare. The commands run in sequence and stop at the first one that fails.</p>
+<div class="pre-scroll" role="region" aria-label="Verification commands" tabindex="0"><pre translate="no"><code>gpg --show-keys --with-fingerprint nulavio-packages.asc &amp;&amp;
+  gpg --import nulavio-packages.asc &amp;&amp;
+  gpg --status-file SHA256SUMS.status --verify SHA256SUMS.asc SHA256SUMS &amp;&amp;
+  grep -q '^\[GNUPG:\] VALIDSIG .* {{key_fpr_plain}}$' SHA256SUMS.status &amp;&amp;
+  sha256sum --check --ignore-missing SHA256SUMS</code></pre></div>
+<p class="prose">The last command checks the files only if gpg accepted the signature and it is by the key <code class="mono" translate="no">{{key_fpr}}</code>. gpg reporting a good signature (<code translate="no">Good signature</code> in English) is not enough: it reports that for a signature by any key you already have. Use only the files the last command confirms (<code translate="no">OK</code> in English); if it confirms none, do not use the download.</p>
 </section>
 
 <section id="known" aria-labelledby="known-h">
