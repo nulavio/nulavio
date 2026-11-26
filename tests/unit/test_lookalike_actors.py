@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from urllib.parse import parse_qs
 
-from node_tool import requires_node
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 MODULES = ROOT / "browser" / "shell" / "modules"
 WARNING = "moz-extension://shell/passwords/lookalike.html?"
 REAL, FAKE = "https://paypal.example/account", "https://paypa1.example/login"

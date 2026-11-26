@@ -18,12 +18,11 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from nulavio_launcher.ai import assistant, audit, registry  # noqa: E402
-from test_vault_storage import FAKE_SECRET_TOOL  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
+from fake_keyring import FAKE_SECRET_TOOL  # noqa: E402
 from fake_llm import FakeProvider, Reply  # noqa: E402
 from node_tool import requires_node  # noqa: E402
 

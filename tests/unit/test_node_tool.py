@@ -9,15 +9,20 @@ from __future__ import annotations
 
 import ast
 import os
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import ClassVar
 from unittest import mock
 
-import node_tool
-from node_tool import KNOB, requires_node
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+import node_tool  # noqa: E402
+from node_tool import KNOB, requires_node  # noqa: E402
+
 UNIT = ROOT / "tests" / "unit"
 
 
@@ -160,6 +165,21 @@ class RequiresNodeTest(unittest.TestCase):
         self.assertEqual(len(result.errors), 1)
         self.assertIn(f"{KNOB}=1 but node is not on PATH", result.errors[0][1])
         self.assertEqual(ran, [])
+
+
+class ImportsOnItsOwnTest(unittest.TestCase):
+    def test_each_module_that_uses_the_helper_imports_without_the_runner(self):
+        """site.yml runs `unittest discover -s tests/unit -p test_site.py`, which puts only tests/unit on the path,
+        and an empty PATH (no gocryptfs, no node) must not skip a module at import before the knob can fail it."""
+        modules = [p.stem for p in sorted(UNIT.glob("test*.py")) if "from node_tool import" in p.read_text(encoding="utf-8")]
+        self.assertIn("test_site", modules)
+        with tempfile.TemporaryDirectory() as empty:
+            env = {"PATH": empty, KNOB: "1"}
+            for module in modules:
+                with self.subTest(module):
+                    code = f"import sys; sys.path.insert(0, {str(UNIT)!r}); import {module}"
+                    run = subprocess.run([sys.executable, "-I", "-c", code], env=env, capture_output=True, text=True, timeout=120)
+                    self.assertEqual(run.returncode, 0, run.stderr[-2000:])
 
 
 class CiRequiresNodeTest(unittest.TestCase):

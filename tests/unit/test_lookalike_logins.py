@@ -10,12 +10,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
-from node_tool import requires_node
-
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 FOUND = {"suspicious": True, "site": "paypa1.example", "similar": "paypal.example"}
 LOCKED = {"suspicious": False, "locked": True}
 

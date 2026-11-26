@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import make_shell  # noqa: E402
 from node_tool import requires_node  # noqa: E402

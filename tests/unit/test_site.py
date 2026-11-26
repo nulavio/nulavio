@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "site"))
 sys.path.insert(0, str(ROOT / "scripts" / "brand"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import build_site  # noqa: E402
 import verify_live  # noqa: E402
