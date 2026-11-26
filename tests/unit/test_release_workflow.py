@@ -356,9 +356,10 @@ def repodata(label: str, listed: str) -> tuple[bytes, bytes, str, bytes]:
 @unittest.skipUnless(shutil.which("bash"), "bash not available")
 class FailedPublishRunbookTest(unittest.TestCase):
     """build.md, "After a failed publish", state 4 (#740, #742): the block checks the revision's pair over HTTPS,
-    then the live objects in R2, and uploads those verified bytes onto the served keys only once every check passed;
-    the upload token, taken at a prompt, reaches the aws calls alone; it then reads the served pair back from R2 and
-    requires the public index to serve it and to list the revision; every download is bounded."""
+    then the live objects in R2 and the revision the primary file they name lists, and uploads those verified bytes
+    onto the served keys only once every check passed; the upload token, taken at a prompt, reaches the aws calls
+    alone; it then reads the served pair back from R2 and requires the public index to serve it and to list the
+    revision; every download is bounded."""
 
     REVISION = "160.0.1-0.4"
     BUCKET = "s3://nulavio-packages/rpm/repodata"
@@ -411,9 +412,9 @@ class FailedPublishRunbookTest(unittest.TestCase):
                     "AWS_SESSION_TOKEN": "sso-token", "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
                     "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
-    def run_block(self):
-        return subprocess.run(["bash", str(self.tmp / "block.sh")], cwd=self.repo, env=self.env, capture_output=True,
-                              text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
+    def run_block(self, *options: str):
+        return subprocess.run(["bash", *options, str(self.tmp / "block.sh")], cwd=self.repo, env=self.env,
+                              capture_output=True, text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
 
     def cache(self, key: str, data: bytes):
         (self.cdn / key).parent.mkdir(parents=True, exist_ok=True)
@@ -461,6 +462,13 @@ class FailedPublishRunbookTest(unittest.TestCase):
         self.assertGreater(len(self.curls()), 3)
         self.assertFalse(self.leak_log.exists(), self.leak_log.read_text() if self.leak_log.exists() else "")
 
+    def test_a_shell_left_in_allexport_does_not_export_the_token(self):
+        # set -a, left on after sourcing an env file, would export what read assigns: the block turns it off.
+        out = self.run_block("-a")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual({call["env"]["AWS_SECRET_ACCESS_KEY"] for call in self.calls()}, {"r2-secret"})
+        self.assertFalse(self.leak_log.exists(), self.leak_log.read_text() if self.leak_log.exists() else "")
+
     def test_no_credential_is_written_on_a_command_line(self):
         self.assertNotRegex(self.block, r"AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
         self.assertNotRegex(self.block, r"R2_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=")
@@ -472,7 +480,8 @@ class FailedPublishRunbookTest(unittest.TestCase):
         out = self.run_block()
         self.assertEqual(out.returncode, 0, out.stderr)
         curls = self.curls()
-        self.assertEqual(len(curls), 6)  # the revision's pair and the served signature, the served pair, the primary
+        # The revision's pair and the served signature, the primary it names, the served pair and its primary.
+        self.assertEqual(len(curls), 7)
         for args in curls:
             self.assertEqual(args[:10], ["-fsS", "--proto", "=https", "--retry", "3", "--max-time", "60",
                                          "--retry-max-time", "180", "--max-filesize"])  # fmt: skip
@@ -547,14 +556,14 @@ class FailedPublishRunbookTest(unittest.TestCase):
         (self.served / "repomd.xml.asc").write_bytes(other_sig)
         (self.rpm / href).write_bytes(primary)
         out = self.run_block()
-        self.assertNotEqual(out.returncode, 0)
+        # It reads the primary file that pair names before it writes: an older index never reaches the served keys.
         self.assertIn("the dnf index lists nulavio 160.0.1-0.3", out.stdout)
-        self.assertNotIn("restored", out.stdout)
+        self.assert_stopped_before_any_write(out)
 
     def test_a_primary_file_past_its_size_limit_fails_it(self):
         href = self.new.decode().splitlines()[1].split()[0]
         self.cache(f"rpm/{href}", b"x" * ((8 << 20) + 1))
-        self.assert_restored_in_r2_only(self.run_block())
+        self.assert_stopped_before_any_write(self.run_block())
 
     def test_a_served_pair_that_does_not_verify_after_the_copy_fails_it(self):
         self.env["FAKE_AWS_CORRUPT"] = "1"
