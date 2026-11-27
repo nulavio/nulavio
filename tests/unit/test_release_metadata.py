@@ -139,6 +139,19 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(readme.read_bytes(), b"Intro `<!--release-->`.\n\nline A\nline B\n\nNow " + link + b".\n")
 
+    def test_a_second_marker_pair_is_refused_before_anything_is_written(self):
+        # OCR round 3 on #878: markers quoted in prose on two lines made a second pair, and the text between them was
+        # replaced by the link. A README with more than one pair is refused, and nothing is written.
+        readme = self.repo / "README.md"
+        text = self.readmes["README.md"] + "\nQuote `<!--release-->` here,\nprose to keep,\nand `<!--/release-->` there.\n"
+        readme.write_text(text)
+        before = self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("more than one release marker pair", result.stderr)
+        self.assertEqual(readme.read_text(), text)
+        self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()), before)
+
     def import_script(self):
         sys.path.insert(0, str(SCRIPT.parent))
         self.addCleanup(sys.path.remove, str(SCRIPT.parent))

@@ -177,7 +177,11 @@ class MetadataWorkflowTest(unittest.TestCase):
         result = self.step("Open the metadata pull request, or report recovery instructions")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("::warning::The open metadata PR differs", result.stdout)
-        self.assertIn("release-metadata.patch", Path(self.env["GITHUB_STEP_SUMMARY"]).read_text())
+        summary = Path(self.env["GITHUB_STEP_SUMMARY"]).read_text()
+        self.assertIn("release-metadata.patch", summary)
+        # OCR round 3 on #878: the whole patch does not apply on a branch that has part of it; the summary says how to
+        # take only the files the PR lacks.
+        self.assertIn("git apply --include=README.md --include=README.pt-BR.md release-metadata.patch", summary)
         self.assertEqual(self.git("branch", "--show-current").strip(), "main")
         self.assertNotIn('"create"', Path(self.env["GH_CALLS"]).read_text())
 

@@ -81,7 +81,7 @@ jobs:
             if ! { git fetch -q origin "$branch" &&
               git diff --quiet FETCH_HEAD -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md; }; then
               echo '::warning::The open metadata PR differs from what this run generated; the release-metadata artifact holds the patch.'
-              printf '\nIt differs from what this run generated (or main moved since): compare it with release-metadata.patch in the release-metadata artifact and apply that on its branch if the PR lacks a change.\n' >> "$GITHUB_STEP_SUMMARY"
+              printf '\nIt differs from what this run generated (or main moved since): compare it with release-metadata.patch in the release-metadata artifact. The whole patch does not apply on a branch that has part of it: apply only the files the PR lacks, for the READMEs git apply --include=README.md --include=README.pt-BR.md release-metadata.patch.\n' >> "$GITHUB_STEP_SUMMARY"
             fi
             exit 0
           fi

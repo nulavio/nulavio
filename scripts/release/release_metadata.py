@@ -128,6 +128,9 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
         if path.is_symlink() or path.is_file():
             # Bytes, so the README keeps its line endings outside the markers.
             text = path.read_bytes()
+            # Markers quoted in prose on two lines would make a second pair, and its text would be replaced.
+            if len(README_RELEASE.findall(text)) > 1:
+                raise ValueError(f"{name} has more than one release marker pair")
             outputs[path] = (text, README_RELEASE.sub(lambda _: link, text))
     # A link would have its target rewritten, outside the paths the workflow stages: refused before any write.
     for path in outputs:

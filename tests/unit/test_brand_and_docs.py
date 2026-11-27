@@ -462,19 +462,22 @@ class DocsTest(unittest.TestCase):
         for readme, ubuntu in (("README.md", "On Ubuntu 24.04 or later"), ("README.pt-BR.md", "No Ubuntu 24.04 ou mais novo")):
             with self.subTest(readme=readme):
                 text = (ROOT / readme).read_text(encoding="utf-8")
-                self.assertEqual(re.findall(r"<!--release-->.*?<!--/release-->", text), [link])
+                # One pair, across lines too: release_metadata.py refuses a README with a second one (OCR round 3 on #878).
+                self.assertEqual((text.count("<!--release-->"), text.count("<!--/release-->")), (1, 1))
+                self.assertIn(link, text)
                 self.assertIsNotNone(release.get("apt_sources"))
                 self.assertIn(ubuntu, text)
                 # The checksum gates the install when the block is pasted whole (OCR on #878).
                 # In a private folder, so the checked file is the installed one, and a failed refresh stops too (OCR
-                # round 2 on #878).
+                # round 2 on #878). In a subshell, and a folder that cannot be made stops it: an empty `cd` succeeds in
+                # the current folder (OCR round 3 on #878).
                 self.assertIn(
-                    'cd "$(mktemp -d)" &&\n'
+                    '(d=$(mktemp -d) && cd "$d" &&\n'
                     f"  curl -fsSLO --proto '=https' {release['apt_sources']} &&\n"
                     f"  echo '{digest}  nulavio.sources' | sha256sum --check &&\n"
                     "  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &&\n"
                     "  sudo apt-get -o APT::Update::Error-Mode=any update &&\n"
-                    "  sudo apt install nulavio\n",
+                    "  sudo apt install nulavio)\n",
                     text,
                 )
                 # A test count goes stale with the next test; the README names none.
