@@ -25,8 +25,15 @@
 
 /* -- masthead -------------------------------------------------------------------------- */
 
-.masthead { display: flex; align-items: center; gap: var(--nv-space-6); min-height: 4.5rem; }
+.masthead { display: flex; align-items: center; gap: 0 var(--nv-space-6); min-height: 4.5rem; }
 .brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
+/* Under 20em, which only enlarged text reaches on a phone (an em in a media query follows the
+   browser's text size), the row wraps instead of running past the page; at 320 px and the
+   default size nothing changes. */
+@media (max-width: 19.9375em) {
+  .masthead { flex-wrap: wrap; }
+  .brand { flex: none; }
+}
 .top-nav { display: none; margin-left: auto; }
 .top-nav ul { display: flex; gap: var(--nv-space-6); }
 .top-nav a, .lang { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
@@ -45,7 +52,7 @@
 
 /* -- summary (hero) -------------------------------------------------------------------- */
 
-.summary { display: grid; gap: var(--nv-space-8); padding-block: var(--nv-space-8) var(--nv-space-8); border-top: var(--rule); }
+.summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); padding-block: var(--nv-space-8) var(--nv-space-8); border-top: var(--rule); }
 .revision { margin-bottom: var(--nv-space-5); font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
 h1 {
   font-size: clamp(2.25rem, 1.4rem + 3.6vw, 3.5rem);
@@ -92,8 +99,8 @@ h1 span { display: block; }
 /* -- figures --------------------------------------------------------------------------- */
 
 .fig .shot { width: 100%; border-radius: var(--nv-radius-xs); }
-.fig figcaption { display: grid; gap: var(--nv-space-2) var(--nv-space-5); margin-top: var(--nv-space-4); font-size: 0.9375rem; line-height: 1.5; }
-.fig figcaption > div { display: grid; gap: var(--nv-space-3); max-width: 44rem; }
+.fig figcaption { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-2) var(--nv-space-5); margin-top: var(--nv-space-4); font-size: 0.9375rem; line-height: 1.5; }
+.fig figcaption > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-3); max-width: 44rem; }
 .fig-n { font-size: var(--nv-type-caption-size); font-weight: var(--nv-font-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nv-color-text-primary); }
 .meta { font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
 .fig-window { padding-bottom: var(--nv-space-9); }
@@ -108,9 +115,9 @@ h1 span { display: block; }
 
 /* -- entries: a rail for the number, the body beside it ---------------------------------- */
 
-.entry { display: grid; gap: var(--nv-space-5); padding-block: var(--nv-space-8); border-top: var(--rule); }
+.entry { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-5); padding-block: var(--nv-space-8); border-top: var(--rule); }
 .rail {
-  display: flex; align-items: center; gap: var(--nv-space-3); white-space: nowrap;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3);
   font-size: var(--nv-type-caption-size); letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--nv-color-text-secondary);
 }
@@ -134,7 +141,7 @@ h2 {
 .fine { display: grid; gap: var(--nv-space-2); max-width: 48rem; padding-block: var(--nv-space-4); border-bottom: var(--rule); color: var(--nv-color-text-primary); }
 .fine strong { font-size: var(--nv-type-caption-size); font-weight: var(--nv-font-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nv-color-text-secondary); }
 
-.figs { display: grid; gap: var(--nv-space-8); margin-top: var(--nv-space-8); }
+.figs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); margin-top: var(--nv-space-8); }
 
 @media (min-width: 64rem) {
   .entry { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 0; padding-block: var(--nv-space-9); }

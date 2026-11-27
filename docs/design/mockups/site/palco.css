@@ -19,8 +19,15 @@
 
 /* -- header ---------------------------------------------------------------------------- */
 
-.top-inner { display: flex; align-items: center; gap: var(--nv-space-6); min-height: 4.5rem; }
+.top-inner { display: flex; align-items: center; gap: 0 var(--nv-space-6); min-height: 4.5rem; }
 .brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
+/* Under 20em, which only enlarged text reaches on a phone (an em in a media query follows the
+   browser's text size), the row wraps instead of running past the page; at 320 px and the
+   default size nothing changes. */
+@media (max-width: 19.9375em) {
+  .top-inner, .top-actions { flex-wrap: wrap; }
+  .brand { flex: none; }
+}
 .top-nav { display: none; margin-left: var(--nv-space-6); }
 .top-nav ul { display: flex; gap: var(--nv-space-6); }
 .top-nav a, .lang {
@@ -29,7 +36,7 @@
   transition: color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
 }
 .top-nav a:hover, .lang:hover { color: var(--nv-color-text-primary); }
-.top-actions { display: flex; align-items: center; gap: var(--nv-space-5); margin-left: auto; }
+.top-actions { display: flex; align-items: center; gap: 0 var(--nv-space-5); margin-left: auto; }
 @media (min-width: 48rem) { .top-nav { display: block; } }
 
 /* -- hero ------------------------------------------------------------------------------ */
@@ -158,6 +165,9 @@ h2 {
   border-color: var(--nv-color-border-subtle);
   color: var(--nv-color-text-primary);
   box-shadow: inset 0 var(--nv-control-selected-insetWidth) 0 var(--nv-color-control-selected-edge);
+}
+@media (forced-colors: active) {
+  .pick:checked + .tab { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
 }
 .pick:focus-visible + .tab {
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);

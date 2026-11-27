@@ -117,6 +117,8 @@ video:focus-visible {
 .btn:hover { background: color-mix(in oklab, var(--nv-color-accent-default) 86%, var(--nv-color-text-primary)); }
 .btn:active { background: color-mix(in oklab, var(--nv-color-accent-default) 76%, var(--nv-color-text-primary)); }
 .btn:focus-visible { outline-color: var(--nv-color-focus); border-radius: var(--nv-radius-md); }
+/* A form's button may wrap its label rather than widen the form past the page (enlarged text on a phone). */
+button.btn { white-space: normal; text-align: center; }
 .btn-sm { min-height: 2.5rem; padding-inline: var(--nv-space-5); font-size: 0.9375rem; }
 
 .join-label { display: block; margin-bottom: var(--nv-space-3); font-size: 0.9375rem; font-weight: var(--nv-font-weight-medium); }
