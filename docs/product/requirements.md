@@ -44,7 +44,7 @@ The Track A preview, Nulavio's profile on the distribution's unmodified Firefox,
 | ID | Requirement | Status | Verification |
 |---|---|---|---|
 | SEC-01 | Never disable sandbox, site isolation, TLS checks, Safe Browsing, updates | **Done** | forbidden-pref tests, Guard rules |
-| SEC-02 | No telemetry to Nulavio (there is no server); upstream telemetry off by default | **Done** | `test_02` |
+| SEC-02 | No telemetry to Nulavio (on its own, the browser contacts no Nulavio server); upstream telemetry off by default | **Done** | `test_02` |
 | SEC-03 | HTTPS-Only with clear, revocable exceptions | **Done** | `test_06` |
 | SEC-04 | Profile dirs 0700 / files 0600 | **Done** | `test_09` |
 | SEC-05 | Logs without secrets, tokens, cookies or URLs | **Done** | redaction tests |
