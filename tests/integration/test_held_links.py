@@ -301,12 +301,12 @@ class HeldLinksTest(unittest.TestCase):
 
     def test_08_an_asked_link_from_another_app_is_asked_in_a_normal_window(self):
         rule = self.call(
-            "return R.addRule({site: 'banco.example', match: 'host', action: 'ask', profileId: args[0]});", self.other
+            "return R.addRule({site: 'pedido.example', match: 'host', action: 'ask', profileId: args[0]});", self.other
         )
         try:
             self.open_private_window()
             earlier = self.tabs_showing("/routing/ask.html")  # the pages test 02 had another extension open
-            self.assertEqual(self.from_another_app("https://banco.example/asked"), 0, "the link was left to the browser")
+            self.assertEqual(self.from_another_app("https://pedido.example/asked"), 0, "the link was left to the browser")
             new = lambda: [tab for tab in self.tabs_showing("/routing/ask.html") if tab not in earlier]  # noqa: E731
             shown = harness.wait_until(new, timeout=20)
             self.assertTrue(shown, self.windows())
@@ -314,9 +314,9 @@ class HeldLinksTest(unittest.TestCase):
             held = shown[0][1].split("h=", 1)[1]
             self.assertEqual(
                 self.call("const h = R.held(args[0], 'routing/ask.html'); return [h.u, h.src];", held),
-                ["https://banco.example/asked", "app"],
+                ["https://pedido.example/asked", "app"],
             )
-            self.assertEqual(self.tabs_showing("banco.example"), [], "the site was loaded")
+            self.assertFalse([u for w in self.windows() for u in w["tabs"] if "//pedido.example" in u], "the site was loaded")
         finally:
             self.close_private_windows()
             self.call("await R.removeRule(args[0]);", rule)
