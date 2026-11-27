@@ -396,7 +396,7 @@ class ShortcutsTest(unittest.TestCase):
             "return [...document.querySelectorAll('panel')].some(p => ['showing', 'open'].includes(p.state)"
             "  && [...p.querySelectorAll('browser')].some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html')));"
         )
-        harness.wait_until(lambda: self.m.chrome(shown), 10)
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(shown), 10), "the profile menu's panel never opened")
         self.m.chrome(CLOSE_PANELS)
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(shown), 10))
         self.m.chrome("gBrowser.selectedBrowser.focus();")

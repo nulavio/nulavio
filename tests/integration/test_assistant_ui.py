@@ -237,10 +237,18 @@ class AssistantUiTest(unittest.TestCase):
     def wait_view(self, predicate, which: str | None = None, timeout: float = 20) -> dict:
         # The panel just opened (SidebarController.show) can still hold its browser's first about:blank: wait for its
         # page, as show_sidebar does. Once it is ready, an error in VIEW still fails at once.
-        found = harness.wait_until(
-            lambda: self.panel_ready(which) and (lambda v: v if predicate(v) else None)(self.view(which)), timeout
-        )
-        self.assertTrue(found, self.view(which))
+        # The last view read is the failure's message: a panel that never got ready is said so, not read again.
+        last = {}
+
+        def poll():
+            if not self.panel_ready(which):
+                return None
+            last["view"] = view = self.view(which)
+            return view if predicate(view) else None
+
+        found = harness.wait_until(poll, timeout)
+        if not found:
+            self.fail(f"the side panel showed {last['view']}" if "view" in last else "the side panel never got ready")
         return found
 
     def show_sidebar(self, which: str | None = None, reload: bool = False) -> dict:

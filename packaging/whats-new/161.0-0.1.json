@@ -7,7 +7,7 @@
     "summary": "Uma atualização de segurança urgente da alpha, com o motor no Firefox 161.0 e as correções de segurança da Mozilla. Além disso, o aviso de login parecido passa a valer dentro de quadros, e há correções nos agentes de IA, no assistente, no desbloqueio pelo celular e no modo confinado.",
     "breaking": [
       "A palavra-chave do assistente na barra de endereços não pode mais ser o atalho de um mecanismo de pesquisa. Um mecanismo que recebeu esse atalho em Configurações o perde.",
-      "Modo confinado (--confined): uma pasta de Downloads ou de dados que é um link passa a funcionar no caminho que o navegador usa, e alguns arranjos são recusados com uma mensagem que diz o que fazer, como um motor descompactado em Downloads ou direto na pasta pessoal."
+      "Modo confinado (--confined): uma pasta de Downloads ou de dados que é um link passa a funcionar (ainda não se a própria pasta pessoal é um link: os downloads se perdem; baixe sem --confined). Alguns arranjos são recusados com uma mensagem que diz o que fazer, como um motor extraído em Downloads."
     ],
     "new": [
       "O aviso de login parecido também confere os campos de senha dentro dos quadros de uma página, com o site do quadro e o de cada página em volta dele."
@@ -31,7 +31,7 @@
     "summary": "An urgent security update of the alpha, with the engine on Firefox 161.0 and Mozilla's security fixes. Also, the look-alike login warning now covers frames, with fixes in AI agents, the assistant, phone unlock and confined mode.",
     "breaking": [
       "The assistant's keyword in the address bar can no longer be a search engine's alias. An engine given that alias in Settings loses it.",
-      "Confined mode (--confined): a Downloads or data folder that is a link now works at the path the browser uses, and some layouts are refused with a message that says what to do, such as an engine unpacked in Downloads or straight in the home folder."
+      "Confined mode (--confined): a Downloads or data folder that is a link now works (not yet when the home folder itself is a link: downloads are then lost, so download without --confined). Some layouts are refused with a message that says what to do, such as an engine unpacked in Downloads."
     ],
     "new": [
       "The look-alike login warning also checks password fields inside a page's frames, with the site of the frame and of each page around it."
