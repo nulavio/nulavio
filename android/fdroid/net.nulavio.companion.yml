@@ -1,6 +1,7 @@
 # The recipe as submitted to fdroiddata (metadata/net.nulavio.companion.yml) on 2026-11-11, for tag
 # companion-v0.1.0 (ADR 0005, decision D4: F-Droid first); 0.2.0 (pairing version 2) added for the tag
-# companion-v0.2.0, not made yet (it is made with the release that ships 0.2.0). fdroiddata keeps the summary out of the recipe,
+# companion-v0.2.0, and 0.2.1 (the malformed-QR fix, #769, and the new icon, #858) for companion-v0.2.1, each tag made
+# with the release that ships it. fdroiddata keeps the summary out of the recipe,
 # in net.nulavio.companion/<locale>/summary.txt (mirrored next to this file). Checked by tests/unit/test_companion_build.py.
 Categories:
   - Security
@@ -38,7 +39,14 @@ Builds:
     gradle:
       - yes
 
+  - versionName: 0.2.1
+    versionCode: 3
+    commit: companion-v0.2.1
+    subdir: android/app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^companion-v.*$
-CurrentVersion: 0.2.0
-CurrentVersionCode: 2
+CurrentVersion: 0.2.1
+CurrentVersionCode: 3
