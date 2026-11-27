@@ -436,6 +436,7 @@ class Bridge:
         self._entered: set[tuple[str, str]] = set()  # (profile, tab) the current call was allowed to act in
         # Questions the person answered yes to: a change since a tab was looked at means it may have moved meanwhile.
         self._questions = 0
+        self._ended = False  # the agent's client went away (end()): no engine is started for this session again
 
     # -- policy ----------------------------------------------------------------------
 
@@ -931,6 +932,8 @@ class Bridge:
 
     def _workspace(self) -> Workspace:
         if self.workspace is None:
+            if self._ended:
+                raise Cancelled()  # a call still running after the client went away makes no new AI Workspace (#646)
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
             workspace = (self.workspace_factory(agent) if self.workspace_factory else
@@ -938,7 +941,22 @@ class Bridge:
                                    headless=self.headless, uploads=uploads))  # fmt: skip
             workspace.local_file = self._local_path()
             self.workspace = workspace
+            if self._ended:  # ended while it was made: close() did not see it
+                self.close()
+                raise Cancelled()
         return self.workspace
+
+    def _start(self, target: Workspace) -> Bidi:
+        """Starts an engine (or returns the running one), never for a session whose client went away (#646): one that
+        ended while the engine started is closed again at once."""
+        if self._ended:
+            raise Cancelled()
+        engine = target.start()
+        if self._ended:
+            target.stop()
+            self.close()
+            raise Cancelled()
+        return engine
 
     def _engines(self) -> list[tuple[str, Workspace]]:
         """Running engines: ("", AI Workspace) and (label, one of the user's profiles)."""
@@ -952,7 +970,7 @@ class Bridge:
         owner = "" if tab is None else self._owner(tab)
         if owner and enter:
             self._enter_profile(owner, tab)
-        engine = self.profiles[owner].bidi if owner else self._workspace().start()
+        engine = self.profiles[owner].bidi if owner else self._start(self._workspace())
         if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
         if engine not in self._net_engines:
@@ -965,7 +983,7 @@ class Bridge:
             return known
         engines = self._engines() or [("", self._workspace())]
         for label, target in engines:
-            bidi = target.start() if not label else target.bidi
+            bidi = self._start(target) if not label else target.bidi
             for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}).get("contexts", []):
                 self.owner[context["context"]] = label
         if tab not in self.owner:
@@ -1052,8 +1070,14 @@ class Bridge:
             self.elements.pop(tab, None)
         self._downloads_mode.pop(label, None)
 
+    def end(self) -> None:
+        """The agent's client went away (the MCP server's stdin ended): the engines close, and a call that is still
+        running starts no new one (#646). close() alone, on a stop or a revocation, lets a later call start again."""
+        self._ended = True
+        self.close()
+
     def close(self) -> None:
-        for target in self.profiles.values():
+        for target in list(self.profiles.values()):
             target.stop()
         self.profiles.clear()
         if self.workspace is not None:
@@ -1107,7 +1131,7 @@ class Bridge:
         engines = self._engines() or [("", self._workspace())]
         out = []
         for label, target in engines:
-            bidi = target.start() if not label else target.bidi
+            bidi = self._start(target) if not label else target.bidi
             for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel).get("contexts", []):
                 self.owner[context["context"]] = label
                 out.append({**context, "profile": label or "AI Workspace"})
@@ -1740,7 +1764,7 @@ class Bridge:
             target.local_file = self._local_path()
             self.profiles[label] = target
         try:
-            bidi = target.start()
+            bidi = self._start(target)
         except TargetError as exc:
             self.profiles.pop(label, None)
             messages = {
@@ -2296,4 +2320,5 @@ def _why(decision: policy.Decision) -> str:
         "internal-pages-off": "blocked: the browser's internal pages are not offered to agents",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",
+        "cancelled": "not used: the call was cancelled while the user answered",
     }.get(decision.reason, f"blocked for this agent ({decision.reason})")

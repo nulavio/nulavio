@@ -6,7 +6,8 @@ Dual-era, as the 2026-07-28 specification describes: modern clients send
 earlier) and get those semantics for the life of the process. Only the
 `tools` feature is offered. stdout carries protocol messages only; logs go
 to stderr. Tool calls run one at a time on a worker thread so `ping` and
-`notifications/cancelled` are answered while a call is in progress.
+`notifications/cancelled` are answered while a call is in progress. When
+stdin ends, every call in progress or queued is cancelled.
 """
 
 from __future__ import annotations
@@ -80,9 +81,14 @@ class Server:
                 if line.strip():
                     self.handle_line(line)
         finally:
+            # The client is gone (stdin closed, or it exited): nothing it asked for may still happen (#646). Every call
+            # is cancelled, so one waiting for the person's answer is denied at once and its request removed, and one
+            # still queued never starts. A call still running after the wait starts no engine (Bridge.end).
+            for event in list(self._cancels.values()):
+                event.set()
             self._jobs.put(None)
             self._worker.join(timeout=30)
-            self.bridge.close()
+            self.bridge.end()
 
     def _skip_rest(self) -> None:
         while True:

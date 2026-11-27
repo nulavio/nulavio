@@ -73,14 +73,28 @@ class FakeBridge:
         self.calls.append((name, arguments))
         return {"content": [{"type": "text", "text": "ok"}], "isError": False}
 
-    def close(self):
+    def end(self):
         self.closed = True
+
+
+class ClientInput(io.BytesIO):
+    """A client's lines on the server's stdin. Like a client that shuts down cleanly, it closes stdin only once every
+    call it made has its response: the end of stdin cancels the calls still in progress (#646)."""
+
+    server: mcp.Server | None = None
+
+    def readline(self, *args):
+        line = super().readline(*args)
+        if not line and self.server is not None:
+            wait_for(lambda: self.server._jobs.empty() and not self.server._cancels)
+        return line
 
 
 def run_server(lines: list, bridge=None) -> list[dict]:
     raw = b"".join((json.dumps(m).encode() if not isinstance(m, bytes) else m) + b"\n" for m in lines)
     out = io.BytesIO()
-    server = mcp.Server(bridge or FakeBridge(), io.BytesIO(raw), out)
+    stdin = ClientInput(raw)
+    server = stdin.server = mcp.Server(bridge or FakeBridge(), stdin, out)
     server.serve()
     return [json.loads(line) for line in out.getvalue().splitlines()]
 
@@ -182,6 +196,8 @@ class ProtocolTest(unittest.TestCase):
         while not (server._cancels.get(2) and server._cancels[2].is_set()) and time.monotonic() < deadline:
             time.sleep(0.01)
         bridge.release.set()
+        # The client closes stdin once it has its response: the end of stdin cancels a call still running (#646).
+        self.assertTrue(wait_for(lambda: len(out.getvalue().splitlines()) == 2 and not server._cancels))
         w.close()
         thread.join(10)
         ids = [json.loads(line).get("id") for line in out.getvalue().splitlines()]
@@ -4927,6 +4943,165 @@ class AutonomyControlsTest(Home):
             ai_cli.api_request({"op": "add", "name": "F", "client": "other", "autonomy": "full_control"})
         with self.assertRaises(registry.RegistryError):
             ai_cli.api_request({"op": "explode"})
+
+
+class DisconnectTest(Home):
+    """#646: the agent's client exits or closes stdin while a call waits for the person's answer."""
+
+    @staticmethod
+    def take(then=None) -> threading.Thread:
+        """What a Nulavio window does with a new request: it marks it seen (the bridge then waits for the answer),
+        then `then(base)`."""
+
+        def run():
+            for _ in range(200):
+                pending = list(registry.requests_dir().glob("*.json"))
+                if pending:
+                    base = pending[0].with_suffix("")
+                    base.with_suffix(".seen").touch()
+                    if then:
+                        then(base)
+                    return
+                time.sleep(0.02)
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        return thread
+
+    def test_stdin_eof_during_a_pending_approval_denies_it_at_once_and_removes_its_files(self):
+        agent, _ = registry.add("d", "other", "restricted")
+        approver = registry.BrowserApprover(fallback=Approve("once"), notice=5, timeout=60, poll=0.05)
+        decisions: list[policy.Decision] = []
+
+        class Asking(FakeBridge):
+            def call(self, name, arguments, cancel):
+                self.started.set()
+                decisions.append(registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                                 approver=approver, cancel=cancel))  # fmt: skip
+                return {"content": [{"type": "text", "text": "done"}], "isError": False}
+
+        bridge = Asking()
+        server_in_r, server_in_w = os.pipe()
+        out = io.BytesIO()
+        server = mcp.Server(bridge, os.fdopen(server_in_r, "rb"), out)
+        thread = threading.Thread(target=server.serve, daemon=True)
+        thread.start()
+        writer = os.fdopen(server_in_w, "wb")
+        for message in (INIT, req(1, "tools/call", {"name": "session_state", "arguments": {}})):
+            writer.write(json.dumps(message).encode() + b"\n")
+        writer.flush()
+        taken: list[Path] = []
+        self.take(taken.append).join(5)
+        self.assertEqual(len(taken), 1, "no request was written")
+        self.assertTrue(wait_for(lambda: bridge.started.is_set()))
+        time.sleep(0.2)  # the approver now waits for the answer
+        started = time.monotonic()
+        writer.close()  # the agent's client exits
+        thread.join(10)
+        self.assertFalse(thread.is_alive(), "the server still waits for the call")
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual([(d.allowed, d.reason) for d in decisions], [(False, "denied")])
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])  # the request page closes as expired
+        self.assertEqual([json.loads(line).get("id") for line in out.getvalue().splitlines()], [0])  # no answer to a gone client
+        self.assertTrue(bridge.closed)
+        # The person clicks "Allow" afterwards: there is nothing to answer any more, and nothing is left behind.
+        with self.assertRaises(registry.RegistryError):
+            registry.answer_request(taken[0].name, "once")
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_an_allow_that_comes_with_the_cancel_does_nothing(self):
+        """The person's answer and the cancel arrive together: the cancel wins, and an answer for the session is not
+        kept either."""
+        agent, _ = registry.add("l", "other", "restricted")
+        cancel = threading.Event()
+        for answer in ("once", "session"):
+            with self.subTest(answer):
+                cancel.clear()
+                decision = registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                           approver=Approve(answer, meanwhile=cancel.set), cancel=cancel)  # fmt: skip
+                self.assertEqual((decision.allowed, decision.reason), (False, "cancelled"))
+        self.assertEqual(registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                         approver=registry.Approver()).reason, "no-approver")  # fmt: skip
+
+    def test_a_browser_answer_read_after_the_cancel_is_a_denial(self):
+        agent, _ = registry.add("b", "other", "restricted")
+        cancel = threading.Event()
+
+        def answer(base: Path):
+            time.sleep(0.2)
+            cancel.set()  # the client went away, and the answer is on disk before the approver looks again
+            (base.with_suffix(".answer")).write_text("once")
+
+        thread = self.take(answer)
+        approver = registry.BrowserApprover(fallback=Approve("once"), notice=5, timeout=30, poll=0.5)
+        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, cancel=cancel), "deny")
+        thread.join(5)
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_an_answer_written_as_its_request_ends_is_not_left_behind(self):
+        base = registry.requests_dir() / "0123456789abcdef"
+        base.with_suffix(".json").write_text("{}")
+        real_write = registry.paths.write_private_file
+
+        def write(path, *args, **kwargs):
+            for suffix in (".json", ".seen", ".answer"):  # the call ended meanwhile (BrowserApprover.ask's finally)
+                base.with_suffix(suffix).unlink(missing_ok=True)
+            return real_write(path, *args, **kwargs)
+
+        with mock.patch.object(registry.paths, "write_private_file", write), self.assertRaises(registry.RegistryError):
+            registry.answer_request(base.name, "once")
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_the_desktop_dialog_closes_when_the_call_is_cancelled(self):
+        fake = self.home / "kdialog"
+        pid_file = self.home / "kdialog.pid"
+        fake.write_text(f'#!/bin/sh\necho $$ > "{pid_file}"\nexec sleep 30\n')
+        fake.chmod(0o700)
+        agent, _ = registry.add("k", "other", "restricted")
+        cancel = threading.Event()
+        threading.Timer(0.5, cancel.set).start()
+        started = time.monotonic()
+        with mock.patch.dict(os.environ, {"DISPLAY": ":0"}):
+            answer = registry.KDialogApprover(str(fake)).ask(registry.get(agent["id"]), "interact", None, cancel=cancel)
+        self.assertEqual(answer, "deny")
+        self.assertLess(time.monotonic() - started, 5)
+        pid = int(pid_file.read_text())
+        self.assertFalse(Path(f"/proc/{pid}").exists() and "zombie" not in Path(f"/proc/{pid}/status").read_text().lower())
+
+    def ended_bridge(self, agent_id: str, made: list, *, end_while_made: bool = False) -> tools.Bridge:
+        bridge: tools.Bridge
+
+        def factory(_agent):
+            workspace = mock.Mock(bidi=None, downloads_dir=self.home / "downloads")
+            workspace.start.side_effect = lambda *a, **k: setattr(workspace, "bidi", mock.Mock()) or workspace.bidi
+            made.append(workspace)
+            if end_while_made:
+                bridge.end()  # the client went away while the call was making its engine
+            return workspace
+
+        bridge = tools.Bridge(agent_id, "s-1", approver=registry.Approver(), workspace_factory=factory)
+        return bridge
+
+    def test_a_call_still_running_after_the_bridge_ended_starts_no_engine(self):
+        agent, _ = registry.add("e", "other", "autonomous")
+        made: list = []
+        bridge = self.ended_bridge(agent["id"], made)
+        bridge.end()
+        result = bridge.call("tabs_list", {})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(made, [])
+        self.assertIsNone(bridge.workspace)
+
+    def test_an_engine_made_as_the_bridge_ends_is_stopped(self):
+        agent, _ = registry.add("e", "other", "autonomous")
+        made: list = []
+        bridge = self.ended_bridge(agent["id"], made, end_while_made=True)
+        result = bridge.call("tabs_list", {})
+        self.assertTrue(result["isError"], result)
+        self.assertEqual(len(made), 1)
+        made[0].start.assert_not_called()
+        made[0].stop.assert_called()  # a disposable workspace's folder goes with it
+        self.assertIsNone(bridge.workspace)
 
 
 class ProfilesAndKeysTest(Home):

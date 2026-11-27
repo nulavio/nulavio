@@ -422,31 +422,49 @@ class Approver:
 class KDialogApprover(Approver):
     """A KDE dialog, outside the browser the agent controls. Allow once / until the agent disconnects / deny."""
 
-    def __init__(self, executable: str | None = None, timeout: float = 120):
+    def __init__(self, executable: str | None = None, timeout: float = 120, poll: float = 0.2):
         self.executable = executable or shutil.which("kdialog")
-        self.timeout = timeout
+        self.timeout, self.poll = timeout, poll
 
     def available(self) -> bool:
         return bool(self.executable) and bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
 
     def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
             cancel: threading.Event | None = None) -> str | None:  # fmt: skip
-        # The dialog cannot be taken back once shown; decide() checks stop, pause and revoke again after it.
+        # Closed as a denial as soon as the call is cancelled (the agent's client went away, #646), the stop is
+        # on, or the agent is paused or revoked, as BrowserApprover does; decide() checks them again after it.
         if not self.available():
             return None
+        if _called_off(agent["id"], cancel):
+            return "deny"
         where = f"in your profile {place}" if place else "in its AI Workspace"
         text = (f"{agent['name']} ({agent['autonomy'].replace('_', ' ')}) wants to: {CAPABILITIES[capability]}"
                 + (f"\non {target}" if target else "") + f"\n{where}"
                 + "\n\nOnly allow this if you asked the agent to do it.")  # fmt: skip
         try:
-            result = subprocess.run(
+            dialog = subprocess.Popen(
                 [self.executable, "--title", "Nulavio AI Bridge", "--yes-label", "Allow once",
                  "--no-label", "Allow until the agent disconnects", "--cancel-label", "Deny", "--yesnocancel", text],
-                capture_output=True, timeout=self.timeout, check=False,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )  # fmt: skip
-        except (OSError, subprocess.TimeoutExpired):
+        except OSError:
             return "deny"
-        return {0: "once", 1: "session"}.get(result.returncode, "deny")
+        deadline = time.monotonic() + self.timeout
+        try:
+            while True:
+                try:
+                    code = dialog.wait(timeout=self.poll)
+                    break
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() > deadline or _called_off(agent["id"], cancel):
+                        return "deny"
+        finally:
+            if dialog.poll() is None:
+                dialog.kill()  # the dialog goes away: an answer given now does nothing
+                dialog.wait()
+        if _off(cancel):
+            return "deny"  # cancelled as the person answered: the call that asked is gone
+        return {0: "once", 1: "session"}.get(code, "deny")
 
 
 class BrowserApprover(Approver):
@@ -500,6 +518,8 @@ class BrowserApprover(Approver):
                 answer = base.with_suffix(".answer")
                 if answer.exists():
                     value = answer.read_text().strip()
+                    if _off(cancel):
+                        return "deny"  # cancelled as the person answered (the agent's client went away, #646)
                     return value if value in ("once", "session", "deny") else "deny"
                 if _called_off(agent["id"], cancel):
                     return "deny"
@@ -561,6 +581,11 @@ def answer_request(request_id: str, answer: str) -> None:
     if not base.with_suffix(".json").exists():
         raise RegistryError("no such request (expired?)")
     paths.write_private_file(base.with_suffix(".answer"), answer)
+    if not base.with_suffix(".json").exists():
+        # The call that asked ended while the answer was written (BrowserApprover.ask removed its files): the
+        # answer goes too, rather than stay on disk for no one (#646).
+        base.with_suffix(".answer").unlink(missing_ok=True)
+        raise RegistryError("no such request (expired?)")
 
 
 def default_approver() -> Approver:
@@ -602,6 +627,10 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
     answer = approver.ask(agent, capability, target, place, cancel)
     if answer is None:
         return Decision(False, mode, capability, "no-approver")
+    if answer in ("once", "session") and cancel is not None and cancel.is_set():
+        # The call was cancelled while the person answered (or its client went away, #646): an "allow" does
+        # nothing, and an answer for the session is not kept for a client that is gone.
+        return Decision(False, mode, capability, "cancelled")
     if answer in ("once", "session"):
         agent = load()["agents"].get(agent_id)
         held = _held(agent, host)
