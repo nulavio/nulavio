@@ -197,8 +197,9 @@ out.forgedWritten = start({ [SHARE]: true, [OVERRIDES]: "+JSDateTimeUTC", [WRITT
   [OVERRIDES]: EARLIER,
 });
 // The same forgery on a profile whose record kept the earlier set as Nulavio's: the module writes the build's set over
-// the forged one and its memory, so nothing of the forgery is left, and what changed since the record is Nulavio's
-// own update (the same set and memory as ownUpdate).
+// the forged one and its memory, so the profile ends as after Nulavio's own update (the same set and memory as
+// ownUpdate), but the module did not write over the set the record kept, so the change is still reported
+// (OpenCodeReview on #825, round 3).
 out.forgedOverwritten = start({ [SHARE]: true, [OVERRIDES]: "+JSDateTimeUTC", [WRITTEN]: "+JSDateTimeUTC" }, {
   [SHARE]: true,
   [OVERRIDES]: EARLIER,
@@ -274,6 +275,22 @@ out.checked = {
   declaredLate: await checked({ [SHARE]: true, [OVERRIDES]: CURRENT }, ...lastStart, () => {
     target.ownPrefValue(OVERRIDES, CURRENT);
   }),
+  // OpenCodeReview on #825 (round 3): this build's set and the module's memory of it copied into the closed profile.
+  // The module finds its set already there and writes nothing, so the change since the record is not its own.
+  copiedSet: await checked({ [SHARE]: true, [OVERRIDES]: CURRENT, [WRITTEN]: CURRENT }, ...lastStart),
+  // The set and the module's memory both taken out of the closed profile: the module writes this build's set where
+  // there was none, not over the one the record kept as Nulavio's.
+  removedSet: await checked({ [SHARE]: true }, ...lastStart),
+  // A set and the module's memory forged in the closed profile: the module writes this build's set over the forged
+  // one, not over the one the record kept as Nulavio's.
+  forgedOverwritten: await checked({ [SHARE]: true, [OVERRIDES]: "+JSDateTimeUTC", [WRITTEN]: "+JSDateTimeUTC" }, ...lastStart),
+  // The same forgery with the same build: the module writes back the very set the record kept, so the check reads no
+  // change, as before #654 (an edit undone before the check reads the prefs leaves nothing to report).
+  sameBuildOverwritten: await checked(
+    { [SHARE]: true, [OVERRIDES]: "+JSDateTimeUTC", [WRITTEN]: "+JSDateTimeUTC" },
+    { [SHARE]: true, [OVERRIDES]: CURRENT },
+    ownCurrent
+  ),
 };
 // The Guard's filter alone: from exactly the record's own value to exactly the one held now, and only for that setting.
 const finding = { id: `pref-changed:${OVERRIDES}`, kind: "pref-changed", key: OVERRIDES, before: EARLIER, after: CURRENT };

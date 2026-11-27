@@ -355,14 +355,44 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
         self.assertEqual(case["reported"], case["findings"])
         self.assertEqual(len(case["reported"]), 1)
 
-    def test_a_forged_set_the_shell_writes_over_leaves_only_its_own_update(self):
+    def test_a_forged_set_the_shell_writes_over_is_still_reported(self):
         # A set and the module's memory forged on a profile whose record kept the earlier set as Nulavio's: the module
-        # writes the build's set over both, so the profile ends as after Nulavio's own update, with nothing of the
-        # forgery left, and the one change since the record is that update.
+        # writes the build's set over both, so the profile ends as after Nulavio's own update. The module did not write
+        # over the set the record kept, though, so the change since the record is not its own (OpenCodeReview on #825,
+        # round 3; the same as before #654).
         case, own = self.out["forgedOverwritten"], self.out["ownUpdate"]
         self.assertEqual((case["set"], case["written"]), (own["set"], own["written"]))
         self.assertEqual(case["findings"], own["findings"])
+        self.assertEqual(case["reported"], case["findings"])
+        checked = self.out["checked"]["forgedOverwritten"]
+        self.assertEqual(checked["reported"], [self.earlier_to_current()])
+        self.assertEqual(checked["after"]["pending"], [self.earlier_to_current()])
+
+    def earlier_to_current(self):
+        return ["privacy.fingerprintingProtection.overrides", "+CanvasRandomization,+JSDateTimeUTC", self.out["current"]]
+
+    def test_the_build_set_copied_into_the_closed_profile_is_still_reported(self):
+        # OpenCodeReview on #825 (round 3): this build's set and the module's memory of it copied into the closed
+        # profile, over the set the record kept as Nulavio's. The module finds its set there and writes nothing; it
+        # holds that set as its own, but it did not make the change since the record.
+        case = self.out["checked"]["copiedSet"]
+        self.assertEqual(case["atCheck"]["owned"], {"privacy.fingerprintingProtection.overrides": self.out["current"]})
+        self.assertEqual(case["reported"], [self.earlier_to_current()])
+        self.assertEqual(case["after"]["pending"], [self.earlier_to_current()])
+
+    def test_the_set_taken_out_of_the_closed_profile_is_still_reported(self):
+        # The set and the module's memory both taken out while the browser was closed: the module writes the build's
+        # set where there was none, not over the one the record kept as Nulavio's.
+        case = self.out["checked"]["removedSet"]
+        self.assertEqual(case["reported"], [self.earlier_to_current()])
+
+    def test_an_edit_the_shell_undoes_with_the_same_build_leaves_no_change(self):
+        # The same build: the module writes back the very set the record kept, so the Guard reads no change and has
+        # nothing to report, as before #654. The Guard reports what changed since its record, not an edit that is gone
+        # by the time it reads the prefs.
+        case = self.out["checked"]["sameBuildOverwritten"]
         self.assertEqual(case["reported"], [])
+        self.assertEqual(case["atCheck"]["prefs"]["privacy.fingerprintingProtection.overrides"], self.out["current"])
 
     def test_only_the_shells_memory_forged_does_not_hide_the_replacement_of_a_persons_set(self):
         # OpenCodeReview on #825: the person's own set is in the record; only the module's memory of its set, a
