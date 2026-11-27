@@ -255,6 +255,7 @@ TEXT = {
         "first": "Pessoal",
         "work": "Trabalho",
         "bank": "Bancos",
+        "engine": "Busca local de teste",
         "pages": {
             "/receitas": ("Receitas da semana", "Sopa de abóbora, arroz de forno e salada de grão-de-bico."),
             "/viagem": ("Roteiro de viagem", "Três dias na serra: trilha no sábado, feira no domingo."),
@@ -269,7 +270,7 @@ TEXT = {
                 "Histórico, logins e cookies do «{work}» ficam separados dos do «{first}».",
             ],
             "link-routed": [
-                "No perfil «{first}», cola-se na barra o endereço da intranet do trabalho.",
+                "No perfil «{first}», digita-se o endereço da intranet do trabalho.",
                 "Uma regra manda esse site para o perfil «{work}».",
                 "O link abre na janela do «{work}», e a faixa diz que foi a sua regra.",
             ],
@@ -285,6 +286,7 @@ TEXT = {
         "first": "Personal",
         "work": "Work",
         "bank": "Banking",
+        "engine": "Local test search",
         "pages": {
             "/recipes": ("Recipes for the week", "Pumpkin soup, baked rice and a chickpea salad."),
             "/trip": ("Trip plan", "Three days in the hills: a hike on Saturday, the market on Sunday."),
@@ -299,7 +301,7 @@ TEXT = {
                 "“{work}” keeps its history, logins and cookies apart from “{first}”.",
             ],
             "link-routed": [
-                "In the “{first}” profile, the work intranet's address is pasted into the bar.",
+                "In the “{first}” profile, the work intranet's address is typed.",
                 "A rule sends that site to the “{work}” profile.",
                 "The link opens in the “{work}” window, and the band says the rule did it.",
             ],
@@ -324,6 +326,7 @@ PRELUDE = (
     f'const R = ChromeUtils.importESModule("{SHELL}/NulavioRouting.sys.mjs").NulavioRouting;'
     f'const V = ChromeUtils.importESModule("{SHELL}/NulavioVault.sys.mjs").NulavioVault;'
     f'const L = ChromeUtils.importESModule("{SHELL}/NulavioLayout.sys.mjs").NulavioLayout;'
+    f'const S = ChromeUtils.importESModule("{SHELL}/NulavioSearch.sys.mjs").NulavioSearch;'
     'const SPS = ChromeUtils.importESModule("resource:///modules/profiles/SelectableProfileService.sys.mjs")'
     ".SelectableProfileService;"
 )
@@ -482,7 +485,7 @@ PREFS_DOC = "const d = gBrowser.selectedBrowser.contentDocument;"
 
 def prefs_point(m, element_js: str) -> tuple[float, float]:
     """Centre of an element of the Settings page (a parent-process page, read through the chrome), in device pixels."""
-    r = m.chrome(PREFS_DOC + f"const e = {element_js}; e.scrollIntoView({{block: 'center'}});"
+    r = m.chrome(PREFS_DOC + f"const e = {element_js};"
                  "const r = e.getBoundingClientRect(); const o = gBrowser.selectedBrowser.getBoundingClientRect();"
                  "return [o.x + r.x + r.width / 2, o.y + r.y + r.height / 2, devicePixelRatio];")  # fmt: skip
     return (r[0] * r[2], r[1] * r[2])
@@ -496,24 +499,31 @@ def content_point(m, element_js: str) -> tuple[float, float]:
     return ((outer[0] + inner[0]) * outer[2], (outer[1] + inner[1]) * outer[2])
 
 
-def paste_into_urlbar(m, text: str) -> None:
-    """The address put on the clipboard and pasted into the address bar, then Enter as a trusted key. Typing it key by
-    key would show the search row of the profile's engine for the first keys (a third-party service, alone)."""
-    m.chrome(
-        "Cc['@mozilla.org/widget/clipboardhelper;1'].getService(Ci.nsIClipboardHelper).copyString(arguments[0]);"
-        "gURLBar.focus(); gURLBar.select(); goDoCommand('cmd_paste');",
-        [text],
-    )
-    if m.chrome("return gURLBar.value;") not in (text, text.removeprefix("http://")):
-        raise RuntimeError("the address was not pasted")
-
-
-def press_enter_in_urlbar(m) -> None:
-    m.chrome(
+def type_into_urlbar(rec: Recorder, m, text: str) -> None:
+    """Trusted keys into the address bar (nsITextInputProcessor, as Firefox's own tests type), a frame per key."""
+    m.chrome("gURLBar.focus(); gURLBar.select();")
+    key = (
         "const tip = Cc['@mozilla.org/text-input-processor;1'].createInstance(Ci.nsITextInputProcessor);"
         "if (!tip.beginInputTransactionForTests(window)) throw new Error('no input transaction');"
-        "const e = new KeyboardEvent('', {key: 'Enter', code: 'Enter', keyCode: 13}); tip.keydown(e); tip.keyup(e);"
+        "const ch = arguments[0];"
+        "const e = ch === '\\n' ? new KeyboardEvent('', {key: 'Enter', code: 'Enter', keyCode: 13})"
+        " : new KeyboardEvent('', {key: ch});"
+        "tip.keydown(e); tip.keyup(e);"
     )
+    for ch in text:
+        m.chrome(key, [ch])
+        rec.shot(m)
+        rec.hold(TYPE_STEP)
+    m.chrome(key, ["\n"])
+
+
+def local_search_engine(m, locale: str, fx: Fixtures) -> None:
+    """The profile's search engine set to a local test engine on loopback. The address bar shows the default engine's
+    icon and offers to search with it while an address is typed; with a real provider that would show one third-party
+    service alone (#173), so the scene uses a fixture engine, as test_search does."""
+    name = TEXT[locale]["engine"]
+    added = chrome_async(m, "return S.addCustom({name: args[0], url: args[1]});", name, fx.url("/search?q=%s"))
+    chrome_async(m, "await S.setDefault(args[0]);", added)
 
 
 def type_into_field(rec: Recorder, m, element: str, text: str) -> None:
@@ -600,7 +610,9 @@ class Scenes:
         return [c.format(first=t["first"], work=t["work"], bank=t["bank"]) for c in t["cap"][scene]]
 
     def open_profiles_pane(self, m) -> None:
-        """Settings at its Profiles pane in the selected tab, as Settings › Profiles shows it."""
+        """Settings at its Profiles pane in the selected tab, as Settings › Profiles shows it, scrolled so that the list
+        of profiles ends at the bottom: the new profile's search choice below it names providers, and a crop of that
+        list would show some of them and not the others (#173)."""
         m.navigate("about:preferences#nulavioProfiles")
         wait(
             lambda: m.chrome(PREFS_DOC + "return !!d?.querySelector('#nulavio-profile-list moz-box-item.nulavio-profile');"),
@@ -608,6 +620,8 @@ class Scenes:
             "the profiles pane",
         )
         time.sleep(0.8)
+        m.chrome(PREFS_DOC + "d.getElementById('nulavio-profile-new-template').scrollIntoView({block: 'end'});")
+        time.sleep(0.3)
 
     @staticmethod
     def row_button(name: str, action: str) -> str:
@@ -647,6 +661,7 @@ class Scenes:
         others.append(child)
         wait(lambda: t["work"] in " ".join(band(child)), 30, "the work profile's band")
         window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
+        rec.notes.append("the work profile was created by the script (NulavioProfiles.create, template work) before the scene")
         rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["work"], time.monotonic() - started)
         rec.caption(cap[1])
@@ -677,6 +692,7 @@ class Scenes:
         window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
         time.sleep(1.5)  # its profile service reads the group's rules
         window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
+        local_search_engine(m, locale, fx)
         target = fx.url("/intranet", host="localhost")  # typed in full: a bare host:port is not always read as an address
         rec.caption(cap[0])
         rec.shot(m)
@@ -685,10 +701,7 @@ class Scenes:
         rec.click()
         rec.shot(m)
         rec.highlight()
-        paste_into_urlbar(m, target)
-        rec.shot(m)
-        rec.hold(1.2)
-        press_enter_in_urlbar(m)
+        type_into_urlbar(rec, m, target)
         rec.caption(cap[1])
         started = time.monotonic()
         rec.watch(m, 1.0)
@@ -714,12 +727,14 @@ class Scenes:
         rec.move(chrome_point(child, "document.querySelector('#nulavio-band-widget .nv-band-route')"), 0.9)
         rec.shot(child)
         rec.hold(2.6)
+        rec.notes.append("the work profile was created by the script (NulavioProfiles.create, template work) before the scene")
         rec.notes.append("the routing rule (localhost opens in the work profile) was added by the script before the scene")
+        rec.notes.append("the personal profile's search engine was set by the script to a local test engine on loopback")
         rec.notes.append("the work profile was started by the script before the scene")
         if locale == "pt-BR":
-            return (f"Na tela: no perfil «{t['first']}», o endereço «{target}» é colado na barra; ele abre na janela do"
+            return (f"Na tela: no perfil «{t['first']}», o endereço «{target}» é digitado; ele abre na janela do"
                     f" «{t['work']}», cuja faixa diz «{said}».")  # fmt: skip
-        return (f"On screen: in the “{t['first']}” profile, the address “{target}” is pasted into the bar; it opens in the"
+        return (f"On screen: in the “{t['first']}” profile, the address “{target}” is typed; it opens in the"
                 f" “{t['work']}” window, whose band says “{said}”.")  # fmt: skip
 
     def protected_unlocks(self, rec: Recorder, s, fx: Fixtures, locale: str, others: list) -> str:
@@ -790,6 +805,10 @@ class Scenes:
         others.append(child)
         wait(lambda: t["bank"] in " ".join(band(child)), 30, "the protected profile's band")
         window_ready(child, [fx.url(p) for p in BANK_PAGES[locale]])
+        rec.notes.append(
+            "the protected profile was created by the script (NulavioVault.createProtected, an artificial password), then"
+            " unlocked and locked again once to write its recording prefs inside its volume"
+        )
         rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["bank"], time.monotonic() - started)
         rec.caption(cap[2])
