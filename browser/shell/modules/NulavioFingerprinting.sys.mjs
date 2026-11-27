@@ -245,27 +245,27 @@ function applyAccessibility(changed) {
     Services.prefs.clearUserPref(OVERRIDES);
   } else if (next !== user) {
     Services.prefs.setStringPref(OVERRIDES, next);
-    if (user !== null && !own) {
-      ownWrite(user, next);
-    }
   }
   // Remembered only for a value made from the build's default.
   if (next !== null && !own) {
     Services.prefs.setStringPref(WRITTEN, next);
+    ownValue(next);
   } else {
     Services.prefs.clearUserPref(WRITTEN);
+    ownValue(null);
   }
 }
 
-/** Tell the Guard that this module replaced its own earlier set (`before`, the one it remembered writing) with
-    `after`: at a start, with a build whose default changed, that is Nulavio's change, not one made outside the
-    browser (#654). Only that: a set it did not write (the person's, or one put in the closed profile) is not
-    told, even when this module then takes the three entries out of it, nor is a set it writes where there was
-    none (the setting turned on). The Guard goes by the two values, not by the name. A failure costs a finding
-    in the Guard, never the set. */
-function ownWrite(before, after) {
+/** Tell the Guard which set is this module's own now (`value`, made from the build's default; null: none). The Guard
+    keeps it in its record, and at the next start leaves out only a change from exactly that set to exactly the one
+    this module then holds as its own: with a build whose default changed, Nulavio's own rewrite (#654). What this
+    module takes for its own here goes by its memory in the profile, which a program can change while the browser is
+    closed; the Guard goes by its record instead, so a set it did not hold as Nulavio's (the person's, or one put in
+    the closed profile) is still reported, also when this module then writes the build's set over it. A failure costs
+    a finding in the Guard, never the set. */
+function ownValue(value) {
   try {
-    lazy.NulavioGuard.ownPrefWrite(OVERRIDES, before, after);
+    lazy.NulavioGuard.ownPrefValue(OVERRIDES, value);
   } catch (e) {
     console.error("Nulavio fingerprinting", e);
   }

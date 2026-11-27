@@ -709,8 +709,10 @@ class GuardTest(unittest.TestCase):
     def test_07_the_shells_own_start_up_update_of_the_fingerprinting_set_is_not_reported(self):
         """#654: with "let sites see my motion and contrast preferences" on, the Shell writes the engine's set again
         from the build's default at each start (NulavioFingerprinting's applyAccessibility). After a build whose
-        default changed, that is Nulavio's own change, not one made outside the browser. A set changed while the
-        browser was closed is still reported, also when the Shell then takes the three entries out of it."""
+        default changed, that is Nulavio's own change, not one made outside the browser: the Guard's record keeps the
+        set the Shell held as its own. A set changed while the browser was closed is still reported, also when the
+        Shell then takes the three entries out of it, and so is a person's set the Shell writes over because only its
+        memory of its set (a setting the Guard does not watch) was changed in the closed profile to name it."""
         share, overrides, written = (
             "nulavio.fingerprinting.shareAccessibility",
             "privacy.fingerprintingProtection.overrides",
@@ -719,41 +721,48 @@ class GuardTest(unittest.TestCase):
         finding = f"pref-changed:{overrides}"
         record = self.profile / "nulavio-guard.json"
         in_record = lambda: json.loads(record.read_text())["snapshot"]["prefs"].get(overrides)  # noqa: E731
+        owned = lambda: json.loads(record.read_text()).get("owned", {}).get(overrides)  # noqa: E731
         user_set = f"return Services.prefs.prefHasUserValue('{overrides}') ? Services.prefs.getStringPref('{overrides}') : null;"
         reported = lambda: {f["id"]: f for f in self.guard("return (await G.check()).findings;")}.get(finding)  # noqa: E731
 
         def clean_up():
+            if self.session.client is None:
+                return  # a start failed: no browser to clean up, and the error is the start's
             self.m.chrome("for (const pref of arguments) Services.prefs.clearUserPref(pref);", [share, overrides, written])
             if any(f["id"] == finding for f in self.guard("return G.findings();")):
                 self.guard("await G.resolve(args[0], 'keep');", finding)
 
         self.addCleanup(clean_up)
+        self.guard("await G.check();")  # the start-up check is done and the record exists, also when this test runs alone
         # The setting on, in the browser: the Shell writes the set from this build's default.
         self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [share])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(user_set) is not None, 5), "the Shell wrote no set")
         current = self.m.chrome(user_set)
         items = current.split(",")
         self.assertGreaterEqual(len(items), 3, current)
-        # As an earlier build left it: the Shell's own set, made from a default with one entry fewer. Written in the
-        # browser, so the record follows it (a change made in the browser is not reported).
+        self.assertTrue(harness.wait_until(lambda: owned() == current, timeout=20), owned())  # the Shell told its set
+        # As an earlier build left it: the Shell's own set, made from a default with one entry fewer, in the profile
+        # and in its memory, and the record keeping it as Nulavio's (what that build's Shell told the Guard). Written
+        # in the browser, so the record follows it (a change made in the browser is not reported).
         earlier = ",".join(items[:-1])
         self.m.chrome(
             "Services.prefs.setStringPref(arguments[0], arguments[2]); Services.prefs.setStringPref(arguments[1], arguments[2]);",
             [written, overrides, earlier],
         )
-        self.assertTrue(harness.wait_until(lambda: in_record() == earlier, timeout=20), in_record())
+        self.guard("G.ownPrefValue(args[0], args[1]);", overrides, earlier)
+        self.assertTrue(harness.wait_until(lambda: (in_record(), owned()) == (earlier, earlier), timeout=20), record.read_text())
 
         # -- the next start, as with a build whose default changed: the Shell writes the set again, and says so --
         self.m = type(self).m = self.session.restart()
         self.assertEqual(self.m.chrome(user_set), current, "the Shell did not write the set again: nothing was tested")
         self.assertIsNone(reported())
-        self.assertTrue(harness.wait_until(lambda: in_record() == current, timeout=20), in_record())
+        self.assertTrue(harness.wait_until(lambda: (in_record(), owned()) == (current, current), timeout=20), record.read_text())
 
         # -- a set written into the closed profile, as a program does: reported --
-        def start_with(value: str) -> None:
+        def start_with(value: str, name: str = overrides) -> None:
             self.session.stop()
             with open(self.profile / "prefs.js", "a", encoding="utf-8") as prefs_js:
-                prefs_js.write(f"user_pref({json.dumps(overrides)}, {json.dumps(value)});\n")
+                prefs_js.write(f"user_pref({json.dumps(name)}, {json.dumps(value)});\n")
             self.m = type(self).m = self.session.restart()
 
         outside = ",".join(items[1:])
@@ -769,6 +778,16 @@ class GuardTest(unittest.TestCase):
         found = reported()
         self.assertIsNotNone(found, self.guard("return G.findings();"))
         self.assertEqual((found["before"], found["after"]), (outside, earlier))
+        self.guard("await G.resolve(args[0], 'keep');", finding)
+        self.assertTrue(harness.wait_until(lambda: (in_record(), owned()) == (earlier, None), timeout=20), record.read_text())
+
+        # -- the person's set, kept, and only the Shell's memory changed in the closed profile to name it: the Shell
+        # writes the build's set over the person's, and that is still reported (OpenCodeReview on #825) --
+        start_with(earlier, written)
+        self.assertEqual(self.m.chrome(user_set), current, "the Shell did not write its set: nothing was tested")
+        found = reported()
+        self.assertIsNotNone(found, self.guard("return G.findings();"))
+        self.assertEqual((found["before"], found["after"]), (earlier, current))
 
 
 def tearDownModule():

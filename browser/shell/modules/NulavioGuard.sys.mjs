@@ -186,14 +186,14 @@ function sortedJSON(value) {
 
 
 class Guard {
-  #state = null; // { snapshot, pending }
+  #state = null; // { snapshot, pending, expected, owned }
   #listening = false;
   #observer = null;
   #diskObserver = null;
   #barObserver = null;
   #bar = null; // { textFor(count, theOnlyFinding), button }
   #own = []; // prefs (names or "branch." prefixes) Nulavio itself changed at this start
-  #ownWrites = []; // { name, before, after }: a setting Nulavio itself rewrote at this start, from one value to another
+  #owned = {}; // { name: value }: the value of a setting that Nulavio itself holds as its own at this start (ownPrefValue)
   #timer = null;
   #checked = null;
   #wanted = false; // a look at the record was asked for while the start-up check was still at work
@@ -565,17 +565,17 @@ class Guard {
       const data = await IOUtils.readJSON(this.#recordPath);
       if (data?.schema === SCHEMA && data.snapshot && typeof data.snapshot === "object") {
         const expected = data.expected && typeof data.expected === "object" && !Array.isArray(data.expected) ? data.expected : {};
-        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [], expected };
+        return { snapshot: data.snapshot, pending: Array.isArray(data.pending) ? data.pending : [], expected, owned: Guard.ownedValues(data.owned) };
       }
     } catch {}
     return null;
   }
 
   async #save() {
-    const { snapshot, pending, expected = {} } = this.#state;
+    const { snapshot, pending, expected = {}, owned = {} } = this.#state;
     await IOUtils.writeJSON(
       this.#recordPath,
-      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected },
+      { schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected, owned },
       { tmpPath: `${this.#recordPath}.tmp` }
     );
     await IOUtils.setPermissions(this.#recordPath, 0o600).catch(() => {});
@@ -616,7 +616,7 @@ class Guard {
     const saved = await this.#load();
     const expected = await this.#heldUpdates(); // what the engine holds now, for the start after this one
     if (!saved) {
-      this.#state = { snapshot: now, pending: [], expected };
+      this.#state = { snapshot: now, pending: [], expected, owned: { ...this.#owned } };
       await this.#save();
       this.#lookAgainIfAsked();
       return { state: "first", findings: [] };
@@ -634,11 +634,11 @@ class Guard {
       Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed),
       this.#touched
     ).filter(f => f.kind !== "pref-changed" || !own(f.key));
-    const fresh = Guard.withoutOwnWrites(found, this.#ownWrites);
+    const fresh = Guard.withoutOwnValues(found, saved.owned, this.#owned);
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
-    this.#state = { snapshot: now, pending, expected };
+    this.#state = { snapshot: now, pending, expected, owned: { ...this.#owned } };
     await this.#save();
     this.#lookAgainIfAsked();
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
@@ -673,23 +673,42 @@ class Guard {
   }
 
   /**
-   * A setting Nulavio itself rewrote at this start, from `before` to `after` (its value in the profile, null for
-   * none), as the record keeps it. Not by name, as ownPrefChanges: only that very change is Nulavio's (#654). The
-   * fingerprinting module rewrites its own set at each start from the build's default, which can change between
-   * builds; a set changed while the browser was closed is not one it wrote, and stays reported.
+   * The value of a setting that Nulavio itself holds as its own at this start (null: none), kept in the record for the
+   * next start (#654). The fingerprinting module holds the set it makes from the build's default, and writes it again
+   * at each start; with a build whose default changed, that write is Nulavio's own. Only the record says which value
+   * was Nulavio's at the last start: never the profile at this one, which a program can change while the browser is
+   * closed (the module's own memory of its set included).
    */
-  ownPrefWrite(name, before, after) {
-    this.#ownWrites.push({ name: String(name), before: before ?? null, after: after ?? null });
+  ownPrefValue(name, value) {
+    const key = String(name);
+    if (Guard.ownedValues({ [key]: value })[key] === undefined) {
+      delete this.#owned[key];
+    } else {
+      this.#owned[key] = value;
+    }
+    if (this.#state) {
+      this.#state.owned = { ...this.#owned }; // a change in the session, or after the start-up check: kept at the next look
+      this.#scheduleRefresh();
+    }
+  }
+
+  /** The record's own values, as ownPrefValue keeps them: plain values by name, anything else left out. */
+  static ownedValues(owned) {
+    if (!owned || typeof owned !== "object" || Array.isArray(owned)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(owned).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value)));
   }
 
   /**
-   * Findings without the settings Nulavio itself rewrote (`writes`, from ownPrefWrite): a setting whose value went
-   * from what the record held to what it holds now by one of those writes. A setting the record held at another
-   * value (changed while the browser was closed, and then rewritten), or that holds another value now, is still
-   * reported.
+   * Findings without a setting Nulavio itself rewrote: one whose value went from exactly the value the record held as
+   * Nulavio's (`before`, the last start's ownPrefValue) to exactly the value Nulavio holds as its own now (`after`).
+   * Not by name, as ownPrefChanges. A setting the record held at another value, or not as Nulavio's (a person's own
+   * set, also when the module's memory was changed while the browser was closed to name it), or that holds another
+   * value now, is still reported.
    */
-  static withoutOwnWrites(findings, writes = []) {
-    const own = f => writes.some(w => w.name === f.key && w.before === f.before && w.after === f.after);
+  static withoutOwnValues(findings, before = {}, after = {}) {
+    const own = f => Object.hasOwn(before, f.key) && Object.hasOwn(after, f.key) && before[f.key] === f.before && after[f.key] === f.after;
     return findings.filter(f => f.kind !== "pref-changed" || !own(f));
   }
 
