@@ -89,10 +89,10 @@ O build em si roda num container descartável, limitado a 16 GiB de memória e d
 
 ```sh
 git clone https://github.com/nulavio/nulavio.git && cd nulavio
-scripts/build/build_nulavio.sh 160.0.1
+scripts/build/build_nulavio.sh 161.0
 ```
 
-O script confere os checksums assinados pela Mozilla antes de compilar qualquer coisa, aplica a [pilha de patches](browser/patches/series) e gera `nulavio-160.0.1.en-US.linux-x86_64.tar.xz`. Empacotamento, assinatura e o ensaio de release estão descritos em [build](docs/architecture/build.md) e na [política de atualização](docs/architecture/update-policy.md).
+O script confere os checksums assinados pela Mozilla antes de compilar qualquer coisa, aplica a [pilha de patches](browser/patches/series) e gera `nulavio-161.0.en-US.linux-x86_64.tar.xz`. Empacotamento, assinatura e o ensaio de release estão descritos em [build](docs/architecture/build.md) e na [política de atualização](docs/architecture/update-policy.md).
 
 ### Se você usava a prévia
 

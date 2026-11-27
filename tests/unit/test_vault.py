@@ -22,6 +22,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
+from child_env import child_env
 from nulavio_launcher.vault import sodium
 
 if not sodium.available():  # pragma: no cover - CI installs libsodium and sets NULAVIO_REQUIRE_SODIUM
@@ -141,7 +142,8 @@ class VaultTestCase(unittest.TestCase):
         tool.chmod(0o700)
         self.keyring_store = self.dir / "keyring.json"
         self.keyring_argv = self.dir / "keyring-argv.log"
-        env = {"NV_FAKE_KEYRING": str(self.keyring_store), "NV_FAKE_KEYRING_ARGV": str(self.keyring_argv)}
+        # The fake secret-tool is this Python, through its #! line.
+        env = child_env({"NV_FAKE_KEYRING": str(self.keyring_store), "NV_FAKE_KEYRING_ARGV": str(self.keyring_argv)})
         return Keyring(str(tool), env)
 
     def assert_locked(self, vault: Vault) -> None:
@@ -1094,7 +1096,7 @@ class CrashTest(VaultTestCase):
             [sys.executable, "-I", "-c", script],
             capture_output=True,
             timeout=60,
-            env={"PATH": os.environ.get("PATH", ""), "HOME": str(self.dir)},
+            env=child_env({"PATH": os.environ.get("PATH", ""), "HOME": str(self.dir)}),
         )
         self.assertLess(result.returncode, 0)
         for path in self.dir.rglob("*"):

@@ -228,25 +228,36 @@ class AssistantUiTest(unittest.TestCase):
     def view(self, which: str | None = None) -> dict:
         return self.panel(VIEW, which)
 
+    def panel_ready(self, which: str | None = None) -> bool:
+        try:
+            return self.panel("return document.documentElement?.dataset.ready === 'true';", which)
+        except AssertionError:
+            return False  # the panel's browser is still being created
+
     def wait_view(self, predicate, which: str | None = None, timeout: float = 20) -> dict:
-        found = harness.wait_until(lambda: (lambda v: v if predicate(v) else None)(self.view(which)), timeout)
-        self.assertTrue(found, self.view(which))
+        # The panel just opened (SidebarController.show) can still hold its browser's first about:blank: wait for its
+        # page, as show_sidebar does. Once it is ready, an error in VIEW still fails at once.
+        # The last view read is the failure's message: a panel that never got ready is said so, not read again.
+        last = {}
+
+        def poll():
+            if not self.panel_ready(which):
+                return None
+            last["view"] = view = self.view(which)
+            return view if predicate(view) else None
+
+        found = harness.wait_until(poll, timeout)
+        if not found:
+            self.fail(f"the side panel showed {last['view']}" if "view" in last else "the side panel never got ready")
         return found
 
     def show_sidebar(self, which: str | None = None, reload: bool = False) -> dict:
         show = f"const w = {WINDOW}; await w.SidebarController.show(args[0]); return w.SidebarController.currentID;"
         self.assertEqual(chrome_async(self.m, show, [SIDEBAR, which]), {"ok": SIDEBAR})
-
-        def ready():
-            try:
-                return self.panel("return document.documentElement?.dataset.ready === 'true';", which)
-            except AssertionError:
-                return False  # the panel's browser is still being created
-
-        self.assertTrue(harness.wait_until(ready, 20))
+        self.assertTrue(harness.wait_until(lambda: self.panel_ready(which), 20))
         if reload:
             self.panel("delete document.documentElement.dataset.ready; content.location.reload();", which)
-            self.assertTrue(harness.wait_until(ready, 20))
+            self.assertTrue(harness.wait_until(lambda: self.panel_ready(which), 20))
         return self.view(which)
 
     def select_new_tab(self, url: str) -> None:
