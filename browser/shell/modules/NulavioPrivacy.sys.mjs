@@ -142,6 +142,19 @@ const PREF_NEW_PROFILE = "nulavio.startpage.shellFirstTab";
 const MODE = { system: Ci.nsIDNSService.MODE_TRROFF, fallback: Ci.nsIDNSService.MODE_TRRFIRST, strict: Ci.nsIDNSService.MODE_TRRONLY };
 // The two settings a DNS choice writes; a policy that locks one of them leaves nothing to choose here.
 const DNS_PREFS = ["network.trr.mode", "network.trr.uri"];
+// Names the engine looks up with the computer's resolver even with encrypted DNS only (TRRService's excluded
+// domains): the person's or a policy's list, then the engine's own. "localhost" and "local" (every name ending in
+// .local), the engine's own default, are what the "encrypted only" option's note already names.
+const DNS_EXCLUSION_PREFS = Object.freeze(["network.trr.excluded-domains", "network.trr.builtin-excluded-domains"]);
+const DNS_EXCLUSIONS_NAMED = new Set(["localhost", "local"]);
+
+/** The excluded names beyond the ones the option's note names, as the engine reads the lists (comma-separated). */
+function dnsExclusions() {
+  const names = DNS_EXCLUSION_PREFS.flatMap(pref => Services.prefs.getStringPref(pref, "").split(","))
+    .map(name => name.trim().toLowerCase())
+    .filter(name => name && !DNS_EXCLUSIONS_NAMED.has(name));
+  return [...new Set(names)];
+}
 
 /** An https:// resolver address without credentials; returns it normalised or throws. */
 export function checkResolverUri(raw) {
@@ -182,13 +195,18 @@ class Privacy {
     }
     const resolver = resolverUri ? (DNS_PROVIDERS.find(p => p.uri === resolverUri)?.id ?? "custom") : null;
     const locked = DNS_PREFS.some(name => Services.prefs.prefIsLocked(name));
-    return { choice, provider, uri, encryptedNow, resolver, resolverUri, locked, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
+    // Names the computer's resolver still answers under encrypted DNS. Not listed, because the engine keeps no list
+    // of them a page can read: names in the computer's hosts file, and the resolver's own name (R40).
+    const excluded = dnsExclusions();
+    return { choice, provider, uri, encryptedNow, resolver, resolverUri, locked, excluded, chosen: Services.prefs.getBoolPref(PREF_DNS_CHOSEN, false), providers: DNS_PROVIDERS };
   }
 
   /**
    * Apply the user's choice. "system": the computer's resolver (no encrypted DNS). "fallback":
    * encrypted DNS, the system's resolver if it fails. "strict": encrypted DNS only; sites do not
-   * load while the resolver cannot be reached.
+   * load while the resolver cannot be reached. In both encrypted choices the engine still asks the system's
+   * resolver for excluded names (`dns().excluded`, localhost and .local), names in the hosts file and the
+   * resolver's own name.
    */
   setDns({ choice, provider, uri } = {}) {
     if (!Object.hasOwn(MODE, choice)) {

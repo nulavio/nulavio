@@ -343,6 +343,77 @@ class VaultMethodsPageErrorsTest(unittest.TestCase):
         self.assertNotIn("refresh", locale("en")["methodsMethodGone"]["message"].lower())
 
 
+class DnsExclusionsTest(unittest.TestCase):
+    """#626: under "Encrypted DNS only" the engine still asks the computer's resolver for the names excluded from
+    encrypted lookups (TRRService::IsExcludedFromTRR, even in MODE_TRRONLY): localhost and .local by default, the
+    names the person or a policy excluded, names in the hosts file, and the resolver's own name. The option said
+    "never"; it now names the exceptions, Settings lists the excluded names, and R40 records them all."""
+
+    PANES = SHELL / "settings" / "native" / "panes.mjs"
+    PRIVACY = SHELL / "modules" / "NulavioPrivacy.sys.mjs"
+    EXCLUSION_PREFS = ("network.trr.excluded-domains", "network.trr.builtin-excluded-domains")
+
+    def test_the_encrypted_only_note_names_the_exceptions_in_both_languages(self):
+        words = {
+            "en": ("never", "localhost", ".local", "administrator"),
+            "pt_BR": ("nunca", "localhost", ".local", "administrador"),
+        }
+        for name, (never, *named) in words.items():
+            with self.subTest(locale=name):
+                note = locale(name)["dnsStrictNote"]["message"]
+                self.assertNotIn(never, note.lower(), "the computer's resolver still answers some names")
+                for word in named:
+                    self.assertIn(word, note)
+                # What fails closed is still said: sites do not load while the resolver cannot be reached.
+                self.assertIn("login" if name == "pt_BR" else "sign-in", note)
+
+    def test_the_excluded_names_line_exists_in_both_languages_with_its_placeholders(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                self.assertEqual(set(messages["dnsExcluded"]["placeholders"]), {"names"})
+                self.assertEqual(set(messages["dnsExcludedMore"]["placeholders"]), {"names", "count"})
+                for key in ("dnsExcluded", "dnsExcludedMore"):
+                    self.assertIn("$NAMES$", messages[key]["message"])
+                self.assertIn("$COUNT$", messages["dnsExcludedMore"]["message"])
+
+    def test_the_module_reads_both_exclusion_lists_and_returns_them(self):
+        text = self.PRIVACY.read_text(encoding="utf-8")
+        listed = re.search(r"const DNS_EXCLUSION_PREFS = Object\.freeze\(\[([^\]]*)\]\)", text)
+        self.assertIsNotNone(listed)
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed.group(1))), self.EXCLUSION_PREFS)
+        self.assertIn('new Set(["localhost", "local"])', text)  # the two the option's note names
+        self.assertRegex(text, r"return \{[^}]*\bexcluded,")
+
+    def test_the_settings_pane_shows_the_names_and_follows_the_mode_in_effect(self):
+        text = self.PANES.read_text(encoding="utf-8")
+        self.assertIn('msg("dnsExcluded", shown)', text)
+        self.assertIn('msg("dnsExcludedMore", shown,', text)
+        self.assertIn('description: [dnsSays(), dnsExcludedSays()].filter(Boolean).join(" ")', text)
+        observed = re.search(r"for \(const pref of \[([^\]]*)\]\) \{\s*Services\.prefs\.addObserver\(pref, dns\.refresh\)", text)
+        self.assertIsNotNone(observed)
+        for pref in ("network.trr.mode", "network.trr.uri", *self.EXCLUSION_PREFS):
+            self.assertIn(f'"{pref}"', observed.group(1))
+        # The engine's own DNS setting re-reads on these two; a mode the roll-out changes changes no pref here.
+        topics = re.search(r'for \(const topic of \[([^\]]*)\]\) \{\s*Services\.obs\.addObserver\(dns\.refresh, topic\);'
+                           r'\s*stops\.push\(\(\) => Services\.obs\.removeObserver\(dns\.refresh, topic\)\);', text)  # fmt: skip
+        self.assertIsNotNone(topics)
+        self.assertEqual(re.findall(r'"([^"]+)"', topics.group(1)), ["network:trr-mode-changed", "network:trr-confirmation"])
+
+    def test_r40_lists_every_exception(self):
+        row = next(line for line in (ROOT / "docs" / "security" / "residual-risks.md").read_text(encoding="utf-8").splitlines()
+                   if line.startswith("| R40 |"))  # fmt: skip
+        for named in (
+            *self.EXCLUSION_PREFS,
+            "`.local`",
+            "hosts file",
+            "resolver's own host name",
+            "network.trr.bootstrapAddr",
+            "#626",
+        ):
+            self.assertIn(named, row)
+
+
 class FailureAnnouncementsTest(unittest.TestCase):
     """#546: a temporary window that cannot be launched after its profile was made, and a link that cannot be written to
     the clipboard, are announced as what they are, by the module itself so every entry point says the same."""
