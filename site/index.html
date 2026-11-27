@@ -88,15 +88,17 @@
 </div>
 </header>
 <main id="main">
+<div class="route">
 <section class="hero" aria-labelledby="hero-h">
 <div class="wrap hero-grid">
+<span class="trail origin" aria-hidden="true"><i></i><i></i><i></i></span>
 <div class="hero-text" itemscope itemtype="https://schema.org/SoftwareApplication" itemid="https://nulavio.net/#software">
 <meta itemprop="name" content="Nulavio">
 <meta itemprop="applicationCategory" content="BrowserApplication">
 <meta itemprop="operatingSystem" content="Linux">
 <meta itemprop="inLanguage" content="pt-BR">
 <link itemprop="url" href="https://nulavio.net/">
-<p class="kicker"><span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>Alpha para Fedora e Ubuntu · <a href="/baixar/">Baixar</a></p>
+<p class="kicker">Alpha para Fedora e Ubuntu · <a href="/baixar/">Baixar</a></p>
 <h1 id="hero-h"><span>A web é sua.</span> <span class="mine">Seus dados também.</span></h1>
 <p class="lead" itemprop="description">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
 <form class="join" action="/api/waitlist" method="post">
@@ -110,39 +112,13 @@
 <p class="join-note">Um único e-mail, quando chegar a sua vez. <a href="/lista/#data">O que guardamos</a></p>
 </form>
 </div>
-<div class="hero-visual">
-<div class="win" data-theme="dark" role="img" aria-label="Janela do Nulavio no perfil Pessoal, protegido, com as abas na lateral. A página de boas-vindas diz: você já começa protegido. Proteção contra rastreamento em todas as janelas, somente HTTPS em todas as janelas, filtro de conteúdo uBlock Origin ativo, e nada é enviado ao Nulavio.">
-<div class="win-bar">
-<span class="win-band"><span class="tile">P</span><b>Pessoal</b><span class="meta"><svg class="ico"><use href="#i-lock"/></svg>Protegido</span></span>
-<span class="win-nav"><svg class="ico"><use href="#i-sidebar"/></svg><svg class="ico"><use href="#i-back"/></svg><svg class="ico"><use href="#i-reload"/></svg></span>
-<span class="win-url"><svg class="ico"><use href="#i-shield"/></svg><span>Pesquise com DuckDuckGo ou digite um endereço</span></span>
-<span class="win-tools"><svg class="ico"><use href="#i-ext"/></svg><svg class="ico"><use href="#i-menu"/></svg></span>
-</div>
-<div class="win-main">
-<div class="win-side">
-<span class="tab tab-on"><img src="/assets/nulavio-symbol.svg" alt="" width="14" height="16">Nova aba</span>
-<span class="tab"><svg class="ico"><use href="#i-globe"/></svg>Notas da reunião</span>
-<span class="tab"><svg class="ico"><use href="#i-globe"/></svg>Documentação</span>
-<span class="tab"><svg class="ico"><use href="#i-plus"/></svg>Nova aba</span>
-<span class="side-foot"><svg class="ico"><use href="#i-star"/></svg><svg class="ico"><use href="#i-clock"/></svg><svg class="ico"><use href="#i-key"/></svg><svg class="ico"><use href="#i-sliders"/></svg></span>
-</div>
-<div class="win-page">
-<div class="nt-search"><svg class="ico"><use href="#i-search"/></svg>Pesquisar com DuckDuckGo</div>
-<div class="nt-card">
-<div class="nt-title"><img src="/assets/nulavio-symbol.svg" alt="" width="14" height="16">Boas-vindas ao Nulavio</div>
-<p>Você já começa protegido. Tudo aqui pode ser mudado depois.</p>
-<ul class="nt-checks">
-<li><svg class="ico"><use href="#i-check"/></svg>Proteção contra rastreamento: em todas as janelas</li>
-<li><svg class="ico"><use href="#i-check"/></svg>Somente HTTPS: em todas as janelas</li>
-<li><svg class="ico"><use href="#i-check"/></svg>Filtro de conteúdo: uBlock Origin {{ubo}} ativo</li>
-<li><svg class="ico"><use href="#i-check"/></svg>Nada é enviado ao Nulavio</li>
-</ul>
-<div class="nt-actions"><b>Começar</b><span>Pular</span></div>
-</div>
-</div>
-</div>
-</div>
-</div>
+<figure class="closeup">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/window-crop-pt-BR-dark.webp" {{wh:window-crop-pt-BR-dark.webp}}>
+<img class="shot" src="/assets/shots/window-crop-pt-BR-light.webp" {{wh:window-crop-pt-BR-light.webp}} alt="O canto superior esquerdo da janela do Nulavio, em tamanho real. A faixa mostra o ícone de pasta de trabalho em azul-claro, o nome Trabalho e um cadeado com a palavra Protegido; abaixo, a barra de endereço com 127.0.0.1 e a lista vertical com três abas: Notas da reunião, selecionada, Planilha de horas e Documentação." loading="eager" fetchpriority="high">
+</picture>
+<figcaption>O canto da janela, em tamanho real. A faixa diz de quem é a janela, «Trabalho», e como ela está, «Protegido». <span class="prov">commit {{shot:window-crop-pt-BR-light.webp}} · build {{buildid}} · Firefox {{shots_firefox}}</span></figcaption>
+</figure>
 </div>
 </section>
 <section class="proof" aria-label="O Nulavio em números">
@@ -171,7 +147,7 @@
 <div class="panel" role="img" aria-label="Painel do site jornal.example: conexão segura e 35 itens bloqueados nesta página, entre anúncios, cookies entre sites, rastreadores de redes sociais e coletores de impressão digital. A proteção neste site está ligada.">
 <div class="panel-head"><svg class="ico"><use href="#i-shield"/></svg><b>jornal.example</b><span class="end">Conexão segura</span></div>
 <ul class="rows">
-<li><span class="grow">Anúncios<small>uBlock Origin</small></span><span class="count">21 bloqueados</span></li>
+<li><span class="grow">Anúncios<small>uBlock Origin {{ubo}}</small></span><span class="count">21 bloqueados</span></li>
 <li><span class="grow">Cookies entre sites</span><span class="count">9 bloqueados</span></li>
 <li><span class="grow">Rastreadores de redes sociais</span><span class="count">3 bloqueados</span></li>
 <li><span class="grow">Coletores de impressão digital</span><span class="count">2 bloqueados</span></li>
@@ -184,6 +160,23 @@
 <div class="feature-text">
 <h2 id="profiles-h">Trabalho, banco e vida pessoal, cada um no seu perfil</h2>
 <p>Cada perfil tem os próprios logins, cookies, histórico e extensões. Você diz uma vez onde cada site abre, e o Nulavio leva cada link ao perfil certo: os que chegam de outros aplicativos, os que você digita e os que clica nas páginas.</p>
+<figure class="bands">
+<ul>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-pt-BR-dark.webp" {{wh:band-personal-pt-BR-dark.webp}}>
+<img src="/assets/shots/band-personal-pt-BR-light.webp" {{wh:band-personal-pt-BR-light.webp}} alt="Faixa do Nulavio no estado Pessoal, sem senha." loading="lazy" decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-work-pt-BR-dark.webp" {{wh:band-work-pt-BR-dark.webp}}>
+<img src="/assets/shots/band-work-pt-BR-light.webp" {{wh:band-work-pt-BR-light.webp}} alt="Faixa do Nulavio no estado Trabalho, protegido." loading="lazy" decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-temporary-seal-pt-BR-dark.webp" {{wh:band-temporary-seal-pt-BR-dark.webp}}>
+<img src="/assets/shots/band-temporary-seal-pt-BR-light.webp" {{wh:band-temporary-seal-pt-BR-light.webp}} alt="Faixa do Nulavio no perfil Temporário: apagado ao fechar." loading="lazy" decoding="async">
+</picture></li>
+</ul>
+<figcaption>A faixa em três estados, recortada de janelas reais. O texto de cada uma foi lido da faixa no momento da captura. <span class="prov">commit {{shot:band-work-pt-BR-light.webp}} · build {{buildid}} · Firefox {{shots_firefox}}</span></figcaption>
+</figure>
 <ul class="points">
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Troca de perfil em um clique, com cor e nome sempre à vista</li>
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Perfil temporário: some do disco quando você fecha a janela</li>
@@ -203,6 +196,60 @@
 <div class="chips"><span class="chip"><span class="tile tile-violet">Q</span>Pesquisa</span><span class="chip chip-temp">Temporário · apagado ao fechar</span></div>
 </div>
 </div>
+<ol class="steps" aria-label="Cenas gravadas">
+<li class="step">
+<h3>Um perfil abre na sua própria janela</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/profile-opens-pt-BR-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/profile-opens-pt-BR-poster.webp" width="1280" height="800" alt="Em Configurações › Perfis, um clique em Abrir no perfil Trabalho abre a janela do Trabalho, com a faixa «Trabalho · Sem senha»." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>Ver a cena inteira <span class="meta">{{clip_s:profile-opens}} s, sem som, com legendas</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/profile-opens-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um perfil abre na sua própria janela">
+<source src="/assets/clips/profile-opens-pt-BR.webm" type="video/webm">
+<source src="/assets/clips/profile-opens-pt-BR.mp4" type="video/mp4">
+<track kind="captions" srclang="pt-BR" label="Português" src="/assets/clips/profile-opens-pt-BR.vtt" default>
+</video>
+<p class="transcript">{{clip_said:profile-opens}}</p>
+</details>
+<figcaption>
+<p class="said">Abrir «Trabalho» abre uma janela só dele, com a cor e o nome do perfil na faixa.</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/profile-opens-pt-BR-poster.webp" width="1280" height="800" alt="" loading="lazy" decoding="async">
+<p>Detalhe da mesma captura, em tamanho real</p>
+</div>
+<p class="prov">{{clip:profile-opens}}</p>
+</figcaption>
+</figure>
+</li>
+<li class="step">
+<h3>Um link vai ao perfil certo</h3>
+<figure class="scene scene-rule">
+<picture class="arrive">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/link-routed-pt-BR-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/link-routed-pt-BR-poster.webp" width="1280" height="800" alt="No perfil Pessoal, digita-se o endereço da intranet do trabalho; ele abre na janela do Trabalho, cuja faixa diz «Aberto pela sua regra · Mudar»." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>Ver a cena inteira <span class="meta">{{clip_s:link-routed}} s, sem som, com legendas</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/link-routed-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um link vai ao perfil certo">
+<source src="/assets/clips/link-routed-pt-BR.webm" type="video/webm">
+<source src="/assets/clips/link-routed-pt-BR.mp4" type="video/mp4">
+<track kind="captions" srclang="pt-BR" label="Português" src="/assets/clips/link-routed-pt-BR.vtt" default>
+</video>
+<p class="transcript">{{clip_said:link-routed}}</p>
+</details>
+<figcaption>
+<p class="said">O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra: «Aberto pela sua regra · Mudar».</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/link-routed-pt-BR-poster.webp" width="1280" height="800" alt="" loading="lazy" decoding="async">
+<p>Detalhe da mesma captura, em tamanho real</p>
+</div>
+<p class="prov">{{clip:link-routed}}</p>
+</figcaption>
+</figure>
+</li>
+</ol>
 </section>
 <section class="feature" aria-labelledby="vault-h">
 <div class="feature-text">
@@ -227,6 +274,34 @@
 <div class="panel-foot"><span class="grow"><small>Perdeu tudo? Use o código de recuperação.</small></span></div>
 </div>
 </div>
+<ol class="steps" start="3" aria-label="Cenas gravadas">
+<li class="step">
+<h3>Um perfil protegido pede a senha e abre</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/protected-unlocks-pt-BR-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/protected-unlocks-pt-BR-poster.webp" width="1280" height="800" alt="Em Configurações › Perfis, o perfil Bancos está bloqueado; um clique em Desbloquear leva à página que pede a senha; com a senha digitada, a janela do Bancos abre, com a faixa «Bancos · Protegido»." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>Ver a cena inteira <span class="meta">{{clip_s:protected-unlocks}} s, sem som, com legendas</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/protected-unlocks-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um perfil protegido pede a senha e abre">
+<source src="/assets/clips/protected-unlocks-pt-BR.webm" type="video/webm">
+<source src="/assets/clips/protected-unlocks-pt-BR.mp4" type="video/mp4">
+<track kind="captions" srclang="pt-BR" label="Português" src="/assets/clips/protected-unlocks-pt-BR.vtt" default>
+</video>
+<p class="transcript">{{clip_said:protected-unlocks}}</p>
+</details>
+<figcaption>
+<p class="said">«Bancos» fica cifrado até a senha ser digitada. Só então a janela dele abre, e a faixa passa a dizer «Protegido».</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/protected-unlocks-pt-BR-poster.webp" width="1280" height="800" alt="" loading="lazy" decoding="async">
+<p>Detalhe da mesma captura, em tamanho real</p>
+</div>
+<p class="prov">{{clip:protected-unlocks}}</p>
+</figcaption>
+</figure>
+</li>
+</ol>
 </section>
 <section class="feature" aria-labelledby="guard-h">
 <div class="feature-text">
@@ -417,10 +492,10 @@
 </div>
 </div>
 </section>
+</div>
 <section class="cta" id="join" data-theme="dark" aria-labelledby="join-h">
 <div class="wrap cta-grid">
 <div>
-<span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>
 <h2 id="join-h">Navegue adiante. Não deixe rastro.</h2>
 <p>Entre na lista e receba o aviso quando o Nulavio chegar ao seu sistema. Fedora primeiro, Ubuntu em seguida.</p>
 </div>

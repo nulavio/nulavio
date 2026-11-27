@@ -4,11 +4,12 @@ Read the root [AGENTS.md](../AGENTS.md) first; its rules apply here and are not 
 
 ## What is here
 
-Static pages in Portuguese and English: the landing (`index.html`, `en/index.html`), which presents Nulavio as it is meant to ship; the engineering document (`engenharia/`, `en/engineering/`), which says what is ready today; the download pages, built from `packaging/release.json`; the waitlist pages and their worker (`_worker.js`, `_routes.json`); the dnf and APT files and the public keys (`rpm/`, `apt/`, `keys/`); the headers (`_headers`).
+Static pages in Portuguese and English: the landing (`index.html`, `en/index.html`), which presents Nulavio as it is meant to ship; the engineering document (`engenharia/`, `en/engineering/`), which says what is ready today; the download pages, built from `packaging/release.json`; the waitlist pages and their worker (`_worker.js`, `_routes.json`); the dnf and APT files and the public keys (`rpm/`, `apt/`, `keys/`); the headers (`_headers`); the captures of the real window (`assets/shots/`) and the landing's recorded scenes (`assets/clips/`), each with a `manifest.json` that the build reads.
 
 ## Rules that apply here
 
 - Static pages (I2): no JavaScript in them, no third-party resource, no cookie; security headers in `_headers`.
+- Motion and media on the landing: CSS only, and every animation inside `prefers-reduced-motion: no-preference`; a recorded scene is a still frame, a loop that plays once and lasts 5 s at most, and the whole video with controls, `preload="none"`, captions and a transcript, never playing by itself; all of it from this origin (`media-src 'self'` is the policy's only allowance for it). A capture's commit, build and hash on the page come from its manifest, never typed.
 - The worker answers `/api/*` and the two link pages only, and stores the address, the language, the platform, the time and the hash of the link's key, nothing else. An entry changes or goes only through its link, never on an address alone; no answer (status, headers, body, whether the database was written) tells whether an address or a key is on the list. New sign-ups keep to unaccented letters, digits and `. _ % + -` before the `@` and unaccented letters, digits and hyphens after it, the address and each label of the domain starting with a letter or a digit (entries from before can hold any character but whitespace and `@`, control characters included); an entry removed by hand goes through `scripts/site/waitlist_remove.py`, never through SQL written with the address in it.
 - Claims (I11): a claim or comparison row changes in both languages, and what is ready today is never confused with what is planned. The engineering pages must agree with `packaging/release.json` and the download pages.
 

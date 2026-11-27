@@ -20,6 +20,12 @@ prefs/baseline.js), {{buildid}} and, per figure, {{onscreen:<id>}},
 {{port:<id>}} and {{wh:<file>}} from site/assets/shots/manifest.json (written
 by scripts/site/capture_site.py), and the two text excerpts {{e1}} (the real
 output of ``prefs explain``) and {{e2}} (the header lines of site/_headers).
+{{shots_firefox}} is the Firefox version the captures' build reports. The
+landing's recorded scenes (site/assets/clips/, with their own manifest.json, written
+by scripts/site/record_site.py) say what they are the same way, per scene and in the
+page's language: {{clip:<scene>}} is the provenance line (the engine's version, the
+build and the start of the WebM's SHA-256), {{clip_s:<scene>}} its length in whole
+seconds and {{clip_said:<scene>}} its transcript, read from the window at capture time.
 {{shot:<file>}} is the commit a capture was taken at and {{origin}} the
 commit(s) the numbers, excerpts and captures come from; outside --release
 they say so when the tree had changes or the build predates the commit.
@@ -318,6 +324,29 @@ def load_manifest(src: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_clips(src: Path) -> dict:
+    """The recorded scenes' manifest: "<scene>-<locale>" -> what record_site.py wrote about that recording."""
+    path = src / "site" / "assets" / "clips" / "manifest.json"
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))["recordings"]
+
+
+def clip_stamp(clips: dict, name: str, scene: str, locale: str | None, page: str) -> str:
+    """What a recorded scene says of itself on the page, from its manifest and never typed."""
+    try:
+        clip = clips[f"{scene}-{locale}"]
+        if name == "clip_s":
+            return str(round(clip["duration_s"]))
+        if name == "clip_said":
+            return html.escape(clip["transcript"], quote=False)
+        webm = next(f for f in clip["files"] if f["file"] == f"{scene}-{locale}.webm")
+        capture = clip["capture"]
+        return f"Firefox {capture['firefox']} · build {capture['buildid']} · sha256 {webm['sha256'][:12]}…"
+    except (KeyError, StopIteration):
+        raise BuildError(f"{page}: no recording of {scene} ({locale}) in the clips manifest") from None
+
+
 def stamps(src: Path, commit: str, manifest: dict) -> dict[str, str]:
     date = commit_date(commit)
     buildids = {f["buildid"] for f in manifest["files"]}
@@ -332,6 +361,7 @@ def stamps(src: Path, commit: str, manifest: dict) -> dict[str, str]:
         "ubo": ublock_version(src),
         "defaults": str(default_count(src)),
         "buildid": next(iter(buildids)) if buildids else "",
+        "shots_firefox": manifest.get("firefox", ""),
         "e1": html.escape(excerpt_e1(src), quote=False),
         "e2": html.escape("\n".join(header_lines(src)), quote=False),
     }
@@ -363,7 +393,9 @@ def break_points(text: str) -> str:
     return REF.sub(lambda m: m.group(1) + re.sub(r"([/_])", r"\1<wbr>", m.group(2)) + m.group(3), text)
 
 
-def stamp_page(text: str, values: dict[str, str], manifest: dict, locale: str | None, page: str) -> str:
+def stamp_page(
+    text: str, values: dict[str, str], manifest: dict, locale: str | None, page: str, clips: dict | None = None
+) -> str:
     files = {f["file"]: f for f in manifest["files"]}
 
     def figure(key: str) -> dict:
@@ -390,6 +422,8 @@ def stamp_page(text: str, values: dict[str, str], manifest: dict, locale: str | 
             return describe(entry["commit"], shot_notes(entry, manifest), locale)
         if name == "origin":
             return origin(values, manifest, locale)
+        if name in ("clip", "clip_s", "clip_said"):
+            return clip_stamp(clips or {}, name, arg, locale, page)
         if name in values:
             return values[name]
         return match.group(0)
@@ -481,6 +515,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
     with tempfile.TemporaryDirectory(prefix="nulavio-site-") as tmp:
         src = release_tree(commit, Path(tmp)) if release else ROOT
         manifest = load_manifest(src)
+        clips = load_clips(src)
         if release and manifest["files"]:
             wanted = git("rev-parse", "--short=7", commit)
             found = {f["commit"] for f in manifest["files"]}
@@ -536,7 +571,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
                     page_values = {**values, "release_version": released["release_version"]}
             elif "<!--release:" in text:
                 raise BuildError(f"{page}: release blocks belong on the engineering pages only")
-            text = stamp_page(text, page_values, manifest, locale, page)
+            text = stamp_page(text, page_values, manifest, locale, page, clips)
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")

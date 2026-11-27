@@ -45,6 +45,14 @@ FORM_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the form's
 WORKER = ROOT / "site" / "_worker.js"
 SAME_SITE = "https://nulavio.net/"
 SHOTS = ROOT / "site" / "assets" / "shots"
+# The landing's recorded scenes (scripts/site/record_site.py): per scene and language a still frame, a loop
+# that plays once, the whole scene as WebM and MP4, and its captions; manifest.json says what each one is.
+CLIPS = ROOT / "site" / "assets" / "clips"
+CSP = (
+    "default-src 'none'; style-src 'self'; img-src 'self'; media-src 'self'; "
+    "base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+)
+PAGE_LANG = {"pt-BR": "pt-BR", "en-US": "en"}  # the page's locale -> the language its captions are marked with
 # The latest real-site regression run (tests/regression/run_sites.py), behind the landing's compatibility figure.
 SITE_RUN = ROOT / "docs" / "research" / "evidence" / "site-regression-2026-11-20.json"
 MONTHS = {
@@ -130,6 +138,35 @@ class Tree(HTMLParser):
         return [n for n in self.root.walk() if tag is None or n.tag == tag]
 
 
+def webp_animation(data: bytes) -> tuple[int, int, int]:
+    """(times it plays, frames, total milliseconds) of an animated WebP; plays 0 means for ever."""
+    assert data[:4] == b"RIFF" and data[8:12] == b"WEBP", "not a WebP file"
+    plays, frames, total, at = -1, 0, 0, 12
+    while at + 8 <= len(data):
+        kind, size = data[at : at + 4], int.from_bytes(data[at + 4 : at + 8], "little")
+        body = data[at + 8 : at + 8 + size]
+        if kind == b"ANIM":
+            plays = int.from_bytes(body[4:6], "little")
+        elif kind == b"ANMF":
+            frames, total = frames + 1, total + int.from_bytes(body[12:15], "little")
+        at += 8 + size + (size & 1)
+    return plays, frames, total
+
+
+def without_blocks(css: str, opening: str) -> str:
+    """The style sheet without the blocks that start with ``opening`` (an at-rule's prelude), nested ones included."""
+    out, at = [], 0
+    while (start := css.find(opening, at)) != -1:
+        out.append(css[at:start])
+        depth, at = 0, css.index("{", start)
+        while True:
+            depth += {"{": 1, "}": -1}.get(css[at], 0)
+            at += 1
+            if depth == 0:
+                break
+    return "".join(out) + css[at:]
+
+
 def tokens(css: str) -> tuple[dict[str, str], dict[str, str]]:
     """Light (:root) and dark (prefers-color-scheme: dark) values of the colour tokens in tokens.css."""
     light = dict(re.findall(r"(--nv-color-[\w-]+):\s*(#[0-9A-Fa-f]{6})", css.split("@media")[0]))
@@ -179,7 +216,7 @@ class SiteTest(unittest.TestCase):
     def test_local_references_resolve(self):
         for page in PAGES:
             html = (self.out / page).read_text(encoding="utf-8")
-            for ref in re.findall(r'(?:src|href|srcset)="(/[^"]*)"', html):
+            for ref in re.findall(r'(?:src|href|srcset|poster)="(/[^"]*)"', html):
                 target = ref.lstrip("/").partition("#")[0]
                 with self.subTest(page=page, ref=ref):
                     if not target or target.endswith("/"):
@@ -190,6 +227,10 @@ class SiteTest(unittest.TestCase):
     def test_security_headers(self):
         headers = (self.out / "_headers").read_text(encoding="utf-8")
         csp = re.search(r"Content-Security-Policy: (.+)", headers).group(1)
+        # The whole policy, so that a directive is never added by the way: media-src 'self' is there for the
+        # landing's recorded scenes and is the redesign's one change to it (#173).
+        self.assertEqual(csp, CSP)
+        self.assertIn(f'"{CSP}"', WORKER.read_text(encoding="utf-8"), "the link page the worker serves carries the same policy")
         self.assertIn("default-src 'none'", csp)
         self.assertIn("frame-ancestors 'none'", csp)
         self.assertNotIn("unsafe", csp)
@@ -325,7 +366,10 @@ class SiteTest(unittest.TestCase):
             tree = self.tree(page)
             # Decorative: the sign-off symbol, and what sits inside a drawing that is one image with its own label.
             drawings = [n for n in tree.all() if n.attrs.get("role") == "img" and n.tag != "svg"]
-            around = [*drawings, *(n for n in tree.all() if n.attrs.get("id") == "signoff")]
+            # A scene's detail is its still frame again, cut at real size: hidden from assistive technology as a
+            # whole, because the scene's own picture carries the text.
+            details = [n for n in tree.all() if "detail" in n.classes() and n.attrs.get("aria-hidden") == "true"]
+            around = [*drawings, *details, *(n for n in tree.all() if n.attrs.get("id") == "signoff")]
             decorative = {id(n) for parent in around for n in parent.walk()}
             for img in tree.all("img"):
                 with self.subTest(page=page, src=img.attrs.get("src")):
@@ -380,6 +424,108 @@ class SiteTest(unittest.TestCase):
                 if transcript and any(key in n or entries[n].get("figure") == key for n in used):
                     with self.subTest(page=page, figure=key):
                         self.assertIn(" ".join(transcript.split()), onscreen)
+
+    def test_recorded_scenes_match_the_manifest_and_say_what_they_show(self):
+        manifest = json.loads((CLIPS / "manifest.json").read_text(encoding="utf-8"))
+        self.assertNotIn(str(Path.home()), json.dumps(manifest), "the manifest must not hold personal paths")
+        listed = {f["file"]: f for clip in manifest["recordings"].values() for f in clip["files"]}
+        on_disk = {p.name for p in CLIPS.iterdir()} - {"manifest.json"}
+        self.assertEqual(on_disk, set(listed), "every served recording is in the manifest, and nothing else is served")
+        for name, entry in sorted(listed.items()):
+            data = (CLIPS / name).read_bytes()
+            with self.subTest(file=name):
+                self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+                self.assertLess(len(data), 150_000 if name.endswith("-poster.webp") else 2_000_000)
+                if name.endswith("-loop.webp"):
+                    # Nothing on the page can pause it, so it stops by itself within five seconds (WCAG 2.2.2).
+                    plays, frames, milliseconds = webp_animation(data)
+                    self.assertEqual(plays, 1, "a loop plays once")
+                    self.assertGreater(frames, 1)
+                    self.assertLessEqual(milliseconds, 5000)
+                if name.endswith("-poster.webp"):
+                    self.assertEqual(webp_animation(data)[1], 0, "a still frame does not move")
+                if name.endswith(".vtt"):
+                    self.assertTrue(data.startswith(b"WEBVTT"))
+        self.assertLess(sum(f["bytes"] for f in listed.values()), 5_000_000, "the recordings as a whole")
+        for page, locale in LANDING.items():
+            tree, html = self.tree(page), self.read(page)
+            used = set(re.findall(r'/assets/clips/([^"]+)', html))
+            scenes = [n for n in tree.all("figure") if "scene" in n.classes()]
+            with self.subTest(page=page):
+                self.assertEqual(used, {name for name in listed if f"-{locale}" in name}, "the page's own language, all of it")
+                self.assertEqual(len(scenes), len(manifest["recordings"]) // 2)
+            for scene in scenes:
+                nodes = list(scene.walk())
+                video = next(n for n in nodes if n.tag == "video")
+                clip = manifest["recordings"][Path(video.attrs["poster"]).name.removesuffix("-poster.webp")]
+                with self.subTest(page=page, scene=clip["scene"]):
+                    # The loop only for whoever did not ask for less motion; the still frame for everyone else.
+                    picture = next(n for n in nodes if n.tag == "picture")
+                    sources = [n for n in picture.children if isinstance(n, Node) and n.tag == "source"]
+                    self.assertEqual([n.attrs.get("media") for n in sources], ["(prefers-reduced-motion: no-preference)"])
+                    self.assertTrue(sources[0].attrs["srcset"].endswith("-loop.webp"))
+                    still = next(n for n in picture.children if isinstance(n, Node) and n.tag == "img")
+                    self.assertTrue(still.attrs["src"].endswith("-poster.webp"))
+                    self.assertGreater(len(still.attrs["alt"]), 60, "the picture says what the scene shows")
+                    for node in (*sources, still, video):
+                        self.assertTrue(node.attrs.get("width") and node.attrs.get("height"), "no layout shift from media")
+                    # The whole scene: nothing fetched before play, never by itself, never with sound.
+                    self.assertEqual(video.attrs.get("preload"), "none")
+                    for attr in ("controls", "muted", "playsinline"):
+                        self.assertIn(attr, video.attrs)
+                    for attr in ("autoplay", "loop"):
+                        self.assertNotIn(attr, video.attrs)
+                    kinds = [n.attrs.get("type") for n in video.children if isinstance(n, Node) and n.tag == "source"]
+                    self.assertEqual(kinds, ["video/webm", "video/mp4"])
+                    tracks = [n for n in video.children if isinstance(n, Node) and n.tag == "track"]
+                    marked = [(t.attrs.get("kind"), t.attrs.get("srclang")) for t in tracks]
+                    self.assertEqual(marked, [("captions", PAGE_LANG[locale])])
+                    self.assertIn("default", tracks[0].attrs)
+                    # What it shows is on the page in words, and what it is comes from the manifest.
+                    said = [" ".join(n.text().split()) for n in nodes if "transcript" in n.classes()]
+                    self.assertEqual(said, [" ".join(clip["transcript"].split())])
+                    webm = next(f for f in clip["files"] if f["file"].endswith(".webm"))
+                    origin = next(n.text() for n in nodes if "prov" in n.classes())
+                    for part in (clip["capture"]["buildid"], f"Firefox {clip['capture']['firefox']}", webm["sha256"][:12]):
+                        self.assertIn(part, origin)
+                    self.assertIn(f"{round(clip['duration_s'])} s", next(n.text() for n in nodes if n.tag == "summary"))
+        # Neutral about third parties: no recording's words name a search engine or another service.
+        words = json.dumps([[c["transcript"], c["captions"]] for c in manifest["recordings"].values()], ensure_ascii=False)
+        self.assertNotRegex(words, r"(?i)duckduckgo|google|bing|kagi|brave|startpage|proton|bitwarden|claude|codex|chatgpt")
+
+    def test_nothing_moves_for_whoever_asked_for_less_motion(self):
+        """Every animation, and every transition of something that moves, is opted into under no-preference."""
+        for sheet in build_site.STYLESHEETS:
+            css = re.sub(r"/\*.*?\*/", "", (ROOT / "site" / sheet).read_text(encoding="utf-8"), flags=re.S)
+            rest = without_blocks(css, "@media (prefers-reduced-motion: no-preference)")
+            rest = without_blocks(rest, "@keyframes")
+            with self.subTest(sheet=sheet):
+                self.assertNotRegex(rest, r"\banimation(-[a-z]+)?\s*:", "an animation outside the opt-in")
+                self.assertNotIn("scroll-behavior", rest)
+                for transition in re.findall(r"transition(?:-property)?\s*:([^;}]+)", rest):
+                    moving = r"\b(all|transform|translate|rotate|scale|width|height|top|left|right|bottom|margin|padding)\b"
+                    self.assertNotRegex(transition, moving)
+                self.assertNotIn("0.01ms", css, "no blanket override: each animation is declared under the opt-in")
+        for page in LANDING:
+            self.assertNotRegex(self.read(page), r"<video[^>]*\b(autoplay|loop)\b", page)
+
+    def test_the_landing_first_view_is_light(self):
+        """What a landing page loads before any scroll or click (#173's budget: 1.5 MB), counted generously:
+        the page, its style sheets, every picture that is not lazy and every video's still frame."""
+        for page in LANDING:
+            html = self.read(page)
+            tree = self.tree(page)
+            wanted = set(re.findall(r'<link rel="(?:stylesheet|icon)" href="(/[^"]+)"', html))
+            wanted |= {n.attrs["poster"] for n in tree.all("video")}
+            for picture in tree.all("picture"):
+                img = next(n for n in picture.children if isinstance(n, Node) and n.tag == "img")
+                if img.attrs.get("loading") != "lazy":
+                    wanted |= {n.attrs.get("srcset") or n.attrs.get("src") for n in picture.children if isinstance(n, Node)}
+            wanted |= {n.attrs["src"] for n in tree.all("img") if n.attrs.get("loading") != "lazy"}
+            total = len(html.encode()) + sum((self.out / ref.lstrip("/")).stat().st_size for ref in wanted)
+            with self.subTest(page=page):
+                self.assertLess(total, 1_500_000)
+                self.assertIn("/assets/landing.css", wanted)
 
     def test_excerpts_are_generated_from_the_tree(self):
         headers = (ROOT / "site" / "_headers").read_text(encoding="utf-8")
