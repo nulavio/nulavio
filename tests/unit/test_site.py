@@ -684,6 +684,13 @@ class LinkPreviewTest(unittest.TestCase):
         whole += "".join(f'<meta name="{key}" content="1">\n' for key in build_site.CARD if key.startswith("twitter:"))
         text = self.page(whole)
         self.assertEqual(build_site.link_preview(text, "x"), text)
+        blank = whole.replace('<meta property="og:image" content="1">', '<meta property="og:image" content=" ">')
+        with self.assertRaisesRegex(build_site.BuildError, "lacks og:image$"):
+            build_site.link_preview(self.page(blank), "x")
+
+    def test_a_blank_description_is_no_description(self):
+        with self.assertRaisesRegex(build_site.BuildError, "a description"):
+            build_site.link_preview(self.page(description='<meta name="description" content="  ">\n'), "x")
 
     def test_a_page_behind_noindex_has_no_preview(self):
         for robots in ("noindex", "NONE", "NoIndex, follow"):

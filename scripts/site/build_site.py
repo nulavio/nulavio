@@ -431,7 +431,7 @@ def keep_addresses(text: str, page: str) -> str:
     return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
-# A page that writes its own preview writes all of it; a partial one would hide the site's picture.
+# A page that writes its own preview writes all of it, none blank; a partial one would hide the site's picture.
 CARD = (
     "og:type", "og:site_name", "og:locale", "og:url", "og:title", "og:description", "og:image", "og:image:type",
     "og:image:width", "og:image:height", "og:image:alt", "twitter:card", "twitter:image", "twitter:image:alt",
@@ -447,13 +447,13 @@ def link_preview(text: str, page: str) -> str:
     if discovery.card:
         if not shared:
             raise BuildError(f"{page}: a page behind noindex or without a canonical address has no link preview")
-        missing = [key for key in CARD if key not in discovery.card]
+        missing = [key for key in CARD if not discovery.card.get(key, "").strip()]
         if missing:
             raise BuildError(f"{page}: its own link preview lacks {', '.join(missing)}")
         return text
     if not shared:
         return text
-    language, title, description = discovery.language, discovery.title.strip(), discovery.description
+    language, title, description = discovery.language, discovery.title.strip(), discovery.description.strip()
     if not (language in LINK_PREVIEW and title and description and len(discovery.canonicals) == 1):
         raise BuildError(f"{page}: a link preview needs a language of the site, a title, a description and one canonical address")
     preview = LINK_PREVIEW[language]
