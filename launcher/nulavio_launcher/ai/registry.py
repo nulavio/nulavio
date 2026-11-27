@@ -452,12 +452,14 @@ class KDialogApprover(Approver):
         deadline = time.monotonic() + self.timeout
         try:
             while True:
+                left = deadline - time.monotonic()
+                if left <= 0 or _called_off(agent["id"], cancel):
+                    return "deny"
                 try:
-                    code = dialog.wait(timeout=self.poll)
+                    code = dialog.wait(timeout=min(self.poll, left))  # an answer after the deadline counts for nothing
                     break
                 except subprocess.TimeoutExpired:
-                    if time.monotonic() > deadline or _called_off(agent["id"], cancel):
-                        return "deny"
+                    continue
         finally:
             if dialog.poll() is None:
                 dialog.kill()  # the dialog goes away: an answer given now does nothing
@@ -526,7 +528,9 @@ class BrowserApprover(Approver):
                 time.sleep(self.poll)
             return "deny"
         finally:
-            for suffix in (".json", ".seen", ".answer"):
+            # The answer first and once more at the end: answer_request() then tells an answer that was taken (its
+            # file gone before the request's) from one written as the request ended (still there once it is gone).
+            for suffix in (".answer", ".json", ".seen", ".answer"):
                 base.with_suffix(suffix).unlink(missing_ok=True)
 
 
@@ -581,9 +585,10 @@ def answer_request(request_id: str, answer: str) -> None:
     if not base.with_suffix(".json").exists():
         raise RegistryError("no such request (expired?)")
     paths.write_private_file(base.with_suffix(".answer"), answer)
-    if not base.with_suffix(".json").exists():
-        # The call that asked ended while the answer was written (BrowserApprover.ask removed its files): the
-        # answer goes too, rather than stay on disk for no one (#646).
+    if not base.with_suffix(".json").exists() and base.with_suffix(".answer").exists():
+        # The call that asked ended while the answer was written (BrowserApprover.ask removed its files) and no one
+        # took it: the answer goes too, rather than stay on disk for no one (#646). One the approver read and removed
+        # (before the request's file) was answered.
         base.with_suffix(".answer").unlink(missing_ok=True)
         raise RegistryError("no such request (expired?)")
 
@@ -627,18 +632,20 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
     answer = approver.ask(agent, capability, target, place, cancel)
     if answer is None:
         return Decision(False, mode, capability, "no-approver")
-    if answer in ("once", "session") and cancel is not None and cancel.is_set():
-        # The call was cancelled while the person answered (or its client went away, #646): an "allow" does
-        # nothing, and an answer for the session is not kept for a client that is gone.
-        return Decision(False, mode, capability, "cancelled")
+    # Whatever the answer: an approver closes its question as a denial when the stop comes on or the agent is paused
+    # or revoked, and the call is told that reason, so the Bridge closes the session on a stop or a revocation.
+    agent = load()["agents"].get(agent_id)
+    held = _held(agent, host)
+    if held:
+        return Decision(False, "block", capability, held)
     if answer in ("once", "session"):
-        agent = load()["agents"].get(agent_id)
-        held = _held(agent, host)
-        if held:
-            return Decision(False, "block", capability, held)
         now_mode, now_source = effective_mode(agent, capability, session_id, scope=scope)
         if now_mode == "block":
             return Decision(False, now_mode, capability, now_source)
+        if cancel is not None and cancel.is_set():
+            # The call was cancelled while the person answered or the registry was read again (or its client went
+            # away, #646): an "allow" does nothing, and an answer for the session is not kept for a client that is gone.
+            return Decision(False, mode, capability, "cancelled")
     if answer == "session":
         grant_session(agent_id, capability, session_id, scope)
         return Decision(True, mode, capability, "approved-session")

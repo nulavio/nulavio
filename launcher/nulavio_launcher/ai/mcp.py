@@ -44,6 +44,7 @@ class Server:
         self._out = threading.Lock()
         self._jobs: queue.Queue = queue.Queue()
         self._cancels: dict[object, threading.Event] = {}
+        self._gone = threading.Event()  # stdin ended: no call starts and no response goes out any more (#646)
         self._worker = threading.Thread(target=self._work, name="mcp-tools", daemon=True)
 
     # -- output ---------------------------------------------------------------------
@@ -83,7 +84,9 @@ class Server:
         finally:
             # The client is gone (stdin closed, or it exited): nothing it asked for may still happen (#646). Every call
             # is cancelled, so one waiting for the person's answer is denied at once and its request removed, and one
-            # still queued never starts. A call still running after the wait starts no engine (Bridge.end).
+            # still queued never starts. A call still running after the wait starts no engine (Bridge.end). The
+            # server's own state comes first: the worker may take the next job before the sweep reaches its event.
+            self._gone.set()
             for event in list(self._cancels.values()):
                 event.set()
             self._jobs.put(None)
@@ -189,14 +192,14 @@ class Server:
                 return
             request_id, name, arguments, cancel, modern = job
             try:
-                if cancel.is_set():
-                    continue  # cancelled before it started: no response, as the spec requires
+                if cancel.is_set() or self._gone.is_set():
+                    continue  # cancelled before it started, or its client went away: no response, as the spec requires
                 try:
                     result = self.bridge.call(name, arguments, cancel)
                 except Exception as exc:
                     print(f"nulavio-ai: tool {name} failed: {type(exc).__name__}", file=sys.stderr)
                     result = {"content": [{"type": "text", "text": f"Internal error in {name}"}], "isError": True}
-                if not cancel.is_set():
+                if not cancel.is_set() and not self._gone.is_set():
                     self._result(request_id, result, modern)
             finally:
                 self._cancels.pop(request_id, None)

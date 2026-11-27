@@ -5456,6 +5456,151 @@ class DisconnectTest(Home):
         made[0].stop.assert_called()  # a disposable workspace's folder goes with it
         self.assertIsNone(bridge.workspace)
 
+    # OpenCodeReview on #853 (round 1).
+
+    def test_a_queued_call_never_starts_once_stdin_ended(self):
+        """The worker may take the next job before the end of stdin reaches that job's cancel: the server's own state
+        says the client is gone first."""
+        calls: list = []
+        took = threading.Event()  # the queued call started
+
+        class Waiting(FakeBridge):
+            def call(self, name, arguments, cancel):
+                calls.append(arguments.get("n"))
+                if arguments.get("n") == 1:
+                    self.started.set()
+                    cancel.wait(5)  # in progress until the end of stdin cancels it
+                else:
+                    took.set()
+                return {"content": [{"type": "text", "text": "done"}], "isError": False}
+
+        class Late:
+            """The sweep reaches this event only once the worker had its chance to take the job."""
+
+            def __init__(self, event):
+                self.event = event
+
+            def set(self):
+                took.wait(1)
+                self.event.set()
+
+        class Cancels(dict):
+            def values(self):
+                events = list(super().values())
+                return events[:1] + [Late(event) for event in events[1:]]
+
+        bridge = Waiting()
+        server_in_r, server_in_w = os.pipe()
+        out = io.BytesIO()
+        server = mcp.Server(bridge, os.fdopen(server_in_r, "rb"), out)
+        server._cancels = Cancels()
+        thread = threading.Thread(target=server.serve, daemon=True)
+        thread.start()
+        writer = os.fdopen(server_in_w, "wb")
+        for message in (INIT, req(1, "tools/call", {"name": "session_state", "arguments": {"n": 1}}),
+                        req(2, "tools/call", {"name": "session_state", "arguments": {"n": 2}})):  # fmt: skip
+            writer.write(json.dumps(message).encode() + b"\n")
+        writer.flush()
+        self.assertTrue(wait_for(bridge.started.is_set))
+        self.assertTrue(wait_for(lambda: len(server._cancels) == 2))
+        writer.close()  # the agent's client exits
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(calls, [1])
+        self.assertEqual([json.loads(line).get("id") for line in out.getvalue().splitlines()], [0])
+
+    def test_a_cancelled_call_starts_no_engine_and_the_next_call_does(self):
+        agent, _ = registry.add("c", "other", "autonomous")
+        made: list = []
+
+        def factory(_agent):
+            workspace = mock.Mock(bidi=None, downloads_dir=self.home / "downloads")
+            engine = mock.Mock(**{"command.return_value": {"contexts": []}})
+            workspace.start.side_effect = lambda *a, **k: setattr(workspace, "bidi", engine) or engine
+            made.append(workspace)
+            return workspace
+
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), workspace_factory=factory)
+        cancel = threading.Event()
+        real_decide = registry.decide
+
+        def decide(*args, **kwargs):
+            decision = real_decide(*args, **kwargs)
+            cancel.set()  # the end of stdin cancels it once its permission was checked, before it reaches the engine
+            return decision
+
+        with mock.patch.object(registry, "decide", decide):
+            self.assertTrue(bridge.call("tabs_list", {}, cancel)["isError"])
+        self.assertEqual(made, [])
+        # A cancel ends that call only: the session's next call starts the engine.
+        result = bridge.call("tabs_list", {}, threading.Event())
+        self.assertFalse(result["isError"], result)
+        self.assertEqual(len(made), 1)
+        made[0].start.assert_called_once()
+        made[0].stop.assert_not_called()
+
+    def test_an_allow_cancelled_while_the_registry_is_read_again_does_nothing(self):
+        agent, _ = registry.add("r", "other", "restricted")
+        cancel = threading.Event()
+        real_load = registry.load
+        loads: list = []
+
+        def load(*args, **kwargs):
+            loads.append(1)
+            if len(loads) == 2:
+                cancel.set()  # after the answer, while decide() reads the registry again
+            return real_load(*args, **kwargs)
+
+        for answer in ("once", "session"):
+            with self.subTest(answer):
+                cancel.clear()
+                loads.clear()
+                with mock.patch.object(registry, "load", load):
+                    decision = registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                               approver=Approve(answer), cancel=cancel)  # fmt: skip
+                self.assertEqual((decision.allowed, decision.reason), (False, "cancelled"))
+        self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+
+    def test_an_answer_the_approver_took_is_not_reported_as_expired(self):
+        base = registry.requests_dir() / "fedcba9876543210"
+        base.with_suffix(".json").write_text("{}")
+        real_write = registry.paths.write_private_file
+
+        def write(path, *args, **kwargs):
+            real_write(path, *args, **kwargs)
+            for suffix in (".answer", ".json", ".seen", ".answer"):  # the approver read it at once (ask's finally)
+                base.with_suffix(suffix).unlink(missing_ok=True)
+
+        with mock.patch.object(registry.paths, "write_private_file", write):
+            registry.answer_request(base.name, "once")  # the call went on with it: the page says it was answered
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_a_question_closed_by_a_stop_a_pause_or_a_revocation_says_why(self):
+        """An approver closes its question as a denial then (the KDE dialog since #646): the call is told the reason,
+        so the Bridge closes the session on a stop or a revocation."""
+        cases = (
+            ("stopped", lambda a: registry.set_stopped(True)),
+            ("paused", lambda a: registry.pause(a, True)),
+            ("revoked", lambda a: registry.revoke(a)),
+        )
+        for reason, act in cases:
+            with self.subTest(reason):
+                agent, _ = registry.add("h", "other", "restricted")
+                approver = Approve("deny", meanwhile=lambda a=agent["id"], act=act: act(a))
+                decision = registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                           approver=approver)  # fmt: skip
+                self.assertEqual((decision.allowed, decision.reason), (False, reason))
+                registry.set_stopped(False)
+
+    def test_the_desktop_dialogs_answer_after_its_deadline_is_a_denial(self):
+        fake = self.home / "kdialog-late"
+        fake.write_text("#!/bin/sh\nsleep 0.6\nexit 0\n")  # "Allow once", after the deadline
+        fake.chmod(0o700)
+        agent, _ = registry.add("t", "other", "restricted")
+        with mock.patch.dict(os.environ, {"DISPLAY": ":0"}):
+            approver = registry.KDialogApprover(str(fake), timeout=0.2, poll=5)
+            self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "deny")
+
 
 class ProfilesAndKeysTest(Home):
     """S8: profiles an agent may use, its routes, and the key file its configuration points to."""

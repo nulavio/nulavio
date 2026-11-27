@@ -932,8 +932,8 @@ class Bridge:
 
     def _workspace(self) -> Workspace:
         if self.workspace is None:
-            if self._ended:
-                raise Cancelled()  # a call still running after the client went away makes no new AI Workspace (#646)
+            if self._called_off():
+                raise Cancelled()  # a cancelled call, or one running after the client left, makes no AI Workspace (#646)
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
             workspace = (self.workspace_factory(agent) if self.workspace_factory else
@@ -946,10 +946,15 @@ class Bridge:
                 raise Cancelled()
         return self.workspace
 
+    def _called_off(self) -> bool:
+        """The client went away (end()), or the current call was cancelled (its client's cancel, or the end of stdin)."""
+        return self._ended or (self._cancel is not None and self._cancel.is_set())
+
     def _start(self, target: Workspace) -> Bidi:
-        """Starts an engine (or returns the running one), never for a session whose client went away (#646): one that
-        ended while the engine started is closed again at once."""
-        if self._ended:
+        """Starts an engine (or returns the running one), never for a call that was cancelled or a session whose client
+        went away (#646): one that ended while the engine started is closed again at once. A cancelled call still gets
+        an engine that runs already (what it does with it then stops at the cancel, as an engine command does)."""
+        if self._ended or (target.bidi is None and self._called_off()):
             raise Cancelled()
         engine = target.start()
         if self._ended:
