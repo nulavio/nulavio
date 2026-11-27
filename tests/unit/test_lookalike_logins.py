@@ -109,6 +109,49 @@ class LookalikeLoginsTest(unittest.TestCase):
         case = self.cases["dismiss_back_left_and_pair_changed"]
         self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)
 
+    def test_continue_in_a_private_window_writes_nothing_to_the_profile(self):
+        """#652: kept in memory for private windows only, until the last one closes; a normal window still warns."""
+        case = self.cases["dismiss_in_private"]
+        self.assertEqual(case["shown"], {**FOUND, "inPrivate": True})  # the page says what "continue" keeps there
+        self.assertEqual((case["answer"], case["again"]), ({"dismissed": True}, {"dismissed": True}), case)
+        self.assertEqual(case["saved"], {"prefs": [], "confirmed": []})  # not in prefs.js, not in Settings
+        self.assertEqual(case["after"], {"private": {"suspicious": False}, "normal": FOUND}, case)
+        self.assertEqual(case["closed"], {**FOUND, "inPrivate": True}, case)  # the last private window closed
+        self.assertEqual(case["prefs"], [])
+
+    def test_continue_back_in_a_private_window_keeps_the_binding_and_nothing_in_the_profile(self):
+        case = self.cases["dismiss_in_private_back"]
+        self.assertEqual(case["unbound"], {"threw": "no-way-back"})
+        self.assertEqual(case["unboundAfter"], {**FOUND, "inPrivate": True})
+        self.assertEqual((case["bound"], case["after"]), ({"dismissed": True}, {"suspicious": False}), case)
+        self.assertEqual((case["prefs"], case["confirmed"]), ([], []), case)
+
+    def test_continue_in_a_private_window_keeps_only_the_pair_shown(self):
+        case = self.cases["dismiss_in_private_other_pair"]
+        self.assertEqual((case["other"], case["none"]), ({"dismissed": False}, {"dismissed": False}), case)
+        self.assertEqual((case["after"], case["prefs"]), ({**FOUND, "inPrivate": True}, []), case)
+
+    def test_a_private_continue_under_way_when_the_last_private_window_closes_keeps_nothing(self):
+        """A choice made before the private windows all closed does not carry into the next private window."""
+        case = self.cases["dismiss_in_private_ended_during_read"]
+        warned = {**FOUND, "inPrivate": True}
+        self.assertEqual((case["first"], case["firstAfter"]), ({"dismissed": False}, warned), case)
+        self.assertEqual(case["kept"], {"dismissed": True}, case)
+        self.assertEqual((case["second"], case["secondAfter"]), ({"dismissed": False}, warned), case)
+        self.assertEqual(case["prefs"], [], case)
+
+    def test_no_private_pair_is_dropped_before_the_last_private_window_closes(self):
+        """The page says "until you close them all": the 201st pair confirmed in one private session keeps the first."""
+        case = self.cases["dismiss_in_private_many"]
+        self.assertEqual(case["kept"], 201, case)
+        self.assertEqual((case["first"], case["last"]), ({"suspicious": False}, {"suspicious": False}), case)
+        self.assertEqual(case["prefs"], [], case)
+
+    def test_a_pair_confirmed_in_a_normal_window_is_not_warned_in_a_private_one(self):
+        case = self.cases["dismiss_in_normal_counts_in_private"]
+        self.assertEqual((case["answer"], case["inPrivate"]), ({"dismissed": True}, {"suspicious": False}), case)
+        self.assertEqual(case["confirmed"], [{"site": FOUND["site"], "similar": FOUND["similar"]}])
+
     def test_checks_at_once_share_one_read_of_the_saved_logins(self):
         case = self.cases["concurrent_checks"]
         self.assertEqual((case["first"], case["second"]), (FOUND, FOUND))

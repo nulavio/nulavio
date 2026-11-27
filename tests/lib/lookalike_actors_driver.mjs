@@ -220,16 +220,20 @@ async function parent({
   locked = false,
   during = () => {},
   duringAt = 0,
+  inPrivate = false,
 } = {}) {
   const loads = [];
   const { contexts, browser } = tab(docs, loads);
+  contexts[0].usePrivateBrowsing = inPrivate; // the engine's flag for the tab's page (a private window)
   const field = contexts.at(-1);
   const actor = new NulavioLookalikeParent();
   actor.globalState = field.currentWindowGlobal;
   const asked = [];
+  const privately = [];
   passwords = {
     bindWarning: (tab, warning) => (passwords.bound = tab === browser ? warning : "another browser"),
-    checkLogin: async url => {
+    checkLogin: async (url, options) => {
+      privately.push(options?.inPrivate ?? null);
       const n = asked.push(url) - 1;
       await flush();
       if (n === duringAt) {
@@ -260,6 +264,7 @@ async function parent({
     in: query?.get("in") ?? null,
     bound: passwords.bound ?? null,
     decided: decided ?? null,
+    privately,
   };
 }
 
@@ -316,6 +321,9 @@ const cases = {
 
   // The parent.
   parent_warns: () => parent(),
+  // #652: in a private window, each check says so to the module (a pair confirmed there counts there only).
+  parent_in_private: () =>
+    parent({ inPrivate: true, suspicious: false, docs: [doc("https://news.example/"), doc("https://paypa1.example/login")] }),
   parent_nothing_to_warn: () => parent({ suspicious: false }),
   // A Primary Password not yet entered: the module compared nothing, so nothing was decided (#708).
   parent_primary_password_locked: () => parent({ suspicious: false, locked: true }),

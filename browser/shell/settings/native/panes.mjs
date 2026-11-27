@@ -2239,6 +2239,21 @@
       }
       return msg(now.choice === "strict" ? "dnsNowStrict" : "dnsNowFallback", now.provider === "custom" ? now.uri : dnsProviderName(now.provider));
     };
+    // The names a setting (the person's or a policy's) keeps from encrypted lookups, while lookups are encrypted:
+    // the computer's resolver answers those, which "encrypted only" would otherwise seem to rule out. Names in the
+    // hosts file and the resolver's own name are not in any list the engine shows (R40). A long list is cut short.
+    const DNS_EXCLUDED_SHOWN = 8;
+    const dnsExcludedSays = () => {
+      const now = dnsNow();
+      const names = now?.excluded ?? [];
+      if (!names.length || !(now.encryptedNow || now.choice === "fallback" || now.choice === "strict")) {
+        return "";
+      }
+      const shown = names.slice(0, DNS_EXCLUDED_SHOWN).join(", ");
+      return names.length > DNS_EXCLUDED_SHOWN
+        ? msg("dnsExcludedMore", shown, String(names.length - DNS_EXCLUDED_SHOWN))
+        : msg("dnsExcluded", shown);
+    };
     const dnsSetup = (emitChange, stops) => {
       stops.push(dns.listen(emitChange));
       dnsBench.watch(emitChange, stops);
@@ -2249,10 +2264,16 @@
       setup(emitChange, stops) {
         dnsSetup(emitChange, stops);
         dns.refresh();
-        // Changed on the engine's advanced screen, or by a policy.
-        for (const pref of ["network.trr.mode", "network.trr.uri"]) {
+        // Changed on the engine's advanced screen, or by a policy; the excluded names too.
+        for (const pref of ["network.trr.mode", "network.trr.uri", "network.trr.excluded-domains", "network.trr.builtin-excluded-domains"]) {
           Services.prefs.addObserver(pref, dns.refresh);
           stops.push(() => Services.prefs.removeObserver(pref, dns.refresh));
+        }
+        // What is in effect can change with no pref of these changing (the engine's regional roll-out under
+        // "default", the resolver confirmed or not): the engine's own DNS setting listens for the same two.
+        for (const topic of ["network:trr-mode-changed", "network:trr-confirmation"]) {
+          Services.obs.addObserver(dns.refresh, topic);
+          stops.push(() => Services.obs.removeObserver(dns.refresh, topic));
         }
       },
       visible: () => dns.state.ready,
@@ -2265,7 +2286,7 @@
         const option = (value, label, note) => ({ value, controlAttrs: { label: msg(label), description: msg(note) } });
         return {
           ...config,
-          controlAttrs: { ...config.controlAttrs, label: msg("dnsChoiceLegend"), description: dnsSays() },
+          controlAttrs: { ...config.controlAttrs, label: msg("dnsChoiceLegend"), description: [dnsSays(), dnsExcludedSays()].filter(Boolean).join(" ") },
           options: [
             // Listed, and marked, only while nothing was chosen yet: choosing it saves nothing.
             ...(dnsNow()?.choice === "default" ? [option("default", "dnsDefaultOption", "dnsDefaultOptionNote")] : []),

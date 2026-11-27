@@ -8,20 +8,29 @@ moving forward, the trail behind you does not persist. The route exits at
 the top right, towards an open horizon. The dot of the "i" in the wordmark
 reuses the same point.
 
-Outputs (docs/brand/assets/logo/ and .../icons/):
+The name is written with the symbol as its initial: the route, at the wordmark's stroke and between
+its ascender and its baseline, then "ulavio" (#175, proposal A of docs/brand/review-2026-11.md,
+chosen by the maintainer on 2026-11-27). No lockup puts the symbol beside the whole wordmark, so the
+initial is never shown twice. In the app icon the route is drawn 15 % larger than the symbol's own
+box (55 % of the tile's width), the proportion of the hand-tuned 16 px master.
+
+Outputs (docs/brand/assets/logo/ and .../icons/, and the Companion's adaptive icon):
   studies/      three exploratory studies (A, B, C) for docs/brand/explorations.md
   logo/         symbol, tile, wordmarks, lockups, monochrome variants
   icons/        app icon sources incl. pixel-tuned 16/24 px masters, symbolic
+  android/app/src/main/res/drawable/ic_launcher_foreground.xml   the adaptive icon's foreground
 
 Run: python3 -I scripts/brand/build_logo.py  (deterministic; tests check it)
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "docs" / "brand" / "assets"
+ANDROID_FOREGROUND = ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "ic_launcher_foreground.xml"
 
 NAVY = "#0B1623"
 SLATE = "#183746"
@@ -70,6 +79,26 @@ def tile_background(size: float = 96, radius: float = TILE_RADIUS, gid: str = "b
         f'<rect x="0.5" y="0.5" width="{size - 1}" height="{size - 1}" rx="{radius - 0.5}" fill="none" '
         f'stroke="{CLOUD}" stroke-opacity="0.10"/>'
     )
+
+
+# --- App icon: the route drawn larger in its tile ------------------------------------------------
+ICON_SCALE = 1.15  # 46 x 54.1 units -> 52.9 x 62.2: 55 % of the tile's width, 65 % of its height
+ROUTE_CENTRE = (48.0, 48.05)  # centre of the route's box (x 25..71, y 21..75.1)
+
+
+def n(value: float) -> str:
+    """A coordinate with at most two decimals and no trailing zeros."""
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def scaled(body: str, scale: float, centre: tuple[float, float], to: tuple[float, float] = (48.0, 48.0)) -> str:
+    transform = f"translate({n(to[0])} {n(to[1])}) scale({n(scale)}) translate({n(-centre[0])} {n(-centre[1])})"
+    return f'<g transform="{transform}">\n{body}\n</g>'
+
+
+def icon_tile(gid: str = "bg") -> str:
+    """The app icon from 32 px up: the tile, and the mint route 15 % larger, centred on it."""
+    return tile_background(gid=gid) + "\n" + scaled(mark(MINT), ICON_SCALE, ROUTE_CENTRE)
 
 
 # --- Wordmark: monoline geometric lowercase "nulavio" -----------------------
@@ -132,26 +161,73 @@ def wordmark(color: str, dot_color: str | None = None) -> tuple[str, str]:
     return view_box, body
 
 
-def lockup(mark_color: str, text_color: str, tile: bool) -> str:
-    """Symbol + wordmark. Bare symbol: wordmark baseline sits on the route's
-    baseline and its x-height is ~62 % of the symbol height. Tile: the
-    x-height band is centred on the tile."""
-    _, wm_body = wordmark(text_color, dot_color=mark_color)
-    _, _, advance = wordmark_paths()
-    band_top, band_bottom = X_TOP - W_STROKE / 2, BASE + W_STROKE / 2
-    if tile:
-        symbol = tile_background(gid="lk") + "\n" + mark(MINT)
-        sym_w, sym_h, scale, gap = 96.0, 96.0, 1.0, 26.0
-        ty = 48 - (band_top + band_bottom) / 2 * scale
-    else:
-        # Bare route bounding box on the 96 grid: x 25..71, y 21..75.1
-        symbol = f'<g transform="translate(-25 -21)">{mark(mark_color)}</g>'
-        sym_w, sym_h, scale, gap = 46.0, 54.1, 0.85, 22.0
-        ty = 54.0 - band_bottom * scale
-    tx = sym_w + gap + (W_STROKE / 2) * scale
-    width = tx + (advance + W_STROKE / 2) * scale
-    body = f'<g>{symbol}</g>\n<g transform="translate({tx:.2f} {ty:.2f}) scale({scale})">{wm_body}</g>'
-    return svg(f"-1 -1 {width + 2:.2f} {sym_h + 2:.2f}", body, title="Nulavio")
+# --- Lockup: the route is the initial ---------------------------------------------------------
+A_WIDTH = 38.0  # between the two stems' centrelines (the symbol's 36:44, at 48 units of height)
+A_STEM_END = 32.0  # the first stem is solid from the top down to here, then dissolves
+A_GAP = 17.0  # to the next letter, the wordmark's own n-to-u spacing
+LOWERCASE_N_ADVANCE = 2 * ARCH_R + 17  # where the wordmark's "u" starts
+
+
+def wordmark_without_initial() -> tuple[str, list[tuple[float, float, float]], float]:
+    """The wordmark's path, dots and advance without its first letter: "ulavio", still where the
+    wordmark draws it (the u starts at x = 41)."""
+    path, dots, advance = wordmark_paths()
+    x, top, base, r = 0.0, X_TOP, BASE, ARCH_R
+    first = f"M{x} {base} V{top} M{x} {top + r} A{r} {r} 0 0 1 {x + 2 * r} {top + r} V{base} "
+    if not path.startswith(first):
+        raise ValueError("wordmark_paths() no longer starts with the lowercase n the lockup replaces")
+    return path[len(first) :], dots, advance
+
+
+def initial_route() -> str:
+    """The symbol's route drawn as the name's capital: from the ascender to the baseline."""
+    return f"M0 {n(A_STEM_END)} V{n(ASC)} L{n(A_WIDTH)} {n(BASE)} V{n(ASC)}"
+
+
+def initial_dots() -> list[tuple[float, float, float]]:
+    """The symbol's three points under the initial's first stem: at the same places along the
+    stem as in the symbol, and the first as wide as the wordmark's stroke so that they survive
+    the sizes the name is shown at (the symbol's own first point is 84 % of its stroke)."""
+    top, height = ASC, BASE - ASC
+    out = []
+    for _cx, cy, r in DOTS:
+        fraction = (cy - 26.0) / 44.0  # the symbol's route runs from y = 26 to y = 70
+        out.append((0.0, round(top + fraction * height, 1), round(r / DOTS[0][2] * W_STROKE / 2, 2)))
+    return out
+
+
+def initial_lockup_parts(mark_paint: str, text_paint: str) -> tuple[str, str]:
+    """(viewBox, body) of "N" + "ulavio". The paints are SVG paint values or class attributes:
+    a value starting with 'class=' is used as is, anything else becomes a stroke/fill colour."""
+    rest, dots, advance = wordmark_without_initial()
+    shift = A_WIDTH + A_GAP - LOWERCASE_N_ADVANCE  # "u" starts where the removed n's advance ended
+    pad = W_STROKE / 2 + 1
+    width = advance + shift + 2 * pad
+
+    def paint(value: str, kind: str) -> str:
+        return value if value.startswith("class=") else f'{kind}="{value}"'
+
+    stroke = f'fill="none" stroke-width="{n(W_STROKE)}" stroke-linecap="round" stroke-linejoin="round"'
+    circles = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in initial_dots())
+    tail = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in dots)
+    body = (
+        f'<path d="{initial_route()}" {paint(mark_paint, "stroke")} {stroke}/>\n'
+        f"<g {paint(mark_paint, 'fill')}>{circles}</g>\n"
+        f'<g transform="translate({n(shift)} 0)">'
+        f'<path d="{rest}" {paint(text_paint, "stroke")} {stroke}/>'
+        f"<g {paint(mark_paint, 'fill')}>{tail}</g></g>"
+    )
+    return f"{n(-pad)} 4 {n(width)} 64", body
+
+
+def lockup(mark_color: str, text_color: str) -> str:
+    view_box, body = initial_lockup_parts(mark_color, text_color)
+    return svg(view_box, body, title="Nulavio")
+
+
+def lockup_mono(color: str) -> str:
+    view_box, body = initial_lockup_parts(color, color)
+    return svg(view_box, body, title="Nulavio")
 
 
 def write(path: Path, content: str) -> None:
@@ -185,7 +261,7 @@ def logo_family() -> None:
     write(logo / "nulavio-symbol.svg", svg("20 16 56 64", mark(MINT), title="Nulavio symbol"))
     write(logo / "nulavio-symbol-dark-on-light.svg", svg("20 16 56 64", mark(MINT_DARK), title="Nulavio symbol"))
     write(logo / "nulavio-symbol-adaptive.svg", svg("20 16 56 64", adaptive_mark(), title="Nulavio symbol"))
-    write(logo / "nulavio-tile.svg", svg("0 0 96 96", tile_background() + "\n" + mark(MINT), title="Nulavio"))
+    write(logo / "nulavio-tile.svg", svg("0 0 96 96", icon_tile(), title="Nulavio"))
     write(logo / "nulavio-mono-black.svg", svg("20 16 56 64", mark("#000000"), title="Nulavio symbol (monochrome)"))
     write(logo / "nulavio-mono-white.svg", svg("20 16 56 64", mark("#FFFFFF"), title="Nulavio symbol (monochrome)"))
     vb, body = wordmark(NAVY, dot_color=MINT_DARK)
@@ -194,14 +270,15 @@ def logo_family() -> None:
     write(logo / "nulavio-wordmark-light.svg", svg(vb, body, title="nulavio"))
     vb, body = wordmark("#000000")
     write(logo / "nulavio-wordmark-mono-black.svg", svg(vb, body, title="nulavio"))
-    write(logo / "nulavio-lockup-horizontal.svg", lockup(MINT_DARK, NAVY, tile=False))
-    write(logo / "nulavio-lockup-horizontal-on-dark.svg", lockup(MINT, CLOUD, tile=False))
-    write(logo / "nulavio-lockup-horizontal-tile.svg", lockup(MINT, NAVY, tile=True))
+    write(logo / "nulavio-lockup-horizontal.svg", lockup(MINT_DARK, NAVY))
+    write(logo / "nulavio-lockup-horizontal-on-dark.svg", lockup(MINT, CLOUD))
+    write(logo / "nulavio-lockup-horizontal-mono-black.svg", lockup_mono("#000000"))
+    write(logo / "nulavio-lockup-horizontal-mono-white.svg", lockup_mono("#FFFFFF"))
 
 
 def icon_masters() -> None:
     icons = ASSETS / "icons"
-    full = svg("0 0 96 96", tile_background() + "\n" + mark(MINT), title="Nulavio", width="512", height="512")
+    full = svg("0 0 96 96", icon_tile(), title="Nulavio", width="512", height="512")
     write(icons / "hicolor" / "scalable" / "apps" / "nulavio.svg", full)
     # 24 px master: stroke thickened, single dot (three dots merge at this size).
     m24 = mark(MINT, stroke=11.5, route="M30 54 V27 L66 71 V27", dots=((30, 70.0, 5.2),))
@@ -227,13 +304,57 @@ def icon_masters() -> None:
         icons / "hicolor" / "symbolic" / "apps" / "nulavio-symbolic.svg",
         svg("0 0 16 16", sym, title="Nulavio", width="16", height="16"),
     )
-    write(ASSETS / "favicon" / "favicon.svg", svg("0 0 96 96", tile_background() + "\n" + mark(MINT), title="Nulavio"))
+    write(ASSETS / "favicon" / "favicon.svg", svg("0 0 96 96", icon_tile(), title="Nulavio"))
+
+
+# --- The Companion's adaptive icon ---------------------------------------------------------------
+# A 108-unit canvas; launchers show the middle 72 and their masks keep at least the 66-unit circle
+# about the centre. The route is scaled about its own centre and moved onto the canvas's centre.
+ANDROID_CANVAS = 108.0
+ANDROID_SCALE = 0.9
+ANDROID_SAFE_RADIUS = 33.0
+
+
+def android_foreground() -> str:
+    """The adaptive icon's foreground as a VectorDrawable: the route and its points in mint, centred.
+    The same file is the monochrome layer (Android 13 themed icons tint it)."""
+    px, py = ROUTE_CENTRE
+    tx, ty = ANDROID_CANVAS / 2 - px, ANDROID_CANVAS / 2 - py
+    route = re.sub(r"([ML])([\d.]+) ([\d.]+)", r"\1\2,\3", ROUTE)  # VectorDrawable: "M30,45 V26 L66,70 V26"
+    dots = "\n".join(
+        f'        <path android:fillColor="{MINT}" android:pathData="M{n(cx - r)},{n(cy)} a{n(r)},{n(r)} 0 1,0 {n(2 * r)},0 '
+        f'a{n(r)},{n(r)} 0 1,0 {n(-2 * r)},0" />'
+        for cx, cy, r in DOTS
+    )
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<!-- The Nulavio symbol, centred in the adaptive icon's safe zone. Generated by scripts/brand/build_logo.py;\n"
+        "     do not edit by hand. Trademark: see docs/brand/guidelines.md. -->\n"
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        f'    android:width="{n(ANDROID_CANVAS)}dp"\n'
+        f'    android:height="{n(ANDROID_CANVAS)}dp"\n'
+        f'    android:viewportWidth="{n(ANDROID_CANVAS)}"\n'
+        f'    android:viewportHeight="{n(ANDROID_CANVAS)}">\n'
+        f'    <group android:pivotX="{n(px)}" android:pivotY="{n(py)}" '
+        f'android:scaleX="{n(ANDROID_SCALE)}" android:scaleY="{n(ANDROID_SCALE)}"\n'
+        f'        android:translateX="{n(tx)}" android:translateY="{n(ty)}">\n'
+        "        <path\n"
+        f'            android:pathData="{route}"\n'
+        f'            android:strokeColor="{MINT}"\n'
+        f'            android:strokeWidth="{n(STROKE)}"\n'
+        '            android:strokeLineCap="round"\n'
+        '            android:strokeLineJoin="round" />\n'
+        f"{dots}\n"
+        "    </group>\n"
+        "</vector>\n"
+    )
 
 
 def main() -> int:
     studies()
     logo_family()
     icon_masters()
+    write(ANDROID_FOREGROUND, android_foreground())
     print(f"wrote SVG assets under {ASSETS.relative_to(ROOT)}")
     return 0
 

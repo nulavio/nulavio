@@ -191,7 +191,7 @@ select.field { padding-right: var(--nv-space-7); }
   min-height: 4rem;
 }
 .brand { display: inline-flex; align-items: center; min-height: 44px; margin-right: auto; }
-.brand img { width: 132px; min-width: 112px; height: auto; }
+.brand img { width: 105px; min-width: 89px; height: auto; }
 .top-nav { display: none; }
 .top-nav ul { display: flex; gap: var(--nv-space-2); }
 .top-nav a,
@@ -212,7 +212,7 @@ select.field { padding-right: var(--nv-space-7); }
 .lang-short { display: none; }
 @media (max-width: 26rem) {
   .top-inner { gap: var(--nv-space-2); }
-  .brand img { width: 112px; }
+  .brand img { width: 89px; }
   .lang { padding-inline: var(--nv-space-3); }
   .lang-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .lang-short { display: inline; }
