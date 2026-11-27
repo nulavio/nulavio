@@ -820,14 +820,31 @@ class AssistantTest(unittest.TestCase):
                 note = f"{tools.UNTRUSTED} {tools.PAGE_FIELDS % 'url, title, text, dialog.message'}\n\n"
                 self.assertTrue(text.startswith(note), text[:200])
                 self.assertTrue(text.endswith("\n\n" + head + data["text"]), text[-50:])
-        # A longer result is still cut at 20,000 characters after the note, which stays whole.
+        # A longer result is still cut at 20,000 characters after the note, which stays whole (and, its text being its
+        # JSON, beside its `untrusted` list's own allowance).
         result = tools.Bridge._ok({"value": "y" * 30_000}, ("value",))
         text = assistant._tool_text(result)
         note = text.split("\n\n", 1)[0]
         self.assertEqual(note, tools.UNTRUSTED + " " + tools.PAGE_FIELDS % "value")
-        self.assertEqual(len(text), len(note) + 2 + 20_000)
+        self.assertEqual(len(text), len(note) + 2 + 20_000 + len(', "untrusted": ["value"]'))
         # Without the note, the cut is where it was.
         self.assertEqual(len(assistant._tool_text({"content": [{"type": "text", "text": "z" * 30_000}]})), 20_000)
+
+    def test_the_untrusted_list_in_a_results_json_does_not_cut_what_the_result_said(self):
+        # OpenCodeReview on #854, round 2: the JSON of a tabs_list or downloads_list result now ends with its
+        # `untrusted` list. A list whose JSON fitted the 20,000 characters without it is still whole, and valid JSON.
+        for fill in (100, 20_000):
+            with self.subTest(fill=fill):
+                tab = {"tab": "t1", "profile": "AI Workspace", "url": "https://example.org/", "title": ""}
+                tab["title"] = "x" * (fill - len(json.dumps({"tabs": [tab]}, ensure_ascii=False)))
+                self.assertEqual(len(json.dumps({"tabs": [tab]}, ensure_ascii=False)), fill)
+                result = tools.Bridge._ok({"tabs": [tab]}, ("tabs[].url", "tabs[].title"))
+                body = assistant._tool_text(result).split("\n\n", 1)[1]
+                self.assertEqual(json.loads(body), {"tabs": [tab], "untrusted": ["tabs[].url", "tabs[].title"]})
+        # A longer list is still cut at 20,000 characters, besides the list's own.
+        result = tools.Bridge._ok({"tabs": [{"title": "y" * 30_000}]}, ("tabs[].url", "tabs[].title"))
+        extra = len(', "untrusted": ["tabs[].url", "tabs[].title"]')
+        self.assertEqual(len(assistant._tool_text(result).split("\n\n", 1)[1]), 20_000 + extra)
 
 
 # The Shell's side of #653 under Node: the module, with a stand-in for the one engine call it makes when loaded.
