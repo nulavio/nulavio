@@ -16,7 +16,7 @@ A Linux-first desktop browser that is **private by default, honest about its lim
 2. **Honesty over marketing.** We separate implemented, prototype and planned. We never claim immunity against malware on the host.
 3. **Upstream first.** Keep the engine's sandbox, isolation, TLS, Safe Browsing and updates. Patch as little as possible.
 4. **Your tools, not ours.** Integrate with Proton Pass, KeePassXC and Bitwarden through official interfaces. Never build a second vault.
-5. **Nothing phones home.** There is no Nulavio server and no telemetry.
+5. **Nothing phones home.** No telemetry, and on its own the browser contacts no Nulavio server. The servers the project runs (the website with its waitlist, the package repository) are reached by a visitor or by the system's package manager, not by the browser by itself.
 6. **Calm UX.** No fear-driven banners. Every warning carries an action and a way back.
 7. **Linux-native.** Wayland, KDE and GNOME conventions, portals, accessibility and scaling.
 8. **Sustainable for a small team.** Automation, pinned inputs and a minimal patch stack.

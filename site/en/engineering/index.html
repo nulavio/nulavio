@@ -7,10 +7,10 @@
 <meta name="color-scheme" content="light dark">
 <title>Nulavio engineering document: what is ready and what is not</title>
 <!--release:on-->
-<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers, and states in writing what it does and what it does not do yet. Public alpha {{release_version}} for Fedora and Ubuntu.">
+<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers on its own, and states in writing what it does and what it does not do yet. Public alpha {{release_version}} for Fedora and Ubuntu.">
 <!--/release:on-->
 <!--release:off-->
-<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers, and states in writing what it does and what it does not do yet. In development, no release to download.">
+<meta name="description" content="Nulavio is a browser for Linux built on Mozilla's Gecko engine. It blocks trackers from the first launch, sends no data to Nulavio servers on its own, and states in writing what it does and what it does not do yet. In development, no release to download.">
 <!--/release:off-->
 <link rel="canonical" href="https://nulavio.net/en/engineering/">
 <link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/engenharia/">
@@ -38,15 +38,16 @@
 </header>
 <main id="main">
 <!-- Receipts (spec 4.1). Status: docs/product/release-criteria.md (walk-through of 2026-10-27: "the alpha is not released yet").
-     No server: launcher/nulavio_launcher/cli.py ("nothing is sent to Nulavio; there is no Nulavio server"); in browser/, nulavio.net
-     only appears as an extension and contract id (shell@nulavio.net, @nulavio.net/routing-command-line-handler;1).
+     No data to Nulavio: docs/security/new-profile-connections.md, tests/integration/test_new_profile_connections.py (a new profile left alone contacts no host of the project); in browser/, nulavio.net
+     only appears as an extension and contract id (shell@nulavio.net, @nulavio.net/routing-command-line-handler;1)
+     and in links the person opens (the what's-new page's link to every version's notes).
      Engine: browser/build/engine.json. Licence: LICENSE, LICENSES.md. Platform order: docs/product/execution-plan.md (Project goal). -->
 <section id="summary" aria-labelledby="summary-h">
 <div class="summary-text">
 <p class="revision">nulavio.net · revision of {{date_en}} · commit {{commit}}</p>
 <p class="pill"><!--release:on--><strong>Public alpha</strong> · {{release_version}}, for Fedora and Ubuntu<!--/release:on--><!--release:off--><strong>In development</strong> · no release to download yet<!--/release:off--></p>
 <h1 id="summary-h">Private by default. Honest by design.</h1>
-<p class="lead">Nulavio is a browser for Linux built on Mozilla's Gecko engine. It comes with tracking protection set to Strict, installs the uBlock Origin blocker on first launch, and sends no data to Nulavio servers: the project runs no service that receives data from the browser.</p>
+<p class="lead">Nulavio is a browser for Linux built on Mozilla's Gecko engine. It comes with tracking protection set to Strict, installs the uBlock Origin blocker on first launch, and on its own sends no data to Nulavio servers: a new profile left alone contacts no host the project runs.</p>
 <p>This page is an engineering document: each claim says what it costs or where it stops, and where to check it. What is not ready yet is marked as not ready. Numbers, excerpts and captures come from commit {{origin}}.</p>
 <p>The code is licensed under the MPL-2.0 and is public at <span translate="no">github.com/nulavio/nulavio</span>. The paths quoted here are relative to that repository.</p>
 </div>
@@ -56,7 +57,7 @@
 <div><dt>Engine</dt><dd>Gecko, built from Firefox <span class="mono">{{firefox}}</span> source</dd></div>
 <div><dt>Engine patches</dt><dd><span class="mono">{{patches}}</span></dd></div>
 <div><dt>Licence</dt><dd>MPL-2.0, public repository</dd></div>
-<div><dt>Nulavio servers that receive browser data</dt><dd>None</dd></div>
+<div><dt>Nulavio servers the browser contacts on its own</dt><dd>None</dd></div>
 </dl>
 </section>
 <figure id="fig-1">
@@ -347,7 +348,7 @@
 <section id="kept" aria-labelledby="kept-h">
 <h2 id="kept-h"><span class="num">3</span> What we keep on, and why</h2>
 <p class="opening">Some engine protections need the network. We keep them, because turning them off would leave you less protected.</p>
-<p class="prose">So «Nulavio has no server» does not mean «the browser never connects to anything».</p>
+<p class="prose">So «on its own, the browser sends no data to Nulavio servers» does not mean «the browser never connects to anything».</p>
 <div class="claim" id="s3-1">
 <div class="claim-text">
 <h3><span class="num">3.1</span> Sandbox and site isolation</h3>

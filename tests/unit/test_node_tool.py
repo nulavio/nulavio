@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import node_tool  # noqa: E402
+from child_env import child_env  # noqa: E402
 from node_tool import KNOB, requires_node  # noqa: E402
 
 UNIT = ROOT / "tests" / "unit"
@@ -182,7 +183,7 @@ class ImportsOnItsOwnTest(unittest.TestCase):
         modules = [p.stem for p in sorted(UNIT.glob("test*.py")) if "from node_tool import" in p.read_text(encoding="utf-8")]
         self.assertIn("test_site", modules)
         with tempfile.TemporaryDirectory() as empty:
-            env = {"PATH": empty, KNOB: "1"}
+            env = child_env({"PATH": empty, KNOB: "1"})
             for module in modules:
                 with self.subTest(module):
                     code = f"import sys; sys.path.insert(0, {str(UNIT)!r}); import {module}"
