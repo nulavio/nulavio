@@ -11,9 +11,10 @@ the pairing QR carries the invite's secret and is meant for that screen only.
 A profile has one pending phone unlock at a time, across helper processes
 (#669, U-T19): its folder of encrypted files (`P.vault/`) records the session id
 of the latest request (`phone-request`, 0600). A new request replaces that
-record and tells the earlier helper to stop; a helper opens the profile only
-while the record still names its own session, checked under the profile's
-state lock just before the volume is mounted.
+record and tells the earlier helper it was replaced, which stops once its own
+record agrees; a helper opens the profile only while the record still names its
+own session, checked under the profile's state lock just before the volume is
+mounted.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import json
 import os
 import secrets
 import socket
+import stat
 import sys
 import threading
 import time
@@ -78,6 +80,7 @@ class Session:
         self.cancelled = threading.Event()
         self.lock = threading.Lock()
         self.done = threading.Event()
+        self.superseded = None  # unlock: whether this profile's record now names another request (#669)
 
     def set(self, state: str, **fields) -> None:
         with self.lock:
@@ -113,6 +116,14 @@ class Session:
             self.decided.set()
             return self.status()
         if action == "cancel":
+            self.cancelled.set()
+            self.decided.set()
+            return {"cancelled": True}
+        if action == "replaced":
+            # Believed only when this helper's own profile agrees: a copy of the profile's folder carries the record
+            # naming this session, and a request on that copy must not end this one (#823 review).
+            if self.superseded is None or not self.superseded():
+                return {"error": "bad-state"}
             self.cancelled.set()
             self.decided.set()
             return {"cancelled": True}
@@ -187,6 +198,9 @@ def _request_lock(box: storage.Container):
     new request must show its QR before the browser gives up on the helper."""
     fd = os.open(box.root / f"{REQUEST_RECORD}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():  # I9: not a FIFO, not someone else's file
+            raise paths.UnsafePathError(f"not a private regular file: {REQUEST_RECORD}.lock")
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
@@ -222,12 +236,12 @@ def is_current_request(box: storage.Container, session_id: str) -> bool:
 
 
 def _end_replaced(previous: str, session_id: str) -> None:
-    """Tell the helper of the replaced request to stop now, so its page says so. Only a courtesy: that helper
-    cannot open the profile any more anyway (is_current_request)."""
+    """Tell the helper of the replaced request, so it stops now and its page says so; it checks its own record
+    first. Only a courtesy: that helper cannot open the profile any more anyway (is_current_request)."""
     if not previous or previous == session_id:
         return
     try:
-        control(previous, {"action": "cancel"}, timeout=2.0)
+        control(previous, {"action": "replaced"}, timeout=2.0)
     except VaultError:
         pass  # not a session id: nothing to tell
 
@@ -341,9 +355,11 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
         emit({"error": coordinator.error or "failed"})
         return
     req_id, expiry = signed["r"]["req_id"], signed["r"]["expiry"]
+    session.superseded = lambda: not is_current_request(box, session.id)  # before the claim: a later one may tell at once
     try:
         previous = claim_request(box, session.id)  # this request is now the profile's only pending one
     except (OSError, paths.UnsafePathError):
+        coordinator.cancel()  # wipes the request's session key and a combined unlock's password key (I8)
         vault.lock()
         emit({"error": "storage-failed"})
         return
@@ -353,7 +369,8 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
     name = link.instance_name("u", req_id)
 
     def stopped() -> bool:
-        return session.cancelled.is_set() or not is_current_request(box, session.id)
+        # The record first, the cancel last: a cancel that comes while the record is read still counts.
+        return not is_current_request(box, session.id) or session.cancelled.is_set()
 
     outcome = None
     try:

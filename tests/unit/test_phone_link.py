@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -459,6 +460,78 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertTrue(profiles.container(self.prof).mounted())
         profiles.lock(self.prof)
 
+    def test_07a_only_the_helper_whose_own_record_was_replaced_stops(self):
+        # #823 review: a copy of the profile's folder, taken while this request waits, carries the record naming
+        # this session. A request started on that copy must not end this one: the helper stops only when its own
+        # profile's record names another session.
+        self.pair()
+        session, _first, thread = self.start("unlock", {"autolock": False})
+        server = phone_session._serve(session, phone_session.socket_path(session.id))
+        self.addCleanup(phone_session.socket_path(session.id).unlink, missing_ok=True)
+        self.addCleanup(server.close)
+        phone_session._end_replaced(session.id, "the-copys-session")  # what the copy's helper does
+        time.sleep(0.5)
+        self.assertFalse(session.cancelled.is_set())
+        self.assertEqual(session.state, "waiting-for-phone")
+
+        phone_session.claim_request(profiles.container(self.prof), "a-later-session")  # now it was replaced
+        phone_session._end_replaced(session.id, "a-later-session")
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(session.state, "cancelled")
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07b_a_cancel_during_the_last_record_check_opens_nothing(self):
+        # #823 review: the cancel is asked after the record, so one that comes while the record is read still counts.
+        self.pair()
+        cancelled = []
+        real = phone_session.is_current_request
+
+        def current(box, session_id):
+            answer = real(box, session_id)
+            cancelled[0].set()  # the person presses Cancel while the record is being read
+            return answer
+
+        with mock.patch.object(phone_session, "is_current_request", current):
+            session, first, thread = self.start("unlock", {"autolock": False})
+            cancelled.append(session.cancelled)
+            phone = self.phone.unlock(first["qr"])
+            thread.join(20)
+            phone.join(20)
+        self.assertEqual(session.state, "cancelled")
+        self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07c_a_record_that_cannot_be_written_wipes_the_pending_request(self):
+        # #823 review: no QR, and the request's session key (and a combined unlock's password key) wiped (I8).
+        self.pair()
+        made = []
+        real_init = phone_session.Coordinator.__init__
+
+        def init(coordinator, *args, **kwargs):
+            real_init(coordinator, *args, **kwargs)
+            made.append(coordinator)
+
+        answers = []
+        failing = mock.patch.object(phone_session, "claim_request", side_effect=OSError(28, "No space left on device"))
+        with mock.patch.object(phone_session.Coordinator, "__init__", init), failing:
+            phone_session.unlock(phone_session.Session("unlock"), {"path": str(self.prof.path)}, answers.append,
+                                 self.phone.resolver)  # fmt: skip
+        self.assertEqual(answers, [{"error": "storage-failed"}])
+        self.assertEqual(len(made), 1)
+        self.assertEqual(made[0].phone.pending, {})
+        self.assertIsNone(made[0]._password_kek)
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07d_a_request_lock_that_is_not_a_private_file_is_refused(self):
+        # #823 review (I9): something other than this user's regular file at the lock's place is not used.
+        box = profiles.container(self.prof)
+        os.mkfifo(box.root / f"{phone_session.REQUEST_RECORD}.lock", 0o600)
+        with self.assertRaises(phone_session.paths.UnsafePathError):
+            phone_session.claim_request(box, "a-session")
+        self.assertFalse(phone_session.is_current_request(box, "a-session"))
+        self.assertFalse((box.root / phone_session.REQUEST_RECORD).exists())
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):
@@ -473,9 +546,10 @@ class PhoneApiTest(unittest.TestCase):
         self.addCleanup(self._cleanup)
 
     def _cleanup(self):
+        tool = shutil.which("fusermount3") or "fusermount"  # what storage.tools_available() accepts
         for mountpoint in sorted(storage.mounted_paths()):
             if mountpoint.startswith(str(self.tmp)):
-                subprocess.run(["fusermount3", "-u", "-z", mountpoint], check=False, capture_output=True)
+                subprocess.run([tool, "-u", "-z", mountpoint], check=False, capture_output=True)
         for dirpath, _dirs, _files in os.walk(self.tmp):
             os.chmod(dirpath, 0o700)
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -512,7 +586,9 @@ class PhoneApiTest(unittest.TestCase):
         # through a stand-in for Avahi (tests/lib/fake_avahi.py), as in test_vault_ui, so nothing is announced.
         prof, _code = profiles.create("cofre", password=PASSWORD, kdf=FAST, recovery_kdf=FAST)
         busctl, registry = self.tmp / "busctl", self.tmp / "avahi.json"
-        busctl.write_text(FAKE_BUSCTL.format(python=sys.executable))
+        # Through /bin/sh, not a #! line naming Python: that line cannot hold a path with a space in it.
+        (self.tmp / "busctl.py").write_text(FAKE_BUSCTL.format(python=sys.executable))
+        busctl.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -I {shlex.quote(str(self.tmp / "busctl.py"))} "$@"\n')
         busctl.chmod(0o700)
         registry.write_text("{}")
         self.env.update({"NULAVIO_BUSCTL": str(busctl), "NV_FAKE_AVAHI": str(registry)})
