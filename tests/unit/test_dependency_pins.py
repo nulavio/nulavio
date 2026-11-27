@@ -7,6 +7,7 @@ from __future__ import annotations
 import copy
 import datetime
 import hashlib
+import io
 import json
 import re
 import shutil
@@ -15,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+import urllib.error
 import urllib.parse
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -745,7 +747,7 @@ class ExtensionLagTest(unittest.TestCase):
             for v, t in reversed(made)
         ]
 
-    def stream_net(self, versions, down_pages=()):
+    def stream_net(self, versions, down_pages=(), current=None):
         """AMO for that stream: the versions list in pages, with a "next" link that points elsewhere."""
         base = f"{watch.AMO}addons/addon/x%40y/"
 
@@ -756,7 +758,7 @@ class ExtensionLagTest(unittest.TestCase):
             def json(self, url, data=None, missing_ok=False):
                 self.requested.append(url)
                 if url == base:
-                    return {"current_version": versions[0]}
+                    return {"current_version": current or versions[0]}
                 if url == base + "versions/1.0/":
                     return versions[-1]
                 if url == f"{watch.AMO}blocklist/block/x%40y/":
@@ -775,9 +777,9 @@ class ExtensionLagTest(unittest.TestCase):
 
         return Stream()
 
-    def stream_row(self, versions, now, page_size=5, pages=watch.VERSIONS_PAGES, down_pages=()):
-        net = self.stream_net(versions, down_pages)
-        entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64, "size": 10}
+    def stream_row(self, versions, now, page_size=5, pages=watch.VERSIONS_PAGES, down_pages=(), current=None, size=10):
+        net = self.stream_net(versions, down_pages, current)
+        entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64, "size": size}
         with tempfile.TemporaryDirectory() as tmp:
             lock = Path(tmp) / "browser" / "distribution" / "extensions.lock.json"
             lock.parent.mkdir(parents=True)
@@ -902,6 +904,53 @@ class ExtensionLagTest(unittest.TestCase):
         net.replies[path]["file"]["created"] = "2026-10-02T00:00:00"
         row = self.rows(net, at("2026-11-26T20:00:00Z"))["keepassxc-browser"]
         self.assertEqual(row.state, "error", row.text)
+
+    def made(self, version, created):
+        return {**self.stream(0)[0], "version": version, "file": {**self.stream(0)[0]["file"], "created": created}}
+
+    def test_amo_current_version_counts_also_when_the_list_has_a_later_one(self):
+        # AMO's current 1.5 came after the pin (36 days before) but is not in the list read, which has 2.0 (9 days):
+        # the lag counts from 1.5, with every reply there as with one missing (main counted from 1.5 too)
+        pin, current, now = self.stream(0)[0], self.made("1.5", "2026-05-05T00:00:00Z"), at("2026-06-10T00:00:00Z")
+        later = [self.made(f"2.{n}", f"2026-06-0{n + 1}T00:00:00Z") for n in reversed(range(3))]
+        row, _ = self.stream_row([*later, pin], now, current=current)  # the list reaches the pin
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.5 for 36 days: run scripts/upstream/refresh_extensions_lock.py", row.text)
+        row, _ = self.stream_row([*later, pin], now, page_size=1, pages=2, current=current)  # it does not
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.5 for at least 36 days", row.text)
+
+    def test_a_summary_version_that_cannot_be_ordered_hides_no_lag_the_list_shows(self):
+        versions = self.stream(1)  # 1.1 (2026-05-11) and the pin
+        current = {**versions[0], "version": "9" * 5000}  # past int()'s 4300 digits: a malformed summary
+        row, _ = self.stream_row(versions, at("2026-06-20T00:00:00Z"), current=current)
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.1 for 40 days", row.text)
+
+    def test_a_lock_size_held_as_text_is_read_as_the_launcher_reads_it(self):
+        row, _ = self.stream_row(self.stream(0), at("2026-06-20T00:00:00Z"), size="10")  # the launcher takes int("10")
+        self.assertEqual((row.state, row.text), ("ok", "x 1.0 is AMO's current version"))
+
+    def test_a_slow_amo_still_reads_every_blocklist(self):
+        # every AMO request answers after 10 s: AMO_BUDGET covers the 10 summary and blocklist requests main made, so
+        # the last pin's blocklist entry is read before any pinned file or versions page
+        clock, net_replies = [0.0], RecordedAmo(self.KEYS).replies
+        blocked = "blocklist/block/%7Bd634138d-c276-4fc8-924b-40a0ea21d284%7D/"
+        net_replies[blocked] = {"is_all_versions": True, "blocked": [], "soft_blocked": []}
+
+        def urlopen(request, timeout):
+            clock[0] += 10
+            reply = net_replies[request.full_url[len(watch.AMO) :]]
+            if reply is None:
+                raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+            return io.BytesIO(json.dumps(reply).encode())
+
+        net = watch.Net(clock=lambda: clock[0], sleep=lambda _: None)
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch.urllib.request, "urlopen", urlopen):
+            rows = watch.extension_rows(net, at("2026-11-26T20:00:00Z"), RecordedAmo(self.KEYS).lock(Path(tmp)))
+        self.assertEqual(rows[-1].state, "fail", rows[-1].text)
+        self.assertIn("is on Mozilla's blocklist", rows[-1].text)
+        self.assertLessEqual(clock[0], watch.AMO_BUDGET)
 
 
 class GradleReviewTest(unittest.TestCase):

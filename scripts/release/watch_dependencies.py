@@ -8,7 +8,8 @@
 * The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced or removed file for the
   pinned version (read on every run, also once a newer version is out), and how long the lock has lagged
   behind AMO: since the first version AMO published after the pin, however many came after it.
-  One AMO reply missing or malformed hides no failure the others show; AMO's requests get AMO_BUDGET seconds in all.
+  One AMO reply missing or malformed hides no failure the others show; AMO's requests get AMO_BUDGET seconds in all,
+  the summary and blocklist of every pin first, then the pinned files, then the versions lists.
 * The pinned extensions against the security advisories their repositories publish on GitHub (the table in
   docs/security/extension-advisory-sources.json): an advisory whose range covers the pinned version fails at once.
 * The base images' tag@digest pins against their registries (a newer build is reported, not failed).
@@ -409,6 +410,7 @@ def amo_file(version: dict) -> dict:
     if not isinstance(file["size"], int) or isinstance(file["size"], bool) or file["size"] <= 0:
         raise ValueError(f"AMO returned a size that is not a positive number for {version['version']}")
     parse_time(file["created"])  # a ValueError or TypeError when it is not a date
+    version_key(version["version"])  # a ValueError when it cannot be ordered (a number past int()'s digit limit, say)
     return {"version": version["version"], "sha256": digest, "size": file["size"], "created": file["created"]}
 
 
@@ -489,17 +491,15 @@ def extension_verdict(
         return "fail", failure
     if current["version"] == pinned:
         return "ok", f"{entry['key']} {pinned} is AMO's current version"
-    since = newer
-    if since is None:  # no listed, public version after the pin in the list: AMO's current one, if it came after it
-        if not after_pin(current, served, hidden):  # a backport, say: following it would downgrade the pin
-            why = (
-                "is not listed and public in AMO's versions list" if current["version"] in hidden else "is not newer than the pin"
-            )
-            text = f"{entry['key']} pinned {pinned}, AMO's current version {current['version']} {why}"
-            if not complete:
-                return "error", f"{text}, and AMO's versions list was not read back to the pin"
-            return "warn", text
-        since = current
+    # the earliest of the list's first newer version and AMO's current one, when that came after the pin: the same
+    # selection as when a reply is missing, so a version the list does not show still counts
+    since = earliest(([newer] if newer else []) + ([current] if after_pin(current, served, hidden) else []))
+    if since is None:  # AMO's current version is a backport, say: following it would downgrade the pin
+        why = "is not listed and public in AMO's versions list" if current["version"] in hidden else "is not newer than the pin"
+        text = f"{entry['key']} pinned {pinned}, AMO's current version {current['version']} {why}"
+        if not complete:
+            return "error", f"{text}, and AMO's versions list was not read back to the pin"
+        return "warn", text
     return lag(entry, since, current, now, complete)
 
 
@@ -537,7 +537,7 @@ def pin_failure(entry: dict, served, block, current) -> str | None:
         return f"{entry['key']} {pinned} is on Mozilla's blocklist: refresh the lock now"
     if served is None:
         return f"{entry['key']} {pinned}: AMO no longer serves the pinned version: refresh the lock now"
-    if served is not MISSING and (served["sha256"] != entry["sha256"].lower() or served["size"] != entry["size"]):
+    if served is not MISSING and (served["sha256"] != entry["sha256"].lower() or served["size"] != int(entry["size"])):
         return f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256 and size"
     if current is not MISSING and current["version"] == pinned and current["sha256"] != entry["sha256"].lower():
         return f"{entry['key']} {pinned}: AMO now serves a different file than the pinned SHA-256"
@@ -584,12 +584,18 @@ def blocklist_entry(net: Net, guid: str) -> dict | None:
 
 def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
     lock = json.loads((root / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
-    rows = []
+    # AMO's summary and the blocklist of every pin first, then every pinned file, then the versions lists: when AMO is
+    # slow, AMO_BUDGET runs out on the lag of the last pins, not on the blocklist of a pin read after another's pages
+    pins = []
     for entry in lock["extensions"]:
         guid = urllib.parse.quote(entry["id"], safe="")
         problems: list[Exception] = []  # each reply is read on its own: the other extensions are still checked too
         current = read(problems, current_file, net, guid)
-        served = read(problems, pinned_file, net, guid, entry)
+        block = read(problems, blocklist_entry, net, guid)
+        pins.append((entry, guid, problems, current, block))
+    served_files = [read(problems, pinned_file, net, guid, entry) for entry, guid, problems, _, _ in pins]
+    rows = []
+    for (entry, guid, problems, current, block), served in zip(pins, served_files, strict=True):
         found, newer, complete = MISSING, None, True
         seen: list[dict] = []  # the versions after the pin the list showed, also when a later page failed
         hidden: set[str] = set()
@@ -597,7 +603,6 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
             found = read(problems, first_newer, net, guid, served, seen, hidden)  # also without AMO's summary
             if found is not MISSING:
                 newer, complete = found
-        block = read(problems, blocklist_entry, net, guid)
         try:
             if not problems:
                 state, text = extension_verdict(entry, served, current, newer, block, now, complete, hidden)
