@@ -305,8 +305,10 @@ class HeldLinksTest(unittest.TestCase):
         )
         try:
             self.open_private_window()
+            earlier = self.tabs_showing("/routing/ask.html")  # the pages test 02 had another extension open
             self.assertEqual(self.from_another_app("https://banco.example/asked"), 0, "the link was left to the browser")
-            shown = harness.wait_until(lambda: self.tabs_showing("/routing/ask.html"), timeout=20)
+            new = lambda: [tab for tab in self.tabs_showing("/routing/ask.html") if tab not in earlier]  # noqa: E731
+            shown = harness.wait_until(new, timeout=20)
             self.assertTrue(shown, self.windows())
             self.assertEqual([private for private, _ in shown], [False], self.windows())
             held = shown[0][1].split("h=", 1)[1]
