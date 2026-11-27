@@ -1,0 +1,49 @@
+/* The chosen direction: «Rota», with what the other two do better. Loaded after rota.css.
+   From the brand: its own typeface for the headings (no serif, so no new font and no
+   font-src), the product's control shape. From «Palco»: the waitlist as the brand's dark
+   home. From «Recibo»: every capture says which build it comes from, and the numbers. */
+
+h1, h2 { font-family: var(--nv-font-family-brand); font-weight: var(--nv-font-weight-semibold); }
+h1 { letter-spacing: -0.03em; line-height: 1.04; }
+h1 .mine { font-style: normal; color: var(--nv-color-accent-default); }
+h2 { letter-spacing: -0.02em; line-height: 1.1; }
+.prose > .fine { font-family: inherit; font-style: normal; font-size: 1.0625rem; color: var(--nv-color-text-secondary); }
+.fine strong { font-size: inherit; color: var(--nv-color-text-primary); }
+
+.btn, .field { border-radius: var(--nv-radius-md); }
+.field { padding-inline: var(--nv-space-5); }
+
+.prov { display: block; font-family: var(--nv-font-family-mono); font-size: var(--nv-type-caption-size); font-variant-numeric: tabular-nums; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+.closeup .prov { margin-top: var(--nv-space-2); }
+.scene figcaption > .prov { font-size: var(--nv-type-caption-size); }
+
+/* The numbers: the first stop, read as a receipt along the line. */
+.proof { position: relative; padding: 0 0 var(--nv-space-9) var(--lane); }
+.proof::before {
+  content: ""; position: absolute; left: var(--line-x); top: 0; bottom: 0;
+  width: var(--line); background: var(--nv-color-route-vertical);
+}
+.proof dl { display: grid; gap: var(--nv-space-5) var(--nv-space-7); padding-block: var(--nv-space-6); border-block: var(--hairline); }
+.proof div { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr); column-gap: var(--nv-space-4); align-items: baseline; align-content: start; }
+.proof dd { grid-column: 1; grid-row: 1; font-family: var(--nv-font-family-mono); font-size: 1.5rem; font-weight: var(--nv-font-weight-medium); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.proof dt { grid-column: 2; grid-row: 1; font-size: 0.9375rem; line-height: 1.45; color: var(--nv-color-text-secondary); }
+@media (min-width: 48rem) { .proof dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 75rem) {
+  .proof dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .proof div { grid-template-columns: minmax(0, 1fr); row-gap: var(--nv-space-2); }
+  .proof dt { grid-column: 1; grid-row: 2; }
+}
+.hero { padding-bottom: var(--nv-space-9); }
+
+/* The exit: the line runs into the brand's dark home and turns towards the form there. */
+.exit {
+  margin-top: 0; padding-block: 0 6rem;
+  background: var(--nv-color-bg-sunken); color: var(--nv-color-text-primary);
+  /* one paint from edge to edge of the viewport, whatever the page's width */
+  border-image: conic-gradient(var(--nv-color-bg-sunken) 0 0) fill 0 / 0 / 0 100vmax;
+}
+.exit::before { height: 6.5rem; }
+.exit::after { top: calc(6.5rem - var(--line) / 2 - 4px); }
+.exit-text { padding-top: 5.3rem; }
+.feature { padding-bottom: 6rem; }
+.foot { border-top: 0; }

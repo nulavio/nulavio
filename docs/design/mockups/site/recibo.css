@@ -1,0 +1,166 @@
+/* Direction «Recibo» (receipt): the engineering pages' document (site/site.css) taken to the
+   landing. A ruled page with a margin rail; numbers set as a receipt; every capture a numbered
+   figure with what it shows, its build and its hash. Nothing moves but the recorded loops.
+   Colours from the tokens only. */
+
+:root {
+  --page: 72rem;
+  --rail: 9.5rem;
+  --rule: 1px solid var(--nv-color-border-separator);
+  --hairline: 1px solid var(--nv-color-border-subtle);
+}
+
+.masthead, main, .colophon {
+  width: 100%;
+  max-width: var(--page);
+  margin-inline: auto;
+  padding-inline: var(--nv-space-5);
+}
+@media (min-width: 48rem) { .masthead, main, .colophon { padding-inline: var(--nv-space-7); } }
+
+.mono, .revision, .rail, .fig-n, .meta, .receipt-title, .receipt dd, .fine strong {
+  font-family: var(--nv-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- masthead -------------------------------------------------------------------------- */
+
+.masthead { display: flex; align-items: center; gap: var(--nv-space-6); min-height: 4.5rem; }
+.brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
+.top-nav { display: none; margin-left: auto; }
+.top-nav ul { display: flex; gap: var(--nv-space-6); }
+.top-nav a { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
+.top-nav a:hover { color: var(--nv-color-text-primary); text-decoration: underline; text-decoration-color: var(--nv-color-accent-default); }
+.btn-quiet { margin-left: auto; background: transparent; border-color: var(--nv-color-border-control); color: var(--nv-color-text-primary); }
+.btn-quiet:hover { background: color-mix(in oklab, var(--nv-color-text-primary) 8%, transparent); }
+.btn-quiet:active { background: color-mix(in oklab, var(--nv-color-text-primary) 12%, transparent); }
+.btn, .field { border-radius: var(--nv-radius-xs); }
+@media (min-width: 48rem) {
+  .top-nav { display: block; }
+  .top-nav + .btn-quiet { margin-left: 0; }
+}
+
+
+/* -- summary (hero) -------------------------------------------------------------------- */
+
+.summary { display: grid; gap: var(--nv-space-8); padding-block: var(--nv-space-8) var(--nv-space-8); border-top: var(--rule); }
+.revision { margin-bottom: var(--nv-space-5); font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); }
+h1 {
+  font-size: clamp(2.25rem, 1.4rem + 3.6vw, 3.5rem);
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+h1 span { display: block; }
+.lead { margin-top: var(--nv-space-6); max-width: 36rem; font-size: 1.1875rem; line-height: 1.5; color: var(--nv-color-text-secondary); }
+.lead strong { color: var(--nv-color-text-primary); }
+.summary .join { margin-top: var(--nv-space-7); max-width: 32rem; }
+.join-row { display: grid; gap: var(--nv-space-3); }
+@media (min-width: 30rem) { .join-row { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* The receipt: the amount first, in a column of its own, then what it counts. */
+.receipt {
+  align-self: start;
+  padding: var(--nv-space-6);
+  background: var(--nv-color-bg-surface);
+  border: var(--hairline);
+  border-bottom: 1px dashed var(--nv-color-border-control);
+}
+.receipt-title {
+  padding-bottom: var(--nv-space-4);
+  border-bottom: var(--rule);
+  font-size: var(--nv-type-caption-size);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--nv-color-text-secondary);
+}
+.receipt dl div {
+  display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); column-gap: var(--nv-space-5); align-items: baseline;
+  padding-block: var(--nv-space-4);
+  border-bottom: var(--hairline);
+}
+.receipt dl div:last-child { border-bottom: 0; padding-bottom: 0; }
+.receipt dd { grid-column: 1; grid-row: 1; font-size: 1.5rem; font-weight: var(--nv-font-weight-medium); line-height: 1.2; text-align: right; }
+.receipt dt { grid-column: 2; grid-row: 1; font-size: 0.9375rem; line-height: 1.45; color: var(--nv-color-text-secondary); }
+
+@media (min-width: 64rem) {
+  .summary { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--nv-space-9); padding-block: var(--nv-space-9) var(--nv-space-8); }
+  .receipt { margin-top: 2.6rem; }
+}
+
+/* -- figures --------------------------------------------------------------------------- */
+
+.fig .shot { width: 100%; border-radius: var(--nv-radius-xs); }
+.fig figcaption { display: grid; gap: var(--nv-space-2) var(--nv-space-5); margin-top: var(--nv-space-4); font-size: 0.9375rem; line-height: 1.5; }
+.fig figcaption > div { display: grid; gap: var(--nv-space-3); max-width: 44rem; }
+.fig-n { font-size: var(--nv-type-caption-size); font-weight: var(--nv-font-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nv-color-text-primary); }
+.meta { font-size: var(--nv-type-caption-size); color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
+.fig-window { padding-bottom: var(--nv-space-9); }
+@media (min-width: 64rem) {
+  .fig-window figcaption { grid-template-columns: var(--rail) minmax(0, 1fr); column-gap: 0; }
+  .fig-n { padding-top: 0.15em; }
+}
+
+.whole summary { min-height: 2.75rem; padding-block: var(--nv-space-3); font-weight: var(--nv-font-weight-medium); }
+.whole summary .meta { margin-left: var(--nv-space-3); font-weight: var(--nv-font-weight-regular); }
+.whole .scene-video { margin-top: var(--nv-space-3); border: var(--hairline); border-radius: var(--nv-radius-xs); }
+
+/* -- entries: a rail for the number, the body beside it ---------------------------------- */
+
+.entry { display: grid; gap: var(--nv-space-5); padding-block: var(--nv-space-8); border-top: var(--rule); }
+.rail {
+  display: flex; align-items: center; gap: var(--nv-space-3); white-space: nowrap;
+  font-size: var(--nv-type-caption-size); letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--nv-color-text-secondary);
+}
+.rail .num { color: var(--nv-color-text-primary); font-weight: var(--nv-font-weight-medium); }
+h2 {
+  font-size: clamp(1.625rem, 1.3rem + 1.4vw, 2.25rem);
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  max-width: 36rem;
+}
+.entry-lead { margin-top: var(--nv-space-5); max-width: 40rem; color: var(--nv-color-text-secondary); }
+
+.ledger { margin-top: var(--nv-space-7); border-top: var(--hairline); max-width: 48rem; }
+.ledger li { position: relative; padding: var(--nv-space-4) 0 var(--nv-space-4) var(--nv-space-6); border-bottom: var(--hairline); }
+.ledger li::before {
+  content: ""; position: absolute; left: 0; top: calc(var(--nv-space-4) + 0.2em);
+  width: var(--nv-route-vertical-width); height: var(--nv-route-vertical-height);
+  border-radius: 2px; background: var(--nv-color-route-vertical);
+}
+.fine { display: grid; gap: var(--nv-space-2); max-width: 48rem; padding-block: var(--nv-space-4); border-bottom: var(--rule); color: var(--nv-color-text-primary); }
+.fine strong { font-size: var(--nv-type-caption-size); font-weight: var(--nv-font-weight-medium); letter-spacing: 0.04em; text-transform: uppercase; color: var(--nv-color-text-secondary); }
+
+.figs { display: grid; gap: var(--nv-space-8); margin-top: var(--nv-space-8); }
+
+@media (min-width: 64rem) {
+  .entry { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 0; padding-block: var(--nv-space-9); }
+  .rail { align-self: start; padding-top: 0.7rem; }
+  .fine { grid-template-columns: 11rem minmax(0, 1fr); align-items: baseline; }
+  .figs .fig { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--nv-space-7); align-items: start; }
+  .figs .fig figcaption { margin-top: 0; }
+}
+
+/* -- waitlist: a form on the page, not a band -------------------------------------------- */
+
+.cta .join {
+  margin-top: var(--nv-space-7);
+  max-width: 48rem;
+  padding: var(--nv-space-6);
+  background: var(--nv-color-bg-surface);
+  border: var(--hairline);
+  border-bottom: 1px dashed var(--nv-color-border-control);
+}
+.join-fields { display: grid; gap: var(--nv-space-5); }
+.cta .field { background: var(--nv-color-bg-canvas); }
+@media (min-width: 48rem) {
+  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+}
+
+/* -- colophon -------------------------------------------------------------------------- */
+
+.colophon { display: grid; gap: var(--nv-space-5); align-items: start; padding-bottom: var(--nv-space-8); font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.colophon::before { content: ""; grid-column: 1 / -1; border-top: var(--rule); margin-bottom: var(--nv-space-5); }
+.colophon-text { display: grid; gap: var(--nv-space-3); max-width: 46rem; }
+@media (min-width: 64rem) { .colophon { grid-template-columns: var(--rail) minmax(0, 1fr); column-gap: 0; } }

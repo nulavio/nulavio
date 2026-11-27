@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>Nulavio: a direção escolhida, «Rota» com enxertos (mock-up do redesenho, #173)</title>
+<link rel="stylesheet" href="../../../../browser/startpage/tokens.css">
+<link rel="stylesheet" href="shared.css">
+<link rel="stylesheet" href="rota.css">
+<link rel="stylesheet" href="final.css">
+</head>
+<body>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+
+<header class="top">
+<a class="brand" href="https://nulavio.net/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="brand/nulavio-lockup-horizontal-on-dark.svg" width="107" height="27">
+<img src="brand/nulavio-lockup-horizontal.svg" alt="Nulavio" width="107" height="27">
+</picture></a>
+<nav class="top-nav" aria-label="Seções">
+<ul>
+<li><a href="#features">Recursos</a></li>
+<li><a href="https://nulavio.net/#compare">Comparativo</a></li>
+<li><a href="https://nulavio.net/#faq">Perguntas</a></li>
+<li><a href="https://nulavio.net/en/" hreflang="en" lang="en">English</a></li>
+</ul>
+</nav>
+<a class="top-join" href="#join">Entrar na lista</a>
+</header>
+
+<main id="main" class="route">
+
+<section class="hero" aria-labelledby="hero-h">
+<span class="trail origin" aria-hidden="true"><i></i><i></i><i></i></span>
+<div class="hero-text">
+<p class="kicker">Alpha para Fedora e Ubuntu · <a href="https://nulavio.net/baixar/">Baixar</a></p>
+<h1 id="hero-h"><span>A web é sua.</span> <span class="mine">Seus dados também.</span></h1>
+<p class="lead">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
+<form class="join" action="/api/waitlist" method="post">
+<input type="hidden" name="lang" value="pt-BR">
+<p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
+<label class="join-label" for="hero-email">Avise-me quando eu puder instalar</label>
+<div class="join-row">
+<input class="field" id="hero-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="seu e-mail">
+<button class="btn" type="submit">Entrar na lista</button>
+</div>
+<p class="join-note">Um único e-mail, quando chegar a sua vez. <a href="https://nulavio.net/lista/#data">O que guardamos</a></p>
+</form>
+</div>
+<figure class="closeup">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="../../../../site/assets/shots/window-crop-pt-BR-dark.webp" width="1200" height="840">
+<img class="shot" src="../../../../site/assets/shots/window-crop-pt-BR-light.webp" width="1200" height="840" alt="O canto superior esquerdo da janela do Nulavio, em tamanho real. A faixa mostra o ícone de pasta de trabalho em azul-claro, o nome Trabalho e um cadeado com a palavra Protegido; abaixo, a barra de endereço com 127.0.0.1 e a lista vertical com três abas: Notas da reunião, selecionada, Planilha de horas e Documentação." loading="eager">
+</picture>
+<figcaption>O canto da janela, em tamanho real: a faixa diz de quem é a janela, «Trabalho», e como ela está, «Protegido». <span class="prov">commit f08daf3 · build 20261104050259 · Firefox 159.0</span></figcaption>
+</figure>
+</section>
+
+<section class="proof" aria-label="O Nulavio em números">
+<dl>
+<div><dt>servidores do Nulavio recebendo dados do seu navegador</dt><dd>0</dd></div>
+<div><dt>padrões de fábrica alterados, cada um com o motivo e o custo por escrito</dt><dd>44</dd></div>
+<div><dt>sites populares testados com as proteções ligadas, em novembro de 2026; nenhum quebrou por causa delas</dt><dd>48</dd></div>
+<div><dt>é a meta para entregar correções urgentes do motor</dt><dd>24 h</dd></div>
+</dl>
+</section>
+
+<div id="features">
+<section class="feature stop" aria-labelledby="profiles-h">
+<div class="prose">
+<h2 id="profiles-h">Trabalho, banco e vida pessoal, cada um no seu perfil</h2>
+<p>Cada perfil tem os próprios logins, cookies, histórico e extensões. Você diz uma vez onde cada site abre, e o Nulavio leva cada link ao perfil certo: os que chegam de outros aplicativos, os que você digita e os que clica nas páginas.</p>
+<figure class="bands">
+<ul>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="../../../../site/assets/shots/band-personal-pt-BR-dark.webp" width="448" height="88">
+<img src="../../../../site/assets/shots/band-personal-pt-BR-light.webp" width="448" height="88" alt="Faixa do Nulavio no estado Pessoal, sem senha." loading="lazy" decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="../../../../site/assets/shots/band-work-pt-BR-dark.webp" width="448" height="88">
+<img src="../../../../site/assets/shots/band-work-pt-BR-light.webp" width="448" height="88" alt="Faixa do Nulavio no estado Trabalho, protegido." loading="lazy" decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="../../../../site/assets/shots/band-temporary-seal-pt-BR-dark.webp" width="447" height="62">
+<img src="../../../../site/assets/shots/band-temporary-seal-pt-BR-light.webp" width="447" height="62" alt="Faixa do Nulavio no perfil Temporário: apagado ao fechar." loading="lazy" decoding="async">
+</picture></li>
+</ul>
+<figcaption>A faixa em três estados, recortada de janelas reais. O texto de cada uma foi lido da faixa no momento da captura.</figcaption>
+</figure>
+<ul class="points">
+<li>Troca de perfil em um clique, com cor e nome sempre à vista</li>
+<li>Perfil temporário: some do disco quando você fecha a janela</li>
+<li>Modelo para sites sensíveis: limpa tudo ao fechar e recusa instalações vindas de páginas</li>
+</ul>
+<p class="fine"><strong>Sem letra miúda:</strong> perfis separam seus dados. Eles não escondem seu endereço IP.</p>
+</div>
+
+
+<ol class="steps">
+<li class="step">
+<h3>Um perfil abre na sua janela</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(prefers-reduced-motion: no-preference)" srcset="media/profile-opens-pt-BR-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="media/profile-opens-pt-BR-poster.webp" width="1280" height="800" alt="Em Configurações › Perfis, um clique em Abrir no perfil Trabalho abre a janela do Trabalho, com a faixa «Trabalho · Sem senha»." loading="lazy" decoding="async">
+</picture>
+<figcaption>
+<p>Abrir «Trabalho» abre uma janela só dele, com a sua própria cor e o seu nome.</p>
+<p class="prov">Firefox 160.0.1 · build 20261119020726 · sha256 1459d46231b2…</p>
+<details class="whole">
+<summary>Ver a cena inteira <span class="meta">9 s, sem som, com legendas</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="media/profile-opens-pt-BR-poster.webp" width="1280" height="800">
+<source src="media/profile-opens-pt-BR.webm" type="video/webm">
+<track kind="captions" srclang="pt-BR" label="Português" src="media/profile-opens-pt-BR.vtt" default>
+</video>
+<p class="transcript">Na tela: Configurações › Perfis, com «Pessoal» e «Trabalho»; clique em Abrir no «Trabalho»; a janela do «Trabalho» abre, com a faixa «Trabalho · Sem senha».</p>
+</details>
+</figcaption>
+</figure>
+</li>
+<li class="step">
+<h3>Um link vai ao perfil certo</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(prefers-reduced-motion: no-preference)" srcset="media/link-routed-pt-BR-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="media/link-routed-pt-BR-poster.webp" width="1280" height="800" alt="No perfil Pessoal, digita-se o endereço da intranet do trabalho; ele abre na janela do Trabalho, cuja faixa diz «Aberto pela sua regra · Mudar»." loading="lazy" decoding="async">
+</picture>
+<div class="detail">
+<img class="shot" src="media/link-routed-pt-BR-poster.webp" width="1280" height="800" alt="" loading="lazy" decoding="async">
+<p>Detalhe da mesma captura, em tamanho real</p>
+</div>
+<figcaption>
+<p>O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra: «Aberto pela sua regra · Mudar».</p>
+<p class="prov">Firefox 160.0.1 · build 20261119020726 · sha256 3517fc0f667a…</p>
+<details class="whole">
+<summary>Ver a cena inteira <span class="meta">10 s, sem som, com legendas</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="media/link-routed-pt-BR-poster.webp" width="1280" height="800">
+<source src="media/link-routed-pt-BR.webm" type="video/webm">
+<track kind="captions" srclang="pt-BR" label="Português" src="media/link-routed-pt-BR.vtt" default>
+</video>
+<p class="transcript">Na tela: no perfil «Pessoal», o endereço «http://localhost:34439/intranet» é digitado; ele abre na janela do «Trabalho», cuja faixa diz «Aberto pela sua regra · Mudar».</p>
+</details>
+</figcaption>
+</figure>
+</li>
+</ol>
+</section>
+</div>
+
+<section class="exit" id="join" data-theme="dark" aria-labelledby="join-h">
+<div class="exit-text">
+<h2 id="join-h">Navegue adiante. Não deixe rastro.</h2>
+<p>Entre na lista e receba o aviso quando o Nulavio chegar ao seu sistema. Fedora primeiro, Ubuntu em seguida.</p>
+</div>
+<form class="join" action="/api/waitlist" method="post">
+<input type="hidden" name="lang" value="pt-BR">
+<p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
+<div class="join-fields">
+<div>
+<label class="join-label" for="join-email">Seu e-mail</label>
+<input class="field" id="join-email" type="email" name="email" required maxlength="254" autocomplete="email" autocapitalize="off" spellcheck="false">
+</div>
+<div>
+<label class="join-label" for="join-os">Sistema que você usa (opcional)</label>
+<select class="field" id="join-os" name="platform">
+<option value="">Prefiro não dizer</option>
+<option value="fedora">Fedora</option>
+<option value="ubuntu">Ubuntu ou Debian</option>
+<option value="arch">Arch</option>
+<option value="linux-other">Outra distribuição Linux</option>
+<option value="windows">Windows</option>
+<option value="macos">macOS</option>
+</select>
+</div>
+<button class="btn" type="submit">Entrar na lista</button>
+</div>
+<p class="join-note">Um único e-mail, quando chegar a sua vez. Sem newsletter. <a href="https://nulavio.net/lista/#data">O que guardamos</a> · <a href="https://nulavio.net/lista/#leave">Sair da lista</a></p>
+</form>
+</section>
+
+</main>
+
+<footer class="foot">
+<a class="brand" href="https://nulavio.net/"><picture>
+<source media="(prefers-color-scheme: dark)" srcset="brand/nulavio-lockup-horizontal-on-dark.svg" width="107" height="27">
+<img src="brand/nulavio-lockup-horizontal.svg" alt="Nulavio" width="107" height="27">
+</picture></a>
+<div class="foot-text">
+<p>Proteção serena para a web aberta.</p>
+<p>O Nulavio é construído sobre o motor Gecko, da Mozilla. O Nulavio não é afiliado à Mozilla. Firefox é marca registrada da Mozilla Foundation.</p>
+<p>Este site não usa scripts, cookies nem análise de visitas. O formulário da lista de espera envia só o que você digita nele.</p>
+</div>
+</footer>
+</body>
+</html>
