@@ -21,6 +21,7 @@ from doh_server import DohServer
 
 PRIVACY = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy'
 NAME = "lookup.nulavio-dns.example"
+EXCLUDED = "excluded.nulavio-dns.example"  # the local resolver knows it too: its query log says it was skipped
 
 
 def resolve(m, name: str) -> list[str] | str:
@@ -49,7 +50,7 @@ class DnsChoiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        cls.doh = DohServer(Path(cls.tmp.name), {NAME}).start()
+        cls.doh = DohServer(Path(cls.tmp.name), {NAME, EXCLUDED}).start()
         cls.session = harness.GeckoProfileSession(name="Pessoal")
         cls.m = cls.session.start()
         cls.m.chrome(
@@ -91,6 +92,15 @@ class DnsChoiceTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
+    def use_dns(self, choice: str, **where) -> None:
+        """Start a case from `choice` itself, so it also runs alone; in the journey it is the state the case before left."""
+        self.m.set_context("chrome")
+        try:
+            self.m.execute(f"{PRIVACY}.setDns(arguments[0]);", [{"choice": choice, **where}])
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(self.state()["choice"], choice)
+
     def test_01_new_tab_asks_once_and_keeping_the_system_resolver_is_explicit(self):
         self.assertEqual(self.state()["choice"], "default")
         self.open("newtab/newtab.html")
@@ -130,6 +140,56 @@ class DnsChoiceTest(unittest.TestCase):
         self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # only this resolver knows the name
         self.assertIn(NAME, self.doh.queries[before:])
         self.assertEqual(resolve(self.m, "localhost.nulavio-unknown.example"), "NS_ERROR_UNKNOWN_HOST")
+
+    def test_02b_an_excluded_name_goes_to_the_computers_resolver_and_settings_lists_it(self):
+        # #626: with encrypted DNS only, the engine still asks the computer's resolver for a name a setting (the
+        # person's or a policy's) excludes from encrypted lookups. The option says so; Settings names the names.
+        self.use_dns("strict", provider="custom", uri=self.doh.uri)  # what 02 saves through Settings
+        settings_page.open_pane(self.m, "privacy")
+        settings_page.wait_control(self.m, "nulavio-dns-choice")
+        try:  # the two prefs are set inside, so a failure part-way through still clears them for test 03
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED])
+            # The engine's test pref: the computer's resolver answers every name with 127.0.0.1, as the local DoH
+            # resolver does, so the answer's address alone cannot tell who answered; the resolver's query log does.
+            self.m.chrome("Services.prefs.setBoolPref('network.dns.native-is-localhost', true);")
+            now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: EXCLUDED in (c["description"] or ""))
+            self.assertIn("excluídos da consulta criptografada", now["description"])
+            self.assertIn("somente DNS criptografado", now["description"])
+            self.assertEqual(self.state()["excluded"], [EXCLUDED])  # localhost and .local are in the option's note
+            before = len(self.doh.queries)
+            answer = resolve(self.m, EXCLUDED)  # answered, by the computer's resolver (which may list it twice)
+            self.assertEqual(sorted(set(answer)) if isinstance(answer, list) else answer, ["127.0.0.1"])
+            self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # which still answers the rest
+            self.assertNotIn(EXCLUDED, self.doh.queries[before:])
+            self.assertIn(NAME, self.doh.queries[before:])
+            # The engine keeps a name as written and looks names up in lowercase: a capital never matches, so the
+            # name goes to the encrypted resolver and Settings does not list it (CodeRabbit on #849).
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED.upper()])
+            now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "excluídos" not in (c["description"] or ""))
+            self.assertEqual(self.state()["excluded"], [])
+            before = len(self.doh.queries)
+            self.assertEqual(resolve(self.m, EXCLUDED), ["127.0.0.1"])
+            self.assertIn(EXCLUDED, self.doh.queries[before:])
+            # A long list is cut short, and says how many more there are. The engine ends a name at a comma or at
+            # whitespace, so the names in a list written with spaces, tabs and new lines are counted one by one.
+            many = [f"n{i}.nulavio-dns.example" for i in range(9)]
+            many.insert(3, EXCLUDED)
+            separators = [" ", "\t", ", ", "\n", "  ", ",", " ,", "\r\n", " ", ""]
+            written = "".join(name + sep for name, sep in zip(many, separators, strict=True))
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [written])
+            now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "e mais 2" in (c["description"] or ""))
+            self.assertEqual(self.state()["excluded"], many)
+            self.assertIn(", ".join(many[:8]), now["description"])
+            self.assertNotIn(many[8], now["description"])
+            before = len(self.doh.queries)
+            self.assertEqual(sorted(set(resolve(self.m, EXCLUDED))), ["127.0.0.1"])  # between a tab and a comma
+            self.assertNotIn(EXCLUDED, self.doh.queries[before:])
+        finally:
+            self.m.chrome(
+                "for (const p of ['network.trr.excluded-domains', 'network.dns.native-is-localhost'])"
+                " Services.prefs.clearUserPref(p);"
+            )
+        settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "excluídos" not in (c["description"] or ""))
 
     def test_03_back_to_the_system_resolver_sends_nothing_to_it(self):
         settings_page.open_pane(self.m, "privacy")
@@ -209,6 +269,26 @@ class DnsChoiceTest(unittest.TestCase):
             self.m.execute("document.getElementById('dns-apply').click();")
             self.assertTrue(harness.wait_until(lambda: self.state()["choice"] == "system", 10))
             self.assertEqual(self.m.chrome("return Services.prefs.getIntPref('network.trr.mode');"), 5)
+        finally:
+            self.m.chrome("Services.prefs.clearUserPref('doh-rollout.mode');")
+
+    def test_06_settings_follow_the_mode_the_engine_changes_while_open(self):
+        # #626: the regional roll-out changes the mode in effect under "default" with no change to a pref the
+        # DNS group observes; the engine says so with network:trr-mode-changed, as its own DNS setting hears it.
+        self.use_dns("system")  # what 05 leaves
+        settings_page.open_pane(self.m, "privacy")
+        settings_page.wait_control(
+            self.m, "nulavio-dns-choice", lambda c: c["shown"] and c["description"] == "Agora: o resolvedor do computador."
+        )
+        self.m.chrome("for (const p of ['network.trr.mode', 'nulavio.dns.chosen']) Services.prefs.clearUserPref(p);")
+        try:
+            settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "sem criptografia" in (c["description"] or ""))
+            self.m.chrome("Services.prefs.setIntPref('doh-rollout.mode', 2);")
+            self.assertTrue(harness.wait_until(lambda: self.state()["encryptedNow"], 10), self.state())
+            now = settings_page.wait_control(
+                self.m, "nulavio-dns-choice", lambda c: "com DNS criptografado" in (c["description"] or "")
+            )
+            self.assertNotIn("sem criptografia", now["description"])
         finally:
             self.m.chrome("Services.prefs.clearUserPref('doh-rollout.mode');")
 
