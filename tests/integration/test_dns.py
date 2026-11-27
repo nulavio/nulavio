@@ -21,7 +21,7 @@ from doh_server import DohServer
 
 PRIVACY = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs").NulavioPrivacy'
 NAME = "lookup.nulavio-dns.example"
-EXCLUDED = "excluded.nulavio-dns.example"  # the local resolver knows it too: only an answer from elsewhere says it was skipped
+EXCLUDED = "excluded.nulavio-dns.example"  # the local resolver knows it too: its query log says it was skipped
 
 
 def resolve(m, name: str) -> list[str] | str:
@@ -139,13 +139,16 @@ class DnsChoiceTest(unittest.TestCase):
         settings_page.open_pane(self.m, "privacy")
         settings_page.wait_control(self.m, "nulavio-dns-choice")
         self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED])
+        # The engine's test pref: the computer's resolver answers every name with 127.0.0.1, as the local DoH
+        # resolver does, so the answer's address alone cannot tell who answered; the resolver's query log does.
+        self.m.chrome("Services.prefs.setBoolPref('network.dns.native-is-localhost', true);")
         try:
             now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: EXCLUDED in (c["description"] or ""))
             self.assertIn("excluídos da consulta criptografada", now["description"])
             self.assertIn("somente DNS criptografado", now["description"])
             self.assertEqual(self.state()["excluded"], [EXCLUDED])  # localhost and .local are in the option's note
             before = len(self.doh.queries)
-            self.assertNotEqual(resolve(self.m, EXCLUDED), ["127.0.0.1"])  # not the encrypted resolver's answer
+            self.assertEqual(resolve(self.m, EXCLUDED), ["127.0.0.1"])  # answered, by the computer's resolver
             self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # which still answers the rest
             self.assertNotIn(EXCLUDED, self.doh.queries[before:])
             self.assertIn(NAME, self.doh.queries[before:])
@@ -156,7 +159,10 @@ class DnsChoiceTest(unittest.TestCase):
             self.assertIn(", ".join(many[:8]), now["description"])
             self.assertNotIn(many[8], now["description"])
         finally:
-            self.m.chrome("Services.prefs.clearUserPref('network.trr.excluded-domains');")
+            self.m.chrome(
+                "for (const p of ['network.trr.excluded-domains', 'network.dns.native-is-localhost'])"
+                " Services.prefs.clearUserPref(p);"
+            )
         settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "excluídos" not in (c["description"] or ""))
 
     def test_03_back_to_the_system_resolver_sends_nothing_to_it(self):
