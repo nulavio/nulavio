@@ -615,19 +615,22 @@ class SiteTest(unittest.TestCase):
                 video = next(n for n in nodes if n.tag == "video")
                 clip = manifest["recordings"][Path(video.attrs["poster"]).name.removesuffix("-poster.webp")]
                 with self.subTest(page=page, scene=clip["scene"]):
-                    # The loop only for whoever did not ask for less motion; the still frame for everyone else.
+                    # On a phone, the smaller cut, whatever the motion setting: the loop is the whole window, which a
+                    # phone's column shrinks past reading. Elsewhere the loop only for whoever did not ask for less
+                    # motion, and the still frame for everyone else. The first source that matches is the one shown.
                     picture = next(n for n in nodes if n.tag == "picture")
                     sources = [n for n in picture.children if isinstance(n, Node) and n.tag == "source"]
                     # The still is the frame the scene's title names, cut so that it is read; a smaller cut on a phone.
                     media = [n.attrs.get("media") for n in sources]
-                    self.assertEqual(media, ["(prefers-reduced-motion: no-preference)", "(max-width: 47.9375rem)"])
-                    self.assertTrue(sources[0].attrs["srcset"].endswith("-loop.webp"))
-                    self.assertTrue(sources[1].attrs["srcset"].endswith("-still-narrow.webp"))
+                    self.assertEqual(media, ["(max-width: 47.9375rem)", "(prefers-reduced-motion: no-preference)"])
+                    narrow, loop = sources
+                    self.assertTrue(loop.attrs["srcset"].endswith("-loop.webp"))
+                    self.assertTrue(narrow.attrs["srcset"].endswith("-still-narrow.webp"))
                     still = next(n for n in picture.children if isinstance(n, Node) and n.tag == "img")
                     self.assertTrue(still.attrs["src"].endswith("-still.webp"))
                     self.assertGreater(len(still.attrs["alt"]), 60, "the picture says what the scene shows")
                     detail = next(n for n in nodes if n.tag == "img" and n.attrs["src"].endswith("-detail.webp"))
-                    for node in (sources[1], still, detail):
+                    for node in (narrow, still, detail):
                         crop = stills[Path(node.attrs.get("srcset") or node.attrs["src"]).name]["crop_css"]
                         self.assertEqual((int(node.attrs["width"]), int(node.attrs["height"])), (crop["w"], crop["h"]))
                     for node in (*sources, still, video):
@@ -845,6 +848,17 @@ class SiteTest(unittest.TestCase):
         css = (ROOT / "site" / "landing.css").read_text(encoding="utf-8")
         self.assertRegex(css, r"\.notice \{[^}]*display: none", "a message shows only when its fragment is the target")
         self.assertIn(".notice:target", css)
+
+    def test_pictures_shown_at_their_real_size_keep_their_pixels_inside_the_hairline(self):
+        # The page sizes every box with its border (border-box); a capture shown at its real size (the bands, a
+        # scene's detail) would lose 2 px of its width to its hairline and be scaled. Their frame goes outside.
+        css = (ROOT / "site" / "landing.css").read_text(encoding="utf-8")
+        for selector in (".bands img", ".detail .shot"):
+            with self.subTest(selector=selector):
+                rule = re.search(r"(?m)^" + re.escape(selector) + r" \{([^}]*)\}", css)
+                self.assertIsNotNone(rule, selector)
+                self.assertIn("box-sizing: content-box", rule.group(1))
+                self.assertIn("max-width: calc(100% - 2px)", rule.group(1), "and the frame still fits a narrow page")
 
     def test_the_link_page_is_one_form_that_posts_to_its_own_address(self):
         """What a sign-up is answered with: the worker serves it with the key in the address (?k=…), and

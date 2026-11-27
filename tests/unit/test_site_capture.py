@@ -154,6 +154,17 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertEqual(self.tree(), before, "no picture replaced, no manifest written, nothing staged left")
 
+    def test_a_capture_that_cannot_start_leaves_no_earlier_run_to_compose(self):
+        # The engine is not found: the run stops before any scene, and the record of the run before is gone, so
+        # compose cannot stamp its screenshots with this checkout's commit.
+        self.record([shot("window-en-US-light")])
+        no_engine = unittest.mock.patch.object(capture_site.harness, "nulavio_engine", lambda: None)
+        with no_engine, contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(capture_site.capture(self.raw, ["en-US"], {"window"}), 2)
+        self.assertFalse((self.raw / "captures.json").exists())
+        with self.assertRaises(FileNotFoundError):
+            capture_site.compose(self.raw)
+
     def test_a_cut_outside_the_screenshot_is_refused(self):
         self.record([{**shot("window-en-US-light"), "crop_css": {"x": 150, "y": 0, "w": 100, "h": 20}}])
         with self.assertRaises(SystemExit):
@@ -165,11 +176,21 @@ class ComposeTest(unittest.TestCase):
         self.assertEqual(capture_site.compose(self.raw), 0)
         sizes = {(f["width"], f["height"]) for f in self.manifest()["files"]}
         self.assertEqual(len(sizes), 1, "one width and one height for the three")
-        before = self.tree()
-        self.record([strip("protected")])  # alone, its width could differ from the two it would sit with
-        with self.assertRaises(SystemExit):
-            capture_site.compose(self.raw)
-        self.assertEqual(self.tree(), before)
+        strips = {k: v for k, v in self.tree().items() if "-strip-" in k}
+        # `--only window` captures the protected strip alone: its width could differ from the two it would sit
+        # with, so it is not cut, the three of the earlier run stay, and the rest of the run is composed.
+        (self.raw / ("1" * 20 + ".png")).write_bytes(png(400, 60, shade=0x20))
+        self.record([strip("protected", raw="1" * 20 + ".png"), shot("window-en-US-light", "1" * 20 + ".png")])
+        self.assertEqual(capture_site.compose(self.raw), 0)
+        self.assertEqual({k: v for k, v in self.tree().items() if "-strip-" in k}, strips)
+        listed = {f["file"] for f in self.manifest()["files"]}
+        self.assertEqual(listed, {Path(k).name for k in strips if k.endswith(".webp")} | {"window-en-US-light.webp"})
+
+    def test_strips_of_a_partial_run_are_not_cut_and_none_is_invented(self):
+        # A first run that has two of the three (the protected profile was not available): no strip at all.
+        self.record([strip("personal"), strip("temporary"), shot("window-en-US-light")])
+        self.assertEqual(capture_site.compose(self.raw), 0)
+        self.assertEqual({f["file"] for f in self.manifest()["files"]}, {"window-en-US-light.webp"})
 
     def test_strips_of_one_css_width_get_one_pixel_width_wherever_they_start(self):
         # 96.4167 CSS px at 2x: from x=0 the edges rounded apart gave 193 px, from x=12.3 they gave 192 px.

@@ -471,7 +471,8 @@ select.field { padding-right: var(--nv-space-7); }
    frame stays transparent, so the three keep one size). */
 .bands { margin-top: var(--nv-space-6); }
 .bands ul { display: grid; justify-items: start; gap: var(--nv-space-2); }
-.bands img { display: block; max-width: 100%; height: auto; border: var(--hairline); border-radius: var(--nv-radius-xs); }
+/* The hairline goes outside the band's pixels (content-box): inside them, it would scale the picture down by 2 px. */
+.bands img { display: block; box-sizing: content-box; max-width: calc(100% - 2px); height: auto; border: var(--hairline); border-radius: var(--nv-radius-xs); }
 .bands li:last-child img { border-color: transparent; border-radius: 0; }
 .bands figcaption { margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
 .bands .prov { margin-top: var(--nv-space-2); }
@@ -506,8 +507,8 @@ select.field { padding-right: var(--nv-space-7); }
 
 /* The detail: the band of the window the scene ends in, a picture of its own cut from the
    capture at the capture's scale (1.5x) and shown at the window's real size, its width and
-   height attributes (smaller only where the page is narrower than it). */
-.detail .shot { display: block; max-width: 100%; height: auto; border-radius: var(--nv-radius-xs); }
+   height attributes (smaller only where the page is narrower than it), its hairline outside them. */
+.detail .shot { display: block; box-sizing: content-box; max-width: calc(100% - 2px); height: auto; border-radius: var(--nv-radius-xs); }
 /* What was done to the video after its capture: words, set as the caption, not as a stamp. */
 .scene .edits { font-family: inherit; }
 .detail p { margin-top: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-caption-size); }

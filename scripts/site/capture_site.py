@@ -664,13 +664,14 @@ def build_info(engine_path: Path) -> dict:
 
 def capture(raw: Path, locales: list[str], only: set[str]) -> int:
     """Step 1: run the scenes, leave the screenshots and ``captures.json`` in ``raw``. No Pillow, no git."""
+    if raw.exists():
+        # First, before anything can stop the run: compose never finds a screenshot or a record of an earlier run.
+        shutil.rmtree(raw)
     engine = harness.nulavio_engine()
     if engine is None:
         print("needs the Nulavio build (NULAVIO_ENGINE)", file=sys.stderr)
         return 2
     info = build_info(Path(engine.path))
-    if raw.exists():
-        shutil.rmtree(raw)  # compose never finds a screenshot of an earlier run
     out = Output(raw)
     argv = ["--locales", *locales, "--only", ",".join(sorted(only))]
     # The container is named only when the runner says which one it is: another image has other fonts and tools.
@@ -728,7 +729,11 @@ def git(*args: str) -> str:
 
 
 def strip_boxes(entries: list[dict]) -> dict[str, dict]:
-    """The strip crops, in CSS px: the states of one language and theme get one width and the band's height."""
+    """The strip crops, in CSS px: the states of one language and theme get one width and the band's height.
+
+    One width for the three is only known from the three: a language and theme of which this run has fewer (a run
+    of ``--only window`` or ``--only bands``, or one that could not reach a state) gets no strip, and the three
+    of an earlier run of the same build stay as they are."""
     groups: dict[tuple, list[dict]] = {}
     for e in entries:
         if e.get("strip") and e["meta"]["state"] in STRIP_STATES:
@@ -737,8 +742,8 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
     for key, group in groups.items():
         states = sorted(e["meta"]["state"] for e in group)
         if states != sorted(STRIP_STATES):
-            # One width for the three is only known from the three: a strip cut alone could differ from the others.
-            raise SystemExit(f"{key}: strips of {states} only; the three come from one run (--only window,bands)")
+            print(f"  {key}: strips of {states} only, not cut; the three come from one run (--only window,bands)", flush=True)
+            continue
         spans = {
             e["name"]: (min(c["x"] for c in e["strip"]["cues"]), max(c["x"] + c["w"] for c in e["strip"]["cues"])) for e in group
         }
@@ -802,14 +807,14 @@ def compose(raw: Path) -> int:
     commit, clean = git("rev-parse", "--short=7", "HEAD"), not git("status", "--porcelain")
     manifest_path = SHOTS / "manifest.json"
     old = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
-    names = {e["name"] + ".webp" for e in record["entries"]}
+    strips = strip_boxes(record["entries"])
+    entries = [e for e in record["entries"] if not e.get("strip") or e["name"] in strips]  # the landing's states only
+    names = {e["name"] + ".webp" for e in entries}
     kept = [f for f in old.get("files", []) if f["file"] not in names]
     if kept and old.get("buildid") != record["buildid"]:
         # The manifest names one build for every capture, and the pages print it.
         raise SystemExit(f"this run leaves {len(kept)} captures of build {old.get('buildid')} in place: capture the whole set")
-    strips = strip_boxes(record["entries"])
     files, staged = [], {}
-    entries = [e for e in record["entries"] if not e.get("strip") or e["name"] in strips]  # the landing's states only
     for e in entries:
         image = Image.open(raw / e["raw"]).convert("RGB")
         crop = strips.get(e["name"], e["crop_css"])
