@@ -133,25 +133,27 @@ class MotionSheetTest(unittest.TestCase):
 
 class SidebarMotionTest(unittest.TestCase):
     """The launcher's width moves on the motion tokens. Since Firefox 160 the engine animates it with a view
-    transition whose timing is CSS (sidebar.css); Horizon re-values those variables. Expand-on-hover reads a pref."""
+    transition whose timing is CSS (sidebar.css); Horizon re-values those variables, which Firefox 161 renamed to
+    design-system tokens (--sidebar-motion-*, --sidebar-panel-*). Expand-on-hover reads a pref."""
 
     HORIZON = ROOT / "browser" / "branding" / "nulavio" / "content" / "theme" / "horizon.css"
 
     def test_horizon_puts_the_engine_transition_on_the_tokens(self):
-        found = {prop: (preludes, value) for preludes, prop, value in declarations(self.HORIZON) if prop.startswith("--motion-")}
+        engine = ("--sidebar-motion-", "--sidebar-panel-", "--motion-")
+        found = {prop: (preludes, value) for preludes, prop, value in declarations(self.HORIZON) if prop.startswith(engine)}
         self.assertEqual(
             {prop: value for prop, (_, value) in found.items()},
             {
-                "--motion-dur-sidebar-enter": "var(--nv-motion-duration-expand)",
-                "--motion-dur-sidebar-exit": "var(--nv-motion-duration-collapse)",
-                "--motion-ease-emphasized": "var(--nv-motion-easing-standard)",
+                "--sidebar-motion-duration-enter": "var(--nv-motion-duration-expand)",
+                "--sidebar-motion-duration-exit": "var(--nv-motion-duration-collapse)",
+                "--sidebar-motion-easing": "var(--nv-motion-easing-standard)",
                 # The motion map (#319): a sidebar panel opening, closing and giving way to another.
-                "--motion-dur-sidebar-panel-enter": "var(--nv-motion-duration-expand)",
-                "--motion-dur-sidebar-panel-exit": "var(--nv-motion-duration-collapse)",
-                "--motion-dur-sidebar-panel-content-fade": "var(--nv-motion-duration-fast)",
-                "--motion-ease-standard": "var(--nv-motion-easing-standard)",
+                "--sidebar-panel-motion-duration-enter": "var(--nv-motion-duration-expand)",
+                "--sidebar-panel-motion-duration-exit": "var(--nv-motion-duration-collapse)",
+                "--sidebar-panel-content-motion-duration-fade": "var(--nv-motion-duration-fast)",
+                "--sidebar-panel-content-motion-easing-fade": "var(--nv-motion-easing-standard)",
             },
-        )
+        )  # Firefox 161's names; the engine reads none of the 160 ones (--motion-dur-sidebar-*), so none is left.
         for prop, (preludes, _) in found.items():
             with self.subTest(prop=prop):
                 # Off with the rest of Horizon (nulavio.horizon.enabled), on the root element.
@@ -183,8 +185,8 @@ class SidebarMotionTest(unittest.TestCase):
                     line for line in text.splitlines() if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
                 )
                 motion = (
-                    r"sidebar\.animation|--motion-|startViewTransition|_getRects|\.animate\(|easing|KeyframeEffect"
-                    r"|_animation[A-Z]"
+                    r"sidebar\.animation|--motion-|--sidebar(-panel)?(-content)?-motion-|startViewTransition|_getRects"
+                    r"|\.animate\(|easing|KeyframeEffect|_animation[A-Z]"
                 )
                 self.assertNotRegex(changed, motion)
 
