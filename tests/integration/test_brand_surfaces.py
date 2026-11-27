@@ -83,7 +83,7 @@ class BrandSurfacesTest(unittest.TestCase):
         self.assertTrue(card["shown"], card)
         shown = colours(self.fetch(card["src"]))
         self.assertEqual(shown & MINT_SCALE, set(), (card, shown))
-        (self.out / "settings-privacy-status.png").write_bytes(self.m.screenshot_png())
+        (self.out / "settings-privacy-status.png").write_bytes(self.window_png())
 
     def test_03_about_dialog_writes_the_name_with_the_symbol_as_initial(self):
         for url in ("chrome://branding/content/about-wordmark.svg", "chrome://branding/content/firefox-wordmark.svg"):
@@ -106,12 +106,21 @@ class BrandSurfacesTest(unittest.TestCase):
         self.capture_about()
         self.m.chrome('Services.wm.getMostRecentWindow("Browser:About")?.close();')
 
+    def window_png(self) -> bytes:
+        """The whole browser window (chrome context), so the selected tab is what is captured."""
+        self.m.set_context("chrome")
+        try:
+            return self.m.screenshot_png()
+        finally:
+            self.m.set_context("content")
+
     def capture_about(self):
-        """Evidence only: the About window's pixels, from its own chrome window handle."""
+        """Evidence only: the About window's pixels. In chrome context the window handles are the
+        top-level windows; the About dialog is the one whose windowtype is Browser:About."""
         self.m.set_context("chrome")
         try:
             before = self.m.send("WebDriver:GetWindowHandle")["value"]
-            for handle in self.m.send("WebDriver:GetChromeWindowHandles"):
+            for handle in self.m.window_handles():
                 self.m.switch_to(handle)
                 if self.m.execute("return document.documentElement.getAttribute('windowtype');") == "Browser:About":
                     (self.out / "about-dialog.png").write_bytes(self.m.screenshot_png())
