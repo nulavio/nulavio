@@ -120,7 +120,7 @@ The fingerprinting comparison (`/engenharia/impressao-digital/`, `/en/engineerin
 | Guard rule | `browser/config/guard-rules.json` + a unit test in `tests/unit/test_prefs_and_guard.py` |
 | Extension update | `python3 -I scripts/upstream/refresh_extensions_lock.py`, review hash **and permission** changes, then `--write` (it re-copies uBlock Origin's list registry and says when a default list of `browser/distribution/content-filter.json` is gone) and run all tests |
 | Design tokens | Edit `docs/brand/tokens.json`, run `scripts/brand/build_tokens.py` and `scripts/brand/contrast.py` |
-| Logo/icons | Edit `scripts/brand/build_logo.py` (never hand-edit generated SVGs), then run `build_logo.py` and `build_icons.py` |
+| Logo/icons | Edit `scripts/brand/build_logo.py` (never hand-edit generated SVGs or the Companion's `ic_launcher_foreground.xml`), then run `build_logo.py` and `build_icons.py`; then `build_social.py` for the social art |
 | Mockups | Edit `docs/brand/mockups/`, then run `scripts/brand/render_mockups.py` |
 | New integration or trust boundary | Add a row to `docs/architecture/trust-boundaries.md` and a scenario to the threat model |
 | Search provider | `PROVIDERS` in `browser/shell/modules/NulavioSearch.sys.mjs`, with URLs from the provider's own OpenSearch description; `firstRun: false` for paid services; never a public SearXNG instance. Run `test_search.py` on the build |

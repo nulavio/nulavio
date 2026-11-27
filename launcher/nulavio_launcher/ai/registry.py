@@ -259,10 +259,12 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
 SESSION_SCOPES_KEPT = 64  # sites and places one capability keeps a session answer for; the oldest goes first
 
 
-def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[str | None, str] = (None, "")) -> None:
+def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[str | None, str] = (None, ""),
+                  cancel: threading.Event | None = None) -> bool:  # fmt: skip
     """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them. It is for
     what the request showed, `scope` = (target, place): that site (or none) in that place, not the capability
-    everywhere (policy.effective_mode)."""
+    everywhere (policy.effective_mode). False, with nothing kept, when `cancel` is set by the time the registry's lock
+    is held: the call that asked was cancelled, or its client went away (#646)."""
     if capability not in CAPABILITIES or capability == INTERNAL_CAPABILITY or not session_id:
         raise RegistryError("bad session grant")
     target, place = scope
@@ -270,6 +272,8 @@ def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[
         raise RegistryError("bad session grant")
 
     def apply(data):
+        if cancel is not None and cancel.is_set():
+            return False
         agent = data["agents"].get(agent_id)
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
@@ -279,8 +283,9 @@ def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[
         scopes = [s for s in scopes if s != [target, place]] + [[target, place]]
         held[capability] = {"session": session_id, "set": now().isoformat(timespec="seconds"),
                             "scopes": scopes[-SESSION_SCOPES_KEPT:]}  # fmt: skip
+        return True
 
-    _update(apply)
+    return _update(apply)
 
 
 def end_session(agent_id: str, session_id: str) -> None:
@@ -424,31 +429,54 @@ class Approver:
 class KDialogApprover(Approver):
     """A KDE dialog, outside the browser the agent controls. Allow once / until the agent disconnects / deny."""
 
-    def __init__(self, executable: str | None = None, timeout: float = 120):
+    def __init__(self, executable: str | None = None, timeout: float = 120, poll: float = 0.2):
         self.executable = executable or shutil.which("kdialog")
-        self.timeout = timeout
+        self.timeout, self.poll = timeout, poll
 
     def available(self) -> bool:
         return bool(self.executable) and bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
 
     def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
             cancel: threading.Event | None = None) -> str | None:  # fmt: skip
-        # The dialog cannot be taken back once shown; decide() checks stop, pause and revoke again after it.
+        # Closed as a denial as soon as the call is cancelled (the agent's client went away, #646), the stop is
+        # on, or the agent is paused or revoked, as BrowserApprover does; decide() checks them again after it.
         if not self.available():
             return None
+        if _called_off(agent["id"], cancel):
+            return "deny"
         where = f"in your profile {place}" if place else "in its AI Workspace"
         text = (f"{agent['name']} ({agent['autonomy'].replace('_', ' ')}) wants to: {CAPABILITIES[capability]}"
                 + (f"\non {target}" if target else "") + f"\n{where}"
                 + "\n\nOnly allow this if you asked the agent to do it.")  # fmt: skip
         try:
-            result = subprocess.run(
+            dialog = subprocess.Popen(
                 [self.executable, "--title", "Nulavio AI Bridge", "--yes-label", "Allow once",
                  "--no-label", "Allow until the agent disconnects", "--cancel-label", "Deny", "--yesnocancel", text],
-                capture_output=True, timeout=self.timeout, check=False,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )  # fmt: skip
-        except (OSError, subprocess.TimeoutExpired):
+        except OSError:
             return "deny"
-        return {0: "once", 1: "session"}.get(result.returncode, "deny")
+        deadline = time.monotonic() + self.timeout
+        try:
+            while True:
+                if _called_off(agent["id"], cancel):
+                    return "deny"
+                left = deadline - time.monotonic()  # after the registry read, which may have taken a while
+                if left <= 0:
+                    return "deny"
+                try:
+                    code = dialog.wait(timeout=min(self.poll, left))
+                    answered = time.monotonic()
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            if dialog.poll() is None:
+                dialog.kill()  # the dialog goes away: an answer given now does nothing
+                dialog.wait()
+        if answered > deadline or _off(cancel):
+            return "deny"  # an answer seen after the deadline, or as the call was cancelled, counts for nothing
+        return {0: "once", 1: "session"}.get(code, "deny")
 
 
 class BrowserApprover(Approver):
@@ -502,13 +530,17 @@ class BrowserApprover(Approver):
                 answer = base.with_suffix(".answer")
                 if answer.exists():
                     value = answer.read_text().strip()
+                    if _off(cancel):
+                        return "deny"  # cancelled as the person answered (the agent's client went away, #646)
                     return value if value in ("once", "session", "deny") else "deny"
                 if _called_off(agent["id"], cancel):
                     return "deny"
                 time.sleep(self.poll)
             return "deny"
         finally:
-            for suffix in (".json", ".seen", ".answer"):
+            # The answer first and once more at the end: answer_request() then tells an answer that was taken (its
+            # file gone before the request's) from one written as the request ended (still there once it is gone).
+            for suffix in (".answer", ".json", ".seen", ".answer"):
                 base.with_suffix(suffix).unlink(missing_ok=True)
 
 
@@ -563,6 +595,12 @@ def answer_request(request_id: str, answer: str) -> None:
     if not base.with_suffix(".json").exists():
         raise RegistryError("no such request (expired?)")
     paths.write_private_file(base.with_suffix(".answer"), answer)
+    if not base.with_suffix(".json").exists() and base.with_suffix(".answer").exists():
+        # The call that asked ended while the answer was written (BrowserApprover.ask removed its files) and no one
+        # took it: the answer goes too, rather than stay on disk for no one (#646). One the approver read and removed
+        # (before the request's file) was answered.
+        base.with_suffix(".answer").unlink(missing_ok=True)
+        raise RegistryError("no such request (expired?)")
 
 
 def default_approver() -> Approver:
@@ -604,16 +642,23 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
     answer = approver.ask(agent, capability, target, place, cancel)
     if answer is None:
         return Decision(False, mode, capability, "no-approver")
+    # Whatever the answer: an approver closes its question as a denial when the stop comes on or the agent is paused
+    # or revoked, and the call is told that reason, so the Bridge closes the session on a stop or a revocation.
+    agent = load()["agents"].get(agent_id)
+    held = _held(agent, host)
+    if held:
+        return Decision(False, "block", capability, held)
     if answer in ("once", "session"):
-        agent = load()["agents"].get(agent_id)
-        held = _held(agent, host)
-        if held:
-            return Decision(False, "block", capability, held)
         now_mode, now_source = effective_mode(agent, capability, session_id, scope=scope)
         if now_mode == "block":
             return Decision(False, now_mode, capability, now_source)
+        if cancel is not None and cancel.is_set():
+            # The call was cancelled while the person answered or the registry was read again (or its client went
+            # away, #646): an "allow" does nothing, and an answer for the session is not kept for a client that is gone.
+            return Decision(False, mode, capability, "cancelled")
     if answer == "session":
-        grant_session(agent_id, capability, session_id, scope)
+        if not grant_session(agent_id, capability, session_id, scope, cancel):
+            return Decision(False, mode, capability, "cancelled")  # cancelled while the grant waited for the lock
         return Decision(True, mode, capability, "approved-session")
     if answer == "once":
         return Decision(True, mode, capability, "approved-once")

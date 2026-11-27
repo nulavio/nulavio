@@ -134,8 +134,8 @@ def page(locale: str, path: str, other_path: str, title: str, description: str, 
 <a class="skip" href="#main">{w["skip"]}</a>
 <header class="masthead">
 <a class="brand" href="{w["home"]}"><picture>
-<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="132" height="27">
-<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="132" height="27">
+<source media="(prefers-color-scheme: dark)" srcset="/assets/nulavio-lockup-horizontal-on-dark.svg" width="105" height="27">
+<img src="/assets/nulavio-lockup-horizontal.svg" alt="Nulavio" width="105" height="27">
 </picture></a>
 {switch.replace("<a ", '<a class="lang" ', 1)}
 </header>

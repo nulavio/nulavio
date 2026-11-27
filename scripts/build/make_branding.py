@@ -56,17 +56,16 @@ def render(svg: Path, size: int | str, out: Path, background: str = "none") -> N
 
 
 def context_fill_wordmark() -> str:
-    """Wordmark whose colour follows the chrome (`-moz-context-properties: fill`)."""
-    path, dots, advance = logo.wordmark_paths()
-    pad = logo.W_STROKE / 2 + 1
-    circles = "".join(f'<circle cx="{cx}" cy="{cy}" r="{r}"/>' for cx, cy, r in dots)
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{-pad} 4 {advance + 2 * pad} 64">\n'
-        f"{logo.HEADER}\n"
-        f'<path d="{path}" fill="none" stroke="context-fill light-dark(#0B1623, #F1F7F5)" '
-        f'stroke-width="{logo.W_STROKE}" stroke-linecap="round" stroke-linejoin="round"/>\n'
-        f'<g fill="context-fill light-dark(#0B1623, #F1F7F5)">{circles}</g>\n</svg>\n'
+    """The name for the About dialog and the engine's other wordmark places: the lockup "N" + "ulavio"
+    (docs/brand/guidelines.md). The letters follow the chrome (`-moz-context-properties: fill`); the
+    initial and the points keep the symbol's colour, Mint 700 by default and mint where the scheme
+    is dark, as the adaptive symbol does (guidelines: never the mint symbol on light)."""
+    view_box, body = logo.initial_lockup_parts('class="nv-mark"', "context-fill light-dark(#0B1623, #F1F7F5)")
+    style = (
+        f"<style>path.nv-mark{{stroke:{logo.MINT_DARK}}}g.nv-mark{{fill:{logo.MINT_DARK}}}"
+        f"@media (prefers-color-scheme: dark){{path.nv-mark{{stroke:{logo.MINT}}}g.nv-mark{{fill:{logo.MINT}}}}}</style>"
     )
+    return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}">\n{logo.HEADER}\n{style}\n{body}\n</svg>\n'
 
 
 def document_pdf_svg() -> str:
