@@ -4,18 +4,32 @@
     NULAVIO_ENGINE=/path/to/nulavio/nulavio \\
         python3 -I scripts/site/capture_site.py [--locales pt-BR en-US] [--only window,bands,guard]
 
-Every scene runs on tests/lib/harness.GeckoProfileSession: a throwaway HOME,
-registered engine profiles, headless, never a user profile. The figures:
+That is both steps on one machine. They are two because the release test container, where the site's
+recordings are made and whose fonts are fixed, has no Pillow and only a copy of the checkout:
 
-* C1 ``window``: the main window of a protected profile "Trabalho"/"Work"
-  (briefcase, sky) created and unlocked through the Shell's own Vault API on
+1. capture (needs the engine): ``tests/integration/capture_site_shots.py``, run by name where the
+   integration tests run, writes the window screenshots as they came and ``captures.json`` (crops in CSS
+   px, what the DOM said) to ``<artifacts>/site-shots/``;
+2. compose (needs Pillow and git, no engine): ``python3 -I scripts/site/capture_site.py compose <dir>``
+   cuts and encodes them into the tree and writes the manifest. It stamps this checkout's commit: run it
+   on the commit the build's Shell was packed from.
+
+Every scene runs on tests/lib/harness.GeckoProfileSession: a throwaway HOME,
+registered engine profiles, headless, never a user profile. The cast is the one of the
+site's recordings (scripts/site/record_site.py): the first profile "Pessoal"/"Personal" has no
+password and the protected profile is "Bancos"/"Banking". The figures:
+
+* C1 ``window``: the main window of the protected profile "Bancos"/"Banking"
+  (the banking template) created and unlocked through the Shell's own Vault API on
   a real gocryptfs volume, three local sample pages served by this script on
-  127.0.0.1, Lateral layout. Falls back to the plain first profile if the
-  Vault is not available here, and the manifest says so.
+  127.0.0.1, Lateral layout. Left out if the Vault is not available here, and the
+  manifest says so.
 * C2 ``bands``: element crops of ``#nulavio-band``: the plain first profile,
   the protected profile, a temporary profile made by the build's own
   ``nulavio-tools temporary api``, and a private window. The AI Workspace
-  state needs a live bridge session and is not captured.
+  state needs a live bridge session and is not captured. Each state also has a
+  ``strip`` crop for the landing: the cues it shows with the same space around them,
+  the band's own height, and one width for the states of a language and theme.
 * C3 ``guard``: the Guard review document after part of
   tests/integration/test_guard.py::test_02 (proxy in prefs.js, malware
   protection off in user.js, a native-messaging manifest pointing to
@@ -45,8 +59,10 @@ import io
 import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -55,7 +71,6 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(ROOT / "launcher"), str(ROOT / "tests" / "lib")]
 
 import harness  # noqa: E402
-from PIL import Image  # noqa: E402
 
 SHOTS = ROOT / "site" / "assets" / "shots"
 MASTERS = ROOT / "docs" / "design" / "screenshots" / "site"
@@ -63,6 +78,9 @@ THEMES = {"light": 0, "dark": 1}
 SCALE = 2
 WINDOW_CROP = {"x": 0, "y": 0, "w": 600, "h": 420}  # CSS px of the 900x640 window
 SEALS = {"private": "nv-band-private", "temporary": "nv-band-temporary"}
+STRIP_PAD = 8  # CSS px around the cues of a strip crop
+NOT_ATTEMPTED = ["band-agent (C2e): needs a live AI Bridge session", "assistant (C4): not attempted"]
+RAW = "site-shots"  # under the artifacts directory: what the capture step leaves for compose
 DOM_CHANGES = ["removed the remotecontrol attribute from the browser window's root element (automation cue)"]
 
 SHELL = "ChromeUtils.importESModule('resource://builtin-addons/nulavio-shell/modules/{0}.sys.mjs')"
@@ -74,39 +92,47 @@ GUARD = SHELL.format("NulavioGuard") + ".NulavioGuard"
 TEXT = {
     "pt-BR": {
         "first": "Pessoal",
-        "work": "Trabalho",
+        "bank": "Bancos",
         "lang": "pt_BR.UTF-8",
         "pages": [
-            ("/notas", "Notas da reunião"),
-            ("/horas", "Planilha de horas"),
-            ("/documentacao", "Documentação"),
+            ("/extrato", "Extrato do mês"),
+            ("/contas", "Contas a pagar"),
+            ("/reserva", "Reserva"),
         ],
-        "notes": [
-            "Revisar o cronograma do segundo trimestre com a equipe.",
-            "Mover a entrega do relatório para quinta-feira.",
-            "Marcar a próxima conversa com o suporte para a semana que vem.",
+        "rows_head": ("Dia", "Lançamento", "Valor"),
+        "rows": [
+            ("02", "Aluguel", "− R$ 1.850,00"),
+            ("05", "Salário", "+ R$ 6.200,00"),
+            ("08", "Conta de luz", "− R$ 214,30"),
+            ("10", "Escola", "− R$ 980,00"),
+            ("15", "Mercado", "− R$ 642,75"),
+            ("20", "Internet", "− R$ 119,90"),
         ],
-        "notes_h2": "Decisões",
-        "notes_lead": "Reunião semanal · 30 minutos · 4 pessoas",
+        "rows_h2": "Lançamentos",
+        "rows_lead": "Conta de exemplo · novembro",
         "on_screen": "Na tela: ",
         "and": " e ",
     },
     "en-US": {
         "first": "Personal",
-        "work": "Work",
+        "bank": "Banking",
         "lang": "en_US.UTF-8",
         "pages": [
-            ("/notes", "Meeting notes"),
-            ("/timesheet", "Timesheet"),
-            ("/documentation", "Documentation"),
+            ("/statement", "Monthly statement"),
+            ("/bills", "Bills to pay"),
+            ("/savings", "Savings"),
         ],
-        "notes": [
-            "Review the second-quarter schedule with the team.",
-            "Move the report delivery to Thursday.",
-            "Book the next call with support for next week.",
+        "rows_head": ("Day", "Entry", "Amount"),
+        "rows": [
+            ("02", "Rent", "− $1,850.00"),
+            ("05", "Salary", "+ $6,200.00"),
+            ("08", "Electricity", "− $214.30"),
+            ("10", "School", "− $980.00"),
+            ("15", "Groceries", "− $642.75"),
+            ("20", "Internet", "− $119.90"),
         ],
-        "notes_h2": "Decisions",
-        "notes_lead": "Weekly meeting · 30 minutes · 4 people",
+        "rows_h2": "Entries",
+        "rows_lead": "Sample account · November",
         "on_screen": "On screen: ",
         "and": " and ",
     },
@@ -161,8 +187,12 @@ def fixture_page(locale: str, path: str) -> bytes | None:
         return None
     title = titles[path]
     if path == t["pages"][0][0]:
-        items = "".join(f"<li>{html.escape(n)}</li>" for n in t["notes"])
-        body = f"<h1>{title}</h1><p class=meta>{t['notes_lead']}</p><h2>{t['notes_h2']}</h2><ul>{items}</ul>"
+        cells = lambda row, tag: "".join(f"<{tag}>{html.escape(c)}</{tag}>" for c in row)  # noqa: E731
+        rows = "".join(f"<tr>{cells(r, 'td')}</tr>" for r in t["rows"])
+        body = (
+            f"<h1>{title}</h1><p class=meta>{t['rows_lead']}</p><h2>{t['rows_h2']}</h2>"
+            f"<table><thead><tr>{cells(t['rows_head'], 'th')}</tr></thead><tbody>{rows}</tbody></table>"
+        )
     else:
         body = f"<h1>{title}</h1>"
     css = (
@@ -170,7 +200,9 @@ def fixture_page(locale: str, path: str) -> bytes | None:
         "body{max-width:38rem;margin:3rem auto;padding:0 1.5rem;line-height:1.55;"
         "background:Canvas;color:CanvasText}"
         "h1{font-size:1.75rem;margin:0 0 .25rem}.meta{color:GrayText;margin:0 0 1.5rem}"
-        "li{margin:.4rem 0}"
+        "h2{font-size:1.1rem;margin:0 0 .5rem}table{border-collapse:collapse;font-variant-numeric:tabular-nums}"
+        "th,td{text-align:left;padding:.45rem 1.5rem .45rem 0;border-bottom:1px solid color-mix(in srgb,GrayText 35%,Canvas)}"
+        "th{font-size:.8rem;color:GrayText;font-weight:600}td:last-child,th:last-child{text-align:right;padding-right:0}"
     )
     doc = f'<!doctype html><html lang="{locale}"><meta charset=utf-8><title>{title}</title><style>{css}</style>{body}'
     return doc.encode()
@@ -299,45 +331,29 @@ def transcript_of(state: dict) -> str:
 # -- image output -------------------------------------------------------------------------
 
 
-class Output:
-    def __init__(self, args: list[str]):
-        self.files: list[dict] = []
-        self.args = args
-        self.figures: dict = {}
-        SHOTS.mkdir(parents=True, exist_ok=True)
-        MASTERS.mkdir(parents=True, exist_ok=True)
+def png_size(png: bytes) -> tuple[int, int]:
+    if png[:8] != b"\x89PNG\r\n\x1a\n" or png[12:16] != b"IHDR":
+        raise ValueError("not a PNG")
+    return struct.unpack(">II", png[16:24])
 
-    def save(self, png: bytes, name: str, crop_css: dict | None, meta: dict) -> dict:
-        image = Image.open(io.BytesIO(png)).convert("RGB")
-        if crop_css:
-            box = tuple(
-                round(v * SCALE)
-                for v in (crop_css["x"], crop_css["y"], crop_css["x"] + crop_css["w"], crop_css["y"] + crop_css["h"])
-            )
-            image = image.crop(box)
-        master = io.BytesIO()
-        image.save(master, "PNG", optimize=True)
-        (MASTERS / f"{name}.png").write_bytes(master.getvalue())
-        webp = io.BytesIO()
-        image.save(webp, "WEBP", lossless=True, quality=100, method=6)
-        data = webp.getvalue()
-        (SHOTS / f"{name}.webp").write_bytes(data)
-        entry = {
-            "file": f"{name}.webp",
-            "master": f"docs/design/screenshots/site/{name}.png",
-            **meta,
-            "scale": SCALE,
-            "crop_css": crop_css,
-            "width": image.width,
-            "height": image.height,
-            "dom_changes": DOM_CHANGES,
-            "date": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "sha256": hashlib.sha256(data).hexdigest(),
-            "bytes": len(data),
-        }
-        self.files = [f for f in self.files if f["file"] != entry["file"]] + [entry]
-        print(f"  {entry['file']} {image.width}x{image.height} {len(data) // 1024} KiB", flush=True)
-        return entry
+
+class Output:
+    """What the capture step leaves: each screenshot as it came, and what to cut from it (in CSS px)."""
+
+    def __init__(self, raw: Path):
+        self.raw = raw
+        self.entries: list[dict] = []
+        self.figures: dict = {}
+        raw.mkdir(parents=True, exist_ok=True)
+
+    def save(self, png: bytes, name: str, crop_css: dict | None, meta: dict, strip: dict | None = None) -> None:
+        file = hashlib.sha256(png).hexdigest()[:20] + ".png"  # one screenshot is cut several times
+        if not (self.raw / file).exists():
+            (self.raw / file).write_bytes(png)
+        entry = {"name": name, "raw": file, "crop_css": crop_css, "strip": strip, "meta": meta,
+                 "date": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}  # fmt: skip
+        self.entries = [e for e in self.entries if e["name"] != name] + [entry]
+        print(f"  {name}", flush=True)
 
     def figure(self, key: str, locale: str, **fields) -> None:
         self.figures.setdefault(key, {})[locale] = fields
@@ -371,11 +387,17 @@ def capture_band(out: Output, m, state_key: str, locale: str, meta: dict, width:
         # the state has a seal at the row's far end, that seal as a second crop (never composited).
         out.save(png, f"band-{state_key}-crop-{locale}-{theme}", union(state["identity"], state["protection"]), base)
         seal = SEALS.get(state_key)
+        cues, align = union(state["identity"], state["protection"]), "start"
         if seal:
             rect = next((c["rect"] for c in state["cues"] if seal in c["kind"].split()), None)
             if rect is None:
                 raise RuntimeError(f"no visible {seal} in the band")
             out.save(png, f"band-{state_key}-seal-{locale}-{theme}", union(rect), base)
+            cues, align = union(rect), "end"  # the seal sits at the far end of the row
+        # The landing's strip: compose gives the states of one language and theme one width, so `cues` here is
+        # what must be inside, `band` the height, and `align` the side of the band the cues are on.
+        out.save(png, f"band-{state_key}-strip-{locale}-{theme}", None, base,
+                 strip={"cues": cues, "band": state["band"], "align": align, "window_w": width})  # fmt: skip
     set_theme(m, "light")
     out.figure(f"band-{state_key}", locale, transcript=transcript, port=meta.get("port"))
     return transcript
@@ -425,12 +447,12 @@ def scene_protected(out: Output, locale: str, fixtures: Fixtures, meta: dict) ->
           const V = {VAULT};
           const SPS = ChromeUtils.importESModule('resource:///modules/profiles/SelectableProfileService.sys.mjs').SelectableProfileService;
           const {{id}} = await V.NulavioVault.createProtected(
-            {{name: args[1], avatar: 'briefcase', color: 'sky', password: args[0]}});
+            {{name: args[1], templateId: 'banking', keyring: false, password: args[0]}});
           const path = (await SPS.getProfile(id)).path;
           await V.vaultHelper({{op: 'unlock', path, method: 'password', secret: args[0]}});
           return {{id, path}};
         """
-        made = chrome_async(m, body, ["synthetic capture password, throwaway volume", t["work"]])
+        made = chrome_async(m, body, ["synthetic capture password, throwaway volume", t["bank"]])
         path = Path(made["path"])
         harness.GeckoProfileSession.enable_marionette(path)
         add_prefs(path, s.prefs)
@@ -439,7 +461,7 @@ def scene_protected(out: Output, locale: str, fixtures: Fixtures, meta: dict) ->
             raise RuntimeError(f"switchTo: {launched}")
         child = harness.GeckoProfileSession.connect(path)
         try:
-            if not harness.wait_until(lambda: t["work"] in transcript_of(band_state(child) or {"cues": []}), 20):
+            if not harness.wait_until(lambda: t["bank"] in transcript_of(band_state(child) or {"cues": []}), 20):
                 raise RuntimeError("the protected profile's band did not appear")
             time.sleep(2)
             lateral(child)
@@ -479,7 +501,7 @@ def scene_protected(out: Output, locale: str, fixtures: Fixtures, meta: dict) ->
                 out.save(window_png(child), f"window-crop-{locale}-{theme}", WINDOW_CROP, base)
             set_theme(child, "light")
             out.figure("fig-1", locale, transcript=transcript, port=fixtures.port, state="protected-unlocked")
-            capture_band(out, child, "work", locale, {**meta, "port": fixtures.port, "profile": "protected, unlocked"})
+            capture_band(out, child, "protected", locale, {**meta, "port": fixtures.port, "profile": "protected, unlocked"})
         finally:
             child.quit()
         return True
@@ -596,8 +618,8 @@ def scene_guard(out: Output, locale: str, meta: dict, theme: str) -> None:
             if page["details"]:
                 raise RuntimeError("the limits section is open")
             png = m.screenshot_png(full=True)
-            image = Image.open(io.BytesIO(png))
-            crop = {"x": 0, "y": 0, "w": image.width / SCALE, "h": min(image.height / SCALE, page["bottom"] + 8)}
+            px_w, px_h = png_size(png)
+            crop = {"x": 0, "y": 0, "w": px_w / SCALE, "h": min(px_h / SCALE, page["bottom"] + 8)}
             cards = ", ".join(f"«{c}»" for c in page["cards"])
             if locale == "pt-BR":
                 transcript = f"Na tela: «{page['title']}», com um cartão para cada mudança: {cards}."
@@ -615,64 +637,26 @@ def scene_guard(out: Output, locale: str, meta: dict, theme: str) -> None:
 # -- main ---------------------------------------------------------------------------------
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout.strip()
-
-
 def build_info(engine_path: Path) -> dict:
     ini = configparser.ConfigParser()
     ini.read(engine_path.parent / "application.ini")
     return {"buildid": ini["App"]["BuildID"], "version": ini["App"]["Version"], "vendor": ini["App"]["Vendor"]}
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--locales", nargs="+", default=["pt-BR", "en-US"], choices=sorted(TEXT))
-    parser.add_argument("--only", default="window,bands,guard", help="comma list of: window, bands, guard")
-    args = parser.parse_args()
+def capture(raw: Path, locales: list[str], only: set[str]) -> int:
+    """Step 1: run the scenes, leave the screenshots and ``captures.json`` in ``raw``. No Pillow, no git."""
     engine = harness.nulavio_engine()
     if engine is None:
         print("needs the Nulavio build (NULAVIO_ENGINE)", file=sys.stderr)
         return 2
     info = build_info(Path(engine.path))
-    only = set(args.only.split(","))
-    argv = ["--locales", *args.locales, "--only", args.only]
-    out = Output(argv)
-    manifest_path = SHOTS / "manifest.json"
-    if manifest_path.exists():  # keep figures not captured in this run
-        old = json.loads(manifest_path.read_text())
-        out.files, out.figures = old.get("files", []), old.get("figures", {})
-    meta = {
-        "commit": git("rev-parse", "--short=7", "HEAD"),
-        # Read before anything is written: the captures themselves dirty site/assets/shots.
-        "worktree_clean": not git("status", "--porcelain"),
-        "buildid": info["buildid"],
-        "firefox": info["version"],
-        "script": "scripts/site/capture_site.py",
-        "args": argv,
-        "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless)",
-    }
+    if raw.exists():
+        shutil.rmtree(raw)  # compose never finds a screenshot of an earlier run
+    out = Output(raw)
+    argv = ["--locales", *locales, "--only", ",".join(sorted(only))]
+    where = ", in ci/containers/fedora-release-itest" if Path("/run/.containerenv").exists() else ""
+    meta = {"harness": f"tests/lib/harness.GeckoProfileSession (throwaway HOME, headless){where}"}
     left_out: list[str] = []
-
-    def write_manifest() -> None:
-        manifest = {
-            "schema": 1,
-            "commit": meta["commit"],
-            "worktree_clean": meta["worktree_clean"],
-            "buildid": info["buildid"],
-            "firefox": info["version"],
-            "script": meta["script"],
-            "args": argv,
-            "dom_changes": DOM_CHANGES,
-            "not_captured": ["band-agent (C2e): needs a live AI Bridge session", "assistant (C4): not attempted", *left_out],
-            "figures": out.figures,
-            "files": sorted(out.files, key=lambda f: f["file"]),
-        }
-        text = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
-        for private in (str(Path.home()), os.environ.get("USER", ""), os.uname().nodename):
-            if private and private in text:
-                raise SystemExit(f"manifest would contain a personal value ({private!r}); not written")
-        manifest_path.write_text(text, encoding="utf-8")
 
     def run(label: str, scene, *scene_args) -> None:
         try:
@@ -681,9 +665,11 @@ def main() -> int:
         except Exception as e:  # a figure that cannot be made real is left out, never faked
             left_out.append(f"{label}: {type(e).__name__}: {e}")
             print(f"  {label} left out: {e}", flush=True)
-        write_manifest()  # progress is saved after every scene
+        record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"], "args": argv, "scale": SCALE,
+                  "dom_changes": DOM_CHANGES, "left_out": left_out, "figures": out.figures, "entries": out.entries}  # fmt: skip
+        (raw / "captures.json").write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    for locale in args.locales:
+    for locale in locales:
         print(f"[{locale}]", flush=True)
         fixtures = Fixtures(locale)
         try:
@@ -697,8 +683,131 @@ def main() -> int:
                     run(f"fig-5 {locale} {theme}", scene_guard, out, locale, meta, theme)
         finally:
             fixtures.close()
-    print(f"{len(out.files)} files; left out: {left_out}")
+    print(f"{len(out.entries)} cuts; left out: {left_out}")
     return 1 if left_out else 0
+
+
+# -- compose (host) -----------------------------------------------------------------------
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def strip_boxes(entries: list[dict]) -> dict[str, dict]:
+    """The strip crops, in CSS px: the states of one language and theme get the width of the widest."""
+    groups: dict[tuple, list[dict]] = {}
+    for e in entries:
+        if e.get("strip"):
+            groups.setdefault((e["meta"]["locale"], e["meta"]["theme"]), []).append(e)
+    boxes = {}
+    for group in groups.values():
+        width = max(e["strip"]["cues"]["w"] for e in group)  # union() already added its own 4 px each side
+        width = width - 8 + 2 * STRIP_PAD
+        for e in group:
+            cues, band = e["strip"]["cues"], e["strip"]["band"]
+            left, right = cues["x"] + 4 - STRIP_PAD, cues["x"] + cues["w"] - 4 + STRIP_PAD
+            x = left if e["strip"]["align"] == "start" else right - width
+            x = min(max(0, x), e["strip"]["window_w"] - width)
+            boxes[e["name"]] = {"x": x, "y": band["y"], "w": width, "h": band["h"]}
+    return boxes
+
+
+def compose(raw: Path) -> int:
+    """Step 2: cut and encode what the capture left, into the tree, and write the manifest."""
+    from PIL import Image  # here, not at the top: the capture step runs where Pillow is not installed
+
+    record = json.loads((raw / "captures.json").read_text(encoding="utf-8"))
+    scale = record["scale"]
+    commit, clean = git("rev-parse", "--short=7", "HEAD"), not git("status", "--porcelain")
+    manifest_path = SHOTS / "manifest.json"
+    old = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+    names = {e["name"] + ".webp" for e in record["entries"]}
+    kept = [f for f in old.get("files", []) if f["file"] not in names]
+    if kept and old.get("buildid") != record["buildid"]:
+        # The manifest names one build for every capture, and the pages print it.
+        raise SystemExit(f"this run leaves {len(kept)} captures of build {old.get('buildid')} in place: capture the whole set")
+    strips = strip_boxes(record["entries"])
+    SHOTS.mkdir(parents=True, exist_ok=True)
+    MASTERS.mkdir(parents=True, exist_ok=True)
+    files = []
+    for e in record["entries"]:
+        image = Image.open(raw / e["raw"]).convert("RGB")
+        crop = strips.get(e["name"], e["crop_css"])
+        if crop:
+            image = image.crop(
+                tuple(round(v * scale) for v in (crop["x"], crop["y"], crop["x"] + crop["w"], crop["y"] + crop["h"]))
+            )
+        name = e["name"]
+        image.save(MASTERS / f"{name}.png", "PNG", optimize=True)
+        webp = io.BytesIO()
+        image.save(webp, "WEBP", lossless=True, quality=100, method=6)
+        data = webp.getvalue()
+        (SHOTS / f"{name}.webp").write_bytes(data)
+        files.append({
+            "file": f"{name}.webp",
+            "master": f"docs/design/screenshots/site/{name}.png",
+            "commit": commit,
+            "worktree_clean": clean,
+            "buildid": record["buildid"],
+            "firefox": record["firefox"],
+            "script": "scripts/site/capture_site.py",
+            "args": record["args"],
+            **e["meta"],
+            "scale": scale,
+            "crop_css": crop,
+            "width": image.width,
+            "height": image.height,
+            "dom_changes": record["dom_changes"],
+            "date": e["date"],
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data),
+        })  # fmt: skip
+        print(f"  {name}.webp {image.width}x{image.height} {len(data) // 1024} KiB", flush=True)
+    manifest = {
+        "schema": 1,
+        "commit": commit,
+        "worktree_clean": clean,
+        "buildid": record["buildid"],
+        "firefox": record["firefox"],
+        "script": "scripts/site/capture_site.py",
+        "args": record["args"],
+        "harness": record["harness"],
+        "dom_changes": record["dom_changes"],
+        "not_captured": [*NOT_ATTEMPTED, *record["left_out"]],
+        "figures": {**old.get("figures", {}), **record["figures"]} if kept else record["figures"],
+        "files": sorted(kept + files, key=lambda f: f["file"]),
+    }
+    text = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
+    for private in (str(Path.home()), os.environ.get("USER", ""), os.uname().nodename):
+        if private and private in text:
+            raise SystemExit(f"manifest would contain a personal value ({private!r}); not written")
+    manifest_path.write_text(text, encoding="utf-8")
+    listed = {f["file"] for f in manifest["files"]}
+    for stale in sorted(SHOTS.glob("*.webp")):  # a capture the set no longer has (a renamed state) is not served
+        if stale.name not in listed:
+            stale.unlink()
+            (MASTERS / f"{stale.stem}.png").unlink(missing_ok=True)
+            print(f"  removed {stale.name}", flush=True)
+    print(f"{len(files)} files; left out: {record['left_out']}")
+    return 1 if record["left_out"] else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["compose"]:
+        parser = argparse.ArgumentParser(prog="capture_site.py compose", description="Cut and encode a capture into the tree.")
+        parser.add_argument("raw", type=Path, help="the site-shots/ directory the capture wrote")
+        return compose(parser.parse_args(argv[1:]).raw)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--locales", nargs="+", default=["pt-BR", "en-US"], choices=sorted(TEXT))
+    parser.add_argument("--only", default="window,bands,guard", help="comma list of: window, bands, guard")
+    args = parser.parse_args(argv)
+    with tempfile.TemporaryDirectory(prefix="nulavio-shots-") as tmp:
+        status = capture(Path(tmp) / RAW, args.locales, set(args.only.split(",")))
+        if status == 2:
+            return 2
+        return compose(Path(tmp) / RAW) or status
 
 
 if __name__ == "__main__":
