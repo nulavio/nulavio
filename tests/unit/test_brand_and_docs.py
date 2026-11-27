@@ -465,8 +465,13 @@ class DocsTest(unittest.TestCase):
                 self.assertEqual(re.findall(r"<!--release-->.*?<!--/release-->", text), [link])
                 self.assertIsNotNone(release.get("apt_sources"))
                 self.assertIn(ubuntu, text)
-                self.assertIn(f"curl -fsSLO --proto '=https' {release['apt_sources']}\n", text)
-                self.assertIn(f"`{digest}`", text)
+                # The checksum gates the install when the block is pasted whole (OCR on #878).
+                self.assertIn(
+                    f"curl -fsSLO --proto '=https' {release['apt_sources']} &&\n"
+                    f"  echo '{digest}  nulavio.sources' | sha256sum --check &&\n"
+                    "  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &&\n",
+                    text,
+                )
                 # A test count goes stale with the next test; the README names none.
                 self.assertNotRegex(text, r"\b\d+ (tests|testes)\b")
 

@@ -101,24 +101,24 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
     # Built only from the checked tag and URL; a README without the markers is left as it is.
     link = f"<!--release-->[{tag}]({url})<!--/release-->"
-    readmes = {}
+    outputs = {
+        metadata_path: (metadata_path.read_text(encoding="utf-8"), serialized),
+        changelog_path: (changelog_path.read_text(encoding="utf-8"), changelog),
+    }
     for name in READMES:
         path = repo / name
         if path.is_file():
-            text = path.read_text(encoding="utf-8")
-            readmes[path] = (text, README_RELEASE.sub(lambda _: link, text))
-    changed = (
-        serialized != metadata_path.read_text(encoding="utf-8")
-        or changelog != changelog_path.read_text(encoding="utf-8")
-        or any(old != new for old, new in readmes.values())
-    )
-    if changed:
-        metadata_path.write_text(serialized, encoding="utf-8")
-        changelog_path.write_text(changelog, encoding="utf-8")
-        for path, (old, new) in readmes.items():
-            if old != new:
-                path.write_text(new, encoding="utf-8")
-    return changed
+            # Bytes, so the README keeps its line endings outside the markers.
+            text = path.read_bytes()
+            outputs[path] = (text, README_RELEASE.sub(lambda _: link, text.decode("utf-8")).encode("utf-8"))
+    # Only the files that differ are written: a README-only repair leaves the metadata and the changelog alone.
+    changed = [(path, new) for path, (old, new) in outputs.items() if old != new]
+    for path, new in changed:
+        if isinstance(new, bytes):
+            path.write_bytes(new)
+        else:
+            path.write_text(new, encoding="utf-8")
+    return bool(changed)
 
 
 def main() -> int:

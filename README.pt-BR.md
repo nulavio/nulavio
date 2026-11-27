@@ -65,14 +65,14 @@ sudo dnf install nulavio
 No Ubuntu 24.04 ou mais novo, x86_64:
 
 ```sh
-curl -fsSLO --proto '=https' https://nulavio.net/apt/nulavio.sources
-sha256sum nulavio.sources
-sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
-sudo apt update
-sudo apt install nulavio
+curl -fsSLO --proto '=https' https://nulavio.net/apt/nulavio.sources &&
+  echo 'f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745  nulavio.sources' | sha256sum --check &&
+  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &&
+  sudo apt update &&
+  sudo apt install nulavio
 ```
 
-Depois do `sha256sum`, siga só se ele mostrar `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`, e apague o arquivo se não mostrar. O arquivo traz a chave pública citada logo abaixo, e o apt só aceita o que ela assinou.
+O `sha256sum --check` interrompe os passos se o arquivo não tiver exatamente esse SHA-256; se a verificação falhar, apague o arquivo. O arquivo traz a chave pública citada logo abaixo, e o apt só aceita o que ela assinou.
 
 Os pacotes e os metadados do repositório são assinados com a chave OpenPGP `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([chave pública](https://nulavio.net/keys/nulavio-packages.asc)). Cada [release](https://github.com/nulavio/nulavio/releases) vem com um SBOM CycloneDX e um `SHA256SUMS` assinado. Outros sistemas: [entre na lista de espera](https://nulavio.net/) e você recebe um e-mail quando o seu for suportado.
 

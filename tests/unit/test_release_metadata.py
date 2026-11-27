@@ -101,6 +101,21 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.repo / "README.md").read_text(), self.readmes["README.md"])
 
+    def test_a_readme_only_repair_writes_only_the_readme_and_keeps_its_line_endings(self):
+        # OCR on #878: a drifted README link for the current release rewrites neither the metadata nor the changelog,
+        # and the README keeps its bytes outside the markers.
+        link = "<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        readme = self.repo / "README.md"
+        readme.write_bytes(b"# Nulavio\r\n\r\nNow <!--release-->[v160.0-0.1](drifted)<!--/release-->.\r\n")
+        for path in (self.metadata, self.repo / "CHANGELOG.md"):
+            path.chmod(0o444)
+            self.addCleanup(path.chmod, 0o644)
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), f"# Nulavio\r\n\r\nNow {link}.\r\n".encode())
+
     def test_the_first_release_with_the_companion_apk_names_it_for_the_download_pages(self):
         # ADR 0014: the pages offer the Companion once a published release carries its APK.
         self.release["assets"] = [{"name": "nulavio-160.0-0.2.fc44.x86_64.rpm"}, {"name": "SHA256SUMS"}]
