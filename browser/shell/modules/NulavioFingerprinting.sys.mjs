@@ -24,6 +24,11 @@
    the system asks, so that pages cannot tell, and only the set itself undoes that. When the system has either
    preference on, a bar offers the setting once. Nulavio's own pages and window follow the system either way. */
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
+});
+
 /** The permission of a site whose pages read the system's time zone. Kept for the site's registrable domain. */
 export const TIME_ZONE = "nulavio-timezone";
 
@@ -244,8 +249,27 @@ function applyAccessibility(changed) {
   // Remembered only for a value made from the build's default.
   if (next !== null && !own) {
     Services.prefs.setStringPref(WRITTEN, next);
+    ownValue(next, user);
   } else {
     Services.prefs.clearUserPref(WRITTEN);
+    ownValue(null);
+  }
+}
+
+/** Tell the Guard which set is this module's own now (`value`, made from the build's default; null: none), and the
+    set it found before it wrote that one (`from`; null: none). The Guard keeps `value` in its record, and at the next
+    start leaves out only a change from exactly that set to exactly the one this module then holds as its own, when
+    this module wrote it over exactly the set the record kept: with a build whose default changed, Nulavio's own
+    rewrite (#654). What this module takes for its own here goes by its memory in the profile, which a program can
+    change while the browser is closed; the Guard goes by its record and by what this module found and wrote instead,
+    so a set it did not hold as Nulavio's (the person's, or one put in the closed profile, this build's own set
+    included) is still reported, also when this module then writes the build's set over it. A failure costs a finding
+    in the Guard, never the set. */
+function ownValue(value, from = null) {
+  try {
+    lazy.NulavioGuard.ownPrefValue(OVERRIDES, value, from);
+  } catch (e) {
+    console.error("Nulavio fingerprinting", e);
   }
 }
 
