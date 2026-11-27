@@ -79,6 +79,7 @@ SCALE = 2
 WINDOW_CROP = {"x": 0, "y": 0, "w": 600, "h": 420}  # CSS px of the 900x640 window
 SEALS = {"private": "nv-band-private", "temporary": "nv-band-temporary"}
 STRIP_PAD = 8  # CSS px to the left and right of the cues of a strip crop
+STRIP_STATES = ("personal", "protected", "temporary")  # the landing's three; their widest cut sets the width
 STRIP_WINDOW = (900, 640)  # as the window of the corner crop: the band has a row to itself
 NOT_ATTEMPTED = ["band-agent (C2e): needs a live AI Bridge session", "assistant (C4): not attempted"]
 RAW = "site-shots"  # under the artifacts directory: what the capture step leaves for compose
@@ -713,7 +714,7 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
     """The strip crops, in CSS px: the states of one language and theme get one width and the band's height."""
     groups: dict[tuple, list[dict]] = {}
     for e in entries:
-        if e.get("strip"):
+        if e.get("strip") and e["meta"]["state"] in STRIP_STATES:
             groups.setdefault((e["meta"]["locale"], e["meta"]["theme"]), []).append(e)
     boxes = {}
     for key, group in groups.items():
@@ -754,7 +755,8 @@ def compose(raw: Path) -> int:
     SHOTS.mkdir(parents=True, exist_ok=True)
     MASTERS.mkdir(parents=True, exist_ok=True)
     files = []
-    for e in record["entries"]:
+    entries = [e for e in record["entries"] if not e.get("strip") or e["name"] in strips]  # the landing's states only
+    for e in entries:
         image = Image.open(raw / e["raw"]).convert("RGB")
         crop = strips.get(e["name"], e["crop_css"])
         if crop:
