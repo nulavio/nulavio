@@ -25,7 +25,9 @@ landing's recorded scenes (site/assets/clips/, with their own manifest.json, wri
 by scripts/site/record_site.py) say what they are the same way, per scene and in the
 page's language: {{clip:<scene>}} is the provenance line (the engine's version, the
 build and the start of the WebM's SHA-256), {{clip_s:<scene>}} its length in whole
-seconds and {{clip_said:<scene>}} its transcript, read from the window at capture time.
+seconds, {{clip_said:<scene>}} its transcript, read from the window at capture time, and
+{{clip_edits:<scene>}} what was done to it afterwards (the manifest's edits and this recording's
+cuts, and which frame its still picture is, from stills.json of scripts/site/scene_stills.py).
 {{shot:<file>}} is the commit a capture was taken at and {{origin}} the
 commit(s) the numbers, excerpts and captures come from; outside --release
 they say so when the tree had changes or the build predates the commit.
@@ -329,13 +331,86 @@ def load_clips(src: Path) -> dict:
     path = src / "site" / "assets" / "clips" / "manifest.json"
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8"))["recordings"]
+    record = json.loads(path.read_text(encoding="utf-8"))
+    clips = record["recordings"]
+    clips["_edits"] = record.get("edits", [])
+    stills = path.with_name("stills.json")
+    clips["_stills"] = json.loads(stills.read_text(encoding="utf-8"))["stills"] if stills.exists() else {}
+    return clips
+
+
+# What was done to a recording after its capture, as the page says it: one phrase for each sentence of the
+# manifest's "edits", matched by how the sentence starts. A sentence with no phrase here stops the build:
+# an edit the page does not disclose is not published.
+CLIP_EDITS = (
+    (
+        r"cursor and click ripples drawn on the frames afterwards",
+        "cursor e cliques desenhados depois",
+        "cursor and clicks drawn afterwards",
+    ),
+    # Said only of a recording in which something is typed, as its transcript says.
+    (r"typing shown at a fixed pace", "digitação em ritmo fixo", "typing at a fixed pace"),
+    # Said with each recording's own cuts and their seconds, below.
+    (r"while a new instance starts, nothing is recorded", None, None),
+    (r"the last frame is held for (?P<n>[0-9.]+) s", "último quadro mantido por {n} s", "last frame held for {n} s"),
+)
+TYPED = re.compile(r"\bdigitad[ao]\b|\btyped\b")
+CLIP_WORDS = {
+    "pt-BR": {
+        "edited": "Vídeo editado: ",
+        "cut": "{n} s de espera cortados",
+        "still": "Imagem parada: o quadro dos {n} s, sem cursor.",
+    },
+    "en-US": {
+        "edited": "Edited video: ",
+        "cut": "{n} s of waiting cut",
+        "still": "Still picture: the frame at {n} s, no cursor.",
+    },
+}
+
+
+def seconds(value: float | str, locale: str) -> str:
+    """19 for 19.0 and 18.6, 0.8 (0,8 in Portuguese) below ten seconds when it is not whole."""
+    number = float(value)
+    text = f"{number:.0f}" if number >= 10 or number == round(number) else f"{number:.1f}"
+    return text.replace(".", ",") if locale == "pt-BR" else text
+
+
+def clip_edits(clips: dict, scene: str, locale: str) -> str:
+    """One line: every edit the manifest records for the recordings, this one's cuts, and which frame the still is."""
+    clip, words, said = clips[f"{scene}-{locale}"], CLIP_WORDS[locale], []
+    cut_sentence = False
+    for sentence in clips["_edits"]:
+        for pattern, pt, en in CLIP_EDITS:
+            match = re.match(pattern, sentence)
+            if not match:
+                continue
+            if pattern.startswith("typing") and not TYPED.search(clip["transcript"]):
+                break  # nothing is typed in this recording
+            if pt is None:
+                cut_sentence = True
+                said += [words["cut"].format(n=seconds(c["real_seconds_cut"], locale)) for c in clip["cuts"]]
+            else:
+                phrase = pt if locale == "pt-BR" else en
+                said.append(phrase.format(**{k: seconds(v, locale) for k, v in match.groupdict().items()}))
+            break
+        else:
+            raise BuildError(f"the recordings' manifest records an edit the page has no words for: {sentence!r}")
+    if clip["cuts"] and not cut_sentence:
+        raise BuildError(f"{scene} ({locale}) has cuts and the manifest's edits do not say why")
+    line = words["edited"] + " · ".join(said) + "."
+    still = clips["_stills"].get(f"{scene}-{locale}-still.webp")
+    if still:
+        line += " " + words["still"].format(n=seconds(round(still["t"], 1), locale))
+    return line
 
 
 def clip_stamp(clips: dict, name: str, scene: str, locale: str | None, page: str) -> str:
     """What a recorded scene says of itself on the page, from its manifest and never typed."""
     try:
         clip = clips[f"{scene}-{locale}"]
+        if name == "clip_edits":
+            return html.escape(clip_edits(clips, scene, locale), quote=False)
         if name == "clip_s":
             return str(round(clip["duration_s"]))
         if name == "clip_said":
@@ -422,7 +497,7 @@ def stamp_page(
             return describe(entry["commit"], shot_notes(entry, manifest), locale)
         if name == "origin":
             return origin(values, manifest, locale)
-        if name in ("clip", "clip_s", "clip_said"):
+        if name in ("clip", "clip_s", "clip_said", "clip_edits"):
             return clip_stamp(clips or {}, name, arg, locale, page)
         if name in values:
             return values[name]

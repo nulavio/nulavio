@@ -429,8 +429,28 @@ class SiteTest(unittest.TestCase):
         manifest = json.loads((CLIPS / "manifest.json").read_text(encoding="utf-8"))
         self.assertNotIn(str(Path.home()), json.dumps(manifest), "the manifest must not hold personal paths")
         listed = {f["file"]: f for clip in manifest["recordings"].values() for f in clip["files"]}
-        on_disk = {p.name for p in CLIPS.iterdir()} - {"manifest.json"}
-        self.assertEqual(on_disk, set(listed), "every served recording is in the manifest, and nothing else is served")
+        # The stills are cut from the same captures' frames by scene_stills.py, which records each one.
+        record = json.loads((CLIPS / "stills.json").read_text(encoding="utf-8"))
+        stills = record["stills"]
+        self.assertNotIn(str(Path.home()), json.dumps(record))
+        on_disk = {p.name for p in CLIPS.iterdir()} - {"manifest.json", "stills.json"}
+        self.assertEqual(on_disk, set(listed) | set(stills), "every served file is in a manifest, and nothing else is served")
+        for name, entry in sorted(stills.items()):
+            data = (CLIPS / name).read_bytes()
+            clip = manifest["recordings"][entry["recording"]]
+            with self.subTest(file=name):
+                self.assertEqual(hashlib.sha256(data).hexdigest(), entry["sha256"])
+                self.assertLess(len(data), 150_000)
+                self.assertEqual(webp_animation(data)[1], 0, "a still frame does not move")
+                self.assertTrue(name.startswith(entry["recording"] + "-"))
+                self.assertLessEqual(entry["t"], clip["duration_s"], "a frame of that recording")
+                # One rectangle of one frame, inside the window, at the capture's scale: never enlarged.
+                crop, (width, height) = entry["crop_css"], clip["window_css"]
+                self.assertTrue(
+                    crop["x"] >= 0 and crop["x"] + crop["w"] <= width and crop["y"] >= 0 and crop["y"] + crop["h"] <= height
+                )
+                self.assertEqual(entry["scale"], clip["scale"])
+                self.assertEqual(entry["px"], [round(crop["w"] * clip["scale"]), round(crop["h"] * clip["scale"])])
         for name, entry in sorted(listed.items()):
             data = (CLIPS / name).read_bytes()
             with self.subTest(file=name):
@@ -452,7 +472,8 @@ class SiteTest(unittest.TestCase):
             used = set(re.findall(r'/assets/clips/([^"]+)', html))
             scenes = [n for n in tree.all("figure") if "scene" in n.classes()]
             with self.subTest(page=page):
-                self.assertEqual(used, {name for name in listed if f"-{locale}" in name}, "the page's own language, all of it")
+                mine = {name for name in (*listed, *stills) if f"-{locale}" in name}
+                self.assertEqual(used, mine, "the page's own language, all of it")
                 self.assertEqual(len(scenes), len(manifest["recordings"]) // 2)
             for scene in scenes:
                 nodes = list(scene.walk())
@@ -462,11 +483,18 @@ class SiteTest(unittest.TestCase):
                     # The loop only for whoever did not ask for less motion; the still frame for everyone else.
                     picture = next(n for n in nodes if n.tag == "picture")
                     sources = [n for n in picture.children if isinstance(n, Node) and n.tag == "source"]
-                    self.assertEqual([n.attrs.get("media") for n in sources], ["(prefers-reduced-motion: no-preference)"])
+                    # The still is the frame the scene's title names, cut so that it is read; a smaller cut on a phone.
+                    media = [n.attrs.get("media") for n in sources]
+                    self.assertEqual(media, ["(prefers-reduced-motion: no-preference)", "(max-width: 47.9375rem)"])
                     self.assertTrue(sources[0].attrs["srcset"].endswith("-loop.webp"))
+                    self.assertTrue(sources[1].attrs["srcset"].endswith("-still-narrow.webp"))
                     still = next(n for n in picture.children if isinstance(n, Node) and n.tag == "img")
-                    self.assertTrue(still.attrs["src"].endswith("-poster.webp"))
+                    self.assertTrue(still.attrs["src"].endswith("-still.webp"))
                     self.assertGreater(len(still.attrs["alt"]), 60, "the picture says what the scene shows")
+                    detail = next(n for n in nodes if n.tag == "img" and n.attrs["src"].endswith("-detail.webp"))
+                    for node in (sources[1], still, detail):
+                        crop = stills[Path(node.attrs.get("srcset") or node.attrs["src"]).name]["crop_css"]
+                        self.assertEqual((int(node.attrs["width"]), int(node.attrs["height"])), (crop["w"], crop["h"]))
                     for node in (*sources, still, video):
                         self.assertTrue(node.attrs.get("width") and node.attrs.get("height"), "no layout shift from media")
                     # The whole scene: nothing fetched before play, never by itself, never with sound.
@@ -485,10 +513,31 @@ class SiteTest(unittest.TestCase):
                     said = [" ".join(n.text().split()) for n in nodes if "transcript" in n.classes()]
                     self.assertEqual(said, [" ".join(clip["transcript"].split())])
                     webm = next(f for f in clip["files"] if f["file"].endswith(".webm"))
-                    origin = next(n.text() for n in nodes if "prov" in n.classes())
+                    origin, edits = (" ".join(n.text().split()) for n in nodes if "prov" in n.classes())
+                    # What was done to the recording after its capture is on the page: each edit the manifest
+                    # records, this recording's own cut with its seconds, and which frame the still is.
+                    self.assertEqual(edits, build_site.clip_edits(build_site.load_clips(ROOT), clip["scene"], locale))
+                    typed = bool(build_site.TYPED.search(clip["transcript"]))
+                    self.assertEqual(edits.count(" · ") + 1, len(manifest["edits"]) - 2 + typed + len(clip["cuts"]))
+                    self.assertEqual(typed, clip["scene"] != "profile-opens", "typing is said where something is typed")
+                    for cut in clip["cuts"]:
+                        self.assertIn(build_site.seconds(cut["real_seconds_cut"], locale) + " s ", edits)
+                    frame = stills[Path(still.attrs["src"]).name]["t"]
+                    self.assertIn(build_site.seconds(round(frame, 1), locale) + " s,", edits)
                     for part in (clip["capture"]["buildid"], f"Firefox {clip['capture']['firefox']}", webm["sha256"][:12]):
                         self.assertIn(part, origin)
                     self.assertIn(f"{round(clip['duration_s'])} s", next(n.text() for n in nodes if n.tag == "summary"))
+        # An edit the page has no words for stops the build, and so does a cut the manifest's edits do not explain.
+        clips = build_site.load_clips(ROOT)
+        self.assertRaises(
+            build_site.BuildError, build_site.clip_edits, {**clips, "_edits": ["frames interpolated"]}, "link-routed", "en-US"
+        )
+        self.assertRaises(
+            build_site.BuildError, build_site.clip_edits, {**clips, "_edits": clips["_edits"][:2]}, "link-routed", "en-US"
+        )
+        self.assertEqual(build_site.seconds(18.6, "pt-BR"), "19")
+        self.assertEqual(build_site.seconds(0.8, "pt-BR"), "0,8")
+        self.assertEqual(build_site.seconds("0.6", "en-US"), "0.6")
         # Neutral about third parties: no recording's words name a search engine or another service.
         words = json.dumps([[c["transcript"], c["captions"]] for c in manifest["recordings"].values()], ensure_ascii=False)
         self.assertNotRegex(words, r"(?i)duckduckgo|google|bing|kagi|brave|startpage|proton|bitwarden|claude|codex|chatgpt")

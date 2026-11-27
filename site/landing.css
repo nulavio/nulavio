@@ -457,11 +457,15 @@ select.field { padding-right: var(--nv-space-7); }
   .steps { grid-column: 1 / -1; }
 }
 
-/* The band alone, in three states, cropped from real windows. */
+/* The band alone, in three states, cropped from real windows at their real size. The capture
+   gives the three one width and one height (the band's row), with the same space around what
+   each says, so they stack as one column of one width at any page width. The hairline frames
+   the two plain ones; the temporary one keeps the band's own dashed edge and no other (its
+   frame stays transparent, so the three keep one size). */
 .bands { margin-top: var(--nv-space-6); }
-.bands ul { display: flex; flex-wrap: wrap; gap: var(--nv-space-3); align-items: center; }
-.bands img { width: auto; height: 2.75rem; border: var(--hairline); border-radius: var(--nv-radius-xs); }
-.bands li:last-child img { height: 1.9375rem; }
+.bands ul { display: grid; justify-items: start; gap: var(--nv-space-2); }
+.bands img { display: block; max-width: 100%; height: auto; border: var(--hairline); border-radius: var(--nv-radius-xs); }
+.bands li:last-child img { border-color: transparent; border-radius: 0; }
 .bands figcaption { margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
 .bands .prov { margin-top: var(--nv-space-2); }
 
@@ -489,28 +493,17 @@ select.field { padding-right: var(--nv-space-7); }
 }
 .scene { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-4); max-width: 46rem; margin-top: var(--nv-space-5); }
 .scene picture { display: block; }
-.scene picture .shot { width: 100%; border-radius: var(--nv-radius-md); box-shadow: var(--nv-elevation-2); }
+.scene picture .shot { width: 100%; height: auto; border-radius: var(--nv-radius-md); box-shadow: var(--nv-elevation-2); }
 .scene figcaption { display: grid; gap: var(--nv-space-4); }
 .scene .said { font-size: 1.0625rem; }
 
-/* The detail: the same still frame, cut by the style sheet at its real size, where the band
-   can be read. No second file. */
-.detail {
-  max-width: 27rem;
-  padding: var(--nv-space-3);
-  border: var(--hairline);
-  border-radius: var(--nv-radius-md);
-  background: var(--nv-color-bg-surface);
-  box-shadow: var(--nv-elevation-2);
-}
-.detail .shot { width: 100%; height: 2.75rem; border-radius: var(--nv-radius-xs); object-fit: none; object-position: left top; }
-.detail p { margin-top: var(--nv-space-3); color: var(--nv-color-text-secondary); font-size: var(--nv-type-caption-size); }
-/* Where the band has a row to itself, the cut takes the toolbar under it too. */
-.scene-rule .detail .shot { height: 4.25rem; }
-/* On a narrow page the cut starts at the words the scene is about, so that they fit whole. */
-@media (max-width: 47.9375rem) {
-  .scene-rule .detail .shot { object-position: -170px 0; }
-}
+/* The detail: the band of the window the scene ends in, a picture of its own cut from the
+   capture at the capture's scale (1.5x) and shown at the window's real size, its width and
+   height attributes (smaller only where the page is narrower than it). */
+.detail .shot { display: block; max-width: 100%; height: auto; border-radius: var(--nv-radius-xs); }
+/* What was done to the video after its capture: words, set as the caption, not as a stamp. */
+.scene .edits { font-family: inherit; }
+.detail p { margin-top: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-caption-size); }
 
 /* The whole scene, on request: nothing of the video is fetched before play is pressed. */
 .whole summary {
@@ -552,6 +545,14 @@ select.field { padding-right: var(--nv-space-7); }
   .scene { grid-template-columns: minmax(0, 1fr) 27rem; column-gap: var(--nv-space-7); max-width: none; }
   .scene picture, .scene .whole { grid-column: 1; }
   .scene figcaption { grid-column: 2; grid-row: 1 / span 2; align-content: start; }
+}
+
+/* The recorded scenes exist in the light theme only. On a dark page they are the brightest
+   things there, and are framed as what they are, pictures of a light window: the control
+   border all round, and no shadow, which a light surface does not cast on a dark one. The
+   captures (the corner in the hero, the bands) have a dark version and are not touched. */
+@media (prefers-color-scheme: dark) {
+  .scene picture .shot, .detail .shot, .scene-video { border-color: var(--nv-color-border-control); box-shadow: none; }
 }
 
 /* The one entrance: opacity and at most 16 px, on a scene's picture only (never on a caption,
