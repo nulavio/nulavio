@@ -455,6 +455,9 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
                 "otherAfter": 1,
                 "notOwnedThen": 1,
                 "notOwnedNow": 1,
+                "otherFrom": 1,
+                "notWritten": 1,
+                "noFrom": 1,
                 "otherName": 1,
                 "otherKind": 1,
                 "none": 1,
@@ -467,22 +470,28 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
         guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
         check = guard[guard.index("  async #check() {") : guard.index("  /** The engine's notice, or a change")]
         # Nulavio's value at the last start comes from the record, never from the profile at this one.
-        self.assertIn("const fresh = Guard.withoutOwnValues(found, saved.owned, ownedNow);", check)
+        self.assertIn("const fresh = Guard.withoutOwnValues(found, saved.owned, ownedNow, ownedFrom);", check)
         # The record then keeps only what was declared at this start, as it was when the prefs were read: nothing is
         # carried over from the last one.
-        self.assertIn("const { snapshot: now, owned: ownedNow } = await this.#taken();", check)
+        self.assertIn("const { snapshot: now, owned: ownedNow, from: ownedFrom } = await this.#taken();", check)
         self.assertEqual(check.count("expected, owned: ownedNow };"), 2)
-        self.assertNotIn("this.#owned", check)
+        self.assertNotIn("this.#owned", check)  # #ownedFrom too
         taken = guard[guard.index("  async #taken() {") : guard.index("  // -- comparing")]
-        self.assertIn("const prefs = this.#prefs();\n    const owned = { ...this.#owned };\n", taken)
+        self.assertIn(
+            "const prefs = this.#prefs();\n    const owned = { ...this.#owned };\n    const from = { ...this.#ownedFrom };\n",
+            taken,
+        )
+        self.assertNotIn(
+            "ownedFrom", guard[guard.index("  async #save() {") : guard.index("  async #check() {")]
+        )  # this start's only
         self.assertNotIn("saved.owned,", check.replace("withoutOwnValues(found, saved.owned,", ""))
         self.assertIn("owned: Guard.ownedValues(data.owned)", guard)  # read from the profile: checked
         self.assertIn("{ schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected, owned }", guard)
         # The module tells its set only where it remembers one made from the build's default, and none otherwise.
         apply = MODULE[MODULE.index("function applyAccessibility(changed) {") : MODULE.index("/** Tell the Guard")]
         self.assertIn(
-            "if (next !== null && !own) {\n    Services.prefs.setStringPref(WRITTEN, next);\n    ownValue(next);\n  } else {\n"
-            "    Services.prefs.clearUserPref(WRITTEN);\n    ownValue(null);",
+            "if (next !== null && !own) {\n    Services.prefs.setStringPref(WRITTEN, next);\n    ownValue(next, user);\n"
+            "  } else {\n    Services.prefs.clearUserPref(WRITTEN);\n    ownValue(null);",
             apply,
         )
         self.assertEqual(MODULE.count("ownValue("), 3)  # the two calls and the function

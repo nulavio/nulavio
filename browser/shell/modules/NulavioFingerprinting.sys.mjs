@@ -249,23 +249,25 @@ function applyAccessibility(changed) {
   // Remembered only for a value made from the build's default.
   if (next !== null && !own) {
     Services.prefs.setStringPref(WRITTEN, next);
-    ownValue(next);
+    ownValue(next, user);
   } else {
     Services.prefs.clearUserPref(WRITTEN);
     ownValue(null);
   }
 }
 
-/** Tell the Guard which set is this module's own now (`value`, made from the build's default; null: none). The Guard
-    keeps it in its record, and at the next start leaves out only a change from exactly that set to exactly the one
-    this module then holds as its own: with a build whose default changed, Nulavio's own rewrite (#654). What this
-    module takes for its own here goes by its memory in the profile, which a program can change while the browser is
-    closed; the Guard goes by its record instead, so a set it did not hold as Nulavio's (the person's, or one put in
-    the closed profile) is still reported, also when this module then writes the build's set over it. A failure costs
-    a finding in the Guard, never the set. */
-function ownValue(value) {
+/** Tell the Guard which set is this module's own now (`value`, made from the build's default; null: none), and the
+    set it found before it wrote that one (`from`; null: none). The Guard keeps `value` in its record, and at the next
+    start leaves out only a change from exactly that set to exactly the one this module then holds as its own, when
+    this module wrote it over exactly the set the record kept: with a build whose default changed, Nulavio's own
+    rewrite (#654). What this module takes for its own here goes by its memory in the profile, which a program can
+    change while the browser is closed; the Guard goes by its record and by what this module found and wrote instead,
+    so a set it did not hold as Nulavio's (the person's, or one put in the closed profile, this build's own set
+    included) is still reported, also when this module then writes the build's set over it. A failure costs a finding
+    in the Guard, never the set. */
+function ownValue(value, from = null) {
   try {
-    lazy.NulavioGuard.ownPrefValue(OVERRIDES, value);
+    lazy.NulavioGuard.ownPrefValue(OVERRIDES, value, from);
   } catch (e) {
     console.error("Nulavio fingerprinting", e);
   }

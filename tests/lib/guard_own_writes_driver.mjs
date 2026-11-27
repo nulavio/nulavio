@@ -119,9 +119,9 @@ let guard = null;
 let target = null; // the Guard that takes it: the module's own, or the fresh one a `checked` case runs
 const fakes = {
   NulavioGuard: {
-    ownPrefValue(name, value) {
-      told.push({ name, value });
-      (target ?? guard.NulavioGuard).ownPrefValue(name, value); // the real one takes it
+    ownPrefValue(name, value, from) {
+      told.push({ name, value, from });
+      (target ?? guard.NulavioGuard).ownPrefValue(name, value, from); // the real one takes it
     },
   },
   AddonManager: {
@@ -165,10 +165,12 @@ function start(profile, record = profile, owned = {}) {
   NulavioFingerprinting.watch();
   const now = Object.fromEntries([SHARE, OVERRIDES].map(name => [name, user.has(name) ? user.get(name) : null]));
   const findings = guard.compareSnapshots({ prefs: recorded(record) }, { prefs: recorded(now) });
-  // What the module holds as its own at this start: its last word, as the real Guard keeps it.
+  // What the module holds as its own at this start, and what it found before it wrote that: its last word, as the
+  // real Guard keeps it.
   const last = told.at(-1);
   const ownNow = last && last.value !== null ? { [last.name]: last.value } : {};
-  const kept = Guard.withoutOwnValues(findings, owned, ownNow);
+  const ownFrom = last && last.value !== null && last.from !== null ? { [last.name]: last.from } : {};
+  const kept = Guard.withoutOwnValues(findings, owned, ownNow, ownFrom);
   const brief = list => list.map(f => [f.key, f.before, f.after]);
   return { set: now[OVERRIDES], written: user.get(WRITTEN) ?? null, told: told.map(t => t.value), findings: brief(findings), reported: brief(kept) };
 }
@@ -292,17 +294,21 @@ out.checked = {
     ownCurrent
   ),
 };
-// The Guard's filter alone: from exactly the record's own value to exactly the one held now, and only for that setting.
+// The Guard's filter alone: from exactly the record's own value to exactly the one held now, written over exactly the
+// record's own value, and only for that setting.
 const finding = { id: `pref-changed:${OVERRIDES}`, kind: "pref-changed", key: OVERRIDES, before: EARLIER, after: CURRENT };
 const was = { [OVERRIDES]: EARLIER };
 out.filter = {
-  same: Guard.withoutOwnValues([finding], was, ownCurrent).length,
-  otherBefore: Guard.withoutOwnValues([{ ...finding, before: "+JSDateTimeUTC" }], was, ownCurrent).length,
-  otherAfter: Guard.withoutOwnValues([{ ...finding, after: "+JSDateTimeUTC" }], was, ownCurrent).length,
-  notOwnedThen: Guard.withoutOwnValues([finding], {}, ownCurrent).length,
-  notOwnedNow: Guard.withoutOwnValues([finding], was, {}).length,
-  otherName: Guard.withoutOwnValues([{ ...finding, key: "network.proxy.type", id: "pref-changed:network.proxy.type" }], was, ownCurrent).length,
-  otherKind: Guard.withoutOwnValues([{ ...finding, kind: "userjs-changed" }], was, ownCurrent).length,
+  same: Guard.withoutOwnValues([finding], was, ownCurrent, was).length,
+  otherBefore: Guard.withoutOwnValues([{ ...finding, before: "+JSDateTimeUTC" }], was, ownCurrent, was).length,
+  otherAfter: Guard.withoutOwnValues([{ ...finding, after: "+JSDateTimeUTC" }], was, ownCurrent, was).length,
+  notOwnedThen: Guard.withoutOwnValues([finding], {}, ownCurrent, was).length,
+  notOwnedNow: Guard.withoutOwnValues([finding], was, {}, was).length,
+  otherFrom: Guard.withoutOwnValues([finding], was, ownCurrent, { [OVERRIDES]: "+JSDateTimeUTC" }).length,
+  notWritten: Guard.withoutOwnValues([finding], was, ownCurrent, ownCurrent).length,
+  noFrom: Guard.withoutOwnValues([finding], was, ownCurrent).length,
+  otherName: Guard.withoutOwnValues([{ ...finding, key: "network.proxy.type", id: "pref-changed:network.proxy.type" }], was, ownCurrent, was).length,
+  otherKind: Guard.withoutOwnValues([{ ...finding, kind: "userjs-changed" }], was, ownCurrent, was).length,
   none: Guard.withoutOwnValues([finding]).length,
 };
 // What the record's field may hold: plain values by name, nothing else (a record is read from the profile).

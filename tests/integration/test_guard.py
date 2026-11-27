@@ -711,8 +711,9 @@ class GuardTest(unittest.TestCase):
         from the build's default at each start (NulavioFingerprinting's applyAccessibility). After a build whose
         default changed, that is Nulavio's own change, not one made outside the browser: the Guard's record keeps the
         set the Shell held as its own. A set changed while the browser was closed is still reported, also when the
-        Shell then takes the three entries out of it, and so is a person's set the Shell writes over because only its
-        memory of its set (a setting the Guard does not watch) was changed in the closed profile to name it."""
+        Shell then takes the three entries out of it, and so are a person's set the Shell writes over because only its
+        memory of its set (a setting the Guard does not watch) was changed in the closed profile to name it, and this
+        build's set with that memory copied into the closed profile, which the Shell finds there and does not write."""
         share, overrides, written = (
             "nulavio.fingerprinting.shareAccessibility",
             "privacy.fingerprintingProtection.overrides",
@@ -785,6 +786,26 @@ class GuardTest(unittest.TestCase):
         # writes the build's set over the person's, and that is still reported (OpenCodeReview on #825) --
         start_with(earlier, written)
         self.assertEqual(self.m.chrome(user_set), current, "the Shell did not write its set: nothing was tested")
+        found = reported()
+        self.assertIsNotNone(found, self.guard("return G.findings();"))
+        self.assertEqual((found["before"], found["after"]), (earlier, current))
+        self.guard("await G.resolve(args[0], 'keep');", finding)
+
+        # -- this build's set and the Shell's memory of it copied into the closed profile, over the earlier set the
+        # record kept as Nulavio's: the Shell finds its set there and writes nothing, and the change is still reported
+        # (OpenCodeReview on #825, round 3) --
+        self.m.chrome(
+            "Services.prefs.setStringPref(arguments[0], arguments[2]); Services.prefs.setStringPref(arguments[1], arguments[2]);",
+            [written, overrides, earlier],
+        )
+        self.guard("G.ownPrefValue(args[0], args[1], args[1]);", overrides, earlier)
+        self.assertTrue(harness.wait_until(lambda: (in_record(), owned()) == (earlier, earlier), timeout=20), record.read_text())
+        self.session.stop()
+        with open(self.profile / "prefs.js", "a", encoding="utf-8") as prefs_js:
+            for name in (overrides, written):
+                prefs_js.write(f"user_pref({json.dumps(name)}, {json.dumps(current)});\n")
+        self.m = type(self).m = self.session.restart()
+        self.assertEqual(self.m.chrome(user_set), current)
         found = reported()
         self.assertIsNotNone(found, self.guard("return G.findings();"))
         self.assertEqual((found["before"], found["after"]), (earlier, current))
