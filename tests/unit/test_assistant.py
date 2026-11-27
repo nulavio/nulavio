@@ -846,6 +846,26 @@ class AssistantTest(unittest.TestCase):
         extra = len(', "untrusted": ["tabs[].url", "tabs[].title"]')
         self.assertEqual(len(assistant._tool_text(result).split("\n\n", 1)[1]), 20_000 + extra)
 
+    def test_a_held_forms_note_does_not_cut_the_untrusted_list_from_its_json(self):
+        # OpenCodeReview on #854, round 3: a click that lets go of a form the page held answers with the Bridge's note
+        # and then the result's JSON. When the note and the JSON fitted the 20,000 characters on main, the JSON with
+        # its `untrusted` list is still whole, and valid JSON.
+        note = "The page had tried to send a form after an earlier action; it was held and has now been sent."
+        for fill in (300, 20_000):
+            with self.subTest(fill=fill):
+                data = {"tab": "t1", "url": "https://example.org/#", "dialog": None, "navigated": True,
+                        "form_sent": True}  # fmt: skip
+                data["url"] += "x" * (fill - len(note) - 2 - len(json.dumps(data, ensure_ascii=False)))
+                self.assertEqual(len(note) + 2 + len(json.dumps(data, ensure_ascii=False)), fill)  # as main sent it
+                result = tools.Bridge._ok(dict(data), tools.WHERE, note=note)
+                body = assistant._tool_text(result).split("\n\n", 1)[1]
+                self.assertTrue(body.startswith(note + "\n\n"), body[:200])
+                self.assertEqual(json.loads(body[len(note) + 2 :]), {**data, "untrusted": ["url", "dialog.message"]})
+        # A longer one is still cut at 20,000 characters, besides the list's own.
+        result = tools.Bridge._ok({"url": "https://example.org/#" + "y" * 30_000, "dialog": None}, tools.WHERE, note=note)
+        extra = len(', "untrusted": ["url", "dialog.message"]')
+        self.assertEqual(len(assistant._tool_text(result).split("\n\n", 1)[1]), 20_000 + extra)
+
 
 # The Shell's side of #653 under Node: the module, with a stand-in for the one engine call it makes when loaded.
 SHELL_COUNTS = """

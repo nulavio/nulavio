@@ -868,14 +868,17 @@ def _tool_text(result: dict) -> str:
     """What the model gets back from a tool: its text parts (screenshots are not sent), cut at 20,000 characters. The
     Bridge's note that names the fields holding page text (UNTRUSTED, up to its blank line) is not counted: the rest
     keeps the budget it had before the note named them (OpenCodeReview on #854). Nor is the result's `untrusted` list,
-    where the text is the result's JSON: a list that fitted without it still does, as valid JSON (round 2)."""
+    where the text is the result's JSON, alone (round 2) or after the Bridge's own note (a held form let go, round 3):
+    a result that fitted without the list still does, as valid JSON."""
     texts = [c.get("text", "") for c in result.get("content", []) if c.get("type") == "text"]
     text, note, extra = "\n".join(texts), "", 0
     if text.startswith(UNTRUSTED) and (end := text.find("\n\n", 0, MAX_NOTE_CHARS)) != -1:
         note, text = text[: end + 2], text[end + 2 :]
     data = result.get("structuredContent")
-    if isinstance(data, dict) and "untrusted" in data and text == json.dumps(data, ensure_ascii=False):
-        extra = len(text) - len(json.dumps({k: v for k, v in data.items() if k != "untrusted"}, ensure_ascii=False))
+    if isinstance(data, dict) and "untrusted" in data:
+        whole = json.dumps(data, ensure_ascii=False)
+        if text == whole or text.endswith("\n\n" + whole):
+            extra = len(whole) - len(json.dumps({k: v for k, v in data.items() if k != "untrusted"}, ensure_ascii=False))
     return (note + text[: 20_000 + extra]) or json.dumps(result.get("structuredContent", {}))[:20_000]
 
 
