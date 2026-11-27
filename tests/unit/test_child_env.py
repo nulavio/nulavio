@@ -43,17 +43,21 @@ class ChildEnvTest(unittest.TestCase):
         self.python = tmp / "python"
         libs, python = shlex.quote(str(self.libs)), shlex.quote(sys.executable)
         self.python.write_text(
-            f'#!/bin/sh\ncase ":${{LD_LIBRARY_PATH-}}:" in *:{libs}:*) exec {python} "$@" ;; esac\n'
+            f'case ":${{LD_LIBRARY_PATH-}}:" in *:{libs}:*) exec {python} "$@" ;; esac\n'
             f"echo {shlex.quote(LOADER_FAILS)} >&2\nexit 127\n"
         )
-        self.python.chmod(0o700)
         # Added to what this process already has: a Python that needs it is the case this covers.
         here = os.environ.get("LD_LIBRARY_PATH")
         self.ld = f"{here}:{self.libs}" if here else str(self.libs)
 
     def start(self, env: dict) -> subprocess.CompletedProcess:
-        return subprocess.run([str(self.python), "-I", "-c", SHOW_ENV], env=env, capture_output=True, text=True, timeout=60)
+        # Read by /bin/sh rather than executed, so a temporary directory mounted noexec still runs it.
+        command = ["/bin/sh", str(self.python), "-I", "-c", SHOW_ENV]
+        return subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
 
+    # The stand-in models the GNU loader (LD_LIBRARY_PATH). On macOS a protected /bin/sh would drop the DYLD_*
+    # variables before the exec, so it would not show what the helper keeps; the suite runs on Linux.
+    @unittest.skipUnless(sys.platform.startswith("linux"), "models the Linux dynamic loader")
     def test_the_interpreter_starts_with_the_helper_and_not_without_it(self):
         own = {"PATH": "/usr/bin:/bin", "NV_CHILD": "1"}
         with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": self.ld, "NV_PARENT_ONLY": "secret"}):
@@ -123,8 +127,10 @@ class _Module:
                     yield target, node.value
             elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and node.value is not None:
                 yield node.target, node.value
-            elif isinstance(node, (ast.For, ast.AsyncFor)):
-                yield node.target, node.iter
+            elif isinstance(node, (ast.For, ast.AsyncFor)):  # over a literal: each element is a value of the target
+                literal = isinstance(node.iter, (ast.List, ast.Tuple, ast.Set))
+                for value in node.iter.elts if literal else [node.iter]:
+                    yield node.target, value
 
     def assigned(self, target: ast.AST) -> list[ast.AST] | str:
         """What the name or `self.x` attribute `target` holds: the values the nearest scope that has it gives it,
@@ -142,9 +148,10 @@ class _Module:
                     return values
         elif isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
             klass = next((n for n in self._ancestors(target) if isinstance(n, ast.ClassDef)), None)
-            if klass is not None:
+            if klass is not None:  # `self.x = ...` in its methods, or `x = ...` in the class body
                 return [v for n, v in self._assignments(klass, ast.walk(klass)) if isinstance(n, ast.Attribute)
-                        and n.attr == target.attr and isinstance(n.value, ast.Name) and n.value.id == "self"]  # fmt: skip
+                        and n.attr == target.attr and isinstance(n.value, ast.Name) and n.value.id == "self"] + \
+                    [v for n, v in self._assignments(klass) if isinstance(n, ast.Name) and n.id == target.attr]  # fmt: skip
         return []
 
     def starts_python(self, expr: ast.AST, seen: frozenset = frozenset()) -> bool:
@@ -234,6 +241,13 @@ class EveryUnitTestUsesTheHelperTest(unittest.TestCase):
             "a name from the enclosing function": (
                 "def test():\n    env = {'PATH': '/bin'}\n    def write():\n"
                 "        return subprocess.run([sys.executable, w], env=env)\n    write()"
+            ),
+            "a loop over literal ones": (
+                'for env in ({"PATH": "/bin"}, {"PATH": "/usr/bin"}):\n    subprocess.run([sys.executable], env=env)'
+            ),
+            "an attribute of the test class": (
+                "class T:\n    env = {'PATH': '/bin'}\n"
+                "    def test(self):\n        subprocess.run([sys.executable], env=self.env)"
             ),
         }
         for case, source in flagged.items():
