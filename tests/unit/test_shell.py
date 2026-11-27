@@ -633,6 +633,27 @@ class RoutingTest(unittest.TestCase):
         self.assertNotIn('params.set("u"', opener)
         self.assertNotIn('params.set("src"', opener)  # the source is in the held link; the page reads no `src`
 
+    def test_held_and_asked_links_open_in_a_normal_window(self):
+        """#670: the pages for a held link (ask, blocked, unlock) and a held link that stays open as the engine opens a
+        link from another app: in a normal window of the profile, a new one when only private windows are open; never
+        in whichever window was used last, which may be private. Behaviour: test_held_links 08, 09 and 10."""
+        routing = module_text("NulavioRouting.sys.mjs")
+        page = routing[routing.index("async #openPage(") :]
+        page = page[: page.index("\n  }\n")]
+        self.assertTrue(page.split("\n", 2)[1].strip().startswith("const win = await this.#browserWindow();"), page)
+        # No wait between keeping the link and opening its page: a slow first window must not take a slot of the
+        # 64 kept links (evicting one a page already shows) before there is a page to show it.
+        after_hold = page[page.index("const id = this.hold(page, params);") :]
+        self.assertNotIn("await", after_hold)
+        self.assertIn("this.#openFrom(win, `${policy.getURL(page)}?${query}`);", after_hold)
+        self.assertEqual(len(re.findall(r"openTrustedLinkIn\(", routing)), 1, "every open goes through #openFrom")
+        opener = routing[routing.index("\n  #openFrom(win, url) {") :]
+        opener = opener[: opener.index("\n  }\n")]
+        self.assertIn("const forceNonPrivate = !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;", opener)
+        self.assertIn('win.openTrustedLinkIn(url, "tab", { forceNonPrivate })', opener)
+        self.assertIn("this.#openFrom(await this.#browserWindow(), url);", routing)
+        self.assertIn("await this.#openInNormalWindow(url); // held at start-up", routing)
+
     def test_rules_are_never_inferred(self):
         # Only the settings page, the toolbar selector and the ask page create or change rules.
         for path in SHELL.rglob("*.js"):
