@@ -95,6 +95,13 @@ class LookalikeActorsTest(unittest.TestCase):
         self.assertIs(case["decided"], True)
         self.assertEqual(self.cases["parent_nothing_to_warn"], {**case, "warned": False, "warning": None, "url": None})
 
+    def test_each_check_says_whether_the_tab_is_in_a_private_window(self):
+        """#652: the module keeps a private window's "continue" for private windows only."""
+        self.assertEqual(self.cases["parent_warns"]["privately"], [False])
+        case = self.cases["parent_in_private"]
+        self.assertEqual(case["asked"], ["https://paypa1.example/login", "https://news.example/"], case)
+        self.assertEqual(case["privately"], [True, True], case)
+
     def test_a_locked_primary_password_decides_nothing_so_the_next_input_asks_again(self):
         # The module compared nothing rather than ask for the Primary Password (#708): the child asks again.
         case = self.cases["parent_primary_password_locked"]
