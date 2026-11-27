@@ -395,21 +395,32 @@ def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
 
 
 @contextlib.contextmanager
-def prefs_js_lock(profile_dir: Path):
+def prefs_js_lock(profile_dir: Path, *, wait: float | None = None):
     """Held while the launcher reads and then replaces a profile's prefs.js: `nulavio run` appending seed and pending
     prefs here, and the AI Bridge taking its temporary prefs out (ai/workspace.py, ProfileTarget). Each then reads the
     file as the other left it, and neither puts back a copy from before the other's change (review of #826).
 
     An exclusive flock on the profile's folder, which adds no file to it. Where the folder cannot be opened or
-    locked, the change is made without it, as before."""
+    locked, the change is made without it, as before. With `wait`, a lock still held by another after that many
+    seconds raises TimeoutError, and nothing is changed (review 2 of #826)."""
     try:
         fd = os.open(profile_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     except OSError:
         yield
         return
     try:
-        with contextlib.suppress(OSError):  # a file system that does not lock
-            fcntl.flock(fd, fcntl.LOCK_EX)
+        deadline = None if wait is None else time.monotonic() + wait
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | (0 if deadline is None else fcntl.LOCK_NB))
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"{profile_dir}: prefs.js is being changed by another launcher") from None
+                time.sleep(0.05)
+                continue
+            except OSError:
+                pass  # a file system that does not lock
+            break
         yield
     finally:
         os.close(fd)  # releases the lock
@@ -418,6 +429,9 @@ def prefs_js_lock(profile_dir: Path):
 def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]]) -> None:
     target = profile.path / "prefs.js"
     with prefs_js_lock(profile.path):
+        # Checked again under the lock, which may have been waited for behind the AI Bridge: a profile an engine
+        # opened meanwhile is that engine's (review 2 of #826).
+        profile.require_not_running()
         try:
             # Never through a symlink or from a FIFO: the browser writes this folder, and this runs outside its
             # confinement.

@@ -129,12 +129,6 @@ def read_user_prefs(path: Path) -> dict[str, PrefValue]:
     return values
 
 
-def line_pref_name(line: str) -> str | None:
-    """The name a ``user_pref()``/``pref()`` line sets, as written in the file; None for any other line."""
-    match = _PREF_LINE.match(line)
-    return match.group(1) if match else None
-
-
 def substitute(value: PrefValue, variables: dict[str, str]) -> PrefValue:
     if isinstance(value, str):
         for key, replacement in variables.items():

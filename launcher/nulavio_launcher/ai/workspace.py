@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -318,36 +319,47 @@ class ProfileTarget(Workspace):
     def _remove_temporary(self, *, saved: bool = True) -> None:
         """The temporary lines out of user.js and, with `saved`, the values the engine saved from them out of prefs.js.
 
-        Only while no engine uses the profile: the engine writes prefs.js as it exits and would put them back."""
-        (self.profile_dir / GUARD_READY).unlink(missing_ok=True)
-        user_js = self.profile_dir / "user.js"
-        if user_js.exists():
-            kept = [line for line in user_js.read_text(encoding="utf-8").splitlines() if TEMPORARY not in line]
-            if kept:
-                paths.write_private_file(user_js, "\n".join(kept) + "\n")
-            else:
-                user_js.unlink()
-        if saved:
-            self._remove_saved()
+        Only while no engine uses the profile: the engine writes prefs.js as it exits and would put them back. prefs.js
+        is cleared even when user.js cannot be (review 2 of #826), and never raises OSError (_remove_saved)."""
+        try:
+            (self.profile_dir / GUARD_READY).unlink(missing_ok=True)
+            user_js = self.profile_dir / "user.js"
+            if user_js.exists():
+                kept = [line for line in user_js.read_text(encoding="utf-8").splitlines() if TEMPORARY not in line]
+                if kept:
+                    paths.write_private_file(user_js, "\n".join(kept) + "\n")
+                else:
+                    user_js.unlink()
+        finally:
+            if saved:
+                self._remove_saved()
+
+    # How long the clean-up waits for a `nulavio run` that is changing prefs.js (review 2 of #826).
+    PREFS_WAIT = 10.0
 
     def _remove_saved(self) -> None:
         """The lines of prefs.js that set one of TEMPORARY_PREFS; every other line stays as the engine wrote it.
 
-        Under prefs_js_lock, which `nulavio run` holds while it appends to prefs.js: what it wrote meanwhile stays."""
+        Under prefs_js_lock, which `nulavio run` holds while it appends to prefs.js: what it wrote meanwhile stays.
+        A prefs.js that cannot be read or replaced, or a lock still held after PREFS_WAIT, leaves the file as it is:
+        the next agent session clears it (R36), and this one starts or ends all the same (review 2 of #826)."""
         prefs_js = self.profile_dir / "prefs.js"
-        with profile.prefs_js_lock(self.profile_dir):
-            if profile.Profile(name=self.label, path=self.profile_dir).running_pid():
-                return  # opened again meanwhile: that engine owns prefs.js now, and the next agent session clears it
-            try:
-                data = paths.read_private_file(prefs_js)
-            except (FileNotFoundError, PermissionError, paths.UnsafePathError):
-                # None; or a link, or a file not the user's (one that cannot even be opened, too): never followed or
-                # replaced (I9), and the session goes on.
-                return
-            lines = data.splitlines(keepends=True)
-            kept = [line for line in lines if not _sets_temporary(line)]
-            if len(kept) != len(lines):
-                paths.write_private_file(prefs_js, b"".join(kept))
+        try:
+            with profile.prefs_js_lock(self.profile_dir, wait=self.PREFS_WAIT):
+                if profile.Profile(name=self.label, path=self.profile_dir).running_pid():
+                    return  # opened again meanwhile: that engine owns prefs.js now, and the next agent session clears it
+                try:
+                    data = paths.read_private_file(prefs_js)
+                except paths.UnsafePathError:
+                    return  # a link or a file not the user's: never followed or replaced (I9)
+                lines = data.splitlines(keepends=True)
+                kept = [line for line in lines if not _sets_temporary(line)]
+                if len(kept) != len(lines):
+                    paths.write_private_file(prefs_js, b"".join(kept))
+        except OSError:
+            # None (FileNotFoundError); one that cannot even be opened (another user's) or replaced (an immutable
+            # file); or the lock held too long (TimeoutError).
+            return
 
     def start(self, timeout: float = 60.0) -> Bidi:
         if self.bidi is not None:
@@ -370,7 +382,13 @@ class ProfileTarget(Workspace):
         from ..vault.storage import Container, StorageError
 
         box = Container(self.profile_dir)
-        if self.holding or not box.vault_path.exists():
+        try:
+            protected = box.vault_path.exists()
+        except OSError:  # Python 3.11 raises PermissionError for a folder that cannot be looked into
+            if not stopping:
+                raise
+            protected = False  # the engine is stopped all the same (review 2 of #826)
+        if self.holding or not protected:
             yield
             return
         with contextlib.ExitStack() as held:
@@ -389,10 +407,18 @@ class ProfileTarget(Workspace):
             super().stop()  # the engine has exited (or was never started): prefs.js is as it left it
             try:
                 self._remove_temporary(saved=self.wrote_prefs)
-            except (OSError, paths.UnsafePathError):
-                pass  # the next agent session in this profile clears them (R36); the Bridge still closes its other engines
+            except (OSError, ValueError, paths.UnsafePathError):
+                # A user.js that cannot be cleaned (one saved in another encoding: UnicodeDecodeError) is left; the
+                # next agent session in this profile clears it (R36); the Bridge still closes its other engines.
+                pass
             self.wrote_prefs = False
 
 
+# One user_pref() of one literal value, as the engine writes prefs.js, and nothing else on the line: a line that also
+# sets another pref stays whole (review 2 of #826).
+_SAVED_LINE = re.compile(r'^\s*user_pref\(\s*"([\w.]+)"\s*,\s*(?:true|false|-?\d+|"(?:[^"\\]|\\.)*")\s*\)\s*;\s*$')
+
+
 def _sets_temporary(line: bytes) -> bool:
-    return prefs.line_pref_name(line.decode("utf-8", errors="replace").rstrip("\r\n")) in TEMPORARY_PREFS
+    match = _SAVED_LINE.match(line.decode("utf-8", errors="replace").rstrip("\r\n"))
+    return bool(match) and match.group(1) in TEMPORARY_PREFS
