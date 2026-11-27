@@ -193,9 +193,12 @@ h2 {
 .cta-grid { display: grid; gap: var(--nv-space-8); }
 .cta-text h2 { margin-top: var(--nv-space-5); }
 .cta-text p { margin-top: var(--nv-space-5); max-width: 30rem; color: var(--nv-color-text-secondary); }
+/* One row only where the form itself has room for the closed list's longest choice,
+   «Outra distribuição Linux», whole: the form is narrower beside the text from 64rem. */
+.cta .join { container-type: inline-size; }
 .join-fields { display: grid; gap: var(--nv-space-5); }
-@media (min-width: 40rem) {
-  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: var(--nv-space-4); }
+@container (min-width: 40rem) {
+  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto; align-items: end; gap: var(--nv-space-4); }
 }
 @media (min-width: 64rem) {
   .cta-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--nv-space-9); align-items: center; }

@@ -135,7 +135,6 @@ video:focus-visible {
 picture.arrive { display: block; }
 @keyframes arrive { from { opacity: 0; translate: 0 16px; } }
 @media (prefers-reduced-motion: no-preference) {
-  html { scroll-behavior: smooth; }
   @supports ((animation-timeline: view()) and (animation-range: entry)) {
     .arrive { animation: arrive linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
   }

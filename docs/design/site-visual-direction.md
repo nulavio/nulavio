@@ -14,7 +14,7 @@ Every mock-up is static HTML and CSS under the site's own rules, so that what is
 
 - no `<script>`, no `<style>`, no `style=""`, no inline handler, no resource from another origin, no `data:` URL: the checks `tests/unit/test_site.py` makes of the built pages. They were rendered behind the site's policy from `site/_headers` plus `media-src 'self'`, and a console message about the policy would have failed the render;
 - every colour, space, radius and duration from [the tokens](../brand/tokens.json), through the generated `browser/startpage/tokens.css` that the site serves as `/assets/tokens.css`. The style sheets hold no literal colour;
-- motion as the specification allows it: one entrance by opacity and at most 16 px, on the media only, as a scroll-driven animation under `prefers-reduced-motion: no-preference` and `@supports`; the recorded loops, which play once and stop; colour transitions. Nothing else moves;
+- motion as the specification allows it: one entrance by opacity and at most 16 px, on the media only, as a scroll-driven animation under `prefers-reduced-motion: no-preference` and `@supports`, except «Palco»'s window in the first view, which rises once on load with `@keyframes`, as the specification also allows; the recorded loops, which play once and stop; colour transitions. Nothing else moves: a jump within the page is not scrolled smoothly;
 - the media slot the maintainer decided on 2026-11-27: the loop of at most 5 s that stops by itself, in `<picture>` over its still frame; the whole scene as `<video controls preload="none">` with a captions track; the transcript; and the one "Sem letra miúda:" line per feature that `test_copy_is_honest` reads. The ids of the landing are kept (`hero-h`, `hero-email`, `profiles-h`, `join`, `join-email`, `join-os`).
 
 The inputs, and the state they are in:
@@ -24,7 +24,7 @@ The inputs, and the state they are in:
 | Tokens | `browser/startpage/tokens.css` on `main` | Linked, not copied. [Pull request #858](https://github.com/nulavio/nulavio/pull/858) adds one token to it, which no mock-up uses |
 | Lockup ("N" + "ulavio", proposal A of [#175](https://github.com/nulavio/nulavio/issues/175)) | #858 at commit `05dadc39` | The two files copied as they are there, to `mockups/site/brand/`, because `main` still has the earlier lockup. Phase 2 uses `docs/brand/assets/logo/` |
 | The window and the band | [site/assets/shots/](../../site/assets/shots/manifest.json) on `main`: commit `f08daf3`, build `20261104050259`, Firefox 159.0 | Linked, not copied |
-| Two recorded scenes, pt-BR | #859 at commit `83a4e98b`: build `20261119020726`, Firefox 160.0.1 | The loop, the still frame, the WebM and the captions of `profile-opens` and `link-routed`, copied to `mockups/site/media/`, because #859 is not on `main`. The MP4 fallback is left out to keep the copy small. Phase 2 records them again |
+| Two recorded scenes, pt-BR | #859 at commit `83a4e98b`: build `20261119020726`, Firefox 160.0.1 | The loop, the still frame, the WebM and the captions of `profile-opens` and `link-routed`, copied to `mockups/site/media/`, because #859 is not on `main`. The MP4 fallback is left out to keep the copy small. Two of their captions are on screen for less than #859's later rule allows (at most 20 characters a second), which #859's later recordings meet. Phase 2 records them again |
 
 The copies, byte for byte the files of those pull requests (SHA-256):
 
@@ -83,7 +83,7 @@ They differ in the layout, in the type and in how the product is shown, on purpo
 | Idea | The real window is the subject, large, on a darker floor | The engineering pages' document, taken to the landing | The page is read along the symbol's route |
 | Layout | A headline across the page, the offer under it in two columns, the window at full width; each feature is text beside a stage | A ruled page with a rail for section numbers; the numbers as a receipt beside the headline | One reading column beside a mint line that starts in the symbol's three points, has a stop for each scene and turns towards the waitlist |
 | Type | The brand's sans, weight 700, tight, 73 px on one line | The brand's sans at weight 600 and 56 px; the mono for labels, numbers and provenance | A serif at weight 400, 64 px, the second sentence in italic. **Outside the brand's type system** ([guidelines §5](../brand/guidelines.md#5-typography)) |
-| The product | The whole window at 1200 px; scenes one at a time on a stage 723 px wide, chosen by two tabs (radio buttons, no script) | Numbered figures 542 px wide, each with what it shows, its build and its hash; the transcript always visible | The corner of the window at its real size, cut by the edge of the page; the band alone in three states; each scene 736 px wide with a detail of the same capture at real size |
+| The product | The whole window at 1200 px; scenes one at a time on a stage 723 px wide, chosen by two tabs (radio buttons, no script) | Numbered figures 542 px wide, each with what it shows, its build and the hash of the file named; the transcript always visible | The corner of the window at its real size, cut by the edge of the page; the band alone in three states; each scene 736 px wide, and the routing scene with a detail of the same capture at real size |
 | Motion | The window rises once (16 px); each scene's capture arrives; the loop | The loop, nothing else | The line is drawn, not animated; each scene's capture arrives; the loop |
 | Waitlist | The brand's dark band | A form on the page, like a paper form | The line turns into the heading |
 | Mock-up | [palco.html](mockups/site/palco.html) | [recibo.html](mockups/site/recibo.html) | [rota.html](mockups/site/rota.html) |
@@ -116,7 +116,7 @@ At 390 px: [light](assets/visual-direction/recibo-390-light.webp), [dark](assets
 
 At 390 px: [light](assets/visual-direction/rota-390-light.webp), [dark](assets/visual-direction/rota-390-dark.webp).
 
-What it does well: with the lockup hidden it is still Nulavio's page, because the line is the symbol; the band can be read, on a desktop and on a phone, because the corner of the window and the detail of each scene are shown at their real size; and the captures' empty area is where the detail sits. Where it falls short: the serif is not the brand's; the right third of a wide screen is empty beside the text; the page is the tallest; and it is the newest skeleton, so the most to build.
+What it does well: with the lockup hidden it is still Nulavio's page, because the line is the symbol; the band can be read, on a desktop and on a phone, because the corner of the window, and a detail of the routing scene, are shown at their real size; and the captures' empty area is where the detail sits. Where it falls short: the serif is not the brand's; the right third of a wide screen is empty beside the text; the page is the tallest; and it is the newest skeleton, so the most to build.
 
 ## How they were rendered and reviewed
 
@@ -129,6 +129,7 @@ What it does well: with the lockup hidden it is still Nulavio's page, because th
   - «Recibo»: the figure captions follow the rail; every rule has the same width; the two scenes went from side by side, at 450 px, to one under the other with the caption beside them, at 542 px.
   - «Rota»: the page scrolled sideways at 390 px, and the close-up made the page wider than the viewport: the figure now ends at the viewport's edge and cuts the capture there; the band's three captures moved from a far column into the text they illustrate; the detail became a card of its own; under 1200 px it sits under the capture instead of over it; on a phone the detail ended in the middle of the words it is there to show ("Aberto pela sua re"), so under 768 px the cut now starts at them.
   - All: the entrance was on the whole figure, so captions, transcripts and «Palco»'s tabs moved with it; it is now on the picture alone, as in the specification's example.
+  - After the first automated review of the pull request: the English link stays in view on a phone in «Recibo», «Rota» and the chosen form, as in «Palco» and on the landing; the waitlist's fields share a row only where the closed list shows its longest choice whole; the content lists keep their role in Safari (`role="list"`); each hash says which file it belongs to; no smooth scrolling.
 - **The author's own scores**, on the ten-point list of the design skill used here (0 to 3 each, 2.5 to pass): «Palco» 2.4, «Recibo» 2.4, «Rota» 2.6, the chosen form 2.7. «Palco» loses on distinctiveness, «Recibo» on how the product is shown, «Rota» on type. They are one agent's judgment of its own work.
 
 ## The choice
@@ -143,10 +144,10 @@ At 390 px: [light](assets/visual-direction/final-390-light.webp), [dark](assets/
 
 What the chosen form takes, and from where:
 
-- from «Rota», the skeleton: the line with its origin, its stops and its turn; the window's corner and each scene's detail at real size; the band shown alone;
+- from «Rota», the skeleton: the line with its origin, its stops and its turn; the window's corner at real size, and a scene's detail at real size beside the scene (drawn for the routing scene only; phase 2 gives each scene its own, item 2 below); the band shown alone;
 - from the brand, the type: the headings in the brand's sans at weight 600, the second sentence in the accent colour instead of italic, and the product's control shape. No serif, so no new font, no hosted file and no `font-src`;
 - from «Palco», the waitlist as the brand's dark home, edge to edge: the line runs into it and turns towards the form there. It is the page's one loud moment;
-- from «Recibo», the provenance: one line in the mono under each capture with its build and the start of its hash, and the numbers as the first stop on the route.
+- from «Recibo», the provenance: one line in the mono under each capture with the commit or build it comes from and, under a scene, the start of its video's hash, named as such (the still and the loop are cut from that video; a capture that changes with the scheme has no single hash to show); and the numbers as the first stop on the route.
 
 ### Criteria
 
@@ -169,7 +170,7 @@ Scored 1 to 5 after rendering; the weights add to 100. This is one agent's judgm
 - **Effort.** «Palco» and «Recibo» are close to style sheets the site already has. «Rota» is a new skeleton: the line across every section, the comparison table and the questions fitted to its lane, and the detail's position chosen per scene. The chosen form saves the type decision and nothing else.
 - **Honest copy.** The copy is the landing's in all four. «Recibo» keeps every transcript in view; «Palco» hides one scene's transcript behind the other's tab. The close-up is itself a matter of honesty: it shows what the window says rather than describing it. The chosen form adds the provenance line.
 - **Motion.** All four are inside the specification. «Recibo» has only the loops.
-- **Performance.** The whole mock-up page, with both scenes' loops and still frames, is 145 to 186 KB as served, against a first-view budget of 1.5 MB. Largest contentful paint was not measured.
+- **Performance.** The whole mock-up page, with both scenes' loops and still frames, is 145 to 187 KB as served, against a first-view budget of 1.5 MB. Largest contentful paint was not measured.
 
 ### Why this one
 
@@ -189,7 +190,7 @@ What it gives up is the cheapest build and the most familiar page. The serif, th
 2. **The close-up as a capture of its own.** The hero uses `window-crop-*`, which `capture_site.py` already makes. For the scenes, the detail is the still frame cut by CSS, with the place of the cut chosen per scene (the band for profiles and routing, the middle of the page for the unlock page and Guard) and per width (on a phone it starts at the words the scene is about, which the mock-up does by a pixel offset read off the capture; phase 2 takes that offset from the manifest). If a scene needs a zoom rather than a cut, `record_site.py compose` gains a second still at twice the density; that is a change to #859's pipeline, to be asked there.
 3. **Recordings that suit a dark page and a small one**: each scene in the dark scheme too, chosen by `prefers-color-scheme` in the `<picture>`; fixture pages with more on them than a heading and a sentence; and the brand of #858, which the pipeline's next run gives.
 4. **The checks the specification lists, plus these**: the detail's picture has an empty `alt` and the scene's own picture carries the text; the provenance line's build and hash come from the manifest at build time, as the engineering pages' figures do, never typed; the line and its stops are in the contrast pairs of `test_contrast_pairs_from_the_tokens` (they use `accent-default` on the canvas and on the sunken surface, and `accent-on` on `accent-default`, all already in it).
-5. **Two things seen in the motion pass.** A `<video>`'s `poster` and a captions `<track default>` are requested when the page loads, even inside a closed `<details>`: about 12 to 15 KB and 0.3 KB a scene, no video bytes. And an element with the scroll entrance is transparent until it enters the view, which a full-page capture or a print never does: phase 2's own screenshots and the print style sheet must ask for reduced motion or leave the entrance out.
+5. **Three things seen in the motion pass.** A `<video>`'s `poster` and a captions `<track default>` are requested when the page loads, even inside a closed `<details>`: about 12 to 15 KB and 0.3 KB a scene, no video bytes. And an element with the scroll entrance is transparent until it enters the view, which a full-page capture or a print never does: phase 2's own screenshots and the print style sheet must ask for reduced motion or leave the entrance out. And a scene started and then hidden, by closing its «Ver a cena inteira» or, in «Palco», by choosing the other tab, plays on out of sight to its end: muted, 9 to 10 s, no loop, and with no script nothing can pause it on closing. Phase 2 keeps that, or puts the player outside the disclosure.
 6. **Both languages.** Only pt-BR was drawn. `/en/` is to be rendered before it ships: some of its strings are longer ("Join the waitlist"), and its captures and recordings are other files with other cuts.
 7. **Two additions to record in the specification.** The band shown alone inside the profiles section is media beyond the "text and two scenes" the specification gives that section, and the provenance line under each capture is new text in every media slot. Both are for #859's document to take in, or for the maintainer to refuse.
 8. **A link preview that follows it** ([#199](https://github.com/nulavio/nulavio/issues/199)): the route's turn and the close-up are what the site's own preview art can take from this direction.

@@ -14,7 +14,7 @@ h2 { letter-spacing: -0.02em; line-height: 1.1; }
 .field { padding-inline: var(--nv-space-5); }
 
 .prov { display: block; font-family: var(--nv-font-family-mono); font-size: var(--nv-type-caption-size); font-variant-numeric: tabular-nums; color: var(--nv-color-text-secondary); overflow-wrap: anywhere; }
-.closeup .prov { margin-top: var(--nv-space-2); }
+.closeup .prov, .bands .prov { margin-top: var(--nv-space-2); }
 .scene figcaption > .prov { font-size: var(--nv-type-caption-size); }
 
 /* The numbers: the first stop, read as a receipt along the line. */

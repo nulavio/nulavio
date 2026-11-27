@@ -29,15 +29,17 @@
 .brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
 .top-nav { display: none; margin-left: auto; }
 .top-nav ul { display: flex; gap: var(--nv-space-6); }
-.top-nav a { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
-.top-nav a:hover { color: var(--nv-color-text-primary); text-decoration: underline; text-decoration-color: var(--nv-color-accent-default); }
-.btn-quiet { margin-left: auto; background: transparent; border-color: var(--nv-color-border-control); color: var(--nv-color-text-primary); }
+.top-nav a, .lang { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
+.top-nav a:hover, .lang:hover { color: var(--nv-color-text-primary); text-decoration: underline; text-decoration-color: var(--nv-color-accent-default); }
+/* The language switch stays in view at every width; the section links fold away on a phone. */
+.lang { margin-left: auto; }
+.btn-quiet { background: transparent; border-color: var(--nv-color-border-control); color: var(--nv-color-text-primary); }
 .btn-quiet:hover { background: color-mix(in oklab, var(--nv-color-text-primary) 8%, transparent); }
 .btn-quiet:active { background: color-mix(in oklab, var(--nv-color-text-primary) 12%, transparent); }
 .btn, .field { border-radius: var(--nv-radius-xs); }
 @media (min-width: 48rem) {
   .top-nav { display: block; }
-  .top-nav + .btn-quiet { margin-left: 0; }
+  .top-nav + .lang { margin-left: 0; }
 }
 
 
@@ -154,8 +156,9 @@ h2 {
 }
 .join-fields { display: grid; gap: var(--nv-space-5); }
 .cta .field { background: var(--nv-color-bg-canvas); }
-@media (min-width: 48rem) {
-  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; }
+/* One row only where the closed list can show its longest choice, «Outra distribuição Linux», whole. */
+@media (min-width: 56rem) {
+  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto; align-items: end; }
 }
 
 /* -- colophon -------------------------------------------------------------------------- */

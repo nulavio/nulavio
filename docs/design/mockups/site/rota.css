@@ -35,12 +35,21 @@ html, body { overflow-x: clip; }
 .brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
 .top-nav { display: none; margin-left: auto; }
 .top-nav ul { display: flex; gap: var(--nv-space-6); }
-.top-nav a { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
-.top-nav a:hover { color: var(--nv-color-text-primary); }
-.top-join { display: inline-flex; align-items: center; min-height: 2.75rem; margin-left: auto; font-size: 0.9375rem; font-weight: var(--nv-font-weight-semibold); }
+.top-nav a, .lang { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
+.top-nav a:hover, .lang:hover { color: var(--nv-color-text-primary); }
+/* The language switch stays in view at every width; the section links fold away on a phone. */
+.lang { margin-left: auto; }
+.top-join { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; font-weight: var(--nv-font-weight-semibold); }
 @media (min-width: 48rem) {
   .top-nav { display: block; }
-  .top-nav + .top-join { margin-left: 0; }
+  .top-nav + .lang { margin-left: 0; }
+}
+/* On the narrowest phones the switch is shortened to «EN», as on the landing (below 26rem there); its name stays «English». */
+.lang-short { display: none; }
+@media (max-width: 23rem) {
+  .top { gap: var(--nv-space-5); }
+  .lang-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lang-short { display: inline; }
 }
 
 /* -- the route ------------------------------------------------------------------------- */
@@ -169,7 +178,8 @@ h2 { font-size: clamp(1.875rem, 1.35rem + 2.2vw, 2.75rem); line-height: 1.12; le
 .exit-text p { margin-top: var(--nv-space-5); max-width: 34rem; font-size: 1.125rem; color: var(--nv-color-text-secondary); }
 .exit .join { margin-top: var(--nv-space-7); max-width: 46rem; }
 .join-fields { display: grid; gap: var(--nv-space-5); }
-@media (min-width: 48rem) { .join-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; } }
+/* One row only where the closed list can show its longest choice, «Outra distribuição Linux», whole. */
+@media (min-width: 56rem) { .join-fields { grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto; align-items: end; } }
 @media (max-width: 63.9375rem) {
   .exit::before { width: calc(var(--lane) - var(--line-x) - 0.5rem); border-bottom-left-radius: 0.75rem; }
   .exit::after { left: calc(var(--lane) - 0.5rem - 4px); }
