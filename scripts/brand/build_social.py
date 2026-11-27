@@ -32,7 +32,8 @@ run that is killed while it moves its files in can leave some of them.
 Text is set in Noto Sans (SIL OFL; installed on most Linux desktops and in the Fedora build image),
 the brand's documented fallback while Inter is not bundled. The SVG files are deterministic
 (tests/unit/test_social_art.py compares them); the PNGs depend on the host's fonts and librsvg.
-Rasterising needs ImageMagick 7 (`magick`) with the librsvg delegate, as build_icons.py does.
+Rasterising needs ImageMagick 7 (`magick`) with the librsvg delegate, as build_icons.py does; the
+GitHub card also needs a Q16 or an HDRI build of it (the usual one), which is checked first.
 
     python3 -I scripts/brand/build_social.py             all of the above
     python3 -I scripts/brand/build_social.py --svg-only  the SVG files only (no ImageMagick)
@@ -411,6 +412,8 @@ def github_svg() -> str:
     # The name and its line are one block, centred in the space above the footer.
     block_h = lockup_h + line_size * 1.5 + (len(lines) - 1) * line_size * 1.36
     top = margin + (footer_y - footer_size * 2.2 - margin - block_h) / 2
+    if top < margin:  # each line raises the name by half a line: a third one takes it into the margin
+        raise ValueError("the GitHub card's line has too many lines: the name would leave the margin")
     line_y = top + lockup_h + line_size * 1.5
     parts = [
         background(width, height),
@@ -436,6 +439,31 @@ def all_svgs() -> dict[str, str]:
 
 def rasterise(source: Path, out: Path) -> None:
     subprocess.run(["magick", "-background", "none", "-density", "96", str(source), *STRIP, str(out)], check=True)
+
+
+def card_rasteriser() -> None:
+    """rasterise_card dithers with a grain of half an 8-bit level. An ImageMagick that holds a channel
+    in 8 bits (Q8 without HDRI) rounds that grain away before it is added, and the rings come back with
+    no error: such a build is refused before anything is written. `magick -version` names the build,
+    as in "ImageMagick 7.1.2-35 Q16-HDRI"."""
+    version = subprocess.run(["magick", "-version"], capture_output=True, text=True, check=True).stdout
+    build = re.search(r"\bQ(\d+)(-HDRI)?\b", version)
+    if not build or (int(build.group(1)) < 16 and not build.group(2)):
+        found = build.group(0) if build else "an unknown quantum depth"
+        raise ValueError(f"ImageMagick is {found}: the GitHub card needs Q16 or an HDRI build to be dithered")
+
+
+def write_card(source: Path, png: Path) -> None:
+    """The GitHub card, drawn beside `png` and moved over it only when it is under GitHub's limit: a
+    card that is refused leaves the one before it."""
+    fresh = png.with_suffix(".new.png")
+    try:
+        rasterise_card(source, fresh)
+        if fresh.stat().st_size >= GITHUB_MAX_BYTES:
+            raise ValueError(f"{png.name} would not be under 1 MB, GitHub's limit: the one before it is kept")
+        os.replace(fresh, png)
+    finally:
+        fresh.unlink(missing_ok=True)
 
 
 def rasterise_card(source: Path, out: Path) -> None:
@@ -632,6 +660,8 @@ def _png_size(path: Path) -> tuple[int, int]:
 
 
 def write_all(svg_only: bool = False) -> list[Path]:
+    if not svg_only:
+        card_rasteriser()
     written = []
     for rel, text_ in all_svgs().items():
         path = OUT / rel
@@ -640,11 +670,9 @@ def write_all(svg_only: bool = False) -> list[Path]:
         written.append(path)
         if not svg_only:
             png = path.with_suffix(".png")
-            (rasterise_card if rel.startswith("github/") else rasterise)(path, png)
+            (write_card if rel.startswith("github/") else rasterise)(path, png)
             written.append(png)
     if not svg_only:
-        if (OUT / "github" / "social-preview.png").stat().st_size >= GITHUB_MAX_BYTES:
-            raise ValueError("github/social-preview.png is not under 1 MB, GitHub's limit")
         sheet = OUT / "crop-check.png"
         crop_check(OUT, sheet)
         written.append(sheet)

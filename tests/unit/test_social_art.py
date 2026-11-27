@@ -160,6 +160,45 @@ class SocialArtTest(unittest.TestCase):
         ):
             build_social.github_svg()
 
+    def test_a_line_that_would_push_the_name_into_the_margin_is_refused(self):
+        with mock.patch.object(build_social, "GITHUB_LINE", "One.\nTwo."):
+            build_social.github_svg()  # two short lines still leave the name inside the margin
+        with mock.patch.object(build_social, "GITHUB_LINE", "One.\nTwo.\nThree."), self.assertRaisesRegex(ValueError, "margin"):
+            build_social.github_svg()
+
+    def test_an_imagemagick_that_cannot_dither_the_card_is_refused_first(self):
+        """Q8 without HDRI rounds the half-level grain away: refused before a file is written."""
+        for build, fit in (("Q16-HDRI", True), ("Q16", True), ("Q8-HDRI", True), ("Q8", False), ("", False)):
+            said = mock.Mock(stdout=f"Version: ImageMagick 7.1.2-35 {build} x86_64 https://imagemagick.org\n")
+            with self.subTest(build=build), mock.patch.object(build_social.subprocess, "run", return_value=said):
+                if fit:
+                    build_social.card_rasteriser()
+                else:
+                    self.assertRaisesRegex(ValueError, "Q16 or an HDRI", build_social.card_rasteriser)
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(build_social, "OUT", Path(tmp) / "social"),
+            mock.patch.object(build_social, "card_rasteriser", side_effect=ValueError("Q8")),
+            self.assertRaises(ValueError),
+        ):
+            build_social.write_all()
+        self.assertFalse((Path(tmp) / "social").exists(), "nothing written")
+
+    def test_a_card_over_githubs_limit_leaves_the_one_before_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            png = Path(tmp) / "social-preview.png"
+            png.write_bytes(b"the card before")
+            big = lambda source, out: out.write_bytes(b"0" * build_social.GITHUB_MAX_BYTES)  # noqa: E731
+            with mock.patch.object(build_social, "rasterise_card", big), self.assertRaisesRegex(ValueError, "1 MB"):
+                build_social.write_card(Path(tmp) / "card.svg", png)
+            self.assertEqual(png.read_bytes(), b"the card before")
+            self.assertEqual([p.name for p in Path(tmp).iterdir()], [png.name])
+            small = lambda source, out: out.write_bytes(b"a new card")  # noqa: E731
+            with mock.patch.object(build_social, "rasterise_card", small):
+                build_social.write_card(Path(tmp) / "card.svg", png)
+            self.assertEqual(png.read_bytes(), b"a new card")
+            self.assertEqual([p.name for p in Path(tmp).iterdir()], [png.name])
+
     def test_both_languages_for_every_post_format(self):
         self.assertEqual(sorted(build_social.SAMPLES), ["en", "pt-BR"])
         self.assertEqual(sorted(build_social.TAGLINE), ["en", "pt-BR"])

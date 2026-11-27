@@ -445,8 +445,7 @@ class SiteTest(unittest.TestCase):
         """#199: every page a search engine may list has the preview's tags, about itself and in its
         language, and a picture of ours with the size and the type it declares. A page behind noindex has none."""
         pages = sorted(str(p.relative_to(self.out)) for p in self.out.rglob("*.html"))
-        self.assertGreater(len(pages), 12)
-        shared = 0
+        shared = set()
         for page in pages:
             html = self.read(page)
             head = Tree(html.partition("</head>")[0] + "</head>")
@@ -454,13 +453,14 @@ class SiteTest(unittest.TestCase):
             og = {m["property"]: m.get("content", "") for m in metas if m.get("property", "").startswith("og:")}
             twitter = {m["name"]: m.get("content", "") for m in metas if m.get("name", "").startswith("twitter:")}
             named = {m["name"]: m.get("content", "") for m in metas if "name" in m}
-            canonical = [n.attrs["href"] for n in head.all("link") if n.attrs.get("rel") == "canonical"]
+            discovery = build_site.Discovery(html)  # the builder's own reading of robots and canonical
+            canonical = discovery.canonicals
             with self.subTest(page=page):
                 self.assertLessEqual(len([m for m in metas if m.get("property") == "og:image"]), 1, "one picture a page")
-                if "noindex" in named.get("robots", "") or not canonical:
+                if discovery.noindex or not canonical:
                     self.assertEqual((og, twitter), ({}, {}), "an address that is not to be shared has no preview")
                     continue
-                shared += 1
+                shared.add(page)
                 language = head.all("html")[0].attrs["lang"]
                 locale, other = {"pt-BR": ("pt_BR", "en_US"), "en": ("en_US", "pt_BR")}[language]
                 self.assertIn(og["og:type"], ("website", "article"))
@@ -485,10 +485,15 @@ class SiteTest(unittest.TestCase):
                 self.assertNotEqual(og["og:image:alt"], og["og:title"], "the alternative text says what the picture shows")
                 self.assertEqual(twitter["twitter:card"], "summary_large_image")
                 self.assertEqual((twitter["twitter:image"], twitter["twitter:image:alt"]), (image, og["og:image:alt"]))
-                if page not in COMPARISON:  # the comparison draws its own picture
-                    self.assertEqual(image, SAME_SITE + build_site.LINK_PREVIEW[language]["image"])
-                    self.assertEqual(og["og:image:alt"], build_site.LINK_PREVIEW[language]["alt"])
-        self.assertGreater(shared, 10)
+                # The site's picture comes with its alternative text; a page's own picture (the
+                # comparison's) with its own.
+                default = build_site.LINK_PREVIEW[language]
+                self.assertEqual(image == SAME_SITE + default["image"], og["og:image:alt"] == default["alt"])
+        # Every page the build always publishes and lists, and the download pages once a release is out.
+        listed = {*LANDING, *WAITLIST, *DOCUMENT, *COMPARISON}
+        if build_site.release_values(ROOT):
+            listed |= set(build_site.DOWNLOAD_PAGES)
+        self.assertLessEqual(listed, shared)
 
     def test_the_previews_alternative_text_is_what_the_picture_shows(self):
         """The site's two pictures are captures of scripts/site/og-template.html: its texts, in each
@@ -643,6 +648,50 @@ class SiteTest(unittest.TestCase):
                     self.assertEqual(len(cells), 5, row.text())
                     self.assertTrue(all(c.text().strip() for c in cells), "every cell says something in words, not only an icon")
                 self.assertRegex(self.read(page), r"(novembro de|November) 20\d\d", "the comparison says when it was made")
+
+
+class LinkPreviewTest(unittest.TestCase):
+    """link_preview (#199) reads the head as HTML, as a browser and a network do."""
+
+    HEAD = (
+        '<!doctype html>\n<html lang="en">\n<head>\n<title>Tom &amp; "Jerry"</title>\n{extra}'
+        '<link rel="canonical" href="https://nulavio.net/en/x/">\n'
+        '<link rel="alternate" hreflang="en" href="https://nulavio.net/en/x/">\n{alternate}'
+        "</head>\n<body>\n</body>\n</html>\n"
+    )
+
+    def page(self, extra: str = "", alternate: str = "", description: str = '<meta name="description" content="A page.">\n'):
+        return self.HEAD.format(extra=description + extra, alternate=alternate)
+
+    def card(self, text: str) -> dict[str, str]:
+        return build_site.Discovery(build_site.link_preview(text, "x")).card
+
+    def test_attributes_in_any_order_and_comments_are_html(self):
+        reversed_ = self.page(description='<meta content="A page." name="description">\n')
+        self.assertEqual(self.card(reversed_)["og:description"], "A page.")
+        commented = self.page('<!-- <meta property="og:title" content="old"> -->\n')
+        self.assertEqual(self.card(commented)["og:title"], 'Tom & "Jerry"')
+
+    def test_a_link_to_itself_is_no_translation(self):
+        self.assertNotIn("og:locale:alternate", self.card(self.page()))
+        other = '<link rel="alternate" hreflang="pt-BR" href="https://nulavio.net/x/">\n'
+        self.assertEqual(self.card(self.page(alternate=other))["og:locale:alternate"], "pt_BR")
+
+    def test_a_page_that_writes_its_own_preview_writes_all_of_it(self):
+        with self.assertRaisesRegex(build_site.BuildError, "lacks og:type"):
+            build_site.link_preview(self.page('<meta name="twitter:title" content="Mine">\n'), "x")
+        whole = "".join(f'<meta property="{key}" content="1">\n' for key in build_site.CARD if key.startswith("og:"))
+        whole += "".join(f'<meta name="{key}" content="1">\n' for key in build_site.CARD if key.startswith("twitter:"))
+        text = self.page(whole)
+        self.assertEqual(build_site.link_preview(text, "x"), text)
+
+    def test_a_page_behind_noindex_has_no_preview(self):
+        for robots in ("noindex", "NONE", "NoIndex, follow"):
+            noindex = f'<meta name="robots" content="{robots}">\n'
+            with self.subTest(robots=robots):
+                self.assertEqual(self.card(self.page(noindex)), {})
+                with self.assertRaisesRegex(build_site.BuildError, "behind noindex"):
+                    build_site.link_preview(self.page(noindex + '<meta property="og:title" content="Mine">\n'), "x")
 
 
 @requires_node

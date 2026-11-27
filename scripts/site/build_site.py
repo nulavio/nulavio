@@ -431,33 +431,48 @@ def keep_addresses(text: str, page: str) -> str:
     return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
+# A page that writes its own preview writes all of it; a partial one would hide the site's picture.
+CARD = (
+    "og:type", "og:site_name", "og:locale", "og:url", "og:title", "og:description", "og:image", "og:image:type",
+    "og:image:width", "og:image:height", "og:image:alt", "twitter:card", "twitter:image", "twitter:image:alt",
+)  # fmt: skip
+
+
 def link_preview(text: str, page: str) -> str:
-    """The page with the link-preview tags in its head, when it is to have them and has none."""
-    head = text.partition("</head>")[0]
-    if 'property="og:' in head or 'name="twitter:' in head:
-        return text  # the page wrote its own
+    """The page with the link-preview tags in its head, when it is to have them and has none. The head
+    is read as HTML (attributes in any order, comments ignored); a page behind noindex has no preview,
+    and a page that writes its own writes a whole one."""
     discovery = Discovery(text)
-    if discovery.noindex or not discovery.canonicals:
+    shared = not discovery.noindex and bool(discovery.canonicals)
+    if discovery.card:
+        if not shared:
+            raise BuildError(f"{page}: a page behind noindex or without a canonical address has no link preview")
+        missing = [key for key in CARD if key not in discovery.card]
+        if missing:
+            raise BuildError(f"{page}: its own link preview lacks {', '.join(missing)}")
         return text
-    language = re.search(r'<html lang="([^"]+)"', head)
-    title = re.search(r"<title>([^<]+)</title>", head)
-    description = re.search(r'<meta name="description" content="([^"]+)">', head)
-    if not (language and language.group(1) in LINK_PREVIEW and title and description and len(discovery.canonicals) == 1):
+    if not shared:
+        return text
+    language, title, description = discovery.language, discovery.title.strip(), discovery.description
+    if not (language in LINK_PREVIEW and title and description and len(discovery.canonicals) == 1):
         raise BuildError(f"{page}: a link preview needs a language of the site, a title, a description and one canonical address")
-    preview = LINK_PREVIEW[language.group(1)]
+    preview = LINK_PREVIEW[language]
     image = ORIGIN + preview["image"]
-    # The title and the description are the page's own, already written as HTML text; a quotation
-    # mark is the one character that text may hold and an attribute may not.
-    said = {"title": title.group(1).replace('"', "&quot;"), "description": description.group(1)}
-    alternate = f'<meta property="og:locale:alternate" content="{preview["other"]}">\n' if discovery.alternates else ""
+    # Another language only when a link names it at another address: a page's link to itself is no translation.
+    other = preview["other"].split("_")[0].lower()
+    translated = any(
+        a.get("hreflang", "").split("-")[0].lower() == other and a.get("href") != discovery.canonicals[0]
+        for a in discovery.alternates
+    )
+    alternate = f'<meta property="og:locale:alternate" content="{preview["other"]}">\n' if translated else ""
     tags = (
         '<meta property="og:type" content="website">\n'
         '<meta property="og:site_name" content="Nulavio">\n'
         f'<meta property="og:locale" content="{preview["locale"]}">\n'
         f"{alternate}"
         f'<meta property="og:url" content="{html.escape(discovery.canonicals[0])}">\n'
-        f'<meta property="og:title" content="{said["title"]}">\n'
-        f'<meta property="og:description" content="{said["description"]}">\n'
+        f'<meta property="og:title" content="{html.escape(" ".join(title.split()))}">\n'
+        f'<meta property="og:description" content="{html.escape(description)}">\n'
         f'<meta property="og:image" content="{image}">\n'
         '<meta property="og:image:type" content="image/png">\n'
         f'<meta property="og:image:width" content="{LINK_PREVIEW_SIZE[0]}">\n'
@@ -481,16 +496,36 @@ class Discovery(HTMLParser):
         self.canonicals: list[str] = []
         self.alternates: list[dict[str, str]] = []
         self.noindex = False
+        # For the link preview: the page's language, title and description, and the preview tags it wrote.
+        self.language = self.title = self.description = ""
+        self.card: dict[str, str] = {}
+        self._in_title = False
         self.feed(text.partition("</head>")[0])
 
     def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
+        attrs = {key: value or "" for key, value in attrs}
+        self._in_title = tag == "title"
+        if tag == "html":
+            self.language = attrs.get("lang", "")
+        if tag == "meta":
+            key = attrs.get("property") or attrs.get("name", "")
+            if key.lower() == "description":
+                self.description = attrs.get("content", "")
+            if key.lower().startswith(("og:", "twitter:")):
+                self.card[key.lower()] = attrs.get("content", "")
         if tag == "meta" and attrs.get("name", "").lower() == "robots":
             self.noindex |= bool({"noindex", "none"} & set(re.split(r"[\s,]+", attrs.get("content", "").lower())))
         if tag == "link" and attrs.get("rel") == "canonical":
             self.canonicals.append(attrs["href"])
         if tag == "link" and attrs.get("rel") == "alternate" and "hreflang" in attrs:
             self.alternates.append(attrs)
+
+    def handle_endtag(self, tag):
+        self._in_title &= tag != "title"
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title += data
 
 
 def write_sitemap(out: Path, pages: dict) -> None:
