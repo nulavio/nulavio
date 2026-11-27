@@ -558,6 +558,31 @@ class AssistantUiTest(unittest.TestCase):
         # The remove control takes it out before Send.
         self.panel("document.getElementById('include-page').click();")
         self.wait_view(lambda v: v["attached"])
+        # A redraw of the items keeps focus on the item's Remove button (#760): the tab's updates as it reloads redraw them.
+        # The keyboard reaches the panel first, then its Remove button.
+        self.m.chrome(
+            "window.focus(); const panel = SidebarController.browser.contentDocument.getElementById('webext-panels-browser');"
+            "Services.focus.setFocus(panel, Ci.nsIFocusManager.FLAG_BYKEY);"
+        )
+        mark = "const b = document.querySelector('#chips button'); b.dataset.drawnBefore = '';"
+        focused = self.panel(mark + "b.focus(); return [document.hasFocus(), document.activeElement === b];")
+        self.assertEqual(focused, [True, True])
+        self.m.chrome("gBrowser.selectedBrowser.reload();")
+        self.wait_loaded(url)
+        redrawn = (
+            "const b = document.activeElement;"
+            "return b.classList.contains('assistant__chip-remove') && b.isConnected && !('drawnBefore' in b.dataset);"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.panel(redrawn), 10), "focus left the item's Remove button")
+        self.assertTrue(self.view()["attached"])  # the item stayed: same tab, same address
+        # With the person in the page, a redraw does not take focus from it into the panel.
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
+        self.panel(mark)
+        self.m.chrome("gBrowser.selectedBrowser.reload();")
+        self.wait_loaded(url)
+        drawn_again = "return !('drawnBefore' in document.querySelector('#chips button').dataset);"
+        self.assertTrue(harness.wait_until(lambda: self.panel(drawn_again), 10))
+        self.assertTrue(self.m.chrome("return Services.focus.focusedElement === gBrowser.selectedBrowser;"))
         self.panel("document.querySelector('#chips button').click();")
         view = self.wait_view(lambda v: not v["attached"] and v["offer"])
         self.assertTrue(self.panel("return document.activeElement.id === 'include-page';"))
