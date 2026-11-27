@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -623,15 +624,15 @@ SHIELD_OUTLINE = "M50 10 L84 22 V50 C84 72 70 88 50 96 C30 88 16 72 16 50 V22 Z"
 
 
 def _status_colour(tokens: dict[str, dict], theme: str, name: str) -> str:
-    """A status colour as the illustrations write it. The value goes into the SVG as it is, so one
-    that is not a colour is refused here: the engine would drop it, and the shield would lose its
-    outline or its mark while the generator succeeded."""
+    """A status colour as the illustrations write it: #RRGGBB, in capitals. The value goes into an SVG
+    file's style sheet, so only that spelling is taken. One that is not a colour would be dropped by the
+    engine, and the shield would lose its outline or its mark while the generator succeeded. The rgba()
+    form that contrast.py reads is refused as well: its parser takes white space and digits that XML and
+    CSS do not, and a translucent colour would show a page that the contrast pairs do not describe."""
     path = f"color.{theme}.status.{name}"
     value = resolve(tokens, path)
-    try:
-        rgba(value)
-    except ValueError as error:
-        raise TokenError(f"{path}: {error}") from error
+    if not (isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)):
+        raise TokenError(f"{path}: an illustration's colour is written as #RRGGBB, got {value!r}")
     return value.upper()
 
 

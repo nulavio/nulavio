@@ -10,9 +10,12 @@ record of the review. Under docs/brand/assets/review/2026-11/ it made:
                     the places people meet them. Except for capture-crops.webp they are compositions
                     made from the assets, not screenshots of GitHub, a desktop, a store or a social network.
 
-Only the proposals are still written here:
+Only the proposals are still written here, and only where a file is missing:
 
   python3 -I scripts/brand/build_review.py            the proposal SVGs
+
+A's geometry and the icon's scale are now build_logo.py's, the applied brand. If that changes, the files
+stay as the review showed them: this script refuses to replace one it would draw differently.
 
 The sheets (--render) and the measured tables of docs/brand/review-2026-11.md (--report) read the
 approved marks, the tokens and the Settings shield as they are in the checkout. Those are now the applied
@@ -299,9 +302,29 @@ def tile_report() -> list[tuple[str, str, float, float]]:
     return [(what, bg, contrast.ratio(NAVY, bg), contrast.ratio(bl.SLATE, bg)) for what, bg in surfaces]
 
 
+FROZEN = (
+    "the proposals are the record of the review of 2026-11-20 and stay as they were shown, and this checkout "
+    "no longer draws {names} that way: the applied brand in build_logo.py has changed since. Nothing was "
+    "written. If that change is meant, give this script the value it drew the proposals with on 2026-11-27 "
+    "instead of the applied one; do not replace the files"
+)
+
+
 def write_proposals() -> list[Path]:
+    """The proposal files, written where they are missing. A file that is there and that this checkout
+    would draw differently is never replaced, and then nothing is written: A's geometry and the icon's
+    scale are read from build_logo.py, which is the applied brand and can change, and the files are the
+    dated record of what the review showed."""
+    drawn = proposal_svgs()
+    changed = sorted(
+        name
+        for name, text in drawn.items()
+        if (OUT / "proposals" / name).exists() and (OUT / "proposals" / name).read_text(encoding="utf-8") != text
+    )
+    if changed:
+        raise ValueError(FROZEN.format(names=", ".join(changed)))
     written = []
-    for name, text in proposal_svgs().items():
+    for name, text in drawn.items():
         path = OUT / "proposals" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
@@ -776,7 +799,12 @@ def main() -> int:
     args = parser.parse_args()
     if args.report or args.render:
         parser.error(HISTORICAL)
-    for path in write_proposals():
+    try:
+        written = write_proposals()
+    except ValueError as error:
+        print(f"build_review.py: {error}", file=sys.stderr)
+        return 1
+    for path in written:
         print(path.relative_to(ROOT))
     return 0
 

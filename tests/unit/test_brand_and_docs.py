@@ -26,6 +26,19 @@ ASSETS = ROOT / "docs" / "brand" / "assets"
 SVG_NS = "{http://www.w3.org/2000/svg}"
 
 
+# Colours and near-colours that the status illustrations do not take, because they write #RRGGBB only.
+NOT_WRITTEN_AS_HEX = (
+    "rgba(226, 235, 238, 1)",
+    "rgba(226,\x0b235, 238, 1)",
+    "rgba(\u0662\u0662\u0666, 235, 238, 1)",
+    "rgba(226., 235, 238, 1)",
+    "rgba(226, 235, 238, 0.5)",
+    "#E2EBEE\n",
+    "#E2EBEEFF",
+    "#\uff25\uff12EBEE",
+)
+
+
 def png_size(path: Path) -> tuple[int, int]:
     data = path.read_bytes()[:24]
     assert data[:8] == b"\x89PNG\r\n\x1a\n", f"{path} is not a PNG"
@@ -129,7 +142,11 @@ class TokensTest(unittest.TestCase):
 
     def test_the_status_illustrations_refuse_a_value_that_is_not_a_colour(self):
         # The value goes into the SVG as it is: one the engine cannot read would leave the shield without
-        # its outline or its mark, and the generator would still succeed.
+        # its outline or its mark, and the generator would still succeed. Only #RRGGBB is taken: the
+        # rgba() form contrast.py reads allows a vertical tab (not XML), digits outside ASCII and "226."
+        # (not CSS), and every one of the spellings below is a colour to contrast.rgba.
+        for value in NOT_WRITTEN_AS_HEX[:4]:
+            self.assertEqual(contrast.rgba(value), (226.0, 235.0, 238.0, 1.0), value)
         cases = (
             (build_tokens.build_shield_ok, "secure"),
             (build_tokens.build_shield_ok, "secureTint"),
@@ -138,7 +155,7 @@ class TokensTest(unittest.TestCase):
         )
         for build, name in cases:
             for theme in ("light", "dark"):
-                for value in ("#GGGGGG", "#ABC", "navy", 5, None, ""):
+                for value in ("#GGGGGG", "#ABC", "navy", 5, None, "", *NOT_WRITTEN_AS_HEX):
                     data = json.loads(build_tokens.TOKENS.read_text())
                     data["color"][theme]["status"][name]["$value"] = value
                     refused = self.assertRaisesRegex(build_tokens.TokenError, rf"color\.{theme}\.status\.{name}")
@@ -178,12 +195,64 @@ class DatedReviewTest(unittest.TestCase):
     def test_the_proposals_stay_as_drawn(self):
         import build_review
 
+        # The files are the record; the generator reads A's geometry from build_logo.py, the applied brand.
+        # The day that changes on purpose this fails, and the files are not what gives way.
+        stale = (
+            "the proposal files are the review's record and are not made again: give build_review.py the "
+            "value it drew them with on 2026-11-27 instead of build_logo.py's new one"
+        )
         committed = sorted(p.name for p in (build_review.OUT / "proposals").glob("*.svg"))
         generated = build_review.proposal_svgs()
         self.assertEqual(committed, sorted(generated))
         for name, text in generated.items():
             with self.subTest(svg=name):
-                self.assertEqual((build_review.OUT / "proposals" / name).read_text(encoding="utf-8"), text)
+                self.assertEqual((build_review.OUT / "proposals" / name).read_text(encoding="utf-8"), text, stale)
+                self.assertIn("a proposal, not an approved asset", text)
+
+    def test_writing_the_proposals_touches_nothing_else(self):
+        import build_review
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            written = build_review.write_proposals()
+            self.assertEqual({p.parent for p in written}, {Path(tmp) / "review" / "proposals"})
+            self.assertEqual(sorted(p.name for p in Path(tmp).rglob("*") if p.is_file()), sorted(p.name for p in written))
+
+    def test_a_proposal_drawn_differently_is_never_replaced(self):
+        import build_review
+
+        def files(folder: Path) -> dict[str, str]:
+            return {p.name: p.read_text(encoding="utf-8") for p in folder.iterdir()}
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            proposals = Path(tmp) / "review" / "proposals"
+            build_review.write_proposals()
+            as_reviewed = files(proposals)
+            # The applied lockup's spacing and the icon's scale change, as a later revision of the brand may
+            # (ROUTE_SCALE is build_logo.ICON_SCALE as this script read it when it was loaded).
+            self.assertEqual(build_review.ROUTE_SCALE, build_logo.ICON_SCALE)
+            with mock.patch.object(build_logo, "A_GAP", 21.0), mock.patch.object(build_review, "ROUTE_SCALE", 1.3):
+                moved = build_review.proposal_svgs()
+                self.assertNotEqual(moved["a-lockup-initial.svg"], as_reviewed["a-lockup-initial.svg"])
+                self.assertNotEqual(moved["ab-icon.svg"], as_reviewed["ab-icon.svg"])
+                (proposals / "c-icon.svg").unlink()  # a missing file is not written either, once one is refused
+                with self.assertRaisesRegex(ValueError, "a-lockup-initial-on-dark.svg, a-lockup-initial.svg, ab-icon.svg"):
+                    build_review.write_proposals()
+                self.assertEqual(files(proposals), {k: v for k, v in as_reviewed.items() if k != "c-icon.svg"})
+                with mock.patch.object(sys, "argv", ["build_review.py"]), contextlib.redirect_stderr(io.StringIO()) as said:
+                    self.assertEqual(build_review.main(), 1)
+                self.assertIn("stay as they were shown", said.getvalue())
+            build_review.write_proposals()  # with the brand as it was, the missing file comes back
+            self.assertEqual(files(proposals), as_reviewed)
+
+    def test_every_mark_pair_meets_its_minimum(self):
+        import build_review
+
+        # What the marks need of the palette that was kept: 3:1 for a graphic (WCAG 1.4.11), 4.5:1 for the name.
+        self.assertEqual(sorted({minimum for _what, _fg, _bg, minimum in build_review.MARK_PAIRS}), [3.0, 4.5])
+        self.assertEqual(len(build_review.MARK_PAIRS), 9)
+        for what, fg, bg, minimum in build_review.MARK_PAIRS:
+            with self.subTest(pair=what):
+                self.assertGreaterEqual(contrast.ratio(fg, bg), minimum)
 
 
 class AssetsTest(unittest.TestCase):
