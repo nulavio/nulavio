@@ -148,7 +148,8 @@ class DnsChoiceTest(unittest.TestCase):
             self.assertIn("somente DNS criptografado", now["description"])
             self.assertEqual(self.state()["excluded"], [EXCLUDED])  # localhost and .local are in the option's note
             before = len(self.doh.queries)
-            self.assertEqual(resolve(self.m, EXCLUDED), ["127.0.0.1"])  # answered, by the computer's resolver
+            answer = resolve(self.m, EXCLUDED)  # answered, by the computer's resolver (which may list it twice)
+            self.assertEqual(sorted(set(answer)) if isinstance(answer, list) else answer, ["127.0.0.1"])
             self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # which still answers the rest
             self.assertNotIn(EXCLUDED, self.doh.queries[before:])
             self.assertIn(NAME, self.doh.queries[before:])
