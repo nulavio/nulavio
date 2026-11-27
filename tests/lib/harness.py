@@ -1014,7 +1014,10 @@ class GeckoProfileSession:
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():
             raise RuntimeError(f"-CreateProfile failed: {created.stderr[-400:]}")
-        self.enable_marionette(self.profile_dir, first_run=first_run)
+        if first_run:
+            self.enable_marionette(self.profile_dir, first_run=True)
+        else:  # the one-argument call the site tools' overrides take (capture_site.py, record_site.py)
+            self.enable_marionette(self.profile_dir)
         engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
         output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
         self.process = subprocess.Popen(
