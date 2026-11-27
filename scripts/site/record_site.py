@@ -2,7 +2,9 @@
 """Record short scenes of the real Nulavio build for nulavio.net and the promotion pieces (#173, #176).
 
 One pipeline, two steps, because the release test container has the engine's libraries but no image
-tools, and the host has the image tools but must not run the engine outside the shared test slot:
+tools, and the host has the image tools but must not run the engine outside the shared test slot.
+``<install-dir>`` is the directory that holds the ``nulavio`` executable (a release package unpacked, or
+a development package of this tree):
 
 1. **capture** (needs the build; runs where the integration tests run). Each scene drives a throwaway
    profile of tests/lib/harness.GeckoProfileSession through Marionette, as the integration tests do,
@@ -12,21 +14,25 @@ tools, and the host has the image tools but must not run the engine outside the 
    the integration runner, which runs it in the release test container (FUSE for the Vault):
 
        NULAVIO_INTEGRATION_IMAGE=fedora-release-itest NULAVIO_TEST_ARTIFACTS=<dir> \\
-           scripts/release/run_integration.sh <install>/nulavio record_site_scenes.py
+           scripts/release/run_integration.sh <install-dir> record_site_scenes.py
 
 2. **compose** (no engine): draws the cursor and the click ripples on the frames, then encodes each
    scene as a muted VP9 WebM, an H.264 MP4, an animated WebP loop and a WebP poster, with WebVTT
    captions and a manifest (hashes, build, every edit; for each recording, when and with which script it
-   was captured and which checkout composed it). Everything is made in a private temporary directory
-   (TMPDIR) and copied to the output only when every scene encoded and every check passed, the manifest
-   last. Needs Pillow and ffmpeg on the host (Fedora: python3-pillow, ffmpeg-free), the tools
-   capture_site.py and the media fixtures already use.
+   was captured and which checkout composed it). It makes the whole set, every scene in both languages,
+   in a private temporary directory (TMPDIR), and replaces docs/design/recordings/2026-11 with it only
+   when every scene encoded and every check passed. Needs Pillow and ffmpeg on the host (Fedora:
+   python3-pillow, ffmpeg-free), the tools capture_site.py and the media fixtures already use.
 
-       python3 -I scripts/site/record_site.py compose <dir>/recordings [--out docs/design/recordings/2026-11]
+       python3 -I scripts/site/record_site.py compose <dir>/recordings
 
-``scripts/site/record_site.sh <install>/nulavio`` runs both. Rerunning it records the same scenes
-from the same script; the files differ byte for byte (frame timing and encoder versions), so the
-manifest holds the hashes of the files that were committed, as the screenshots' manifest does.
+``scripts/site/record_site.sh <install-dir>`` runs both. Rerunning it records the same scenes from the
+same script; the files differ byte for byte (frame timing and encoder versions), so the manifest holds
+the hashes of the files that were committed, as the screenshots' manifest does.
+
+A maintainer's tool with nothing to choose: the scenes, the languages, the frame rate, the sizes and
+the output directory are fixed below. What it does not try to handle (two runs at once, hostile
+captures, other hosts' fonts) is in docs/design/site-redesign.md.
 
 What a recording changes, all listed in the manifest: the window's ``remotecontrol`` attribute is
 removed (the striped address bar of automation); the cursor is drawn afterwards, because a headless
@@ -39,6 +45,7 @@ from __future__ import annotations
 import argparse
 import base64
 import configparser
+import contextlib
 import datetime as dt
 import hashlib
 import html
@@ -62,9 +69,15 @@ SCENES = ("profile-opens", "link-routed", "protected-unlocks")
 LOCALES = ("pt-BR", "en-US")
 WINDOW_CSS = (1280, 800)
 SCALE = 1.5
-FPS = 30
+FPS = 30  # the videos' frame rate
+WIDTH = 1280  # the videos' and posters' width, in pixels
+LOOP_WIDTH = 800
+LOOP_STEP = 3  # the loop shows every third frame of the video: 10 a second, 100 ms each
+LOOP_MS = 1000 * LOOP_STEP // FPS
+BUDGET = 2_000_000  # the largest file allowed, in bytes
 TAIL = 0.6  # seconds added after the last hold
 LOOP_MAX = 5.0  # an image that moves by itself stops within 5 s (WCAG 2.2.2), so the loop plays once
+LOOP_SHOWS = 1.0  # seconds of the window a scene cuts to that its loop shows at least
 CAPTION_CPS = 20  # a caption is on screen long enough to be read: at most this many characters a second
 CLICK_LENGTH = 0.45  # seconds a click's ripple lasts
 TYPE_STEP = 0.075  # seconds per typed key in the video
@@ -121,19 +134,29 @@ def duration_of(timeline: dict) -> float:
     return round(max(times) + TAIL, 3)
 
 
-def frame_count(timeline: dict, fps: int) -> int:
+def frame_count(timeline: dict) -> int:
     """Frames of the encoded video: the scene's length rounded up to a whole frame, so the last hold is never cut.
-    The video lasts ``frame_count / fps`` seconds; the manifest and the last caption use that, not the timeline's end."""
-    return math.ceil(duration_of(timeline) * fps - 1e-6)
+    The video lasts ``frame_count / FPS`` seconds; the manifest and the last caption use that, not the timeline's end."""
+    return math.ceil(duration_of(timeline) * FPS - 1e-6)
 
 
-def loop_frames(span: tuple[float, float], fps: int, loop_fps: int = 10) -> tuple[list[int], int]:
-    """The video frames the short loop shows and how long each stays, in ms: about `loop_fps` a second, and never
-    more than LOOP_MAX seconds in all, whatever the frame rate."""
-    step = max(1, round(fps / loop_fps))
-    frame_ms = round(1000 * step / fps)
-    indices = list(range(round(span[0] * fps), round(span[1] * fps), step))
-    return indices[: int(LOOP_MAX * 1000) // frame_ms], frame_ms
+def loop_window(timeline: dict, end: float) -> tuple[float, float]:
+    """The part of the scene the short loop shows, LOOP_MAX seconds at most: from the scene's highlight, or from
+    later when the window the scene cuts to would otherwise get less than LOOP_SHOWS seconds of the loop (an unlock
+    that took long, say)."""
+    start = timeline.get("highlight")
+    if start is None:
+        start = max(0.0, end - LOOP_MAX)
+    if timeline.get("cuts"):
+        start = max(start, timeline["cuts"][-1]["t"] + LOOP_SHOWS - LOOP_MAX)
+    return start, min(end, start + LOOP_MAX)
+
+
+def loop_frames(span: tuple[float, float]) -> list[int]:
+    """The video frames the short loop shows, each for LOOP_MS: every LOOP_STEP-th frame from the first one at or
+    after the span's start to the last one before its end, and never more than LOOP_MAX seconds in all."""
+    first, stop = (math.ceil(t * FPS - 1e-6) for t in span)
+    return list(range(first, stop, LOOP_STEP))[: int(LOOP_MAX * 1000) // LOOP_MS]
 
 
 def webp_animation(data: bytes) -> tuple[int, int]:
@@ -154,29 +177,42 @@ def webp_animation(data: bytes) -> tuple[int, int]:
     return loops, total
 
 
-def fast_cues(captions: list[dict], end: float, cps: float = CAPTION_CPS) -> list[str]:
-    """The captions that leave the screen too soon to be read: more than `cps` characters a second."""
+def ms(seconds: float) -> int:
+    return round(seconds * 1000)
+
+
+def fast_cues(captions: list[dict], end: float) -> list[str]:
+    """The captions that leave the screen too soon to be read: more than CAPTION_CPS characters a second, by the
+    whole milliseconds the WebVTT file gives each one."""
     fast = []
     for i, cue in enumerate(captions):
-        shown = (captions[i + 1]["t"] if i + 1 < len(captions) else end) - cue["t"]
-        if shown <= 0 or len(cue["text"]) / shown > cps:
-            fast.append(f"{len(cue['text'])} characters in {shown:.2f} s: {cue['text']}")
+        shown = ms(captions[i + 1]["t"] if i + 1 < len(captions) else end) - ms(cue["t"])
+        if shown <= 0 or len(cue["text"]) * 1000 > CAPTION_CPS * shown:
+            fast.append(f"{len(cue['text'])} characters in {shown / 1000:.2f} s: {cue['text']}")
     return fast
 
 
 FRAME_NAME = re.compile(r"\d{4}\.png")
 
 
-def check_timeline(timeline: dict) -> None:
-    """A timeline is the capture's output, read on the host: its scene and language name the files compose writes
-    and its frame names are opened, so they must be the ones this script itself writes."""
+def check_timeline(timeline: dict, scene: str, locale: str) -> None:
+    """A timeline is the capture's output, read on the host: it must be the one of the scene and language whose
+    directory it is in, and its frame names, which compose opens, the ones this script itself writes."""
     if timeline.get("schema") != 1:
         raise ValueError(f"unknown timeline schema {timeline.get('schema')!r}")
-    if timeline.get("scene") not in SCENES or timeline.get("locale") not in LOCALES:
-        raise ValueError(f"unknown scene or language: {timeline.get('scene')!r}, {timeline.get('locale')!r}")
+    if (timeline.get("scene"), timeline.get("locale")) != (scene, locale):
+        raise ValueError(f"{scene}-{locale} holds the timeline of {timeline.get('scene')!r}, {timeline.get('locale')!r}")
     names = [f["file"] for f in timeline["frames"]] + [timeline["poster"]]
     if not timeline["frames"] or not all(isinstance(n, str) and FRAME_NAME.fullmatch(n) for n in names):
         raise ValueError("frame names must be NNNN.png")
+
+
+def captured(path: Path) -> Path:
+    """A file of the capture, as compose opens it: a regular file in a real directory, never a link that leads out
+    of the captures (they come out of the container)."""
+    if path.parent.is_symlink() or path.is_symlink() or not path.is_file():
+        raise ValueError(f"{path} is not a regular file of the capture")
+    return path
 
 
 def personal_values(text: str, seen: list[str], home: str, user: str, host: str) -> list[str]:
@@ -195,8 +231,8 @@ def personal_values(text: str, seen: list[str], home: str, user: str, host: str)
 
 
 def vtt_time(seconds: float) -> str:
-    ms = round(seconds * 1000)
-    return f"{ms // 3_600_000:02d}:{ms // 60_000 % 60:02d}:{ms // 1000 % 60:02d}.{ms % 1000:03d}"
+    at = ms(seconds)
+    return f"{at // 3_600_000:02d}:{at // 60_000 % 60:02d}:{at // 1000 % 60:02d}.{at % 1000:03d}"
 
 
 def webvtt(captions: list[dict], end: float) -> str:
@@ -222,9 +258,7 @@ class Recorder:
 
     def __init__(self, out: Path, scene: str, locale: str):
         self.dir = out / f"{scene}-{locale}"
-        if self.dir.exists():
-            shutil.rmtree(self.dir)
-        self.dir.mkdir(parents=True)
+        self.dir.mkdir(parents=True)  # new: a run starts from an empty directory and records each scene once
         self.scene, self.locale = scene, locale
         self.t = 0.0
         self.frames: list[dict] = []
@@ -327,7 +361,12 @@ class Recorder:
             "notes": self.notes,
             **meta,
         }
-        (self.dir / "timeline.json").write_text(json.dumps(timeline, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        (self.dir / "timeline.json.part").write_text(json.dumps(timeline, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    def publish(self) -> None:
+        """The timeline under the name compose reads. Only a scene that passed gets one: this is called after the
+        scene and its teardown, so a timeline cut short, or one of a case the runner reports as failed, stays `.part`."""
+        os.replace(self.dir / "timeline.json.part", self.dir / "timeline.json")
 
 
 # -- capture: fixtures, sessions, windows --------------------------------------------------------
@@ -545,9 +584,17 @@ TEXT = {
 PERSONAL_PAGES = {"pt-BR": ["/receitas", "/viagem"], "en-US": ["/recipes", "/trip"]}
 WORK_PAGES = {"pt-BR": ["/chamados"], "en-US": ["/tickets"]}
 BANK_PAGES = {"pt-BR": ["/extrato"], "en-US": ["/statement"]}
-# A new window's own first page (the new tab) names the profile's search engine with no alternatives beside it; the
-# scenes never show a third-party service that way (#173), so a window that opens gets a fixture page first.
-NEW_WINDOW_NOTE = "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
+# A window's own first page (the new tab) names the profile's search engine with no alternatives beside it, and
+# Settings' choice of a new profile's search engine lists providers, which a crop would show in part. The scenes never
+# show a third-party service that way (#173): every window gets fixture pages first, and Settings is scrolled.
+FIXTURE_NOTE = (
+    "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's"
+    " first frame (a window's own first page, the new tab, names a search engine)"
+)
+SETTINGS_NOTE = (
+    "Settings was scrolled by the script before the first frame, so that the list of profiles ends at the bottom"
+    " (the search choice of a new profile, below it, lists providers)"
+)
 PASSWORD = "artificial pass 173"  # noqa: S105 -- a throwaway volume in a throwaway home
 SHELL = "resource://builtin-addons/nulavio-shell/modules"
 PRELUDE = (
@@ -675,8 +722,12 @@ def prepare_profile(harness, path: Path, locale: str) -> None:
     add_prefs(harness, path, recording_prefs(locale))
 
 
-def window_ready(m, pages: list[str]) -> None:
-    """One window at the recording size, Lateral, no bars, showing `pages` (the first selected)."""
+def window_ready(m, pages: list[str], locale: str) -> None:
+    """One window at the recording size, Lateral, no bars, showing `pages` (the first selected), its interface in
+    `locale`: a build without that language would fall back to another, and the footage would be mislabelled."""
+    shown = m.chrome("return Services.locale.appLocaleAsBCP47;")
+    if shown != locale:
+        raise RuntimeError(f"the window's interface is in {shown}, not in {locale}: this build cannot record {locale}")
     m.set_context("chrome")
     try:
         m.send("WebDriver:SetWindowRect", {"width": WINDOW_CSS[0], "height": WINDOW_CSS[1]})
@@ -800,6 +851,25 @@ def wait(predicate, timeout: float, what: str):
     raise RuntimeError(f"timed out: {what}")
 
 
+def quit_all(clients: list) -> None:
+    for client in clients:
+        with contextlib.suppress(Exception):  # the session's cleanup ends what is left
+            client.quit()
+
+
+def unmount_vaults(tmp: Path) -> None:
+    """Lazily, as the Vault's tests detach a throwaway volume: an instance that never connected can still hold the
+    mount busy, and the session's cleanup ends it only afterwards."""
+    for vault in tmp.rglob("*.vault"):
+        mountpoint = vault.with_name(vault.name[: -len(".vault")])
+        subprocess.run(["fusermount3", "-u", "-z", str(mountpoint)], capture_output=True, check=False)
+
+
+def make_removable(tmp: Path) -> None:
+    for dirpath, _d, _f in os.walk(tmp):
+        os.chmod(dirpath, 0o700)
+
+
 # -- capture: scenes -----------------------------------------------------------------------------
 
 
@@ -847,36 +917,27 @@ class Scenes:
 
     def record(self, scene: str, locale: str) -> Path:
         rec = Recorder(self.out, scene, locale)  # first: if it cannot write, nothing has been started yet
-        fixtures = Fixtures(locale)
-        s, others = None, []
-        try:
+        others: list = []
+        with contextlib.ExitStack() as teardown:  # last in, first out; each step runs whatever the others did
+            fixtures = Fixtures(locale)
+            teardown.callback(fixtures.close)
             s = self.session(locale)
+            teardown.callback(s.cleanup)
+            teardown.callback(make_removable, s.tmp)
+            teardown.callback(unmount_vaults, s.tmp)
+            teardown.callback(quit_all, others)
             transcript = getattr(self, scene.replace("-", "_"))(rec, s, fixtures, locale, others)
+            rec.notes.append(FIXTURE_NOTE)
             now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             rec.save(transcript, {**self.meta, "captured": now, "window_css": list(WINDOW_CSS)})
-            return rec.dir
-        finally:
-            for client in others:
-                try:
-                    client.quit()
-                except Exception:  # noqa: S110 -- the session's cleanup ends what is left
-                    pass
-            if s is not None:
-                for vault in s.tmp.rglob("*.vault"):
-                    # Lazily, as the Vault's tests detach a throwaway volume: an instance that never connected can
-                    # still hold the mount busy, and cleanup() ends it only afterwards.
-                    mountpoint = vault.with_name(vault.name[: -len(".vault")])
-                    subprocess.run(["fusermount3", "-u", "-z", str(mountpoint)], capture_output=True, check=False)
-                for dirpath, _d, _f in os.walk(s.tmp):
-                    os.chmod(dirpath, 0o700)
-                s.cleanup()
-            fixtures.close()
+        rec.publish()
+        return rec.dir
 
     def caps(self, locale: str, scene: str) -> list[str]:
         t = TEXT[locale]
         return [c.format(first=t["first"], work=t["work"], bank=t["bank"]) for c in t["cap"][scene]]
 
-    def open_profiles_pane(self, m) -> None:
+    def open_profiles_pane(self, rec: Recorder, m) -> None:
         """Settings at its Profiles pane in the selected tab, as Settings › Profiles shows it, scrolled so that the list
         of profiles ends at the bottom: the new profile's search choice below it names providers, and a crop of that
         list would show some of them and not the others (#173)."""
@@ -889,6 +950,7 @@ class Scenes:
         time.sleep(0.8)
         m.chrome(PREFS_DOC + "d.getElementById('nulavio-profile-new-template').scrollIntoView({block: 'end'});")
         time.sleep(0.3)
+        rec.notes.append(SETTINGS_NOTE)
 
     @staticmethod
     def row_button(name: str, action: str) -> str:
@@ -910,8 +972,8 @@ class Scenes:
         work = chrome_async(m, "return P.create({templateId: 'work', name: args[0]});", t["work"])
         path = Path(chrome_async(m, "return (await SPS.getProfile(args[0])).path;", work))
         prepare_profile(self.h, path, locale)
-        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
-        self.open_profiles_pane(m)  # the selected tab becomes Settings
+        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]], locale)
+        self.open_profiles_pane(rec, m)  # the selected tab becomes Settings
         row = self.row_button(t["work"], "open")
         button = prefs_point(m, row)  # scrolls the row into view before the first frame
         rec.caption(cap[0])
@@ -927,9 +989,8 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["work"] in " ".join(band(child)), 30, "the work profile's band")
-        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
+        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]], locale)
         rec.notes.append("the work profile was created by the script (NulavioProfiles.create, template work) before the scene")
-        rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["work"], time.monotonic() - started)
         rec.caption(cap[1])
         rec.shot(child, poster=True)
@@ -956,9 +1017,9 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["work"] in " ".join(band(child)), 30, "the work profile's band")
-        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
+        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]], locale)
         time.sleep(1.5)  # its profile service reads the group's rules
-        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
+        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]], locale)
         local_search_engine(m, locale, fx)
         target = fx.url("/intranet", host="localhost")  # typed in full: a bare host:port is not always read as an address
         rec.caption(cap[0])
@@ -1027,8 +1088,8 @@ class Scenes:
         prepare_profile(self.h, path, locale)
         chrome_async(m, "return V.lock(args[0]);", bank)
         wait(lambda: chrome_async(m, locked, bank), 30, "the protected profile locked again")
-        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
-        self.open_profiles_pane(m)
+        window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]], locale)
+        self.open_profiles_pane(rec, m)
         row = self.row_button(t["bank"], "unlock")
         wait(lambda: m.chrome(PREFS_DOC + f"return !!({row});"), 20, "the Unlock button")
         button = prefs_point(m, row)  # scrolls the row into view before the first frame
@@ -1073,12 +1134,11 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["bank"] in " ".join(band(child)), 30, "the protected profile's band")
-        window_ready(child, [fx.url(p) for p in BANK_PAGES[locale]])
+        window_ready(child, [fx.url(p) for p in BANK_PAGES[locale]], locale)
         rec.notes.append(
             "the protected profile was created by the script (NulavioVault.createProtected, an artificial password), then"
             " unlocked and locked again once to write its recording prefs inside its volume"
         )
-        rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["bank"], time.monotonic() - started)
         rec.caption(cap[2])
         rec.shot(child, poster=True)
@@ -1115,19 +1175,17 @@ def draw_ripple(draw, x: float, y: float, u: float, scale: float) -> None:
     )
 
 
-def compose_frames(src: Path, timeline: dict, work: Path, width: int, fps: int) -> tuple[int, int, int]:
+def compose_frames(src: Path, timeline: dict, work: Path) -> tuple[int, int, int]:
     from PIL import Image, ImageDraw
 
-    count = frame_count(timeline, fps)
-    if work.exists():
-        shutil.rmtree(work)
-    work.mkdir(parents=True)
+    count = frame_count(timeline)
+    work.mkdir()
     w0, h0 = timeline["size"]
-    size = (width, round(h0 * width / w0 / 2) * 2)
+    size = (WIDTH, round(h0 * WIDTH / w0 / 2) * 2)
     scale = timeline["scale"]
     cache: dict[str, Image.Image] = {}
     for i in range(count):
-        t = i / fps
+        t = i / FPS
         name = frame_at(timeline["frames"], t)
         if name not in cache:
             cache.clear()
@@ -1149,46 +1207,37 @@ def ffmpeg(*args: str) -> None:
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], check=True)
 
 
-def encode(work: Path, fps: int, out_base: Path) -> list[Path]:
+def encode(work: Path, out_base: Path) -> list[Path]:
     """Muted video: no audio track at all, no metadata, the same frames in VP9 WebM and H.264 MP4."""
-    frames = ["-framerate", str(fps), "-i", str(work / "%05d.png")]
+    frames = ["-framerate", str(FPS), "-i", str(work / "%05d.png")]
     common = ["-an", "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1", "-pix_fmt", "yuv420p", "-fflags", "+bitexact"]
     webm, mp4 = out_base.with_suffix(".webm"), out_base.with_suffix(".mp4")
     ffmpeg(*frames, "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "36", "-row-mt", "1", "-deadline", "good",
-           "-cpu-used", "2", "-g", str(fps * 4), *common, str(webm))  # fmt: skip
-    ffmpeg(*frames, "-c:v", "libopenh264", "-b:v", "700k", "-maxrate", "1200k", "-g", str(fps * 4), *common,
+           "-cpu-used", "2", "-g", str(FPS * 4), *common, str(webm))  # fmt: skip
+    ffmpeg(*frames, "-c:v", "libopenh264", "-b:v", "700k", "-maxrate", "1200k", "-g", str(FPS * 4), *common,
            "-movflags", "+faststart", str(mp4))  # fmt: skip
     return [webm, mp4]
 
 
-def loop_window(timeline: dict, end: float) -> tuple[float, float]:
-    """The part of the scene the short loop shows: from its highlight, at most LOOP_MAX seconds."""
-    start = timeline.get("highlight")
-    if start is None:
-        start = max(0.0, end - LOOP_MAX)
-    return start, min(end, start + LOOP_MAX)
-
-
-def loop_webp(work: Path, span: tuple[float, float], fps: int, out: Path, width: int, loop_fps: int = 10) -> Path:
+def loop_webp(work: Path, span: tuple[float, float], out: Path) -> Path:
     """The short loop for <picture> (reduced motion gets the poster instead): animated WebP at a lower rate and size,
     played once (loop=1), so it stops by itself within LOOP_MAX seconds."""
     from PIL import Image
 
-    indices, frame_ms = loop_frames(span, fps, loop_fps)
     images = []
-    for i in indices:
+    for i in loop_frames(span):
         image = Image.open(work / f"{i:05d}.png")
-        images.append(image.resize((width, round(image.height * width / image.width)), Image.Resampling.LANCZOS))
-    images[0].save(out, "WEBP", save_all=True, append_images=images[1:], duration=frame_ms, loop=1,
+        images.append(image.resize((LOOP_WIDTH, round(image.height * LOOP_WIDTH / image.width)), Image.Resampling.LANCZOS))
+    images[0].save(out, "WEBP", save_all=True, append_images=images[1:], duration=LOOP_MS, loop=1,
                    quality=60, method=6, minimize_size=True)  # fmt: skip
     return out
 
 
-def poster_webp(src: Path, name: str, out: Path, width: int) -> Path:
+def poster_webp(frame: Path, out: Path) -> Path:
     from PIL import Image
 
-    image = Image.open(src / name).convert("RGB")
-    image = image.resize((width, round(image.height * width / image.width)), Image.Resampling.LANCZOS)
+    image = Image.open(frame).convert("RGB")
+    image = image.resize((WIDTH, round(image.height * WIDTH / image.width)), Image.Resampling.LANCZOS)
     image.save(out, "WEBP", quality=82, method=6)
     return out
 
@@ -1202,49 +1251,52 @@ def describe(path: Path) -> dict:
     return {"file": path.name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
-def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int, budget: int) -> int:
-    """Every scene under `frames_root`, made in a private temporary directory and copied to `out` only when all of
-    them encoded and every check passed (sizes, the loop's length read from its file, captions that can be read, no
-    personal value), the manifest last. A failed run leaves `out` as it was. Recordings of `out` that this run does
-    not make stay in its manifest; the size budget is checked for them too."""
-    timelines = sorted(frames_root.glob("*/timeline.json"))
-    if not timelines:
-        print(f"compose: no <scene>-<language>/timeline.json under {frames_root}: pass the recordings/ directory the"
-              " capture wrote", file=sys.stderr)  # fmt: skip
+def compose(frames_root: Path, out: Path = OUT) -> int:
+    """The whole set, every scene in both languages, from the capture's `frames_root`: made in a private temporary
+    directory, which replaces `out` only when all of them encoded and every check passed (sizes, the loop's length
+    read from its file and the window it shows, captions that can be read, no personal value). A capture with a scene
+    missing, or a failed check, leaves `out` as it was: a run makes the whole set again or nothing."""
+    keys = [(scene, locale) for scene in SCENES for locale in LOCALES]
+    missing = [
+        f"{scene}-{locale}" for scene, locale in keys if not (frames_root / f"{scene}-{locale}" / "timeline.json").is_file()
+    ]
+    if missing:
+        print(f"compose: no timeline.json under {frames_root} for {', '.join(missing)}: pass the recordings/ directory"
+              " of a capture in which every scene passed", file=sys.stderr)  # fmt: skip
         return 2
     if not shutil.which("ffmpeg"):
         print("compose needs ffmpeg (Fedora: ffmpeg-free)", file=sys.stderr)
         return 2
-    manifest_path = out / "manifest.json"
-    # Only the recordings are carried over from a manifest that is already there; the rest is written anew.
-    recordings = json.loads(manifest_path.read_text(encoding="utf-8"))["recordings"] if manifest_path.exists() else {}
     composed = {
         "utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit": git("rev-parse", "--short=7", "HEAD"),
         "worktree_clean": not git("status", "--porcelain"),
     }
-    problems = []
+    recordings, problems = {}, []
     with tempfile.TemporaryDirectory(prefix="nulavio-compose-") as tmp:
         stage, work = Path(tmp) / "out", Path(tmp) / "frames"
         stage.mkdir()
-        for timeline_path in timelines:
-            src = timeline_path.parent
-            timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
-            check_timeline(timeline)
-            key = f"{timeline['scene']}-{timeline['locale']}"
-            base = stage / key
-            w, h, count = compose_frames(src, timeline, work, width, fps)
-            end = count / fps  # the encoded video's length
-            files = encode(work, fps, base)
+        for scene, locale in keys:
+            key = f"{scene}-{locale}"
+            src, base = frames_root / key, stage / key
+            timeline = json.loads(captured(src / "timeline.json").read_text(encoding="utf-8"))
+            check_timeline(timeline, scene, locale)
+            for name in {f["file"] for f in timeline["frames"]} | {timeline["poster"]}:
+                captured(src / name)
+            w, h, count = compose_frames(src, timeline, work)
+            end = count / FPS  # the encoded video's length
+            files = encode(work, base)
             span = loop_window(timeline, end)
-            loop = loop_webp(work, span, fps, base.with_name(f"{key}-loop.webp"), loop_width)
+            if timeline["cuts"] and not span[0] <= timeline["cuts"][-1]["t"] <= span[1] - LOOP_SHOWS + 1e-6:
+                problems.append(f"{key}: the loop ({span[0]:.2f} to {span[1]:.2f} s) does not show the window the scene cuts to")
+            loop = loop_webp(work, span, base.with_name(f"{key}-loop.webp"))
             loops, loop_ms = webp_animation(loop.read_bytes())
             if loops != 1 or loop_ms > LOOP_MAX * 1000:
                 problems.append(
                     f"{loop.name} plays {loops or 'endless'} time(s) for {loop_ms} ms: a loop plays once, {LOOP_MAX} s at most"
                 )
             files.append(loop)
-            files.append(poster_webp(src, timeline["poster"], base.with_name(f"{key}-poster.webp"), width))
+            files.append(poster_webp(src / timeline["poster"], base.with_name(f"{key}-poster.webp")))
             vtt = base.with_suffix(".vtt")
             vtt.write_text(webvtt(timeline["captions"], end), encoding="utf-8")
             files.append(vtt)
@@ -1253,12 +1305,15 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
             ]
             shutil.rmtree(work)
             described = [describe(f) for f in files]
+            problems += [
+                f"{f['file']} is {f['bytes']} bytes, over the budget of {BUDGET}" for f in described if f["bytes"] > BUDGET
+            ]
             recordings[key] = {
-                "scene": timeline["scene"],
-                "locale": timeline["locale"],
+                "scene": scene,
+                "locale": locale,
                 "duration_s": round(end, 3),
                 "video_px": [w, h],
-                "fps": fps,
+                "fps": FPS,
                 "captured_px": timeline["size"],
                 "scale": timeline["scale"],
                 "window_css": timeline["window_css"],
@@ -1291,29 +1346,23 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
             "encoders": {
                 "webm": "libvpx-vp9 crf 36",
                 "mp4": "libopenh264 700k",
-                "loop": "Pillow WebP q60, 10 fps, at most 5 s, played once",
+                "loop": f"Pillow WebP q60, {FPS // LOOP_STEP} fps, at most 5 s, played once",
                 "audio": "none",
             },
-            "budget_bytes_per_file": budget,
-            "recordings": dict(sorted(recordings.items())),
+            "budget_bytes_per_file": BUDGET,
+            "recordings": recordings,
         }
-        problems += [
-            f"{f['file']} is {f['bytes']} bytes, over the budget of {budget}"
-            for recording in manifest["recordings"].values()  # the ones kept from an earlier run too
-            for f in recording["files"]
-            if f["bytes"] > budget
-        ]
         text = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
-        seen = [recording["transcript"] for recording in manifest["recordings"].values()]
+        seen = [recording["transcript"] for recording in recordings.values()]
         private = personal_values(text, seen, str(Path.home()), os.environ.get("USER", ""), os.uname().nodename)
         problems += [f"the manifest would contain a personal value ({value!r})" for value in private]
         if problems:
             print("compose: nothing written to " + str(out) + ":\n  " + "\n  ".join(problems), file=sys.stderr)
             return 1
-        out.mkdir(parents=True, exist_ok=True)
-        for staged in sorted(stage.iterdir()):
-            shutil.copyfile(staged, out / staged.name)
-        manifest_path.write_text(text, encoding="utf-8")
+        (stage / "manifest.json").write_text(text, encoding="utf-8")
+        if out.exists():
+            shutil.rmtree(out)
+        shutil.copytree(stage, out)
     return 0
 
 
@@ -1322,13 +1371,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     c = sub.add_parser("compose", help="cursor, encoding, captions and manifest from captured frames (host, no engine)")
     c.add_argument("frames", type=Path, help="the recordings/ directory the capture wrote")
-    c.add_argument("--out", type=Path, default=OUT)
-    c.add_argument("--width", type=int, default=1280, help="video width in pixels")
-    c.add_argument("--loop-width", type=int, default=800, help="animated WebP width in pixels")
-    c.add_argument("--fps", type=int, default=FPS)
-    c.add_argument("--budget", type=int, default=2_000_000, help="largest file allowed, in bytes")
     args = parser.parse_args(argv)
-    return compose(args.frames, args.out, args.width, args.loop_width, args.fps, args.budget)
+    try:
+        return compose(args.frames)
+    except ValueError as error:  # a capture that is not what this script writes
+        print(f"compose: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

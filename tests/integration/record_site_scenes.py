@@ -1,15 +1,17 @@
 """Capture step of the site's recordings (#173, #176): not a test of the suite.
 
 Its name does not match ``test*.py``, so the integration suite, CI and the release never run it. It is run
-by name, where the integration tests run (the release test container, with FUSE for the Vault scene):
+by name, where the integration tests run (the release test container, with FUSE for the Vault scene);
+``<install-dir>`` is the directory that holds the ``nulavio`` executable:
 
     NULAVIO_INTEGRATION_IMAGE=fedora-release-itest NULAVIO_TEST_ARTIFACTS=<dir> \\
-        scripts/release/run_integration.sh <install>/nulavio record_site_scenes.py
+        scripts/release/run_integration.sh <install-dir> record_site_scenes.py
 
-Each scene and language is one case, so one that fails leaves the others recorded. Frames and a timeline
-go to ``<artifacts>/recordings/<scene>-<locale>/``; ``scripts/site/record_site.py compose`` turns them into
-video on the host. A scene that cannot reach the state it shows fails: it is never staged. Every run empties
-``<artifacts>/recordings/`` first, so compose never finds a timeline of an earlier run there.
+Each scene and language is one case. Frames and a timeline go to ``<dir>/recordings/<scene>-<locale>/``;
+``python3 -I scripts/site/record_site.py compose <dir>/recordings`` turns them into video on the host, and
+needs every one of them. A scene that cannot reach the state it shows fails: it is never staged, and it
+leaves no ``timeline.json``, which a scene gets only after it and its teardown passed. Every run empties
+``<dir>/recordings/`` first, so compose never finds a timeline of an earlier run there.
 """
 
 from __future__ import annotations
