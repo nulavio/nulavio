@@ -169,7 +169,7 @@ class _Module:
         what this does not follow (a parameter, another function's result)."""
         if isinstance(expr, ast.Call):
             name = expr.func.attr if isinstance(expr.func, ast.Attribute) else getattr(expr.func, "id", None)
-            if name == "child_env" or (name == "copy" and _is_environ(expr.func.value)):
+            if name == "child_env" or (isinstance(expr.func, ast.Attribute) and name == "copy" and _is_environ(expr.func.value)):
                 return False
             if name == "dict":
                 return self.built(expr.args[0], seen) if expr.args else True
@@ -251,6 +251,7 @@ class EveryUnitTestUsesTheHelperTest(unittest.TestCase):
             "a parameter": "def run(env):\n    subprocess.run([sys.executable], env=env)",
             "a spread of the parent's": "def run(**extra):\n    subprocess.run([sys.executable], env={**os.environ, **extra})",
             "not this Python": 'subprocess.run(["git", "status"], env={"PATH": "/usr/bin"})',
+            "a bare copy()": "from copy import copy\nsubprocess.run([sys.executable], env=copy(os.environ))",
         }
         for case, source in passing.items():
             with self.subTest(case):
