@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 MODULE = ROOT / "browser" / "shell" / "modules" / "NulavioRouting.sys.mjs"
 ROUTER = ROOT / "browser" / "shell" / "modules" / "NulavioRouter.sys.mjs"
 ROUTED_FLAG = re.search(r'export const ROUTED_FLAG = "([^"]+)";', ROUTER.read_text(encoding="utf-8")).group(1)
@@ -26,7 +30,7 @@ EXPLICIT = [f"--{ROUTED_FLAG}", f"--{ROUTE_BY_FLAG}", "explicit"]
 LINK = ["-new-tab", "https://bank.example/page"]
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class OpenInTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
