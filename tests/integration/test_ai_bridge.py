@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -29,10 +30,15 @@ from mcp_client import McpClient
 from test_window_band import BAND_PROBE, assert_band
 
 from nulavio_launcher import engine as engine_mod
+from nulavio_launcher import guard
 from nulavio_launcher.ai import audit, policy, registry, tools, workspace
 from nulavio_launcher.ai.bidi import Bidi, script_result
 from nulavio_launcher.vault import sodium, storage
 from nulavio_launcher.vault.core import Vault
+
+
+# Quick actions an agent's window withholds by the nulavio.ai.workspace pref alone (#639): an ordinary one offers them.
+ORDINARY_QUICK_ACTIONS = ["nulavio-assistant", "nulavio-settings", "nulavio-immersive"]
 
 
 def prefs_lines(values: dict) -> str:
@@ -347,6 +353,40 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(c.call("evaluate", tab=own["tab"], expression="document.cookie")["structuredContent"]["value"], "")
         c.close()
         self.assertFalse((work / "user.js").exists() and "nulavio-ai-temporary" in (work / "user.js").read_text())
+        # #639: the engine saved the temporary lines in prefs.js as it closed; they went with the session, so the
+        # profile starts again through `nulavio run` (no critical Guard finding) and its windows are ordinary ones.
+        saved = (work / "prefs.js").read_text(encoding="utf-8")
+        self.assertIn("// Mozilla User Preferences", saved)  # written by the engine, not only the lines seeded above
+        self.assertIn('user_pref("termsofuse.acceptedVersion", 4);', saved)
+        self.assertEqual(sorted(name for name in workspace.TEMPORARY_PREFS if f'"{name}"' in saved), [])
+        self.assertEqual([f.pref for f in guard.audit(work) if f.severity == "critical"], [])
+        if harness.nulavio_engine():  # the quick actions are the Nulavio Shell's
+            # The next ordinary window of that profile is not taken for an agent's: its quick actions are offered.
+            self.assertEqual(self.ordinary_window_quick_actions(work), {name: False for name in ORDINARY_QUICK_ACTIONS})
+
+    def ordinary_window_quick_actions(self, profile_dir: Path) -> dict[str, bool]:
+        """Start the profile as the user would (no bridge), and say which Nulavio quick actions it withholds."""
+        session = harness.GeckoProfileSession()  # only its throwaway HOME and engine environment
+        self.addCleanup(session.cleanup)
+        harness.GeckoProfileSession.enable_marionette(profile_dir)  # test-only lines, after the checks above
+        session.process = subprocess.Popen(
+            [str(session.engine.path), "--profile", str(profile_dir)],
+            env=session.env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            preexec_fn=lambda: os.umask(0o077),
+            start_new_session=True,
+        )
+        session.client = m = harness.GeckoProfileSession.connect(profile_dir, session.process)
+        actions = (
+            "const {ActionsProviderQuickActions: Q} = ChromeUtils.importESModule("
+            "'moz-src:///browser/components/urlbar/ActionsProviderQuickActions.sys.mjs');"
+        )
+        registered = actions + "return arguments[0].every(a => Q.getAction(a));"
+        self.assertTrue(harness.wait_until(lambda: m.chrome(registered, [ORDINARY_QUICK_ACTIONS]), 30))
+        self.assertEqual(m.chrome("return Services.prefs.getStringPref('nulavio.ai.workspace', '');"), "")
+        withheld = m.chrome(actions + "return arguments[0].map(a => Q.getAction(a).isUnsupported());", [ORDINARY_QUICK_ACTIONS])
+        return dict(zip(ORDINARY_QUICK_ACTIONS, withheld, strict=True))
 
     def test_18_profiles_the_agent_may_not_use(self):
         agent, env = self.agent("full_control")
