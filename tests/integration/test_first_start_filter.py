@@ -2,9 +2,9 @@
 
 On a new profile's first start the build's policy installs uBlock Origin from addons.mozilla.org, and uBlock Origin
 then loads its lists. A request made before that is not filtered, and the requests made while it loads them are held
-back and then let through, mostly filtered (docs/security/residual-risks.md, R91). This module measures that window on the real
-first start of a new profile, with the first-run sequence on as a person gets it, in the two ways a person can reach
-a page that early:
+back and then let through, filtered or not (docs/security/residual-risks.md, R91). This module measures that window
+on the real first start of a new profile, with the first-run sequence on as a person gets it, in the two ways a
+person can reach a page that early:
 
 - `test_01`: a link from another app starts the browser, so the page loads while the browser starts;
 - `test_02`: the person chooses "Use the defaults" on the welcome as soon as it shows and opens a page at once.
@@ -40,7 +40,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
 
 UBLOCK = "uBlock0@raymondhill.net"
-SHELL_ID = "shell@nulavio.net"
 READY_WITHIN = 180  # seconds after the engine process started: a new tab is filtered by then
 READING = 20  # seconds a reading may take before it says nothing
 AFTER_READY = 5  # rounds of (a new tab, an image added to the early page) once the filter is ready
