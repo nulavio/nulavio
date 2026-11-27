@@ -28,17 +28,17 @@ The landing presents Nulavio as it is meant to ship, and keeps its present order
 | Section (id) | Today | Phase 2 | Media |
 |---|---|---|---|
 | Hero (`hero-h`, `hero-email`) | Headline, the waitlist form, a drawn window | The same, with the drawn window replaced by a still of the real window (`capture_site.py` fig-1), or the short loop of a scene once a direction is chosen | Still; a loop only if the direction asks for it |
-| Protection from the first click (`protect-h`) | Text, drawn checks | Text and the first-launch scene | Loop + video (scene planned: first launch) |
-| Profiles (`profiles-h`) | Text, drawn rules | Text and two scenes: a profile opening, a link routed to the right profile | Loops + videos: `profile-opens`, `link-routed` (recorded) |
-| Encrypted profiles (`vault-h`) | Text | Text and the unlock scene | Loop + video: `protected-unlocks` (recorded) |
-| Guard (`guard-h`) | Text | Text and the Guard review (still today: fig-5) | Still; a scene planned |
-| AI (`ai-h`) | Text | Text and the AI Bridge scene, its provider choice shown with its alternatives | Planned |
+| Protection from the first click (`protect-h`) | Text and a drawn panel (HTML and CSS): a page's blocked counts | Text and the first-launch scene | Loop + video (scene planned: first launch) |
+| Profiles (`profiles-h`) | Text and a drawn panel: the routing rules | Text and two scenes: a profile opening, a link routed to the right profile | Loops + videos: `profile-opens`, `link-routed` (recorded) |
+| Encrypted profiles (`vault-h`) | Text and a drawn panel: a locked profile and its ways to unlock | Text and the unlock scene | Loop + video: `protected-unlocks` (recorded) |
+| Guard (`guard-h`) | Text and a drawn panel: changes to review | Text and the Guard review (still today: fig-5) | Still; a scene planned |
+| AI (`ai-h`) | Text and a drawn panel: an agent's permissions (it names one agent, with no alternative beside it) | Text and the AI Bridge scene, its provider choice shown with its alternatives | Planned |
 | Also built in (`more-h`) | List | List; search provider choice and Copy Link to Highlight as short loops | Planned |
 | Comparison (`compare`, `compare-h`) | Table | Unchanged in structure; rows change in both languages with the date | None |
 | Questions (`faq`, `faq-*`) | `<details>` | Unchanged | None |
 | Waitlist (`join`, `join-email`, `join-os`) | Form | Unchanged | None |
 
-Every feature section keeps exactly one `.fine` line ("Sem letra miúda:" / "No fine print:"), as `test_copy_is_honest` reads it. A media slot never carries a claim the text does not: what the clip shows is in its transcript, and the transcript is read from the browser's own interface at capture time.
+A drawn panel is replaced by the real thing only where a recording or a capture of the build shows the same moment; until then it stays, as it is today. Every feature section keeps exactly one `.fine` line ("Sem letra miúda:" / "No fine print:"), as `test_copy_is_honest` reads it. A media slot never carries a claim the text does not: what the clip shows is in its transcript, and the transcript is read from the browser's own interface at capture time.
 
 ### Engineering pages (`/engenharia/`, `/en/engineering/`)
 
@@ -165,11 +165,11 @@ Every recording lists these in the manifest:
 
 - the window's `remotecontrol` attribute is removed (the striped address bar of automation), as for the screenshots;
 - the cursor is drawn afterwards: a headless window has no pointer, so hover states are not shown;
-- typing (the unlock password) is shown at a fixed pace, one frame per key, each key really typed into the field;
+- typing is shown at a fixed pace, one frame per key, each key really typed into the field;
 - while a new instance starts, nothing is recorded: the video cuts to its window once it is up, and the manifest says how many real seconds were cut;
-- what the script set up before the scene (a routing rule, a profile already open, the tabs of a window that opens) is a note of that recording.
+- what the script set up before the scene (the profiles it created, a routing rule, a profile already open, a search engine, the protected profile unlocked and locked once to write its prefs, the tabs of a window that opens) is a note of that recording.
 
-Neutrality shapes the scenes too. A new window's own first page names the profile's search engine with nothing beside it, and typing an address key by key shows that engine in the address bar's first row; neither is shown. A window that opens gets a fixture page before its first frame, and an address is pasted, not typed. A scene about search (planned) shows the whole choice of providers, none preselected.
+Neutrality shapes the scenes too. A new window's own first page names the profile's search engine with nothing beside it; the focused address bar shows that engine's icon and, while an address is typed, offers to search with it; Settings' choice of a new profile's search engine lists providers. None of these is shown with a real provider alone: a window that opens gets a fixture page before its first frame, the profile where an address is typed searches with a local test engine on loopback (as `test_search` does), and Settings is scrolled so that its provider list stays out of frame. Each of these is a note of the recording. A scene about search (planned) shows the whole choice of providers, none preselected.
 
 Reproducible means: the same script on the same build records the same scenes. The files are not byte-identical between runs (frame timing, encoder versions), so the manifest holds the hashes of the files committed.
 
@@ -178,7 +178,7 @@ Reproducible means: the same script on the same build records the same scenes. T
 | Scene | Shows | Status |
 |---|---|---|
 | `profile-opens` | Settings › Profiles; Open on "Trabalho"/"Work"; its own window opens with its band | Recorded (sample) |
-| `link-routed` | In "Pessoal"/"Personal", an address of the work intranet is pasted into the address bar; it opens in the "Trabalho"/"Work" window, whose band says the rule did it | Recorded (sample) |
+| `link-routed` | In "Pessoal"/"Personal", an address of the work intranet is typed; it opens in the "Trabalho"/"Work" window, whose band says the rule did it | Recorded (sample) |
 | `protected-unlocks` | Settings › Profiles with "Bancos"/"Banking" locked; Unlock; the password typed on the unlock page; the profile opens in its window | Recorded (sample) |
 | First launch | The welcome and its protection checks | Planned |
 | Guard | A change made from outside, reported and undone | Planned |
