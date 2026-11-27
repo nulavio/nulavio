@@ -89,8 +89,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.addCleanup(self.server.__exit__, None, None, None)
         self.session = harness.GeckoProfileSession(name="Pessoal")
         self.addCleanup(self.session.cleanup)  # stops the engine and removes the temporary home
-        self.artifacts = Path(os.environ.get("NULAVIO_TEST_ARTIFACTS") or self.session.tmp / "artifacts")
-        self.artifacts.mkdir(parents=True, exist_ok=True)
+        self.artifacts = harness.artifacts_dir()  # kept after the run: the session's temporary home is removed
         self.counter = 0
         self.record: dict = {}
 
@@ -114,9 +113,9 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
     def read(self, n: str, asked: float, times: int = 1, ads_before: int = 0) -> dict:
         """One reading for `n`, asked for at `asked` (seconds since the start): when the control image reached the
-        server (its `times`-th request), whether the image the lists block did too (more than `ads_before` times),
-        and when every image of the current page was done. Raises when the control image never came: such a reading
-        says nothing."""
+        server (its `times`-th request), whether the image the lists block did too (more than `ads_before` times)
+        and when it did, and when every image of the current page was done. Raises when the control image never
+        came: such a reading says nothing."""
         if not harness.wait_until(lambda: len(self.server.hit_times(control(n))) >= times, timeout=READING):
             raise AssertionError(f"could not measure: the control image {control(n)} was not requested; {self.server.hits[-6:]}")
         if not harness.wait_until(lambda: self.m.execute(IMAGES_DONE), timeout=READING):
@@ -127,6 +126,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             "asked": asked,
             "requested": self.now(self.server.hit_times(control(n))[times - 1]),
             "leaked": len(ads) > ads_before,
+            "leaked_at": self.now(ads[ads_before]) if len(ads) > ads_before else None,
             "done": done,
         }
 
@@ -154,11 +154,17 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
     # -- the measurement ------------------------------------------------------------------------------------
     def wait_for_the_filter(self) -> None:
-        """New tabs, one after another, until two in a row are filtered; the early tab is not touched."""
-        probes, installed, streak = [], None, 0
-        while self.now() < READY_WITHIN and streak < 2:
+        """New tabs, one after another, until two in a row are filtered; the early tab is not touched. The first of
+        the two counts if its control image came before `READY_WITHIN`: the second then only confirms it."""
+        probes, present, installed, streak = [], False, None, 0
+
+        def before_the_deadline() -> bool:
+            return self.now() < READY_WITHIN or (streak == 1 and probes[-1]["requested"] < READY_WITHIN)
+
+        while streak < 2 and before_the_deadline():
             if installed is None:
                 state = self.addon()
+                present = present or state is not None
                 if state and state["active"]:
                     installed = self.now()
                     self.record["ublock_version"] = state["version"]
@@ -167,12 +173,14 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.record["ublock_active_at"] = installed
         self.record["probes"] = probes
         if installed is None:
+            # Installed but never active is a broken activation, not a missing network: it fails everywhere.
+            self.assertFalse(present, f"uBlock Origin was installed by the policy but not active in {READY_WITHIN} s")
             message = f"uBlock Origin was not installed by the policy in {READY_WITHIN} s (no network?)"
             if os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1":
                 raise AssertionError(message)
             raise unittest.SkipTest(message)
         self.assertEqual(streak, 2, f"a new tab was still not filtered {READY_WITHIN} s after the start: {probes[-4:]}")
-        leaks = [p["requested"] for p in probes if p["leaked"]]
+        leaks = [p["leaked_at"] for p in probes if p["leaked"]]
         self.record["last_new_tab_leaked_at"] = leaks[-1] if leaks else None
         self.record["new_tab_filtered_at"] = probes[-2]["requested"]
 
@@ -204,7 +212,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         r = self.record
 
         def word(entry: dict) -> str:
-            return f"{'LEAKED' if entry['leaked'] else 'blocked'}@{entry['requested']}s"
+            return f"LEAKED@{entry['leaked_at']}s" if entry["leaked"] else f"blocked@{entry['requested']}s"
 
         print(
             f"\nfirst-start-filter {case}: first page asked@{r['first_page']['asked']}s {word(r['first_page'])},"
