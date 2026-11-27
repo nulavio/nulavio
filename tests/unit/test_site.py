@@ -166,6 +166,26 @@ class Tree(HTMLParser):
         return [n for n in self.root.walk() if tag is None or n.tag == tag]
 
 
+# The blocks of prose the server-claim check reads, one by one: text() joins neighbouring cells with no
+# space between them, so a page's text is not read as one string.
+PROSE = {"p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "h5", "h6", "figcaption", "blockquote", "title"}
+
+
+def prose_blocks(tree: Tree) -> list[str]:
+    """The text of each block of prose on the page, and each meta element's content."""
+    return [n.text() for n in tree.all() if n.tag in PROSE] + [n.attrs.get("content") or "" for n in tree.all("meta")]
+
+
+def figures(tree: Tree) -> list[tuple[str, str]]:
+    """Each (dt, dd) pair of the page's definition lists: a term with the values that follow it, up to the next term."""
+    pairs = []
+    for term in tree.all("dt"):
+        siblings = [n for n in term.parent.children if isinstance(n, Node)]
+        after = itertools.takewhile(lambda n: n.tag != "dt", siblings[siblings.index(term) + 1 :])
+        pairs += [(term.text(), n.text()) for n in after if n.tag == "dd"]
+    return pairs
+
+
 def tokens(css: str) -> tuple[dict[str, str], dict[str, str]]:
     """Light (:root) and dark (prefers-color-scheme: dark) values of the colour tokens in tokens.css."""
     light = dict(re.findall(r"(--nv-color-[\w-]+):\s*(#[0-9A-Fa-f]{6})", css.split("@media")[0]))
@@ -329,20 +349,16 @@ class SiteTest(unittest.TestCase):
         # The project runs servers (the waitlist's worker, the package repository): what is true is
         # that the browser, on its own, contacts none of them (docs/security/new-profile-connections.md).
         # Each block is checked apart, because text() joins neighbouring cells with no space between them.
-        blocks = {"p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "figcaption", "blockquote", "title"}
         unqualified = []
         for page in sorted(f for f in self.files if f.endswith(".html")):
             tree = self.tree(page)
-            texts = [n.text() for n in tree.all() if n.tag in blocks]
-            texts += [n.attrs.get("content") or "" for n in tree.all("meta")]
-            for text in texts:
+            for text in prose_blocks(tree):
                 for sentence in re.split(r"(?<=[.!?])\s+", " ".join(text.split())):
                     if unqualified_server_claim(sentence):
                         unqualified.append(f"{page}: {sentence}")
-            for term in tree.all("dt"):
-                values = [n.text() for n in term.parent.children if isinstance(n, Node) and n.tag == "dd"]
-                if any(unqualified_server_figure(term.text(), value) for value in values):
-                    unqualified.append(f"{page}: {term.text()}: {values}")
+            for label, value in figures(tree):
+                if unqualified_server_figure(label, value):
+                    unqualified.append(f"{page}: {label}: {value}")
         self.assertEqual(unqualified, [])
 
     def test_the_server_claim_check_reads_each_sentence_as_meant(self):
@@ -386,6 +402,27 @@ class SiteTest(unittest.TestCase):
         ]
         self.assertEqual([f for f in refused_figures if not unqualified_server_figure(*f)], [])
         self.assertEqual([f for f in accepted_figures if unqualified_server_figure(*f)], [])
+
+    def test_the_server_claim_check_reads_every_heading_and_each_figure_with_its_own_value(self):
+        # A dl may wrap each dt/dd group in a div (the fact sheet) or not (the engineering pages' lists):
+        # either way a term is read with the values that follow it, up to the next term.
+        tree = Tree(
+            "<dl><dt>Nulavio servers</dt><dd>2</dd><dt>Accounts required</dt><dd>0</dd></dl>"
+            "<dl><div><dt>Engine</dt><dd>Gecko</dd></div><div><dt>Licence</dt><dd>MPL-2.0</dd><dd>public</dd></div></dl>"
+        )
+        self.assertEqual(
+            figures(tree),
+            [
+                ("Nulavio servers", "2"),
+                ("Accounts required", "0"),
+                ("Engine", "Gecko"),
+                ("Licence", "MPL-2.0"),
+                ("Licence", "public"),
+            ],
+        )
+        self.assertEqual([f for f in figures(tree) if unqualified_server_figure(*f)], [])
+        headings = Tree("".join(f"<h{level}>Heading {level}</h{level}>" for level in range(1, 7)))
+        self.assertEqual(prose_blocks(headings), [f"Heading {level}" for level in range(1, 7)])
 
     # -- landing page structure (spec §7, §9) ---------------------------------------------
 
