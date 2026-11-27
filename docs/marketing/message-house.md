@@ -38,9 +38,9 @@ Personas (from the [strategy](../brand/strategy.md#audience)): Ana, an SRE on Fe
 
 ### 3. You choose, and you can check · Você escolhe, e pode conferir
 
-- **en.** Your password manager, your search engine, your DNS and your AI agents: Nulavio sets each up the way you pick, with no partner preselected, and every choice can be undone. There is no telemetry and no Nulavio server. The code, the patches and every package's component list are public.
-- **pt-BR.** Seu gerenciador de senhas, seu buscador, seu DNS e seus agentes de IA: o Nulavio configura cada um do jeito que você escolher, sem parceiro pré-escolhido, e tudo dá para desfazer. Não há telemetria nem servidor do Nulavio. O código, os patches e a lista de componentes de cada pacote são públicos.
-- **Proof:** C16 password manager through its official extension · C17 suggestions off until you allow them · C18 DNS asked once · C15 agents in their own profile, with permissions and an emergency stop · C05 no telemetry, every unasked connection listed · C23 signed source, patches, SBOM · C26 MPL-2.0 · C22 the update targets.
+- **en.** Your password manager, your search engine, your DNS and your AI agents: Nulavio sets each up the way you pick, none of them is a Nulavio partner, and every choice can be undone. There is no telemetry and no Nulavio server. The code, the patches and every package's component list are public.
+- **pt-BR.** Seu gerenciador de senhas, seu buscador, seu DNS e seus agentes de IA: o Nulavio configura cada um do jeito que você escolher, nenhum deles é parceiro do Nulavio, e tudo dá para desfazer. Não há telemetria nem servidor do Nulavio. O código, os patches e a lista de componentes de cada pacote são públicos.
+- **Proof:** C16 password manager through its official extension · C17 suggestions off until you allow them · C18 DNS asked once · C15 agents in their own profile by default, with permissions and an emergency stop · C29 no partner; the defaults as the build sets them · C05 no telemetry, every unasked connection listed · C23 signed source, patches, SBOM · C26 MPL-2.0 · C22 the update targets.
 - **Trade-off we say out loud:** a third-party service you pick (a search engine, a password manager, an AI provider) has its own privacy policy; Nulavio does not vouch for it.
 
 ## Boilerplate
@@ -71,7 +71,7 @@ Strikethrough marks phrases we never use (the docs test ignores text inside `~~�
 
 ## Every piece carries
 
-- The AI line, spoken or on the end card, and in the description: "Voice and music are AI-generated. Everything shown on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo o que aparece na tela foi gravado do navegador de verdade." (rule 4)
+- The AI line, on the end card and in the description, naming exactly what the piece's manifest marks as AI-generated (rule 4). With an AI voice and AI music: "Voice and music are AI-generated. Everything shown on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo o que aparece na tela foi gravado do navegador de verdade." With library music instead, "Voice is AI-generated" / "A voz foi gerada por IA", and the music's credit if its licence asks for one.
 - The engine line, when the engine is named (rule 6).
 - "Alpha" while Nulavio is an alpha.
 - In the description, the link to this file's claims for that piece (rule 2).

@@ -8,12 +8,12 @@ Every short ends on the same card, 3 s:
 
 - the lockup and nulavio.net;
 - "Public alpha · Fedora and Ubuntu" / "Alfa pública · Fedora e Ubuntu" (C24);
-- "Voice and music are AI-generated. Everything on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo na tela foi gravado do navegador de verdade." (rule 4);
+- "Voice and music are AI-generated. Everything on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo na tela foi gravado do navegador de verdade." (rule 4; the first sentence names what the manifest marks as AI-generated);
 - the engine line from [claims.md](claims.md#engine-line), when the short names the engine.
 
 The description of each short links its claims, as the [trailer's](trailer.md#description-text-for-the-video-page) does.
 
-Voice-over length, counted on 2026-11-27: 40–50 words in English for 22–28 s, about 2 words a second; the Portuguese lines are 0–6 % longer and use the 3 s of the last card when needed.
+Voice-over length, counted on 2026-11-27: 42–52 words in English for 22–28 s, about 2 words a second; the Portuguese lines are 0–7 % longer and use the 3 s of the last card when needed.
 
 ## S1 · Protected from the first launch (25 s)
 
@@ -68,25 +68,25 @@ For Ana and the team lead: agents, without handing over the keys.
 | Time | Picture | On screen (en / pt-BR) | VO en | VO pt-BR | Claims |
 |---|---|---|---|---|---|
 | 0:00–0:03 | Motion: hook | "Let an AI agent browse?" / "Deixar um agente de IA navegar?" | "Letting an AI agent use your browser?" | "Vai deixar um agente de IA usar seu navegador?" | — |
-| 0:03–0:12 | R08 `ai-bridge` (connect, workspace band) | "Its own profile, away from your logins" / "Perfil próprio, longe dos seus logins" | "In Nulavio, any MCP client connects to a profile of its own, away from your logins." | "No Nulavio, qualquer cliente MCP se conecta a um perfil só dele, longe dos seus logins." | C15 |
-| 0:12–0:20 | R08 `ai-bridge` (permission, revoke) | the permission panel as recorded | "It gets the permissions you grant, and you can take them back at any moment." | "Ele recebe as permissões que você dá, e você pode retirá-las a qualquer momento." | C15 |
-| 0:20–0:28 | R08 `ai-bridge` (emergency stop), then end card | "Emergency stop" / "Parada de emergência" | "Every action is logged, and one click stops every agent." | "Cada ação fica registrada, e um clique para todos os agentes." | C15 |
+| 0:03–0:12 | R08 `ai-bridge` (connect, workspace band) | "Its own profile, away from your logins" / "Perfil próprio, longe dos seus logins" | "In Nulavio, an MCP client gets a profile of its own, away from your logins, unless you give it one of yours." | "No Nulavio, um cliente MCP ganha um perfil só dele, longe dos seus logins, a não ser que você dê um dos seus." | C15 |
+| 0:12–0:20 | R08 `ai-bridge` (permission, revoke) | the permission panel as recorded | "It gets only the permissions you grant, and you can take them back." | "Ele recebe só as permissões que você dá, e você pode retirá-las." | C15 |
+| 0:20–0:28 | R08 `ai-bridge` (emergency stop), then end card | "Emergency stop" / "Parada de emergência" | "Every action is logged, and the emergency stop halts every agent." | "Cada ação fica registrada, e a parada de emergência detém todos os agentes." | C15 |
 
-Rule 6: no AI product is named in the voice-over or shown on screen. The client is the project's test client.
+Rule 6: no AI product is named in the voice-over or shown on screen. The client is the project's test client, registered under a neutral name, as in T7.
 
-## S6 · Your choices, no partner preselected (25 s)
+## S6 · Your choices, no partner behind them (25 s)
 
 For Carla and Bruno: it works with what they already use.
 
 | Time | Picture | On screen (en / pt-BR) | VO en | VO pt-BR | Claims |
 |---|---|---|---|---|---|
 | 0:00–0:03 | Motion: hook | "Keep what you already use." / "Fique com o que você já usa." | "Keep what you already use." | "Fique com o que você já usa." | — |
-| 0:03–0:10 | R09 `password-manager` | the full list as recorded | "Pick your password manager in one step, through its official extension. Nulavio doesn't build a second vault." | "Escolha seu gerenciador de senhas num passo, pela extensão oficial. O Nulavio não cria um segundo cofre." | C16 |
+| 0:03–0:10 | R09 `password-manager` | the full list as recorded | "Pick your password manager, through its official extension. Nulavio doesn't build a second vault." | "Escolha seu gerenciador de senhas, pela extensão oficial. O Nulavio não cria um segundo cofre." | C16, C29 |
 | 0:10–0:17 | R10 `search-provider` | the full list as recorded | "Search suggestions stay off until you allow them, one search engine at a time." | "As sugestões de busca ficam desligadas até você permitir, um buscador de cada vez." | C17 |
 | 0:17–0:22 | R11 `dns` | the full list as recorded | "And your DNS is asked once, on the first tab." | "E o DNS é perguntado uma vez, na primeira aba." | C18 |
 | 0:22–0:25 | Motion card, then end card | "Every choice can be undone." / "Toda escolha dá para desfazer." | — | — | C16–C18 |
 
-Rule 6: each list is shown whole, and the voice-over names no provider.
+Rule 6: each list is shown whole, as the build shows it; the search list marks DuckDuckGo as its starting default (C29), and the voice-over names no provider.
 
 ## Later shorts
 

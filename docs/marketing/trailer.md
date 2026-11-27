@@ -6,7 +6,7 @@
 - **For:** all four personas in the [message house](message-house.md#positioning).
 - **Built from:** real recordings of a Nulavio build (scene IDs `R…`, listed [below](#recordings-the-pipeline-needs)), plus motion titles and abstract backgrounds. AI makes only the voice, the music, the sound effects, the titles and the transitions (rule 1).
 - **Claims:** each scene cites IDs from the [claims register](claims.md). A line whose claim changes status is rewritten before the render.
-- **Voice-over:** about 170 words in each language, counted on 2026-11-27. Over about 75 s of speech that is 2.2 words a second in English, under the 2.3–2.5 a voice can say clearly. Portuguese is slower when spoken, so its cut stretches the motion scenes (T1, T9, T10) by up to 8 s.
+- **Voice-over:** about 170 words in each language (168 en, 171 pt-BR), counted on 2026-11-27. Over about 75 s of speech that is 2.2 words a second in English, under the 2.3–2.5 a voice can say clearly. Portuguese is slower when spoken, so its cut stretches the motion scenes (T1, T9, T10) by up to 8 s.
 
 ## Scenes
 
@@ -66,18 +66,19 @@ Times are for the English cut. The Portuguese cut keeps the same scenes and stre
 
 - **Picture:** R08 `ai-bridge`: a neutral test client connects through MCP; the agent works in its own workspace (the band says so); the cursor presses the emergency stop.
 - **On screen:** "AI that goes only as far as you let it" / "IA que vai só até onde você deixa"
-- **VO en:** "AI agents work in a profile of their own, with the permissions you grant, and one click stops them all."
-- **VO pt-BR:** "Agentes de IA trabalham num perfil só deles, com as permissões que você dá, e um clique para todos eles."
+- **VO en:** "AI agents work in a profile of their own, with the permissions you grant, and the emergency stop halts them all."
+- **VO pt-BR:** "Agentes de IA trabalham num perfil só deles, com as permissões que você dá, e a parada de emergência detém todos eles."
 - **Claims:** C15.
-- **Rule 6:** no agent product is named or shown. The client on screen is the project's test client.
+- **Rule 6:** no agent product is named or shown. The client is the project's test client, registered under a neutral name ("Test agent" / "Agente de teste"), which is all Nulavio's interface shows of it.
+- **Note:** "by default" is the AI Workspace; an agent given one of your profiles is not shown here (C15).
 
 ### T8 · 1:00–1:08 · Your choices
 
-- **Picture:** quick cuts of R09 `password-manager`, R10 `search-provider` and R11 `dns`, each showing the full list of options, none highlighted as recommended.
+- **Picture:** quick cuts of R09 `password-manager`, R10 `search-provider` and R11 `dns`, each showing the full list of options as the build shows it. The search list marks its starting default (DuckDuckGo, C29) as the default, beside the others, and the voice-over names none.
 - **On screen:** "Your choice, and you can undo it" / "Você escolhe, e pode voltar atrás"
 - **VO en:** "Your password manager, your search engine, your DNS: you choose, and you can change your mind."
 - **VO pt-BR:** "Seu gerenciador de senhas, seu buscador, seu DNS: você escolhe, e pode mudar de ideia."
-- **Claims:** C16, C17, C18.
+- **Claims:** C16, C17, C18, C29.
 
 ### T9 · 1:08–1:15 · Honest limits
 
@@ -93,14 +94,14 @@ Times are for the English cut. The Portuguese cut keeps the same scenes and stre
 - **On screen:**
   - "Free and open source · Public alpha for Fedora and Ubuntu" / "Livre e de código aberto · Alfa pública para Fedora e Ubuntu" (C24, C26)
   - The engine line from [claims.md](claims.md#engine-line), small.
-  - "Voice and music are AI-generated. Everything on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo na tela foi gravado do navegador de verdade." (rule 4)
+  - "Voice and music are AI-generated. Everything on screen is recorded from the real browser." / "A voz e a música foram geradas por IA. Tudo na tela foi gravado do navegador de verdade." (rule 4; the first sentence follows the manifest, as the [message house](message-house.md#every-piece-carries) says)
 - **VO en:** "Nulavio. Protected from the start. Honest by design."
 - **VO pt-BR:** "Nulavio. Protegido desde o início. Honesto por princípio."
 
 ## Description text (for the video page)
 
-- **en:** "Nulavio is a free, open-source browser for Linux, in public alpha for Fedora and Ubuntu. Every claim in this video, with the test or document behind it: <link to claims.md at the release tag>. Voice and music are AI-generated; everything on screen is recorded from the real browser. Built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation."
-- **pt-BR:** "O Nulavio é um navegador livre e de código aberto para Linux, em alfa pública para Fedora e Ubuntu. Cada afirmação deste vídeo, com o teste ou documento que a sustenta: <link para claims.md na tag da versão>. A voz e a música foram geradas por IA; tudo na tela foi gravado do navegador de verdade. Feito sobre o motor Gecko da Mozilla. O Nulavio não é afiliado à Mozilla. Firefox é uma marca registrada da Mozilla Foundation."
+- **en:** "Nulavio is a free, open-source browser for Linux, in public alpha for Fedora and Ubuntu. Every claim in this video, with the test or document behind it: <link to claims.md at the release tag>. <AI line as on the end card>; everything on screen is recorded from the real browser. Built on Mozilla's Gecko engine. Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation."
+- **pt-BR:** "O Nulavio é um navegador livre e de código aberto para Linux, em alfa pública para Fedora e Ubuntu. Cada afirmação deste vídeo, com o teste ou documento que a sustenta: <link para claims.md na tag da versão>. <linha de IA como no cartão final>; tudo na tela foi gravado do navegador de verdade. Feito sobre o motor Gecko da Mozilla. O Nulavio não é afiliado à Mozilla. Firefox é uma marca registrada da Mozilla Foundation."
 - The platform's AI label is set on upload ([tools-and-budget.md](tools-and-budget.md#ai-disclosure)).
 
 ## Recordings the pipeline needs
@@ -112,6 +113,7 @@ What #173 has so far (read on 2026-11-27 from its branch, not yet merged): `scri
 - Only the browser window is recorded. Anything outside it (a folder on disk, another app) is shown as a motion card built from what the capture step read, with the real names, and the manifest says so.
 - Hover states do not show, because the cursor is drawn afterwards.
 - #176 asks for 4K at 60 fps; the pipeline records 1920×1200 at 30 fps. Whether that is enough for the trailer is #173's and the maintainer's call.
+- A 1280×800 window does not fill a 9:16 or 1:1 frame. The shorts need either a crop that follows the cursor (each crop recorded in the manifest) or a second recording in a narrow window; #173 decides which, and the narrow window must be one of Nulavio's real layouts.
 
 ### For every recording
 
@@ -141,4 +143,4 @@ What #173 has so far (read on 2026-11-27 from its branch, not yet merged): `scri
 | R11 `dns` | (new) | The first tab's DNS question with every option listed | [test_dns.py](../../tests/integration/test_dns.py) `test_01` | T8, S6 |
 | R12 `copy-link-to-highlight` | (Copy Link to Highlight) | A fixture article; a passage selected; the link copied and opened at the passage | [test_text_fragments.py](../../tests/integration/test_text_fragments.py) | a later short |
 
-Rule 6 for R08–R11: every list shows all its options, with none presented as recommended, and no third-party account is signed in. Where a third party's name appears, it is because the list shows it, beside its alternatives.
+Rule 6 for R08–R11: every list shows all its options as the build shows them, nothing is added to present one as recommended, and no third-party account is signed in. A default the build sets (search, C29) is shown as the build marks it. Where a third party's name appears, it is because the list shows it, beside its alternatives.
