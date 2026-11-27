@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -21,6 +23,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from fake_avahi import FAKE_BUSCTL
 from nulavio_launcher.vault import link, phone, phone_session, profiles, sodium, storage
 from nulavio_launcher.vault.core import b64e
 from phone_link_ref import LinkedPhone
@@ -432,6 +435,214 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
         self.assertFalse(profiles.container(self.prof).mounted())
 
+    def test_07_a_second_unlock_request_leaves_the_first_unable_to_open_the_profile(self):
+        # #669 (U-T19): one pending phone request per profile. These sessions serve no control socket, so the new
+        # request cannot tell the first one to stop: only the profile's record of its pending request does. The
+        # phone approves the first QR after the second was shown: the first helper opens nothing, says
+        # "cancelled" and tells the phone; the second still unlocks.
+        self.pair()
+        first_session, first, first_thread = self.start("unlock", {"autolock": False})
+        second_session, second, second_thread = self.start("unlock", {"autolock": False})
+        self.assertNotEqual(json.loads(first["qr"])["r"]["req_id"], json.loads(second["qr"])["r"]["req_id"])
+        phone = self.phone.unlock(first["qr"])
+        first_thread.join(20)
+        phone.join(20)
+        self.assertFalse(first_thread.is_alive())
+        self.assertEqual(first_session.state, "cancelled")
+        self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+        phone = self.phone.unlock(second["qr"])
+        second_thread.join(20)
+        phone.join(20)
+        self.assertEqual(second_session.state, "unlocked")
+        self.assertEqual(self.phone.result, {"t": "ok"})
+        self.assertTrue(profiles.container(self.prof).mounted())
+        profiles.lock(self.prof)
+
+    def test_07a_only_the_helper_whose_own_record_was_replaced_stops(self):
+        # #823 review: a copy of the profile's folder, taken while this request waits, carries the record naming
+        # this session. A request started on that copy must not end this one: the helper stops only when its own
+        # profile's record names another session.
+        self.pair()
+        session, _first, thread = self.start("unlock", {"autolock": False})
+        server = phone_session._serve(session, phone_session.socket_path(session.id))
+        self.addCleanup(phone_session.socket_path(session.id).unlink, missing_ok=True)
+        self.addCleanup(server.close)
+        phone_session._end_replaced(session.id, "the-copys-session")  # what the copy's helper does
+        time.sleep(0.5)
+        self.assertFalse(session.cancelled.is_set())
+        self.assertEqual(session.state, "waiting-for-phone")
+
+        phone_session.claim_request(profiles.container(self.prof), "a-later-session")  # now it was replaced
+        phone_session._end_replaced(session.id, "a-later-session")
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(session.state, "cancelled")
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07b_a_cancel_during_the_last_record_check_opens_nothing(self):
+        # #823 review: the cancel is asked after the record, so one that comes while the record is read still counts.
+        self.pair()
+        cancelled = []
+        real = phone_session.is_current_request
+
+        def current(box, session_id):
+            answer = real(box, session_id)
+            cancelled[0].set()  # the person presses Cancel while the record is being read
+            return answer
+
+        with mock.patch.object(phone_session, "is_current_request", current):
+            session, first, thread = self.start("unlock", {"autolock": False})
+            cancelled.append(session.cancelled)
+            phone = self.phone.unlock(first["qr"])
+            thread.join(20)
+            phone.join(20)
+        self.assertEqual(session.state, "cancelled")
+        self.assertEqual(self.phone.result, {"t": "error", "code": "cancelled"})
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07c_a_record_that_cannot_be_written_wipes_the_pending_request(self):
+        # #823 review: no QR, and the request's session key (and a combined unlock's password key) wiped (I8).
+        self.pair()
+        made = []
+        real_init = phone_session.Coordinator.__init__
+
+        def init(coordinator, *args, **kwargs):
+            real_init(coordinator, *args, **kwargs)
+            made.append(coordinator)
+
+        answers = []
+        failing = mock.patch.object(phone_session, "claim_request", side_effect=OSError(28, "No space left on device"))
+        with mock.patch.object(phone_session.Coordinator, "__init__", init), failing:
+            phone_session.unlock(phone_session.Session("unlock"), {"path": str(self.prof.path)}, answers.append,
+                                 self.phone.resolver)  # fmt: skip
+        self.assertEqual(answers, [{"error": "storage-failed"}])
+        self.assertEqual(len(made), 1)
+        self.assertEqual(made[0].phone.pending, {})
+        self.assertIsNone(made[0]._password_kek)
+        self.assertFalse(profiles.container(self.prof).mounted())
+
+    def test_07d_a_request_lock_that_is_not_a_private_file_is_refused(self):
+        # #823 review (I9): something other than this user's regular file at the lock's place is not used.
+        box = profiles.container(self.prof)
+        os.mkfifo(box.root / f"{phone_session.REQUEST_RECORD}.lock", 0o600)
+        with self.assertRaises(phone_session.paths.UnsafePathError):
+            phone_session.claim_request(box, "a-session")
+        self.assertFalse(phone_session.is_current_request(box, "a-session"))
+        self.assertFalse((box.root / phone_session.REQUEST_RECORD).exists())
+
+    def test_07e_a_request_lock_with_a_broader_mode_is_made_private(self):
+        # #823 review, round 2 (I9): a lock file put back with 0644, say from a backup, is 0600 once it is used.
+        box = profiles.container(self.prof)
+        lock = box.root / f"{phone_session.REQUEST_RECORD}.lock"
+        lock.touch()
+        os.chmod(lock, 0o644)  # not through the open's mode: the umask would narrow that one
+        phone_session.claim_request(box, "a-session")
+        self.assertEqual(lock.stat().st_mode & 0o777, 0o600)
+
+    def test_07f_a_held_request_lock_is_waited_for_a_bounded_time(self):
+        # #823 review, round 2: a helper stopped while it holds the record's lock does not hold up the others for
+        # ever. The last check gives up and opens nothing; the claim fails, so the start answers storage-failed.
+        box = profiles.container(self.prof)
+        phone_session.claim_request(box, "a-session")
+        held = os.open(box.root / f"{phone_session.REQUEST_RECORD}.lock", os.O_RDWR)
+        self.addCleanup(os.close, held)
+        phone_session.fcntl.flock(held, phone_session.fcntl.LOCK_EX)
+        answers = []
+
+        def ask():
+            answers.append(phone_session.is_current_request(box, "a-session"))
+            try:
+                phone_session.claim_request(box, "a-later-session")
+            except OSError as exc:
+                answers.append(type(exc))
+
+        with mock.patch.object(phone_session, "REQUEST_LOCK_WAIT", 0.5):
+            thread = threading.Thread(target=ask, daemon=True)
+            thread.start()
+            thread.join(5)
+        self.addCleanup(phone_session.fcntl.flock, held, phone_session.fcntl.LOCK_UN)
+        self.assertFalse(thread.is_alive(), "still waiting for the record's lock")
+        self.assertEqual(answers, [False, BlockingIOError])
+
+    def test_07g_a_replaced_notice_is_believed_only_when_the_record_names_another_session(self):
+        # #823 review, round 2: a record that cannot be read for a moment (or is missing) is no proof that another
+        # request took this one's place. The helper keeps waiting, and still unlocks once the record is back.
+        self.pair()
+        session, first, thread = self.start("unlock", {"autolock": False})
+        box = profiles.container(self.prof)
+        record = box.root / phone_session.REQUEST_RECORD
+        aside = box.root / "phone-request.aside"
+        os.rename(record, aside)
+        os.symlink(aside, record)  # not read: a link is refused
+        self.assertEqual(session.handle({"action": "replaced"}), {"error": "bad-state"})
+        os.unlink(record)  # missing
+        self.assertEqual(session.handle({"action": "replaced"}), {"error": "bad-state"})
+        self.assertFalse(session.cancelled.is_set())
+        os.rename(aside, record)
+
+        phone = self.phone.unlock(first["qr"])
+        thread.join(20)
+        phone.join(20)
+        self.assertEqual(session.state, "unlocked")
+        self.assertTrue(profiles.container(self.prof).mounted())
+        profiles.lock(self.prof)
+
+    def test_07h_a_replaced_helper_that_cannot_be_reached_is_left_alone(self):
+        # #823 review, round 2: telling the replaced helper is a courtesy. When the runtime folder cannot be used
+        # any more, the new request still goes on to wait for the phone.
+        unsafe = phone_session.paths.UnsafePathError("refusing to use symlink")
+        for error in (unsafe, PermissionError(13, "Permission denied")):
+            with self.subTest(error=type(error).__name__), mock.patch.object(phone_session, "sessions_dir", side_effect=error):
+                phone_session._end_replaced("an-earlier-session", "this-session")
+
+    def test_07i_a_later_start_cannot_replace_a_request_before_its_qr_is_out(self):
+        # #823 review, round 3: two starts that overlap (two clicks on one page, say). The later one claims the record
+        # at the worst moment, after this one's claim and before its QR. The QR goes out under the record's lock, so
+        # the later claim waits for it: the QR shown was the profile's pending request when it was shown. Before,
+        # the earlier start could answer with a QR already replaced, which nothing on main does.
+        self.pair()
+        box = profiles.container(self.prof)
+        session = phone_session.Session("unlock")
+        later = threading.Thread(target=phone_session.claim_request, args=(box, "a-later-session"), daemon=True)
+        seen = []
+        shown = threading.Event()
+
+        def emit(message):
+            if not shown.is_set():
+                later.start()
+                later.join(1.0)  # well under REQUEST_LOCK_WAIT: the later claim is still waiting, or done
+                seen.append((message.get("session"), phone_session._recorded(box)))  # no lock: it is held here
+                shown.set()
+
+        args = (session, {"path": str(self.prof.path), "autolock": False}, emit, self.phone.resolver)
+        thread = threading.Thread(target=phone_session.unlock, args=args, daemon=True)
+        thread.start()
+        self.assertTrue(shown.wait(20), "no first answer")
+        later.join(10)
+        session.handle({"action": "cancel"})
+        thread.join(10)
+        self.assertEqual(seen, [(session.id, session.id)])
+        self.assertFalse(later.is_alive())
+        self.assertEqual(phone_session._recorded(box), "a-later-session")  # the later start still took its place
+        self.assertFalse(box.mounted())
+
+    def test_07j_a_request_lock_with_another_name_is_refused_and_left_as_it_is(self):
+        # #823 review, round 3 (I9): a lock file that is also another file (a hard link, from a folder put back by
+        # hand, say) is refused before its mode is changed: making it 0600 would change that other file too. main
+        # leaves its own lock file's mode alone.
+        box = profiles.container(self.prof)
+        outside = self.tmp / "outside.sh"
+        outside.write_text("#!/bin/sh\n")
+        os.chmod(outside, 0o755)
+        os.link(outside, box.root / f"{phone_session.REQUEST_RECORD}.lock")
+        with self.assertRaises(phone_session.paths.UnsafePathError):
+            phone_session.claim_request(box, "a-session")
+        self.assertFalse(phone_session.is_current_request(box, "a-session"))
+        self.assertEqual(outside.stat().st_mode & 0o777, 0o755)
+        self.assertFalse((box.root / phone_session.REQUEST_RECORD).exists())
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):
@@ -443,7 +654,16 @@ class PhoneApiTest(unittest.TestCase):
         patcher = mock.patch.dict(os.environ, {"NULAVIO_HOME": str(self.tmp / "home")})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.addCleanup(self._cleanup)
+
+    def _cleanup(self):
+        tool = shutil.which("fusermount3") or "fusermount"  # what storage.tools_available() accepts
+        for mountpoint in sorted(storage.mounted_paths()):
+            if mountpoint.startswith(str(self.tmp)):
+                subprocess.run([tool, "-u", "-z", mountpoint], check=False, capture_output=True)
+        for dirpath, _dirs, _files in os.walk(self.tmp):
+            os.chmod(dirpath, 0o700)
+        shutil.rmtree(self.tmp, ignore_errors=True)
 
     def api(self, request: dict) -> dict:
         result = subprocess.run([str(ROOT / "bin" / "nulavio"), "vault", "api"], input=json.dumps(request), env=self.env,
@@ -459,6 +679,53 @@ class PhoneApiTest(unittest.TestCase):
         prof, _code = profiles.create("cofre", password=PASSWORD, kdf=FAST, recovery_kdf=FAST)
         self.assertEqual(self.api({"op": "phone-pair-start", "path": str(prof.path), "current": "wrong"}),
                          {"error": "wrong-secret"})  # fmt: skip
+
+    def status(self, session: str) -> dict:
+        return self.api({"op": "phone-session", "session": session, "action": "status"})
+
+    def wait_status(self, session: str, *states: str, timeout: float = 30) -> dict:
+        deadline = time.monotonic() + timeout
+        status = self.status(session)
+        while status.get("state") not in states and time.monotonic() < deadline:
+            time.sleep(0.2)
+            status = self.status(session)
+        return status
+
+    def test_a_second_unlock_start_ends_the_first_helpers_request(self):
+        # #669 (U-T19): each `phone-unlock-start` starts a helper process of its own. The second one ends the
+        # first one's request for the same profile, and only the second QR can open the profile. The phone is found
+        # through a stand-in for Avahi (tests/lib/fake_avahi.py), as in test_vault_ui, so nothing is announced.
+        prof, _code = profiles.create("cofre", password=PASSWORD, kdf=FAST, recovery_kdf=FAST)
+        busctl, registry = self.tmp / "busctl", self.tmp / "avahi.json"
+        # Through /bin/sh, not a #! line naming Python: that line cannot hold a path with a space in it.
+        (self.tmp / "busctl.py").write_text(FAKE_BUSCTL.format(python=sys.executable))
+        busctl.write_text(f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -I {shlex.quote(str(self.tmp / "busctl.py"))} "$@"\n')
+        busctl.chmod(0o700)
+        registry.write_text("{}")
+        self.env.update({"NULAVIO_BUSCTL": str(busctl), "NV_FAKE_AVAHI": str(registry)})
+        linked = LinkedPhone(ReferencePhone("Pixel de teste"), registry=registry)
+        self.addCleanup(linked.close)
+        started = self.api({"op": "phone-pair-start", "path": str(prof.path), "current": PASSWORD})
+        linked.pair(started["qr"])
+        self.assertEqual(self.wait_status(started["session"], "waiting-for-you", "failed")["sas"], linked.sas)
+        self.api({"op": "phone-session", "session": started["session"], "action": "confirm", "match": True})
+        self.assertEqual(self.wait_status(started["session"], "paired", "failed")["state"], "paired")
+
+        first = self.api({"op": "phone-unlock-start", "path": str(prof.path), "autolock": False})
+        self.assertEqual(self.status(first["session"])["state"], "waiting-for-phone")
+        second = self.api({"op": "phone-unlock-start", "path": str(prof.path), "autolock": False})
+        self.assertNotEqual(first["session"], second["session"])
+        # The first helper is told at once: its page shows "cancelled" without anyone pressing Cancel there.
+        self.assertEqual(self.wait_status(first["session"], "cancelled", "unlocked", "failed")["state"], "cancelled")
+        self.assertEqual(self.status(second["session"])["state"], "waiting-for-phone")
+        self.assertFalse(profiles.container(prof).mounted())
+
+        phone = linked.unlock(second["qr"])
+        self.assertEqual(self.wait_status(second["session"], "unlocked", "failed", "unreachable")["state"], "unlocked")
+        phone.join(20)
+        self.assertEqual(linked.result, {"t": "ok"})
+        self.assertTrue(profiles.container(prof).mounted())
+        profiles.lock(prof)
 
     @unittest.skipUnless(
         os.environ.get("NULAVIO_LAN_TESTS") == "1" and shutil.which("avahi-publish") and link.avahi_available(),
