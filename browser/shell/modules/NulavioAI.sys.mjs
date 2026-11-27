@@ -774,7 +774,7 @@ class AI {
     this.#offers.set(win, delivery);
     // Opened by the module in that window: no user-input rule, and never another window's side panel.
     await win.SidebarController.show(SIDEBAR_ID);
-    this.#emit({ win }, { type: "offer" });
+    this.#emit({ win }, { type: "offer", items: delivery.chipId !== null }); // whether the window's items changed
     return { done: true };
   }
 
