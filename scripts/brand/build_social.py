@@ -18,7 +18,8 @@ The texts are input: the templates' sample texts are SAMPLES below; a new post i
   python3 -I scripts/brand/build_social.py post --text post.json --out <dir>
 
 where post.json holds {"lang": "en", "kicker": "...", "title": "...", "body": "...", "footer": "..."}
-(title and body may contain line breaks; long lines wrap). It writes the four formats into <dir>.
+(title and body may contain line breaks; long lines wrap). It writes the four formats into <dir>, or
+nothing: a text that does not fit one of them, or a rasteriser that fails, leaves <dir> as it was.
 
 Text is set in Noto Sans (SIL OFL; installed on most Linux desktops and in the Fedora build image),
 the brand's documented fallback while Inter is not bundled. The SVG files are deterministic
@@ -36,6 +37,8 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -103,15 +106,63 @@ SAMPLES = {
 }
 TAGLINE = {"en": "The Linux browser that is protected from the start.", "pt-BR": "O navegador para Linux que já vem protegido."}
 
-# Average advance of Noto Sans, in em, used to wrap lines (an estimate: a line is kept a little
-# shorter than the width it is given).
-ADVANCE = {"bold": 0.60, "regular": 0.54}
+# Noto Sans' advance widths, in thousandths of an em, read from the hmtx tables of NotoSans-Regular.ttf
+# and NotoSans-Bold.ttf (Fedora's google-noto-sans-fonts 20251201) on 2026-11-27. They are what lines are
+# wrapped and refused by, so the SVG files need no font to be generated. Kerning is left out: it mostly
+# tightens, so a line is drawn a little shorter than it is measured. Text is limited to these characters,
+# Basic Latin, Latin-1 and the punctuation below, because the width of any other is not known here and
+# a host without the glyph would draw it in another font.
+MEASURED = (
+    "".join(chr(c) for c in range(0x20, 0x7F))
+    + "¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
+    + "–—‘’‚“”„†•…‹›€™−"
+)
+ADVANCES = {
+    400: """
+260 269 408 646 572 831 732 225 300 300 551 572 268 322 268 372 572 572 572 572 572 572 572 572 572 572 268 268 572
+572 572 434 899 639 650 632 730 556 519 728 741 339 273 619 524 907 760 781 605 781 622 549 556 731 600 930 586 566
+572 329 372 329 572 444 281 561 615 480 615 564 344 615 618 258 258 534 258 935 618 605 615 615 413 479 361 618 508
+786 529 510 470 380 551 380 572 269 572 572 572 572 551 513 580 832 357 509 572 832 500 428 572 350 350 281 623 655
+268 225 350 376 509 745 771 781 434 639 639 639 639 639 639 881 632 556 556 556 556 339 339 339 339 730 760 781 781
+781 781 781 572 781 731 731 731 731 566 605 631 561 561 561 561 561 561 864 480 564 564 564 564 258 258 258 258 605
+618 605 605 605 605 605 572 605 618 618 618 618 510 615 510 500 1000 175 175 250 359 359 416 512 376 791 310 310 572
+773 572
+""",
+    700: """
+260 282 479 646 572 902 750 266 339 339 542 572 285 320 281 415 572 572 572 572 572 572 572 572 572 572 281 285 572
+572 572 477 898 692 665 642 732 560 549 724 765 389 331 664 559 943 813 791 621 791 656 551 577 756 650 967 670 626
+579 331 415 331 572 411 365 599 632 516 632 597 387 632 650 299 298 620 298 975 650 625 632 632 447 502 434 650 571
+856 578 571 493 394 551 394 572 286 572 572 568 572 551 486 593 832 381 614 572 832 500 424 572 379 380 365 653 648
+281 263 380 386 614 830 874 845 477 692 692 692 692 692 692 952 642 560 560 560 560 389 389 389 389 732 805 791 791
+791 791 791 572 791 756 756 756 756 626 628 704 599 599 599 599 599 599 917 516 597 597 597 597 299 299 299 299 627
+650 625 625 625 625 625 572 619 650 650 650 650 571 632 571 500 1000 217 217 286 445 445 513 513 376 855 365 365 572
+773 581
+""",
+}
+_ADVANCE = {weight: dict(zip(MEASURED, (int(v) for v in row.split()), strict=True)) for weight, row in ADVANCES.items()}
+# Semibold (the footer) lies between the two masters, so the wider of them bounds it.
+_ADVANCE[600] = {c: max(_ADVANCE[400][c], _ADVANCE[700][c]) for c in MEASURED}
+
+# A language tag as BCP 47 writes the common ones (en, pt-BR, es-419, zh-Hant-TW). It becomes part of a
+# file name and an attribute, so nothing else is taken.
+LANG = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*")
 
 
-def svg(width: int, height: int, body: str, *, title: str) -> str:
+def advance(line: str, size: float, weight: int) -> float:
+    """The width of one line of Noto Sans at `size` px, from the measured advances."""
+    return sum(_ADVANCE[weight][c] for c in line) * size / 1000
+
+
+def svg(width: int, height: int, body: str, *, title: str, lang: str = "", desc: str = "") -> str:
+    """The image. role="img" hides what is inside from assistive technology, so `title` names it and
+    `desc` carries the rest of the visible text; `lang` on the root covers both."""
+    language = f' xml:lang="{html.escape(lang)}"' if lang else ""
+    described = ' aria-describedby="d"' if desc else ""
+    description = f'<desc id="d">{html.escape(desc)}</desc>\n' if desc else ""
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" '
-        f'role="img" aria-labelledby="t">\n{HEADER}\n<title id="t">{html.escape(title)}</title>\n{body}\n</svg>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}"'
+        f'{language} role="img" aria-labelledby="t"{described}>\n{HEADER}\n<title id="t">{html.escape(title)}</title>\n'
+        f"{description}{body}\n</svg>\n"
     )
 
 
@@ -150,14 +201,16 @@ def trail(x: float, y: float, size: float) -> str:
     return "".join(out)
 
 
-def wrap(text: str, size: float, width: float, weight: str) -> list[str]:
-    limit = max(1, int(width / (size * ADVANCE[weight])))
+def wrap(text: str, size: float, width: float, weight: int) -> list[str]:
+    """`text` in lines no wider than `width`, broken at spaces. A word wider than the line is refused."""
     lines: list[str] = []
     for paragraph in text.split("\n"):
         line = ""
         for word in paragraph.split():
+            if advance(word, size, weight) > width:
+                raise ValueError(f"{word!r} is wider than the card: break it or shorten it")
             candidate = f"{line} {word}".strip()
-            if line and len(candidate) > limit:
+            if line and advance(candidate, size, weight) > width:
                 lines.append(line)
                 line = word
             else:
@@ -166,23 +219,39 @@ def wrap(text: str, size: float, width: float, weight: str) -> list[str]:
     return lines
 
 
-def text(lines: list[str], x: float, y: float, size: float, leading: float, fill: str, weight: int, lang: str) -> str:
+def text(lines: list[str], x: float, y: float, size: float, leading: float, fill: str, weight: int) -> str:
     spans = "".join(
         f'<tspan x="{bl.n(x)}" y="{bl.n(y + i * size * leading)}">{html.escape(line)}</tspan>' for i, line in enumerate(lines)
     )
-    return (
-        f'<text xml:lang="{html.escape(lang)}" font-family="{FONT}" font-size="{bl.n(size)}" font-weight="{weight}" '
-        f'fill="{fill}">{spans}</text>'
-    )
+    return f'<text font-family="{FONT}" font-size="{bl.n(size)}" font-weight="{weight}" fill="{fill}">{spans}</text>'
 
 
-def validate(post: dict) -> dict:
+def validate(post: object) -> dict:
+    """The post with its optional texts filled in, or ValueError. Everything a post can be refused for
+    without drawing it is refused here, before a file is written."""
     keys = {"lang", "kicker", "title", "body", "footer"}
+    if not isinstance(post, dict):
+        raise ValueError("a post is a JSON object")
     if set(post) - keys or not {"lang", "title"} <= set(post):
         raise ValueError(f"a post has the keys {sorted(keys)}; lang and title are required")
     if not all(isinstance(v, str) for v in post.values()):
         raise ValueError("every value of a post is a string")
-    return {"kicker": "", "body": "", "footer": "", **post}
+    if not LANG.fullmatch(post["lang"]):
+        raise ValueError(f"lang is a language tag such as en or pt-BR, not {post['lang']!r}")
+    if not post["title"].strip():
+        raise ValueError("the title is empty")
+    for key in sorted((keys - {"lang"}) & set(post)):
+        # Line breaks and other white space separate words and are never drawn; every other character
+        # must be one whose width is known. That also keeps out what XML cannot hold (NUL, surrogates).
+        # The kicker is drawn in capitals, and a capital can be outside the set when its letter is inside (ÿ, µ).
+        drawn = post[key].upper() if key == "kicker" else post[key]
+        unknown = sorted({c for c in drawn if not c.isspace() and c not in MEASURED})
+        if unknown:
+            listed = ", ".join(f"U+{ord(c):04X}" for c in unknown)
+            raise ValueError(f"the {key} has characters this script cannot measure ({listed}): see MEASURED")
+    out = {"kicker": "", "body": "", "footer": "", **post}
+    # The kicker and the footer are one line each.
+    return {**out, "kicker": " ".join(out["kicker"].split()), "footer": " ".join(out["footer"].split())}
 
 
 def post_svg(fmt: str, post: dict) -> str:
@@ -196,26 +265,44 @@ def post_svg(fmt: str, post: dict) -> str:
     parts.append(name(margin, top, lockup_w))
     bottom = height - margin - bottom_free
     footer_y = bottom - kicker_size * 0.2
+    kicker, footer_x = post["kicker"].upper(), margin + kicker_size * 2.1
+    # The two single lines are not wrapped: one that is too wide is refused, as a word too wide is.
+    for what, line, weight, room in (("kicker", kicker, 700, inner), ("footer", post["footer"], 600, width - margin - footer_x)):
+        if advance(line, kicker_size, weight) > room:
+            raise ValueError(f"the {what} is wider than the {fmt} card: shorten it")
     if post["footer"]:
         parts.append(trail(margin, footer_y - kicker_size * 0.35, kicker_size * 0.55))
-        parts.append(text([post["footer"]], margin + kicker_size * 2.1, footer_y, kicker_size, 1.2, INK, 600, post["lang"]))
-    body_lines = wrap(post["body"], body_size, inner, "regular") if post["body"] else []
-    title_lines = wrap(post["title"], title_size, inner, "bold")
+        parts.append(text([post["footer"]], footer_x, footer_y, kicker_size, 1.2, INK, 600))
+    body_lines = wrap(post["body"], body_size, inner, 400) if post["body"] else []
+    title_lines = wrap(post["title"], title_size, inner, 700)
     block = []
     y = footer_y - (kicker_size * 2.4 if post["footer"] else 0)
     if body_lines:
         y -= (len(body_lines) - 1) * body_size * 1.3
-        block.append(text(body_lines, margin, y, body_size, 1.3, MUTED, 400, post["lang"]))
+        block.append(text(body_lines, margin, y, body_size, 1.3, MUTED, 400))
         y -= body_size * 1.3 + title_size * 0.45
     y -= (len(title_lines) - 1) * title_size * 1.05
-    block.append(text(title_lines, margin, y, title_size, 1.05, INK, 700, post["lang"]))
-    if post["kicker"]:
+    block.append(text(title_lines, margin, y, title_size, 1.05, INK, 700))
+    top_size = title_size
+    if kicker:
         y -= title_size * 1.05
-        block.append(text([post["kicker"].upper()], margin, y, kicker_size, 1.2, ACCENT, 700, post["lang"]))
-    if y - title_size < top + name_height(lockup_w):
+        top_size = kicker_size
+        block.append(text([kicker], margin, y, kicker_size, 1.2, ACCENT, 700))
+    # y is the topmost line's baseline: that line, at its own size, must start below the lockup.
+    if y - top_size < top + name_height(lockup_w):
         raise ValueError(f"the text does not fit the {fmt} card: shorten the title or the body")
     parts += block
-    return svg(width, height, "\n".join(parts), title=f"Nulavio: {post['title'].replace(chr(10), ' ')}")
+    # What the title does not say, in the order it is read on the card: the kicker and the body as
+    # sentences, then the footer as it is written (an address).
+    said = [line if line[-1] in ".!?…:" else f"{line}." for line in (post["kicker"], " ".join(post["body"].split())) if line]
+    return svg(
+        width,
+        height,
+        "\n".join(parts),
+        title=f"Nulavio: {' '.join(post['title'].split())}",
+        lang=post["lang"],
+        desc=" ".join([*said, *([post["footer"]] if post["footer"] else [])]),
+    )
 
 
 def avatar_svg() -> str:
@@ -239,9 +326,9 @@ def header_svg(lang: str = "en") -> str:
     parts = [
         background(width, height),
         name(x0, y, lockup_w),
-        text([TAGLINE[lang]], x0 + 4, y + lockup_h + 58, 34, 1.2, MUTED, 400, lang),
+        text([TAGLINE[lang]], x0 + 4, y + lockup_h + 58, 34, 1.2, MUTED, 400),
     ]
-    return svg(width, height, "\n".join(parts), title="Nulavio")
+    return svg(width, height, "\n".join(parts), title="Nulavio", lang=lang, desc=TAGLINE[lang])
 
 
 def all_svgs() -> dict[str, str]:
@@ -261,7 +348,9 @@ def rasterise(source: Path, out: Path) -> None:
 
 def crop_check(out_dir: Path, sheet: Path) -> None:
     """The avatar in a circle at 400 and 48 px on X's light and dark, and the header with the
-    assumed avatar place and phone crop over it. An approximation of X's page, not a capture."""
+    assumed avatar place and phone crop over it. An approximation of X's page, not a capture.
+    The two panels are 750 px wide and are joined as they are, so that the sheet at its own size
+    shows both avatars at theirs: nothing is resampled after the 48 px one is made."""
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
         avatar = out_dir / "profile" / "avatar.png"
@@ -304,7 +393,7 @@ def crop_check(out_dir: Path, sheet: Path) -> None:
                 "magick",
                 "(",
                 "-size",
-                "1500x460",
+                "750x460",
                 "xc:#000000",
                 round400,
                 "-geometry",
@@ -317,7 +406,7 @@ def crop_check(out_dir: Path, sheet: Path) -> None:
                 ")",
                 "(",
                 "-size",
-                "1500x460",
+                "750x460",
                 "xc:#FFFFFF",
                 round400,
                 "-geometry",
@@ -329,8 +418,6 @@ def crop_check(out_dir: Path, sheet: Path) -> None:
                 "-composite",
                 ")",
                 "+append",
-                "-resize",
-                "1500x",
                 avatars,
             ],
             check=True,
@@ -358,6 +445,30 @@ def write_all(svg_only: bool = False) -> list[Path]:
     return written
 
 
+def write_post(post: object, out: Path, svg_only: bool = False) -> list[Path]:
+    """One post in every format, into `out`. Every format is drawn before a file is written, and the
+    files are made in a directory beside their destination (the same file system, so that each move
+    is a rename) and moved in at the end: a text that does not fit one format, or a rasteriser that
+    fails, leaves `out` as it was."""
+    post = validate(post)
+    svgs = {f"{fmt}-{post['lang']}.svg": post_svg(fmt, post) for fmt in FORMATS}
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=out, prefix=".build_social-") as staging:
+        staged = []
+        for file_name, text_ in svgs.items():
+            path = Path(staging) / file_name
+            path.write_text(text_, encoding="utf-8")
+            staged.append(path)
+            if not svg_only:
+                rasterise(path, path.with_suffix(".png"))
+                staged.append(path.with_suffix(".png"))
+        written = []
+        for path in staged:
+            os.replace(path, out / path.name)
+            written.append(out / path.name)
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--svg-only", action="store_true", help="write the SVG files only")
@@ -369,13 +480,12 @@ def main() -> int:
     if not args.svg_only and not shutil.which("magick"):
         parser.error("need ImageMagick 7 ('magick') with librsvg to rasterise; or pass --svg-only")
     if args.command == "post":
-        post = validate(json.loads(args.text.read_text(encoding="utf-8")))
-        args.out.mkdir(parents=True, exist_ok=True)
-        for fmt in FORMATS:
-            path = args.out / f"{fmt}-{post['lang']}.svg"
-            path.write_text(post_svg(fmt, post), encoding="utf-8")
-            if not args.svg_only:
-                rasterise(path, path.with_suffix(".png"))
+        try:
+            written = write_post(json.loads(args.text.read_text(encoding="utf-8")), args.out, args.svg_only)
+        except (OSError, ValueError) as error:  # a file that cannot be read, JSON that is not, a post that is refused
+            print(f"{args.text}: {error}", file=sys.stderr)
+            return 1
+        for path in written:
             print(path)
         return 0
     for path in write_all(args.svg_only):
