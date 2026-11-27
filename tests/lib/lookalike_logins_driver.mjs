@@ -427,6 +427,74 @@ const cases = {
     const damaged = await check(passwords);
     return result(store, { answer, confirmed, reset, restored, damaged });
   },
+  // The list edited by hand: an entry that is not a pair of sites (here one that cannot even be turned into text) is
+  // skipped, and the pairs around it still count; the next Continue writes back only the pairs.
+  dismissed_with_a_malformed_entry: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const name = "nulavio.passwords.lookalikeDismissed";
+    prefs.set(name, JSON.stringify(["paypa1.example paypal.example", { toString: null }, 5]));
+    const attempt = async fn => {
+      try {
+        return await fn();
+      } catch (e) {
+        return { threw: e.constructor.name };
+      }
+    };
+    const confirmed = await check(passwords);
+    const again = await attempt(() => passwords.dismissFor(LOOKALIKE, SHOWN));
+    const other = await attempt(() => passwords.checkLogin(OTHER));
+    const listed = await attempt(() => passwords.listConfirmed());
+    const pair = { site: "examp1e.example", similar: "example.example" };
+    const answer = await attempt(() => passwords.dismissFor(OTHER, pair));
+    const otherAfter = await attempt(() => passwords.checkLogin(OTHER));
+    return result(store, { confirmed, again, other, listed, answer, otherAfter, kept: JSON.parse(prefs.get(name)) });
+  },
+  // Continue on pair after pair in a long list: the module adds the new pair to the pairs it keeps instead of going
+  // through the whole list again, so one more Continue and the next check cost the same with 20 pairs or with 100.
+  dismiss_does_not_reread_the_list: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    let converted = 0;
+    const idn = {
+      convertUTF8toACE: host => (converted++, host),
+      convertACEtoUTF8: host => host,
+      convertToDisplayIDN: host => host,
+    };
+    globalThis.Cc = { "@mozilla.org/network/idn-service;1": { getService: () => idn } };
+    globalThis.Ci = { nsIIDNService: {} };
+    const site = n => ({
+      url: `https://paypal-login.p${n}.example/`,
+      pair: { site: `p${n}.example`, similar: "paypal.example" },
+    });
+    const cost = {};
+    try {
+      for (let n = 0; n < 100; n++) {
+        const before = converted;
+        const { url, pair } = site(n);
+        await passwords.dismissFor(url, pair);
+        await passwords.checkLogin(url);
+        cost[n + 1] = converted - before;
+      }
+    } finally {
+      delete globalThis.Cc;
+      delete globalThis.Ci;
+    }
+    return { at20: cost[20], at100: cost[100] };
+  },
+  // The list changed outside the module, then Continue on another pair: the pair removed elsewhere is warned again.
+  dismiss_after_a_change_elsewhere: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const name = "nulavio.passwords.lookalikeDismissed";
+    await passwords.dismissFor(LOOKALIKE, SHOWN);
+    const confirmed = await check(passwords);
+    prefs.set(name, "[]"); // removed in about:config
+    passwords.dismiss("examp1e.example", "example.example");
+    const removed = await check(passwords);
+    const other = await passwords.checkLogin(OTHER);
+    return result(store, { confirmed, removed, other, kept: JSON.parse(prefs.get(name)) });
+  },
   // The engine refuses to write the list (a pref longer than it accepts): Continue fails, so the page says nothing was
   // remembered and does not open the site, and the pairs already confirmed stay as they were.
   dismiss_write_refused: async () => {

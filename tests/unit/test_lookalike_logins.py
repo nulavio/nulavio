@@ -167,6 +167,27 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual(case["restored"], {"suspicious": False}, case)
         self.assertEqual(case["damaged"], FOUND, case)
 
+    def test_an_entry_that_is_not_a_pair_is_skipped(self):
+        """The list edited by hand: the pairs around a malformed entry still count, and Settings still lists them."""
+        case = self.cases["dismissed_with_a_malformed_entry"]
+        self.assertEqual(case["confirmed"], {"suspicious": False}, case)
+        self.assertEqual(case["again"], {"dismissed": True}, case)
+        self.assertEqual(case["other"], {"suspicious": True, "site": "examp1e.example", "similar": "example.example"})
+        self.assertEqual(case["listed"], [{"site": "paypa1.example", "similar": "paypal.example"}], case)
+        self.assertEqual((case["answer"], case["otherAfter"]), ({"dismissed": True}, {"suspicious": False}), case)
+        self.assertEqual(case["kept"], ["paypa1.example paypal.example", "examp1e.example example.example"], case)
+
+    def test_continue_does_not_go_through_the_whole_list_again(self):
+        case = self.cases["dismiss_does_not_reread_the_list"]
+        self.assertEqual(case["at100"], case["at20"], case)
+
+    def test_continue_after_a_change_elsewhere_reads_the_list_as_it_is_now(self):
+        case = self.cases["dismiss_after_a_change_elsewhere"]
+        self.assertEqual(case["confirmed"], {"suspicious": False}, case)
+        self.assertEqual(case["removed"], FOUND, case)
+        self.assertEqual(case["other"], {"suspicious": False}, case)
+        self.assertEqual(case["kept"], ["examp1e.example example.example"], case)
+
     def test_a_refused_write_remembers_nothing_and_keeps_the_list(self):
         case = self.cases["dismiss_write_refused"]
         self.assertEqual(case["before"], {"dismissed": True}, case)

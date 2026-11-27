@@ -326,7 +326,9 @@ class Passwords {
   #dismissed(raw = this.#dismissedRaw()) {
     try {
       const list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
+      // Only the text entries dismiss() writes: anything else (the pref edited by hand) is not a pair, and is skipped
+      // rather than read, so the pairs around it still count.
+      return Array.isArray(list) ? list.filter(entry => typeof entry === "string") : [];
     } catch {
       return [];
     }
@@ -534,9 +536,16 @@ class Passwords {
      has no limit, so no pair is ever dropped to make room for another. */
   dismiss(site, similar) {
     const entry = pairEntry(site, similar);
-    const list = this.#dismissed().filter(e => e !== entry);
+    const raw = this.#dismissedRaw();
+    const list = this.#dismissed(raw).filter(e => e !== entry);
     list.push(entry);
-    Services.prefs.setStringPref(PREF_DISMISSED, JSON.stringify(list));
+    const written = JSON.stringify(list);
+    Services.prefs.setStringPref(PREF_DISMISSED, written);
+    // The kept pairs were built from the list this call read: they only gain this pair, so the next check does not go
+    // through the whole list again. Kept pairs built from another value (changed elsewhere) are rebuilt on that check.
+    if (this.#confirmedCache.raw === raw) {
+      this.#confirmedCache = { raw: written, pairs: this.#confirmedCache.pairs.add(entry) };
+    }
   }
 
   /** The pairs the person chose to continue on, newest first (Settings › Passwords). */
