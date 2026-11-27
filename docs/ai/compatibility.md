@@ -31,7 +31,7 @@ Checked on 2026-10-26 on Fedora 44 KDE (Wayland), engine Gecko 158.0.1 (Nulavio 
 |---|---|---|---|
 | List, open, close tabs | `tabs_list`, `tab_new`, `tab_close` | SUPPORTED | Tab ids are BiDi browsing-context ids |
 | Navigation and waiting | `navigate` (waits for `complete`); `click`/`type` wait for a navigation they start | SUPPORTED | Uses `browsingContext.navigationStarted`/`load` events |
-| Read page text | `page_read` | SUPPORTED | `innerText`, size-limited, marked untrusted |
+| Read page text | `page_read` | SUPPORTED | `innerText`, size-limited, marked untrusted (as is page text in every other result: [which fields](connect-an-agent.md#page-text-in-results)) |
 | DOM / accessibility snapshot | `page_snapshot` | PARTIAL | Interactive elements with role and name computed from the DOM (labels, ARIA, text), not the platform accessibility tree. Password values never returned |
 | Screenshots | `screenshot` | SUPPORTED | Viewport PNG |
 | Click, type, submit | `click`, `type` | SUPPORTED | Real input events (`input.performActions`); submit and link clicks checked against their capabilities |
