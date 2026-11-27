@@ -1509,6 +1509,36 @@ class AiBridgeTest(unittest.TestCase):
         self.assertFalse([hit for hit in self.fx.hits if hit.startswith(("/agent-result", "/page/linked"))], self.fx.hits)
         self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
 
+    def test_35_closing_stdin_during_a_pending_approval_denies_it_and_a_later_allow_does_nothing(self):
+        # #646: the agent's client exits while a click waits for the person. The request is denied at once and its
+        # files removed, the bridge ends without waiting for the request to expire, and the person's "Allow" afterwards
+        # does nothing. Here the person is asked in a Nulavio window (BrowserApprover), which the test plays.
+        agent, env = self.agent("restricted")
+        env.pop("NULAVIO_AI_APPROVER")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-task"))["structuredContent"]["tab"]
+        link = self.element(c.call("page_snapshot", tab=tab), role="link")
+        marker = str(self.home / "data" / "ai" / "workspaces" / agent["id"])
+        self.assertTrue(engine_processes(marker))
+        c.send({"jsonrpc": "2.0", "id": 99, "method": "tools/call",
+                "params": {"name": "click", "arguments": {"tab": tab, "element": link}}})  # fmt: skip
+        folder = registry.requests_dir()
+        self.assertTrue(harness.wait_until(lambda: list(folder.glob("*.json")), timeout=30), c.stderr)
+        request = next(folder.glob("*.json"))
+        request.with_suffix(".seen").touch()  # a Nulavio window shows it: the bridge waits for the answer
+        time.sleep(1)
+        closed = time.monotonic()
+        c.process.stdin.close()  # the agent's client exits
+        self.assertTrue(harness.wait_until(lambda: not list(folder.iterdir()), timeout=5), list(folder.iterdir()))
+        with self.assertRaises(registry.RegistryError):  # the person clicks "Allow once" now: nothing to answer
+            registry.answer_request(request.stem, "once")
+        c.process.wait(timeout=30)
+        self.assertLess(time.monotonic() - closed, 30)  # it did not wait for the request to expire
+        self.assertTrue(harness.wait_until(lambda: not engine_processes(marker), timeout=20))
+        self.assertEqual(list(folder.iterdir()), [])
+        self.assertEqual(self.fx.requests_to("/page/linked"), [])  # the click never happened
+        self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+
 
 if __name__ == "__main__":
     unittest.main()
