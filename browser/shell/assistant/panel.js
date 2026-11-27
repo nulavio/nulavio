@@ -72,6 +72,7 @@ const BEFORE_START = new Set([
   "private-window",
   "no-window",
   "page-changed",
+  "tab-changed",
   "recipient-changed",
   "size-changed",
   "thread-recipient",
@@ -717,8 +718,8 @@ async function showError(error, task) {
   announce(text, "error");
   if (STATE_CHANGED.has(reason)) {
     await render().catch(() => {});
-  } else if (reason === "page-changed") {
-    await refreshPage();
+  } else if (reason === "page-changed" || reason === "tab-changed") {
+    await refreshPage(); // the item went with the refusal: the panel offers the page of the tab selected now (#861)
   }
 }
 
