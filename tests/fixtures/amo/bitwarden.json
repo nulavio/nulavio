@@ -1,0 +1,755 @@
+{
+ "recorded": "2026-11-26T19:37Z",
+ "how": "GET of each path below on https://addons.mozilla.org/api/v5/ (no authentication), as watch_dependencies.py requests it; version objects trimmed to the fields the watch reads, null for a 404",
+ "lock": {
+  "key": "bitwarden",
+  "id": "{446900e4-71c2-419f-a6a7-df9c091e268b}",
+  "version": "2026.10.2",
+  "sha256": "abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73",
+  "size": 23833411
+ },
+ "replies": {
+  "addons/addon/%7B446900e4-71c2-419f-a6a7-df9c091e268b%7D/": {
+   "guid": "{446900e4-71c2-419f-a6a7-df9c091e268b}",
+   "slug": "bitwarden-password-manager",
+   "current_version": {
+    "id": 6734433,
+    "version": "2026.11.0",
+    "file": {
+     "id": 5278513,
+     "created": "2026-11-19T19:23:05Z",
+     "hash": "sha256:607d6433d9de151a4c51135ad9e70882460d0e0493a9b585f15a9848d5f10b97",
+     "size": 28129360,
+     "status": "public",
+     "url": "https://addons.mozilla.org/firefox/downloads/file/5278513/bitwarden_password_manager-2026.11.0.xpi"
+    }
+   }
+  },
+  "addons/addon/%7B446900e4-71c2-419f-a6a7-df9c091e268b%7D/versions/2026.10.2/": {
+   "id": 6654556,
+   "version": "2026.10.2",
+   "channel": "listed",
+   "file": {
+    "id": 5198653,
+    "created": "2026-11-02T14:54:35Z",
+    "hash": "sha256:abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73",
+    "size": 23833411,
+    "status": "public",
+    "url": "https://addons.mozilla.org/firefox/downloads/file/5198653/bitwarden_password_manager-2026.10.2.xpi"
+   }
+  },
+  "addons/addon/%7B446900e4-71c2-419f-a6a7-df9c091e268b%7D/versions/?page=1&page_size=50": {
+   "count": 173,
+   "next": "https://addons.mozilla.org/api/v5/addons/addon/%7B446900e4-71c2-419f-a6a7-df9c091e268b%7D/versions/?page=2&page_size=50",
+   "previous": null,
+   "page_count": 4,
+   "page_size": 50,
+   "results": [
+    {
+     "id": 6734433,
+     "version": "2026.11.0",
+     "channel": "listed",
+     "file": {
+      "id": 5278513,
+      "created": "2026-11-19T19:23:05Z",
+      "hash": "sha256:607d6433d9de151a4c51135ad9e70882460d0e0493a9b585f15a9848d5f10b97",
+      "size": 28129360,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5278513/bitwarden_password_manager-2026.11.0.xpi"
+     }
+    },
+    {
+     "id": 6654556,
+     "version": "2026.10.2",
+     "channel": "listed",
+     "file": {
+      "id": 5198653,
+      "created": "2026-11-02T14:54:35Z",
+      "hash": "sha256:abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73",
+      "size": 23833411,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5198653/bitwarden_password_manager-2026.10.2.xpi"
+     }
+    },
+    {
+     "id": 6638088,
+     "version": "2026.10.1",
+     "channel": "listed",
+     "file": {
+      "id": 5182191,
+      "created": "2026-10-29T12:59:29Z",
+      "hash": "sha256:25cd5e074628058474ca7578269c75e3e136569e6a821a0da07d56ed761e11fa",
+      "size": 23833704,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5182191/bitwarden_password_manager-2026.10.1.xpi"
+     }
+    },
+    {
+     "id": 6581535,
+     "version": "2026.10.0",
+     "channel": "listed",
+     "file": {
+      "id": 5125667,
+      "created": "2026-10-15T15:43:00Z",
+      "hash": "sha256:a25e02e961f4ffcecda12584f32f1993102ad7509e9ca84582e5287109f5bd20",
+      "size": 21787866,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5125667/bitwarden_password_manager-2026.10.0.xpi"
+     }
+    },
+    {
+     "id": 6532400,
+     "version": "2026.9.3",
+     "channel": "listed",
+     "file": {
+      "id": 5076543,
+      "created": "2026-10-01T18:12:20Z",
+      "hash": "sha256:5dd6efa5d228dbeac7a0c6a883f951787dc66e57985322ce549210b0df8d054c",
+      "size": 21121082,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5076543/bitwarden_password_manager-2026.9.3.xpi"
+     }
+    },
+    {
+     "id": 6493122,
+     "version": "2026.9.0",
+     "channel": "listed",
+     "file": {
+      "id": 5037282,
+      "created": "2026-09-17T14:31:05Z",
+      "hash": "sha256:324a2d97e365092fe9db0f0069e4c748c935858523868361a3277c1bbf339a17",
+      "size": 20880886,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5037282/bitwarden_password_manager-2026.9.0.xpi"
+     }
+    },
+    {
+     "id": 6426449,
+     "version": "2026.8.0",
+     "channel": "listed",
+     "file": {
+      "id": 4970633,
+      "created": "2026-08-20T14:35:51Z",
+      "hash": "sha256:989ee33f19329af1fc155dcebb7f90a517a7259cea4bfbdd660923d25a7d465a",
+      "size": 19853740,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4970633/bitwarden_password_manager-2026.8.0.xpi"
+     }
+    },
+    {
+     "id": 6371475,
+     "version": "2026.7.0",
+     "channel": "listed",
+     "file": {
+      "id": 4915668,
+      "created": "2026-07-23T16:53:12Z",
+      "hash": "sha256:11836eb9d2abc9914bb337b57e20c5a09cf44f24fa572f7e886384fd350a5112",
+      "size": 19055042,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4915668/bitwarden_password_manager-2026.7.0.xpi"
+     }
+    },
+    {
+     "id": 6331750,
+     "version": "2026.6.1",
+     "channel": "listed",
+     "file": {
+      "id": 4875950,
+      "created": "2026-06-30T17:10:25Z",
+      "hash": "sha256:7ba16c3d422ab287db17b014a4683bace36341e471e4d4fd58ac2b616c6ac17d",
+      "size": 18442401,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4875950/bitwarden_password_manager-2026.6.1.xpi"
+     }
+    },
+    {
+     "id": 6297890,
+     "version": "2026.5.1",
+     "channel": "listed",
+     "file": {
+      "id": 4842111,
+      "created": "2026-06-08T17:49:58Z",
+      "hash": "sha256:d32f61f4fb95728ab450edabc88fe195400adfafab488ca949b5a355298f27b8",
+      "size": 17973543,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4842111/bitwarden_password_manager-2026.5.1.xpi"
+     }
+    },
+    {
+     "id": 6283631,
+     "version": "2026.5.0",
+     "channel": "listed",
+     "file": {
+      "id": 4827854,
+      "created": "2026-05-29T17:32:53Z",
+      "hash": "sha256:8ebb475518a330b88b4e2cba0864c5ca11bed390739cb84fbf256e938c91b6d9",
+      "size": 17971466,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4827854/bitwarden_password_manager-2026.5.0.xpi"
+     }
+    },
+    {
+     "id": 6251830,
+     "version": "2026.4.0",
+     "channel": "listed",
+     "file": {
+      "id": 4796063,
+      "created": "2026-05-07T18:22:26Z",
+      "hash": "sha256:ccbdf6c3a11c8655d4fe9bdfcf5f16c4c9ff2d8732fadbb85396a2123274ae10",
+      "size": 17476181,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4796063/bitwarden_password_manager-2026.4.0.xpi"
+     }
+    },
+    {
+     "id": 6205717,
+     "version": "2026.3.0",
+     "channel": "listed",
+     "file": {
+      "id": 4749958,
+      "created": "2026-04-02T14:35:39Z",
+      "hash": "sha256:2dc6d074d4dc0abd2a8966f5065a55e7252bbf5e54b23c31dbedabfac0d4dbc4",
+      "size": 17155549,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4749958/bitwarden_password_manager-2026.3.0.xpi"
+     }
+    },
+    {
+     "id": 6171074,
+     "version": "2026.2.0",
+     "channel": "listed",
+     "file": {
+      "id": 4715321,
+      "created": "2026-03-05T19:10:20Z",
+      "hash": "sha256:e54999d45ae1cd001452a34294240633c89a95ae832f212721d746a89555958e",
+      "size": 17018915,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4715321/bitwarden_password_manager-2026.2.0.xpi"
+     }
+    },
+    {
+     "id": 6153883,
+     "version": "2026.1.1",
+     "channel": "listed",
+     "file": {
+      "id": 4698131,
+      "created": "2026-02-18T04:02:24Z",
+      "hash": "sha256:6143af5d61d95021fcdd6939ab8c18f9535f775c80d4b69f75d1d238f81ae347",
+      "size": 16612488,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4698131/bitwarden_password_manager-2026.1.1.xpi"
+     }
+    },
+    {
+     "id": 6120373,
+     "version": "2025.12.1",
+     "channel": "listed",
+     "file": {
+      "id": 4664623,
+      "created": "2026-01-13T19:24:39Z",
+      "hash": "sha256:a7a123eee4e40fdd8af7c0c67243731ddcc37ae1498cf2828995f4905600c51f",
+      "size": 16371448,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4664623/bitwarden_password_manager-2025.12.1.xpi"
+     }
+    },
+    {
+     "id": 6096468,
+     "version": "2025.12.0",
+     "channel": "listed",
+     "file": {
+      "id": 4640726,
+      "created": "2025-12-11T22:31:43Z",
+      "hash": "sha256:0256a61e84e23903fd379f5971150a8b23a53a126da62d276d57e514408839cd",
+      "size": 16019262,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4640726/bitwarden_password_manager-2025.12.0.xpi"
+     }
+    },
+    {
+     "id": 6089397,
+     "version": "2025.11.2",
+     "channel": "listed",
+     "file": {
+      "id": 4633659,
+      "created": "2025-12-02T20:00:52Z",
+      "hash": "sha256:0fcda36efb4c8b54913d4536e43b07f6c1ea4daaa8969ff45bac77509af5f861",
+      "size": 15600216,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4633659/bitwarden_password_manager-2025.11.2.xpi"
+     }
+    },
+    {
+     "id": 6080040,
+     "version": "2025.11.1",
+     "channel": "listed",
+     "file": {
+      "id": 4624303,
+      "created": "2025-11-20T19:26:26Z",
+      "hash": "sha256:d5a0ce8bb3eecd6cc5d716b15f36b50ac8dcc368704ff137c12e465fd7924afa",
+      "size": 15600219,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4624303/bitwarden_password_manager-2025.11.1.xpi"
+     }
+    },
+    {
+     "id": 6075031,
+     "version": "2025.11.0",
+     "channel": "listed",
+     "file": {
+      "id": 4619294,
+      "created": "2025-11-14T01:06:53Z",
+      "hash": "sha256:6be183d581fb81aa19e9fe658aa533aeea91185b54917700952ea3a576cacfc6",
+      "size": 15600216,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4619294/bitwarden_password_manager-2025.11.0.xpi"
+     }
+    },
+    {
+     "id": 6055443,
+     "version": "2025.10.0",
+     "channel": "listed",
+     "file": {
+      "id": 4599707,
+      "created": "2025-10-16T19:20:18Z",
+      "hash": "sha256:31b88743f36032fa3cfb78e0582fb732ef00a3c5915182ba37fd08b04aac1d3b",
+      "size": 14640391,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4599707/bitwarden_password_manager-2025.10.0.xpi"
+     }
+    },
+    {
+     "id": 6036713,
+     "version": "2025.9.0",
+     "channel": "listed",
+     "file": {
+      "id": 4580978,
+      "created": "2025-09-18T17:21:27Z",
+      "hash": "sha256:601b6e38ddcdde8f42fc48c7c978e3ad5a69ae5c082312932b7998c824bf9343",
+      "size": 13949796,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4580978/bitwarden_password_manager-2025.9.0.xpi"
+     }
+    },
+    {
+     "id": 6022777,
+     "version": "2025.8.2",
+     "channel": "listed",
+     "file": {
+      "id": 4567044,
+      "created": "2025-08-28T21:21:02Z",
+      "hash": "sha256:0a6d986010d4845454083e2a02f81667b43dd7e4901693f4a7d0e7c67d9f7ffb",
+      "size": 14523375,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4567044/bitwarden_password_manager-2025.8.2.xpi"
+     }
+    },
+    {
+     "id": 6018502,
+     "version": "2025.8.1",
+     "channel": "listed",
+     "file": {
+      "id": 4562769,
+      "created": "2025-08-22T20:37:50Z",
+      "hash": "sha256:840e07f5d1946496276e44ee0a8986f46d7476d22f769389d0d389402a9d49fe",
+      "size": 14517874,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4562769/bitwarden_password_manager-2025.8.1.xpi"
+     }
+    },
+    {
+     "id": 6007855,
+     "version": "2025.7.1",
+     "channel": "listed",
+     "file": {
+      "id": 4552124,
+      "created": "2025-08-07T21:15:59Z",
+      "hash": "sha256:c7984a2748923ece0f72124c08c8277ce9f28d8a100f0f18c9bb977dcfae364f",
+      "size": 15490762,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4552124/bitwarden_password_manager-2025.7.1.xpi"
+     }
+    },
+    {
+     "id": 5997247,
+     "version": "2025.7.0",
+     "channel": "listed",
+     "file": {
+      "id": 4541517,
+      "created": "2025-07-24T16:12:08Z",
+      "hash": "sha256:ef4fb7d3aba06273beb2c3a78f7daa73bdac0d3eaf8f5ebf9c41b2d4a3618a3f",
+      "size": 15490643,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4541517/bitwarden_password_manager-2025.7.0.xpi"
+     }
+    },
+    {
+     "id": 5981101,
+     "version": "2025.6.1",
+     "channel": "listed",
+     "file": {
+      "id": 4525374,
+      "created": "2025-07-02T16:36:35Z",
+      "hash": "sha256:f61e604f0b6c13ac734e78cf415ee5e12c96577d6f0382a0853108c60b1b4eb1",
+      "size": 15448168,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4525374/bitwarden_password_manager-2025.6.1.xpi"
+     }
+    },
+    {
+     "id": 5949665,
+     "version": "2025.5.0",
+     "channel": "listed",
+     "file": {
+      "id": 4493940,
+      "created": "2025-05-15T19:01:21Z",
+      "hash": "sha256:56e62622b7c322d2c2c4db04ad3eac2e7454bd7eebffebdcf5ca4b728ba09feb",
+      "size": 17962633,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4493940/bitwarden_password_manager-2025.5.0.xpi"
+     }
+    },
+    {
+     "id": 5940516,
+     "version": "2025.4.0",
+     "channel": "listed",
+     "file": {
+      "id": 4484791,
+      "created": "2025-05-01T12:24:59Z",
+      "hash": "sha256:643cb6fd7b9d1b209f82ca552342390a45c3edc94645cb049e49d016ee28b63c",
+      "size": 17261955,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4484791/bitwarden_password_manager-2025.4.0.xpi"
+     }
+    },
+    {
+     "id": 5923151,
+     "version": "2025.3.2",
+     "channel": "listed",
+     "file": {
+      "id": 4467426,
+      "created": "2025-04-03T20:34:35Z",
+      "hash": "sha256:30f9384a46f6ef2ba6c9d273fc7c77a9afeef120dc4b3cbc5c28f171f4e8aeab",
+      "size": 17261326,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4467426/bitwarden_password_manager-2025.3.2.xpi"
+     }
+    },
+    {
+     "id": 5896083,
+     "version": "2025.2.0",
+     "channel": "listed",
+     "file": {
+      "id": 4440363,
+      "created": "2025-02-19T13:46:12Z",
+      "hash": "sha256:c4d7f355a2269620482f50edac7fce3c19f515190f24cdf80edc865f71d3a374",
+      "size": 17557633,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4440363/bitwarden_password_manager-2025.2.0.xpi"
+     }
+    },
+    {
+     "id": 5866612,
+     "version": "2024.12.4",
+     "channel": "listed",
+     "file": {
+      "id": 4410896,
+      "created": "2024-12-27T17:57:36Z",
+      "hash": "sha256:fad085bb5aadc852088b2d2da666ed182575e74e47848d40180e25b89ec70cb3",
+      "size": 16590655,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4410896/bitwarden_password_manager-2024.12.4.xpi"
+     }
+    },
+    {
+     "id": 5863520,
+     "version": "2024.12.3",
+     "channel": "listed",
+     "file": {
+      "id": 4407804,
+      "created": "2024-12-19T18:48:45Z",
+      "hash": "sha256:a48af549da66e2987a135b0cb918b1c90f8e80b868760cbaa07c8f6df4da9b07",
+      "size": 16588846,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4407804/bitwarden_password_manager-2024.12.3.xpi"
+     }
+    },
+    {
+     "id": 5848009,
+     "version": "2024.11.2",
+     "channel": "listed",
+     "file": {
+      "id": 4392295,
+      "created": "2024-11-21T16:53:29Z",
+      "hash": "sha256:38faecbfca76086a54e62b6e2036eae45e9d9f9f3aee4c7a72b652593f51b8e7",
+      "size": 17139615,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4392295/bitwarden_password_manager-2024.11.2.xpi"
+     }
+    },
+    {
+     "id": 5842789,
+     "version": "2024.11.0",
+     "channel": "listed",
+     "file": {
+      "id": 4387077,
+      "created": "2024-11-13T01:23:00Z",
+      "hash": "sha256:5fc6ca8befe1798bf8bc0196a866d78c9e837ae4d425b0eb156883ad65577370",
+      "size": 17138449,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4387077/bitwarden_password_manager-2024.11.0.xpi"
+     }
+    },
+    {
+     "id": 5827462,
+     "version": "2024.10.1",
+     "channel": "listed",
+     "file": {
+      "id": 4371752,
+      "created": "2024-10-17T15:59:07Z",
+      "hash": "sha256:7b7357ddce2756dc536b86b5c14139ec09731c1c114ac82807c60fba3ced12a5",
+      "size": 14864865,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4371752/bitwarden_password_manager-2024.10.1.xpi"
+     }
+    },
+    {
+     "id": 5819258,
+     "version": "2024.10.0",
+     "channel": "listed",
+     "file": {
+      "id": 4363548,
+      "created": "2024-10-03T14:46:20Z",
+      "hash": "sha256:9ea9428444870a74ae1999d77eb12d97a45275c85e83d6afdcbc4597fa3eccfb",
+      "size": 13374996,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4363548/bitwarden_password_manager-2024.10.0.xpi"
+     }
+    },
+    {
+     "id": 5811575,
+     "version": "2024.9.1",
+     "channel": "listed",
+     "file": {
+      "id": 4355865,
+      "created": "2024-09-19T13:03:57Z",
+      "hash": "sha256:f484fbcd1e45e4a68f2eec8fb8c22fed5a77f1a00b515f38c167e36b4d6118bf",
+      "size": 13379802,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4355865/bitwarden_password_manager-2024.9.1.xpi"
+     }
+    },
+    {
+     "id": 5806387,
+     "version": "2024.9.0",
+     "channel": "listed",
+     "file": {
+      "id": 4350677,
+      "created": "2024-09-10T16:41:12Z",
+      "hash": "sha256:8c8b97b445fe65cbdd91eda4bd07e8946d6c1b21ac89c771205a3b9225e2ef12",
+      "size": 12493571,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4350677/bitwarden_password_manager-2024.9.0.xpi"
+     }
+    },
+    {
+     "id": 5803847,
+     "version": "2024.8.2",
+     "channel": "listed",
+     "file": {
+      "id": 4348137,
+      "created": "2024-09-05T17:03:56Z",
+      "hash": "sha256:46908d7ffafc276b7f0425341849d439ee8c0f75d755f6eee79f83a097ea8e7b",
+      "size": 12492338,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4348137/bitwarden_password_manager-2024.8.2.xpi"
+     }
+    },
+    {
+     "id": 5799433,
+     "version": "2024.8.1",
+     "channel": "listed",
+     "file": {
+      "id": 4343724,
+      "created": "2024-08-27T15:46:05Z",
+      "hash": "sha256:52b19c69997bc392ebea26e12f1420b2bf42850df2a28dcd64b303396009554d",
+      "size": 12492370,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4343724/bitwarden_password_manager-2024.8.1.xpi"
+     }
+    },
+    {
+     "id": 5796701,
+     "version": "2024.8.0",
+     "channel": "listed",
+     "file": {
+      "id": 4340992,
+      "created": "2024-08-22T14:05:42Z",
+      "hash": "sha256:8b7dba43a2820adce4d9ae497be119eac3802c01bd4b5a536941fbeea8adac59",
+      "size": 12488457,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4340992/bitwarden_password_manager-2024.8.0.xpi"
+     }
+    },
+    {
+     "id": 5781992,
+     "version": "2024.7.1",
+     "channel": "listed",
+     "file": {
+      "id": 4326285,
+      "created": "2024-07-26T02:47:48Z",
+      "hash": "sha256:28c505df3b615f6a3c829afdcff74584ddc5eb1d3fb35f9848c18470fad93772",
+      "size": 12034585,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4326285/bitwarden_password_manager-2024.7.1.xpi"
+     }
+    },
+    {
+     "id": 5763441,
+     "version": "2024.6.3",
+     "channel": "listed",
+     "file": {
+      "id": 4307738,
+      "created": "2024-06-21T19:15:53Z",
+      "hash": "sha256:d3c052e66a9daa390707c4481ec50c09bc3b6253cb222792c9a55aa4b5f4045a",
+      "size": 11581563,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4307738/bitwarden_password_manager-2024.6.3.xpi"
+     }
+    },
+    {
+     "id": 5761462,
+     "version": "2024.6.2",
+     "channel": "listed",
+     "file": {
+      "id": 4305759,
+      "created": "2024-06-18T22:40:34Z",
+      "hash": "sha256:c064e2d6601cb921ecd154e0d3bfd54d71af43da1947aa51666877ef0afd1436",
+      "size": 11580195,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4305759/bitwarden_password_manager-2024.6.2.xpi"
+     }
+    },
+    {
+     "id": 5738554,
+     "version": "2024.4.2",
+     "channel": "listed",
+     "file": {
+      "id": 4282854,
+      "created": "2024-05-06T11:30:23Z",
+      "hash": "sha256:19caac7131a37e558204c1f61cf1459502cc624b0284dc5837112c4742917da0",
+      "size": 11283098,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4282854/bitwarden_password_manager-2024.4.2.xpi"
+     }
+    },
+    {
+     "id": 5719451,
+     "version": "2024.4.1",
+     "channel": "listed",
+     "file": {
+      "id": 4263752,
+      "created": "2024-04-12T12:48:37Z",
+      "hash": "sha256:1ba1e66cb9a4ee3bf80a81fc31348b04162385455d2b02f9902473e3931d9693",
+      "size": 11268081,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4263752/bitwarden_password_manager-2024.4.1.xpi"
+     }
+    },
+    {
+     "id": 5717382,
+     "version": "2024.3.1",
+     "channel": "listed",
+     "file": {
+      "id": 4261683,
+      "created": "2024-04-08T12:47:51Z",
+      "hash": "sha256:c55dbcc014ac7782c1c0e7b31cf859e97da43a308d886b87efcd13e7cb5fc510",
+      "size": 11265875,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4261683/bitwarden_password_manager-2024.3.1.xpi"
+     }
+    },
+    {
+     "id": 5702299,
+     "version": "2024.2.1",
+     "channel": "listed",
+     "file": {
+      "id": 4246600,
+      "created": "2024-03-07T04:32:41Z",
+      "hash": "sha256:f2db399e5a0915e4fd7e4906c32c72eac4a2b7bb4b4acacd892fff18e73085d4",
+      "size": 11137537,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4246600/bitwarden_password_manager-2024.2.1.xpi"
+     }
+    },
+    {
+     "id": 5689077,
+     "version": "2024.2.0",
+     "channel": "listed",
+     "file": {
+      "id": 4233394,
+      "created": "2024-02-07T16:51:37Z",
+      "hash": "sha256:2c59e7040749dee010b34fb2a9c24b28ada71ad7fa5a23264ff70e63f8f686d1",
+      "size": 10810369,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4233394/bitwarden_password_manager-2024.2.0.xpi"
+     }
+    }
+   ]
+  },
+  "blocklist/block/%7B446900e4-71c2-419f-a6a7-df9c091e268b%7D/": {
+   "id": 1125818,
+   "created": "2025-08-12T15:14:02Z",
+   "modified": "2025-08-12T16:42:38Z",
+   "addon_name": {
+    "ca": "Bitwarden - Administrador de contrasenyes gratuït",
+    "cs": "Bitwarden – Bezplatný správce hesel",
+    "da": "Bitwarden - Gratis adgangskode manager",
+    "de": "Bitwarden - Kostenloser Passwort-Manager",
+    "en-US": "Bitwarden Password Manager",
+    "es-ES": "Bitwarden – Gestor de contraseñas gratuito",
+    "fa": "Bitwarden - مدیریت گذرواژه رایگان",
+    "fi": "Bitwarden – Ilmainen salasananhallinta",
+    "fr": "Bitwarden – Gestionnaire de mots de passe gratuit",
+    "hu": "Bitwarden – Ingyenes Jelszó Kezelő",
+    "id": "Bitwarden - Pengelola Sandi Gratis",
+    "it": "Bitwarden – Gestore di Password Gratuito",
+    "ja": "Bitwarden - 無料パスワードマネージャー",
+    "ko": "Bitwarden - 무료 비밀번호 관리자",
+    "nb-NO": "Bitwarden — Fri passordbehandling",
+    "nl": "Bitwarden - Gratis Wachtwoordbeheerder",
+    "pl": "Bitwarden - Darmowy menedżer haseł",
+    "pt-BR": "Bitwarden - Gerenciador de Senhas Gratuito",
+    "pt-PT": "Bitwarden - Gestor de palavras-passe gratuito",
+    "ro": "Bitwarden - Manager de parole gratuit",
+    "ru": "Bitwarden – бесплатный менеджер паролей",
+    "sk": "Bitwarden - Bezplatný správca hesiel",
+    "sv-SE": "Bitwarden - Gratis lösenordshanterare",
+    "th": "Bitwarden – โปรแกรมจัดการรหัสผ่านฟรี",
+    "tr": "Bitwarden - Ücretsiz Parola Yöneticisi",
+    "uk": "Bitwarden – Безкоштовний менеджер паролів",
+    "vi": "Bitwarden - Trình quản lý mật khẩu miễn phí",
+    "zh-CN": "Bitwarden – 免费密码管理器",
+    "zh-TW": "Bitwarden – 免費密碼管理工具"
+   },
+   "blocked": [],
+   "soft_blocked": [
+    "0.0.1",
+    "1.43.0",
+    "1.44.0",
+    "1.44.1",
+    "2022.9.0",
+    "2023.7.0",
+    "2023.8.2",
+    "2023.9.0",
+    "2023.10.0",
+    "2024.12.0"
+   ],
+   "guid": "{446900e4-71c2-419f-a6a7-df9c091e268b}",
+   "reason": "Version deleted",
+   "url": null,
+   "is_all_versions": false,
+   "versions": []
+  }
+ }
+}
