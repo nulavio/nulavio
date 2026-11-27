@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 SHELL = ROOT / "browser" / "shell"
 MODULE = (SHELL / "modules" / "NulavioFingerprinting.sys.mjs").read_text(encoding="utf-8")
 PATCH = (ROOT / "browser" / "patches" / "0012-rfp-per-site-audio-noise-and-one-screen-size.patch").read_text(encoding="utf-8")
@@ -301,7 +305,7 @@ class MotionAndContrastTest(unittest.TestCase):
                     self.assertTrue(words[key]["message"].strip())
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class GuardAndTheShellsOwnSetTest(unittest.TestCase):
     """#654: at each start with "let sites see my motion and contrast preferences" on, the Shell writes the engine's
     set again from the build's default. After a build whose default changed, the Guard took that for a change made
@@ -379,6 +383,38 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
             {"nulavio.fingerprinting.shareAccessibility", "privacy.fingerprintingProtection.overrides"},
         )
         self.assertEqual(self.out["shareOff"]["told"], [])
+
+    def test_the_real_check_leaves_out_the_shells_own_update(self):
+        # The same as ownUpdate, through the Guard's own start-up check and the record it writes.
+        case, current = self.out["checked"]["ownUpdate"], self.out["current"]
+        self.assertEqual(case["reported"], [])
+        own = {"privacy.fingerprintingProtection.overrides": current}
+        self.assertEqual(case["atCheck"]["owned"], own)
+        self.assertEqual(
+            case["after"], {"prefs": {**own, "nulavio.fingerprinting.shareAccessibility": True}, "owned": own, "pending": []}
+        )
+
+    def test_the_setting_turned_off_during_the_check_does_not_report_the_shells_own_update(self):
+        # OpenCodeReview on #825 (round 2): the check read the prefs with the Shell's rewrite in them, then the person
+        # turned the setting off in Settings before it compared. What was Nulavio's goes with the prefs it read.
+        case, current = self.out["checked"]["turnedOff"], self.out["current"]
+        self.assertEqual(case["reported"], [])
+        self.assertEqual(case["atCheck"]["prefs"]["privacy.fingerprintingProtection.overrides"], current)
+        self.assertEqual(case["atCheck"]["owned"], {"privacy.fingerprintingProtection.overrides": current})
+        # The look that follows takes in the person's change, and the record then holds no set as Nulavio's.
+        self.assertEqual(
+            case["after"], {"prefs": {"nulavio.fingerprinting.shareAccessibility": False}, "owned": {}, "pending": []}
+        )
+
+    def test_a_value_declared_as_nulavios_after_the_check_read_the_prefs_hides_nothing(self):
+        # The mirror: a set put in the closed profile, which the Shell does not hold as its own when the check reads
+        # the prefs. A declaration that comes later is the next look's, and the change found is still reported.
+        case, current = self.out["checked"]["declaredLate"], self.out["current"]
+        finding = ["privacy.fingerprintingProtection.overrides", "+CanvasRandomization,+JSDateTimeUTC", current]
+        self.assertEqual(case["reported"], [finding])
+        self.assertEqual(case["atCheck"]["owned"], {})
+        self.assertEqual(case["after"]["pending"], [finding])
+        self.assertEqual(case["after"]["owned"], {"privacy.fingerprintingProtection.overrides": current})
 
     def test_the_guard_goes_by_both_values_and_the_name(self):
         self.assertEqual(

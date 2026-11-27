@@ -3,7 +3,9 @@
 // then the Guard's own comparison (compareSnapshots, and withoutOwnValues in browser/shell/modules/NulavioGuard.sys.mjs)
 // between the record of the last start (its prefs, and the set it kept as Nulavio's own) and the prefs after it.
 // Prints, as JSON, for each case: the set after the start, what the module told the Guard, and the findings with and
-// without what the record and the module say is Nulavio's own. Used by
+// without what the record and the module say is Nulavio's own. The `checked` cases run the Guard's own start-up check
+// (check(), then the look it asks for) on a fresh Guard, with the record and the engine's other parts stood in for,
+// and something done while that check is still at work (OpenCodeReview on #825). Used by
 // tests/unit/test_fingerprinting_shell.py; the real engine is exercised by tests/integration/test_guard.py (07).
 //
 //     node tests/lib/guard_own_writes_driver.mjs <NulavioGuard module> <NulavioFingerprinting module>
@@ -24,11 +26,62 @@ const EARLIER = "+CanvasRandomization,+JSDateTimeUTC";
 let user = new Map(); // the profile's own values
 const defaults = new Map([[OVERRIDES, DEFAULT]]);
 const read = (name, fallback) => (user.has(name) ? user.get(name) : defaults.has(name) ? defaults.get(name) : fallback);
+const PREF = { PREF_INVALID: 0, PREF_STRING: 32, PREF_INT: 64, PREF_BOOL: 128 };
+const observers = []; // [domain, observer]: who listens to which prefs
+/** A pref changed in the browser: its observers hear of it, as the engine tells them. */
+function changed(name) {
+  for (const [domain, observer] of [...observers]) {
+    if (name.startsWith(domain)) {
+      (observer.observe ?? observer).call(observer, null, "nsPref:changed", name);
+    }
+  }
+}
+const files = new Map(); // the record, by path
+const timers = []; // callbacks of the timers the Guard set, run by runTimers()
+let searchInit = null; // what happens while the Guard's snapshot waits for the search service, after it read the prefs
 
+globalThis.Ci = {
+  nsIFile: {},
+  nsIPrefBranch: PREF,
+  nsIEnterprisePolicies: { ACTIVE: 1 },
+  nsIX509CertDB: {},
+  nsIPKCS11ModuleDB: {},
+  nsITimer: { TYPE_ONE_SHOT: 0 },
+};
+globalThis.Cc = {
+  "@mozilla.org/timer;1": {
+    createInstance: () => ({ initWithCallback: callback => timers.push(callback), cancel: () => {} }),
+  },
+  "@mozilla.org/security/x509certdb;1": { getService: () => ({ getCerts: async () => [] }) },
+  "@mozilla.org/security/pkcs11moduledb;1": { getService: () => ({ listModules: async () => [] }) },
+};
+globalThis.PathUtils = { join: (...parts) => parts.join("/"), filename: path => path.split("/").at(-1) };
+const missing = async () => {
+  throw new Error("no such file");
+};
+globalThis.IOUtils = {
+  readJSON: async path => {
+    if (!files.has(path)) {
+      throw new Error("no such file");
+    }
+    return structuredClone(files.get(path));
+  },
+  writeJSON: async (path, data) => void files.set(path, structuredClone(data)),
+  setPermissions: async () => {},
+  getChildren: missing,
+  readUTF8: missing,
+  read: missing,
+  stat: missing,
+};
 globalThis.Services = {
   prefs: {
     prefIsLocked: () => false,
     prefHasUserValue: name => user.has(name),
+    getPrefType: name => {
+      const value = read(name, undefined);
+      return { boolean: PREF.PREF_BOOL, number: PREF.PREF_INT, string: PREF.PREF_STRING }[typeof value] ?? PREF.PREF_INVALID;
+    },
+    getChildList: prefix => [...new Set([...user.keys(), ...defaults.keys()])].filter(name => name.startsWith(prefix)),
     getBoolPref: read,
     getIntPref: read,
     getStringPref: read,
@@ -36,25 +89,52 @@ globalThis.Services = {
     setStringPref: (name, value) => user.set(name, String(value)),
     clearUserPref: name => user.delete(name),
     getDefaultBranch: () => ({ getStringPref: (name, fallback) => (defaults.has(name) ? defaults.get(name) : fallback) }),
-    addObserver: () => {},
-    removeObserver: () => {},
+    addObserver: (domain, observer) => observers.push([domain, observer]),
+    removeObserver: (domain, observer) => {
+      const at = observers.findIndex(([d, o]) => d === domain && o === observer);
+      if (at >= 0) {
+        observers.splice(at, 1);
+      }
+    },
   },
-  obs: { addObserver: () => {}, removeObserver: () => {} },
+  obs: { addObserver: () => {}, removeObserver: () => {}, notifyObservers: () => {} },
   perms: { ALLOW_ACTION: 1, getAllByTypes: () => [] },
   wm: { getEnumerator: () => [] },
   tm: { dispatchToMainThread: () => {} },
+  dirsvc: { get: key => ({ path: `/${key}` }) },
+  appinfo: { appBuildID: "20261126000000" },
+  policies: { status: 0 },
+  search: {
+    init: async () => {
+      await searchInit?.();
+    },
+    getDefault: async () => null,
+    getDefaultPrivate: async () => null,
+  },
 };
 
 // What the fingerprinting module tells the Guard, recorded and passed on to the real one.
 const told = [];
 let guard = null;
+let target = null; // the Guard that takes it: the module's own, or the fresh one a `checked` case runs
 const fakes = {
   NulavioGuard: {
     ownPrefValue(name, value) {
       told.push({ name, value });
-      guard.NulavioGuard.ownPrefValue(name, value); // the real one takes it
+      (target ?? guard.NulavioGuard).ownPrefValue(name, value); // the real one takes it
     },
   },
+  AddonManager: {
+    STATE_POSTPONED: 7,
+    getAddonsByTypes: async () => [],
+    getAllInstalls: async () => [],
+    getAddonByID: async () => null,
+    addAddonListener: () => {},
+    addInstallListener: () => {},
+  },
+  AddonManagerPrivate: { getNewSideloads: async () => [] },
+  AsyncShutdown: { appShutdownConfirmed: { addBlocker: () => {} } },
+  NulavioAI: { workspaceAgent: async () => null },
 };
 globalThis.ChromeUtils = {
   defineESModuleGetters(lazy, modules) {
@@ -64,6 +144,7 @@ globalThis.ChromeUtils = {
       }
     }
   },
+  generateQI: () => () => {},
 };
 
 guard = await import(pathToFileURL(process.argv[2]).href);
@@ -133,6 +214,67 @@ out.forgedMemoryOnly = start({ [SHARE]: true, [OVERRIDES]: "+CanvasRandomization
 out.shareOutside = start({ [SHARE]: true }, {});
 // The setting off: nothing is written or told at a start.
 out.shareOff = start({ [OVERRIDES]: EARLIER, [WRITTEN]: EARLIER }, undefined, { [OVERRIDES]: EARLIER });
+/** The Guard's timers, run until none is left (each look it asked for, in order). */
+async function runTimers() {
+  while (timers.length) {
+    await timers.shift()();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+}
+
+/** One start through the Guard's own check (OpenCodeReview on #825): the profile as the last session left it, the
+    record of that session (its prefs and the set it kept as Nulavio's own), and `during`, what happens while the check
+    is still at work, after it read the prefs. Gives the check's findings, the record it wrote then, and the record
+    after the look it asked for. */
+async function checked(profile, record, owned, during = null) {
+  const fresh = new Guard();
+  target = fresh;
+  timers.length = 0;
+  files.clear();
+  const path = PathUtils.join(Services.dirsvc.get("ProfD").path, guard.RECORD);
+  const snapshot = { build: Services.appinfo.appBuildID, extensions: {}, prefs: recorded(record), roots: {}, modules: {} };
+  Object.assign(snapshot, { hosts: {}, policies: null, userJs: null, search: { default: null, private: null } });
+  files.set(path, { schema: 1, snapshot, pending: [], expected: {}, owned });
+  user = new Map(Object.entries(profile).filter(([, value]) => value !== null));
+  told.length = 0;
+  NulavioFingerprinting.unwatch();
+  NulavioFingerprinting.watch(); // the Shell's start, before the Guard's check
+  searchInit = during;
+  let result;
+  try {
+    result = await fresh.check();
+  } finally {
+    searchInit = null;
+  }
+  const atCheck = structuredClone(files.get(path));
+  await runTimers();
+  const after = files.get(path);
+  target = null;
+  NulavioFingerprinting.unwatch();
+  const brief = list => list.map(f => [f.key, f.before, f.after]);
+  return {
+    reported: brief(result.findings),
+    atCheck: { prefs: atCheck.snapshot.prefs, owned: atCheck.owned },
+    after: { prefs: after.snapshot.prefs, owned: after.owned, pending: brief(after.pending) },
+  };
+}
+
+const lastStart = [{ [SHARE]: true, [OVERRIDES]: EARLIER }, { [OVERRIDES]: EARLIER }]; // the record of the last start
+out.checked = {
+  // Nulavio's own update, as in ownUpdate, through the real check.
+  ownUpdate: await checked({ [SHARE]: true, [OVERRIDES]: EARLIER, [WRITTEN]: EARLIER }, ...lastStart),
+  // The same, and the person turns the setting off in Settings while the check is at work: the module clears its set
+  // and tells the Guard it holds none. The check still pairs the prefs it read with what was Nulavio's then.
+  turnedOff: await checked({ [SHARE]: true, [OVERRIDES]: EARLIER, [WRITTEN]: EARLIER }, ...lastStart, () => {
+    user.set(SHARE, false);
+    changed(SHARE);
+  }),
+  // A set put in the closed profile without the module's memory of it (so the module holds none), and a value
+  // declared as Nulavio's own only after the check read the prefs: it does not hide the change it found.
+  declaredLate: await checked({ [SHARE]: true, [OVERRIDES]: CURRENT }, ...lastStart, () => {
+    target.ownPrefValue(OVERRIDES, CURRENT);
+  }),
+};
 // The Guard's filter alone: from exactly the record's own value to exactly the one held now, and only for that setting.
 const finding = { id: `pref-changed:${OVERRIDES}`, kind: "pref-changed", key: OVERRIDES, before: EARLIER, after: CURRENT };
 const was = { [OVERRIDES]: EARLIER };
