@@ -47,12 +47,17 @@ start=$(date +%s)
 # Whether each package named is of this release (#637). A reused directory (the default one is per Firefox version)
 # may still hold another revision's: the manifest would list it and its SBOM would carry this release's name.
 of_this_release() {
-    local file release="$version-$NULAVIO_RELEASE"
+    local file name dist release="$version-$NULAVIO_RELEASE"
     for file in "$@"; do
-        case ${file##*/} in
-            "nulavio-$release".[a-z]*.rpm | "nulavio_${release}_amd64.deb") ;;
-            *) echo "rehearsal: ${file##*/} is not of release $release: rehearse into a clean directory" >&2; return 1 ;;
-        esac
+        name=${file##*/}
+        # An RPM is nulavio-<release>.<one distribution segment>.x86_64.rpm, as release_manifest.py names it: a
+        # longer tail (0.2.alpha.fc44) is another revision, not this one.
+        dist=${name#"nulavio-$release."}
+        dist=${dist%.x86_64.rpm}
+        if [[ $name == "nulavio_${release}_amd64.deb" ]]; then continue; fi
+        if [[ $name == "nulavio-$release.$dist.x86_64.rpm" && $dist =~ ^[a-z][a-z0-9_]*$ ]]; then continue; fi
+        echo "rehearsal: $name is not of release $release: rehearse into a clean directory" >&2
+        return 1
     done
 }
 

@@ -236,6 +236,10 @@ class RehearsalSbomTest(unittest.TestCase):
             "x86_64/nulavio-160.0.1-0.1.fc44.x86_64.rpm",
             "x86_64/nulavio-160.0.1-0.20.fc44.x86_64.rpm",
             "x86_64/nulavio-160.0.1-0.2.1.fc44.x86_64.rpm",
+            # More than the one distribution segment rpm adds (release_manifest.py's RPM name): not 0.2 either.
+            "x86_64/nulavio-160.0.1-0.2.alpha.fc44.x86_64.rpm",
+            "x86_64/nulavio-160.0.1-0.2.fc44.noarch.rpm",
+            "x86_64/nulavio-160.0.1-0.2.x86_64.rpm",
             "x86_64/nulavio-160.0.2-0.2.fc44.x86_64.rpm",
             "nulavio_160.0.1-0.1_amd64.deb",
             "nulavio_160.0.1-0.2.1_amd64.deb",
