@@ -7,10 +7,16 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 SHELL = ROOT / "browser" / "shell"
 MODULE = (SHELL / "modules" / "NulavioFingerprinting.sys.mjs").read_text(encoding="utf-8")
 PATCH = (ROOT / "browser" / "patches" / "0012-rfp-per-site-audio-noise-and-one-screen-size.patch").read_text(encoding="utf-8")
@@ -297,6 +303,200 @@ class MotionAndContrastTest(unittest.TestCase):
             for key in ("accessibilityOffer", "accessibilityOfferShare", "accessibilityOfferKeep"):
                 with self.subTest(locale=locale, key=key):
                     self.assertTrue(words[key]["message"].strip())
+
+
+@requires_node
+class GuardAndTheShellsOwnSetTest(unittest.TestCase):
+    """#654: at each start with "let sites see my motion and contrast preferences" on, the Shell writes the engine's
+    set again from the build's default. After a build whose default changed, the Guard took that for a change made
+    outside the browser. The module now tells the Guard which set is its own; the Guard keeps it in its record, and
+    leaves out only a change from exactly the set its record kept as Nulavio's to exactly the one the module holds now.
+    Anything else about the set is still reported (tests/lib/guard_own_writes_driver.mjs runs both modules; test_guard
+    07 the real engine)."""
+
+    @classmethod
+    def setUpClass(cls):
+        modules = [str(SHELL / "modules" / name) for name in ("NulavioGuard.sys.mjs", "NulavioFingerprinting.sys.mjs")]
+        done = subprocess.run(
+            ["node", str(ROOT / "tests" / "lib" / "guard_own_writes_driver.mjs"), *modules],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        cls.out = json.loads(done.stdout)
+
+    def test_the_shells_own_update_after_a_new_build_is_not_reported(self):
+        case = self.out["ownUpdate"]
+        self.assertEqual(case["set"], self.out["current"])
+        self.assertEqual(len(case["findings"]), 1, "the case the issue is about did not happen: nothing was tested")
+        self.assertEqual(case["reported"], [])
+        self.assertEqual(case["told"], [self.out["current"]])
+        self.assertEqual(case["findings"][0][2], self.out["current"])
+        current = self.out["current"]
+        self.assertEqual(
+            self.out["sameBuild"], {"set": current, "written": current, "told": [current], "findings": [], "reported": []}
+        )
+
+    def test_a_set_changed_while_closed_is_still_reported(self):
+        for name in ("outsidePlain", "outsideStripped"):
+            with self.subTest(name):
+                case = self.out[name]
+                self.assertEqual(case["told"], [None])  # the module did not write it before: not its own
+                self.assertEqual(case["reported"], case["findings"])
+                self.assertEqual(len(case["reported"]), 1)
+        # The Shell took the accessibility entry out of the set put there, and that is still reported.
+        self.assertEqual(self.out["outsideStripped"]["reported"][0][2], "+CanvasRandomization")
+
+    def test_a_forged_memory_of_the_shells_set_does_not_hide_a_change(self):
+        # The module rewrites what it takes for its own set; the record did not keep the earlier one as Nulavio's.
+        case = self.out["forgedWritten"]
+        self.assertEqual(case["told"], [self.out["current"]])
+        self.assertEqual(case["reported"], case["findings"])
+        self.assertEqual(len(case["reported"]), 1)
+
+    def test_a_forged_set_the_shell_writes_over_is_still_reported(self):
+        # A set and the module's memory forged on a profile whose record kept the earlier set as Nulavio's: the module
+        # writes the build's set over both, so the profile ends as after Nulavio's own update. The module did not write
+        # over the set the record kept, though, so the change since the record is not its own (OpenCodeReview on #825,
+        # round 3; the same as before #654).
+        case, own = self.out["forgedOverwritten"], self.out["ownUpdate"]
+        self.assertEqual((case["set"], case["written"]), (own["set"], own["written"]))
+        self.assertEqual(case["findings"], own["findings"])
+        self.assertEqual(case["reported"], case["findings"])
+        checked = self.out["checked"]["forgedOverwritten"]
+        self.assertEqual(checked["reported"], [self.earlier_to_current()])
+        self.assertEqual(checked["after"]["pending"], [self.earlier_to_current()])
+
+    def earlier_to_current(self):
+        return ["privacy.fingerprintingProtection.overrides", "+CanvasRandomization,+JSDateTimeUTC", self.out["current"]]
+
+    def test_the_build_set_copied_into_the_closed_profile_is_still_reported(self):
+        # OpenCodeReview on #825 (round 3): this build's set and the module's memory of it copied into the closed
+        # profile, over the set the record kept as Nulavio's. The module finds its set there and writes nothing; it
+        # holds that set as its own, but it did not make the change since the record.
+        case = self.out["checked"]["copiedSet"]
+        self.assertEqual(case["atCheck"]["owned"], {"privacy.fingerprintingProtection.overrides": self.out["current"]})
+        self.assertEqual(case["reported"], [self.earlier_to_current()])
+        self.assertEqual(case["after"]["pending"], [self.earlier_to_current()])
+
+    def test_the_set_taken_out_of_the_closed_profile_is_still_reported(self):
+        # The set and the module's memory both taken out while the browser was closed: the module writes the build's
+        # set where there was none, not over the one the record kept as Nulavio's.
+        case = self.out["checked"]["removedSet"]
+        self.assertEqual(case["reported"], [self.earlier_to_current()])
+
+    def test_an_edit_the_shell_undoes_with_the_same_build_leaves_no_change(self):
+        # The same build: the module writes back the very set the record kept, so the Guard reads no change and has
+        # nothing to report, as before #654. The Guard reports what changed since its record, not an edit that is gone
+        # by the time it reads the prefs.
+        case = self.out["checked"]["sameBuildOverwritten"]
+        self.assertEqual(case["reported"], [])
+        self.assertEqual(case["atCheck"]["prefs"]["privacy.fingerprintingProtection.overrides"], self.out["current"])
+
+    def test_only_the_shells_memory_forged_does_not_hide_the_replacement_of_a_persons_set(self):
+        # OpenCodeReview on #825: the person's own set is in the record; only the module's memory of its set, a
+        # setting the Guard does not watch, is changed in the closed profile to name it. The module then writes the
+        # build's set over the person's: still a change made outside, since the record never held that set as Nulavio's.
+        case = self.out["forgedMemoryOnly"]
+        self.assertEqual(case["set"], self.out["current"], "the module did not write its set: nothing was tested")
+        self.assertEqual(
+            case["findings"], [["privacy.fingerprintingProtection.overrides", "+CanvasRandomization", self.out["current"]]]
+        )
+        self.assertEqual(case["reported"], case["findings"])
+
+    def test_the_setting_turned_on_outside_is_reported_with_the_set_it_brings(self):
+        case = self.out["shareOutside"]
+        self.assertEqual(case["told"], [self.out["current"]])  # its own set now; the record kept none
+        self.assertEqual(
+            {f[0] for f in case["reported"]},
+            {"nulavio.fingerprinting.shareAccessibility", "privacy.fingerprintingProtection.overrides"},
+        )
+        self.assertEqual(self.out["shareOff"]["told"], [])
+
+    def test_the_real_check_leaves_out_the_shells_own_update(self):
+        # The same as ownUpdate, through the Guard's own start-up check and the record it writes.
+        case, current = self.out["checked"]["ownUpdate"], self.out["current"]
+        self.assertEqual(case["reported"], [])
+        own = {"privacy.fingerprintingProtection.overrides": current}
+        self.assertEqual(case["atCheck"]["owned"], own)
+        self.assertEqual(
+            case["after"], {"prefs": {**own, "nulavio.fingerprinting.shareAccessibility": True}, "owned": own, "pending": []}
+        )
+
+    def test_the_setting_turned_off_during_the_check_does_not_report_the_shells_own_update(self):
+        # OpenCodeReview on #825 (round 2): the check read the prefs with the Shell's rewrite in them, then the person
+        # turned the setting off in Settings before it compared. What was Nulavio's goes with the prefs it read.
+        case, current = self.out["checked"]["turnedOff"], self.out["current"]
+        self.assertEqual(case["reported"], [])
+        self.assertEqual(case["atCheck"]["prefs"]["privacy.fingerprintingProtection.overrides"], current)
+        self.assertEqual(case["atCheck"]["owned"], {"privacy.fingerprintingProtection.overrides": current})
+        # The look that follows takes in the person's change, and the record then holds no set as Nulavio's.
+        self.assertEqual(
+            case["after"], {"prefs": {"nulavio.fingerprinting.shareAccessibility": False}, "owned": {}, "pending": []}
+        )
+
+    def test_a_value_declared_as_nulavios_after_the_check_read_the_prefs_hides_nothing(self):
+        # The mirror: a set put in the closed profile, which the Shell does not hold as its own when the check reads
+        # the prefs. A declaration that comes later is the next look's, and the change found is still reported.
+        case, current = self.out["checked"]["declaredLate"], self.out["current"]
+        finding = ["privacy.fingerprintingProtection.overrides", "+CanvasRandomization,+JSDateTimeUTC", current]
+        self.assertEqual(case["reported"], [finding])
+        self.assertEqual(case["atCheck"]["owned"], {})
+        self.assertEqual(case["after"]["pending"], [finding])
+        self.assertEqual(case["after"]["owned"], {"privacy.fingerprintingProtection.overrides": current})
+
+    def test_the_guard_goes_by_both_values_and_the_name(self):
+        self.assertEqual(
+            self.out["filter"],
+            {
+                "same": 0,
+                "otherBefore": 1,
+                "otherAfter": 1,
+                "notOwnedThen": 1,
+                "notOwnedNow": 1,
+                "otherFrom": 1,
+                "notWritten": 1,
+                "noFrom": 1,
+                "otherName": 1,
+                "otherKind": 1,
+                "none": 1,
+            },
+        )
+        self.assertEqual(
+            self.out["ownedValues"],
+            [{"privacy.fingerprintingProtection.overrides": self.out["current"], "a": 1, "b": True}, {}, {}, {}],
+        )
+        guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
+        check = guard[guard.index("  async #check() {") : guard.index("  /** The engine's notice, or a change")]
+        # Nulavio's value at the last start comes from the record, never from the profile at this one.
+        self.assertIn("const fresh = Guard.withoutOwnValues(found, saved.owned, ownedNow, ownedFrom);", check)
+        # The record then keeps only what was declared at this start, as it was when the prefs were read: nothing is
+        # carried over from the last one.
+        self.assertIn("const { snapshot: now, owned: ownedNow, from: ownedFrom } = await this.#taken();", check)
+        self.assertEqual(check.count("expected, owned: ownedNow };"), 2)
+        self.assertNotIn("this.#owned", check)  # #ownedFrom too
+        taken = guard[guard.index("  async #taken() {") : guard.index("  // -- comparing")]
+        self.assertIn(
+            "const prefs = this.#prefs();\n    const owned = { ...this.#owned };\n    const from = { ...this.#ownedFrom };\n",
+            taken,
+        )
+        self.assertNotIn(
+            "ownedFrom", guard[guard.index("  async #save() {") : guard.index("  async #check() {")]
+        )  # this start's only
+        self.assertNotIn("saved.owned,", check.replace("withoutOwnValues(found, saved.owned,", ""))
+        self.assertIn("owned: Guard.ownedValues(data.owned)", guard)  # read from the profile: checked
+        self.assertIn("{ schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected, owned }", guard)
+        # The module tells its set only where it remembers one made from the build's default, and none otherwise.
+        apply = MODULE[MODULE.index("function applyAccessibility(changed) {") : MODULE.index("/** Tell the Guard")]
+        self.assertIn(
+            "if (next !== null && !own) {\n    Services.prefs.setStringPref(WRITTEN, next);\n    ownValue(next, user);\n"
+            "  } else {\n    Services.prefs.clearUserPref(WRITTEN);\n    ownValue(null);",
+            apply,
+        )
+        self.assertEqual(MODULE.count("ownValue("), 3)  # the two calls and the function
+        self.assertNotIn("ownPrefChanges", MODULE)  # by name, it would hide a change made outside
+        self.assertNotIn("ownPrefWrite", guard + MODULE)  # by the profile's value, a forged memory would pass
 
 
 if __name__ == "__main__":
