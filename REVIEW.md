@@ -50,7 +50,7 @@ The documented test-only exceptions must stay test-only:
 **I7-ai-bridge.** AI Bridge least privilege:
 - grants come only from the user's registry, re-read on every call; no tool reads or edits policy;
 - page content is marked untrusted and never reaches the policy decision;
-- tokens are stored only as SHA-256 and never logged;
+- the registry keeps and compares only a token's SHA-256; Nulavio writes the token itself in clear only to the agent's key file (`tokens/<agent>.token`, 0600), never to the registry, an agent's configuration, a command line or a log;
 - addresses are classified before navigation (localhost, private, link-local and `.local` need `local_resources`);
 - `execute_js`, `cookies_storage` and raw debugging stay blocked unless granted;
 - one workspace per agent, the user's extensions never loaded there, `remote.prefs.recommended=false`;
