@@ -100,7 +100,7 @@
 <link itemprop="url" href="https://nulavio.net/">
 <p class="kicker">Alpha out for Fedora and Ubuntu · <a href="/en/download/">Download</a></p>
 <h1 id="hero-h"><span>Your web.</span> <span class="mine">Your rules.</span></h1>
-<p class="lead" itemprop="description">Nulavio is the Linux browser that is <strong>protected from the start</strong>: it blocks ads and trackers on the first launch, encrypts your profiles on disk and sends nothing to us. No telemetry, no account, no server.</p>
+<p class="lead" itemprop="description">Nulavio is the Linux browser that is <strong>protected from the start</strong>: it blocks ads and trackers on the first launch, encrypts your profiles on disk and, on its own, sends nothing to us. No telemetry, no account, no server.</p>
 <form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="en">
 <p class="trap" aria-hidden="true"><label>Leave this field empty <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
@@ -161,7 +161,7 @@
 <h2 id="profiles-h">Work, banking and personal life, each in its own profile</h2>
 <p>Each profile has its own logins, cookies, history and extensions. You say once where each site opens, and Nulavio takes every link to the right profile: the ones that come from other apps, the ones you type and the ones you click on pages.</p>
 <figure class="bands">
-<ul>
+<ul role="list">
 <li><picture>
 <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-strip-en-US-dark.webp" {{wh:band-personal-strip-en-US-dark.webp}}>
 <img src="/assets/shots/band-personal-strip-en-US-light.webp" {{wh:band-personal-strip-en-US-light.webp}} alt="Nulavio band in the Personal, no password state." decoding="async">
@@ -196,17 +196,17 @@
 <div class="chips"><span class="chip"><span class="tile tile-violet">R</span>Research</span><span class="chip chip-temp">Temporary · deleted on close</span></div>
 </div>
 </div>
-<ol class="steps" aria-label="Recorded scenes">
+<ol class="steps" role="list" aria-label="Recorded scenes">
 <li class="step">
 <h3>A profile opens in a window of its own</h3>
 <figure class="scene">
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/profile-opens-en-US-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/profile-opens-en-US-still-narrow.webp" type="image/webp" width="448" height="280">
-<img class="shot" src="/assets/clips/profile-opens-en-US-still.webp" width="800" height="500" alt="In Settings › Profiles, a click on Open for the Work profile opens the Work window, its band reading “Work · No password”." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/profile-opens-en-US-still.webp" width="800" height="500" alt="The Work window, opened by a click on Open in Settings › Profiles: its band reads “Work · No password”, and its one tab shows a page of open support tickets." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>See the whole scene <span class="meta">{{clip_s:profile-opens}} s, no sound, with captions</span></summary>
+<summary>See the whole scene<span class="visually-hidden">: a profile opens in a window of its own</span> <span class="meta">{{clip_s:profile-opens}} s, no sound, with captions</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/profile-opens-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A profile opens in a window of its own">
 <source src="/assets/clips/profile-opens-en-US.webm" type="video/webm">
 <source src="/assets/clips/profile-opens-en-US.mp4" type="video/mp4">
@@ -231,10 +231,10 @@
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/link-routed-en-US-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/link-routed-en-US-still-narrow.webp" type="image/webp" width="448" height="280">
-<img class="shot" src="/assets/clips/link-routed-en-US-still.webp" width="800" height="500" alt="In the Personal profile, the address of the work intranet is typed; it opens in the Work window, whose band says “Opened by your rule · Change”." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/link-routed-en-US-still.webp" width="800" height="500" alt="The Work window with the team intranet in a new tab, after its address was typed in the Personal profile: the band reads “Work · No password · Opened by your rule · Change”." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>See the whole scene <span class="meta">{{clip_s:link-routed}} s, no sound, with captions</span></summary>
+<summary>See the whole scene<span class="visually-hidden">: a link goes to the right profile</span> <span class="meta">{{clip_s:link-routed}} s, no sound, with captions</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/link-routed-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A link goes to the right profile">
 <source src="/assets/clips/link-routed-en-US.webm" type="video/webm">
 <source src="/assets/clips/link-routed-en-US.mp4" type="video/mp4">
@@ -278,17 +278,17 @@
 <div class="panel-foot"><span class="grow"><small>Lost everything? Use the recovery code.</small></span></div>
 </div>
 </div>
-<ol class="steps" start="3" aria-label="Recorded scenes">
+<ol class="steps" role="list" start="3" aria-label="Recorded scenes">
 <li class="step">
 <h3>A protected profile asks for its password, then opens</h3>
 <figure class="scene">
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/protected-unlocks-en-US-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/protected-unlocks-en-US-still-narrow.webp" type="image/webp" width="448" height="272">
-<img class="shot" src="/assets/clips/protected-unlocks-en-US-still.webp" width="800" height="500" alt="In Settings › Profiles, the Banking profile is locked; a click on Unlock leads to the page that asks for the password; once it is typed, the Banking window opens, its band reading “Banking · Protected”." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/protected-unlocks-en-US-still.webp" width="800" height="500" alt="The unlock page of the Banking profile, opened from Settings › Profiles: “This profile is locked”, with the password already typed in the Profile password field, before Unlock is clicked." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>See the whole scene <span class="meta">{{clip_s:protected-unlocks}} s, no sound, with captions</span></summary>
+<summary>See the whole scene<span class="visually-hidden">: a protected profile asks for its password, then opens</span> <span class="meta">{{clip_s:protected-unlocks}} s, no sound, with captions</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/protected-unlocks-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A protected profile asks for its password, then opens">
 <source src="/assets/clips/protected-unlocks-en-US.webm" type="video/webm">
 <source src="/assets/clips/protected-unlocks-en-US.mp4" type="video/mp4">
@@ -297,7 +297,7 @@
 <p class="transcript">{{clip_said:protected-unlocks}}</p>
 </details>
 <figcaption>
-<p class="said">“Banking” stays encrypted until its password is typed. Only then does its window open, and the band reads “Protected”.</p>
+<p class="said">“Banking” keeps its files encrypted until it is unlocked, in this scene with its password. Only then does its window open, and the band reads “Protected”.</p>
 <div class="detail" aria-hidden="true">
 <img class="shot" src="/assets/clips/protected-unlocks-en-US-detail.webp" width="384" height="44" alt="" loading="lazy" decoding="async">
 <p>After the password: the band of the “Banking” window</p>

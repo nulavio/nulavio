@@ -340,19 +340,31 @@ def load_clips(src: Path) -> dict:
 
 
 # What was done to a recording after its capture, as the page says it: one phrase for each sentence of the
-# manifest's "edits", matched by how the sentence starts. A sentence with no phrase here stops the build:
-# an edit the page does not disclose is not published.
+# manifest's "edits", matched as a whole sentence. A sentence with no phrase here, or one that says more than
+# the sentence matched here, stops the build: an edit the page does not disclose is not published.
 CLIP_EDITS = (
     (
-        r"cursor and click ripples drawn on the frames afterwards",
+        "cursor",
+        r"cursor and click ripples drawn on the frames afterwards"
+        r" \(a headless window has no pointer; hover states are not shown\)",
         "cursor e cliques desenhados depois",
         "cursor and clicks drawn afterwards",
     ),
     # Said only of a recording in which something is typed, as its transcript says.
-    (r"typing shown at a fixed pace", "digitação em ritmo fixo", "typing at a fixed pace"),
+    (
+        "typing",
+        r"typing shown at a fixed pace of one frame per key, each key really typed into the field",
+        "digitação em ritmo fixo",
+        "typing at a fixed pace",
+    ),
     # Said with each recording's own cuts and their seconds, below.
-    (r"while a new instance starts, nothing is recorded", None, None),
-    (r"the last frame is held for (?P<n>[0-9.]+) s", "último quadro mantido por {n} s", "last frame held for {n} s"),
+    ("cut", r"while a new instance starts, nothing is recorded: the video cuts to its window once it is up", None, None),
+    (
+        "held",
+        r"the last frame is held for (?P<n>[0-9]+(?:\.[0-9]+)?) s at the end",
+        "último quadro mantido por {n} s",
+        "last frame held for {n} s",
+    ),
 )
 TYPED = re.compile(r"\bdigitad[ao]\b|\btyped\b")
 CLIP_WORDS = {
@@ -381,11 +393,11 @@ def clip_edits(clips: dict, scene: str, locale: str) -> str:
     clip, words, said = clips[f"{scene}-{locale}"], CLIP_WORDS[locale], []
     cut_sentence = False
     for sentence in clips["_edits"]:
-        for pattern, pt, en in CLIP_EDITS:
-            match = re.match(pattern, sentence)
+        for kind, pattern, pt, en in CLIP_EDITS:
+            match = re.fullmatch(pattern, sentence)
             if not match:
                 continue
-            if pattern.startswith("typing") and not TYPED.search(clip["transcript"]):
+            if kind == "typing" and not TYPED.search(clip["transcript"]):
                 break  # nothing is typed in this recording
             if pt is None:
                 cut_sentence = True
@@ -400,9 +412,9 @@ def clip_edits(clips: dict, scene: str, locale: str) -> str:
         raise BuildError(f"{scene} ({locale}) has cuts and the manifest's edits do not say why")
     line = words["edited"] + " · ".join(said) + "."
     still = clips["_stills"].get(f"{scene}-{locale}-still.webp")
-    if still:
-        line += " " + words["still"].format(n=seconds(round(still["t"], 1), locale))
-    return line
+    if still is None:  # the still is served with the scene: which frame it is is said, or nothing is built
+        raise BuildError(f"{scene} ({locale}): its still is not in stills.json, so the page cannot say which frame it is")
+    return line + " " + words["still"].format(n=seconds(round(still["t"], 1), locale))
 
 
 def clip_stamp(clips: dict, name: str, scene: str, locale: str | None, page: str) -> str:
@@ -417,7 +429,7 @@ def clip_stamp(clips: dict, name: str, scene: str, locale: str | None, page: str
             return html.escape(clip["transcript"], quote=False)
         webm = next(f for f in clip["files"] if f["file"] == f"{scene}-{locale}.webm")
         capture = clip["capture"]
-        return f"Firefox {capture['firefox']} · build {capture['buildid']} · sha256 {webm['sha256'][:12]}…"
+        return f"Firefox {capture['firefox']} · build {capture['buildid']} · WebM sha256 {webm['sha256'][:12]}…"
     except (KeyError, StopIteration):
         raise BuildError(f"{page}: no recording of {scene} ({locale}) in the clips manifest") from None
 

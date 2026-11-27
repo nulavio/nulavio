@@ -341,7 +341,9 @@ select.field { padding-right: var(--nv-space-7); }
 }
 
 /* The corner of the window at its real size (a 2x capture shown at half its pixels). The
-   figure runs to the edge of the viewport and cuts the capture there: the window goes on. */
+   figure runs to the edge of the viewport and cuts the capture there: the window goes on.
+   Where the figure is wider than the capture, the capture and its caption move right, so that
+   the capture still ends at the viewport's edge and never stops short of it. */
 .closeup {
   min-width: 0;
   margin-right: calc(-1 * var(--gutter));
@@ -352,6 +354,7 @@ select.field { padding-right: var(--nv-space-7); }
 .closeup .shot {
   width: 37.5rem;
   max-width: none;
+  margin-left: max(0px, 100% - 37.5rem);
   border-right: 0;
   border-bottom: 0;
   border-radius: var(--nv-radius-md) 0 0 0;
@@ -359,6 +362,7 @@ select.field { padding-right: var(--nv-space-7); }
 }
 .closeup figcaption {
   max-width: 27rem;
+  margin-left: max(0px, 100% - 37.5rem);
   padding: var(--nv-space-4) var(--gutter) 0 0;
   border-top: var(--hairline);
   color: var(--nv-color-text-secondary);
@@ -753,7 +757,8 @@ select.field { padding-right: var(--nv-space-7); }
 .legend li { display: inline-flex; align-items: center; gap: var(--nv-space-3); }
 .sources { max-width: 46rem; margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
 .swipe { margin-bottom: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
-@media (min-width: 66rem) {
+/* Hidden only where the table fits whole: its 62rem and border, the line's lane and the gutters. */
+@media (min-width: 71.25rem) {
   .swipe { display: none; }
 }
 

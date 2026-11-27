@@ -100,7 +100,7 @@
 <link itemprop="url" href="https://nulavio.net/">
 <p class="kicker">Alpha para Fedora e Ubuntu · <a href="/baixar/">Baixar</a></p>
 <h1 id="hero-h"><span>A web é sua.</span> <span class="mine">Seus dados também.</span></h1>
-<p class="lead" itemprop="description">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
+<p class="lead" itemprop="description">O Nulavio é o navegador para Linux que <strong>já vem protegido</strong>: bloqueia anúncios e rastreadores na primeira abertura, cifra seus perfis no disco e, sozinho, não manda nada para nós. Sem telemetria, sem conta, sem servidor.</p>
 <form class="join" action="/api/waitlist" method="post">
 <input type="hidden" name="lang" value="pt-BR">
 <p class="trap" aria-hidden="true"><label>Deixe este campo vazio <input type="text" name="hp" tabindex="-1" autocomplete="off"></label></p>
@@ -161,7 +161,7 @@
 <h2 id="profiles-h">Trabalho, banco e vida pessoal, cada um no seu perfil</h2>
 <p>Cada perfil tem os próprios logins, cookies, histórico e extensões. Você diz uma vez onde cada site abre, e o Nulavio leva cada link ao perfil certo: os que chegam de outros aplicativos, os que você digita e os que clica nas páginas.</p>
 <figure class="bands">
-<ul>
+<ul role="list">
 <li><picture>
 <source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-strip-pt-BR-dark.webp" {{wh:band-personal-strip-pt-BR-dark.webp}}>
 <img src="/assets/shots/band-personal-strip-pt-BR-light.webp" {{wh:band-personal-strip-pt-BR-light.webp}} alt="Faixa do Nulavio no estado Pessoal, sem senha." decoding="async">
@@ -196,17 +196,17 @@
 <div class="chips"><span class="chip"><span class="tile tile-violet">Q</span>Pesquisa</span><span class="chip chip-temp">Temporário · apagado ao fechar</span></div>
 </div>
 </div>
-<ol class="steps" aria-label="Cenas gravadas">
+<ol class="steps" role="list" aria-label="Cenas gravadas">
 <li class="step">
 <h3>Um perfil abre na sua própria janela</h3>
 <figure class="scene">
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/profile-opens-pt-BR-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/profile-opens-pt-BR-still-narrow.webp" type="image/webp" width="448" height="280">
-<img class="shot" src="/assets/clips/profile-opens-pt-BR-still.webp" width="800" height="500" alt="Em Configurações › Perfis, um clique em Abrir no perfil Trabalho abre a janela do Trabalho, com a faixa «Trabalho · Sem senha»." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/profile-opens-pt-BR-still.webp" width="800" height="500" alt="A janela do Trabalho, aberta por um clique em Abrir em Configurações › Perfis: a faixa diz «Trabalho · Sem senha», e a única aba mostra uma página de chamados abertos." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>Ver a cena inteira <span class="meta">{{clip_s:profile-opens}} s, sem som, com legendas</span></summary>
+<summary>Ver a cena inteira<span class="visually-hidden">: um perfil abre na sua própria janela</span> <span class="meta">{{clip_s:profile-opens}} s, sem som, com legendas</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/profile-opens-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um perfil abre na sua própria janela">
 <source src="/assets/clips/profile-opens-pt-BR.webm" type="video/webm">
 <source src="/assets/clips/profile-opens-pt-BR.mp4" type="video/mp4">
@@ -231,10 +231,10 @@
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/link-routed-pt-BR-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/link-routed-pt-BR-still-narrow.webp" type="image/webp" width="448" height="280">
-<img class="shot" src="/assets/clips/link-routed-pt-BR-still.webp" width="800" height="500" alt="No perfil Pessoal, digita-se o endereço da intranet do trabalho; ele abre na janela do Trabalho, cuja faixa diz «Aberto pela sua regra · Mudar»." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/link-routed-pt-BR-still.webp" width="800" height="500" alt="A janela do Trabalho com a intranet da equipe numa aba nova, depois de o endereço ser digitado no perfil Pessoal: a faixa diz «Trabalho · Sem senha · Aberto pela sua regra · Mudar»." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>Ver a cena inteira <span class="meta">{{clip_s:link-routed}} s, sem som, com legendas</span></summary>
+<summary>Ver a cena inteira<span class="visually-hidden">: um link vai ao perfil certo</span> <span class="meta">{{clip_s:link-routed}} s, sem som, com legendas</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/link-routed-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um link vai ao perfil certo">
 <source src="/assets/clips/link-routed-pt-BR.webm" type="video/webm">
 <source src="/assets/clips/link-routed-pt-BR.mp4" type="video/mp4">
@@ -278,17 +278,17 @@
 <div class="panel-foot"><span class="grow"><small>Perdeu tudo? Use o código de recuperação.</small></span></div>
 </div>
 </div>
-<ol class="steps" start="3" aria-label="Cenas gravadas">
+<ol class="steps" role="list" start="3" aria-label="Cenas gravadas">
 <li class="step">
 <h3>Um perfil protegido pede a senha e abre</h3>
 <figure class="scene">
 <picture class="arrive">
 <source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/protected-unlocks-pt-BR-loop.webp" type="image/webp" width="800" height="500">
 <source media="(max-width: 47.9375rem)" srcset="/assets/clips/protected-unlocks-pt-BR-still-narrow.webp" type="image/webp" width="448" height="272">
-<img class="shot" src="/assets/clips/protected-unlocks-pt-BR-still.webp" width="800" height="500" alt="Em Configurações › Perfis, o perfil Bancos está bloqueado; um clique em Desbloquear leva à página que pede a senha; com a senha digitada, a janela do Bancos abre, com a faixa «Bancos · Protegido»." loading="lazy" decoding="async">
+<img class="shot" src="/assets/clips/protected-unlocks-pt-BR-still.webp" width="800" height="500" alt="A página de desbloqueio do perfil Bancos, aberta em Configurações › Perfis: «Este perfil está bloqueado», com a senha já digitada no campo Senha do perfil, antes do clique em Desbloquear." loading="lazy" decoding="async">
 </picture>
 <details class="whole">
-<summary>Ver a cena inteira <span class="meta">{{clip_s:protected-unlocks}} s, sem som, com legendas</span></summary>
+<summary>Ver a cena inteira<span class="visually-hidden">: um perfil protegido pede a senha e abre</span> <span class="meta">{{clip_s:protected-unlocks}} s, sem som, com legendas</span></summary>
 <video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/protected-unlocks-pt-BR-poster.webp" width="1280" height="800" aria-label="Cena inteira: Um perfil protegido pede a senha e abre">
 <source src="/assets/clips/protected-unlocks-pt-BR.webm" type="video/webm">
 <source src="/assets/clips/protected-unlocks-pt-BR.mp4" type="video/mp4">
@@ -297,7 +297,7 @@
 <p class="transcript">{{clip_said:protected-unlocks}}</p>
 </details>
 <figcaption>
-<p class="said">«Bancos» fica cifrado até a senha ser digitada. Só então a janela dele abre, e a faixa passa a dizer «Protegido».</p>
+<p class="said">Os arquivos do «Bancos» ficam cifrados até ele ser desbloqueado, nesta cena com a senha. Só então a janela dele abre, e a faixa passa a dizer «Protegido».</p>
 <div class="detail" aria-hidden="true">
 <img class="shot" src="/assets/clips/protected-unlocks-pt-BR-detail.webp" width="384" height="44" alt="" loading="lazy" decoding="async">
 <p>Depois da senha: a faixa da janela do «Bancos»</p>

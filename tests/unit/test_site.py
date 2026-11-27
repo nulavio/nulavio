@@ -524,7 +524,11 @@ class SiteTest(unittest.TestCase):
                         self.assertIn(build_site.seconds(cut["real_seconds_cut"], locale) + " s ", edits)
                     frame = stills[Path(still.attrs["src"]).name]["t"]
                     self.assertIn(build_site.seconds(round(frame, 1), locale) + " s,", edits)
-                    for part in (clip["capture"]["buildid"], f"Firefox {clip['capture']['firefox']}", webm["sha256"][:12]):
+                    for part in (
+                        clip["capture"]["buildid"],
+                        f"Firefox {clip['capture']['firefox']}",
+                        "WebM sha256 " + webm["sha256"][:12],
+                    ):
                         self.assertIn(part, origin)
                     self.assertIn(f"{round(clip['duration_s'])} s", next(n.text() for n in nodes if n.tag == "summary"))
         # An edit the page has no words for stops the build, and so does a cut the manifest's edits do not explain.
@@ -535,6 +539,11 @@ class SiteTest(unittest.TestCase):
         self.assertRaises(
             build_site.BuildError, build_site.clip_edits, {**clips, "_edits": clips["_edits"][:2]}, "link-routed", "en-US"
         )
+        # A known sentence that goes on to say more is a sentence the page has no words for.
+        longer = [clips["_edits"][0].removesuffix(")") + "; frames interpolated)", *clips["_edits"][1:]]
+        self.assertRaises(build_site.BuildError, build_site.clip_edits, {**clips, "_edits": longer}, "link-routed", "en-US")
+        # A scene whose still is not recorded is not built: the page would not say which frame it shows.
+        self.assertRaises(build_site.BuildError, build_site.clip_edits, {**clips, "_stills": {}}, "link-routed", "en-US")
         self.assertEqual(build_site.seconds(18.6, "pt-BR"), "19")
         self.assertEqual(build_site.seconds(0.8, "pt-BR"), "0,8")
         self.assertEqual(build_site.seconds("0.6", "en-US"), "0.6")

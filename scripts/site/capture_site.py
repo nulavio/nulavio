@@ -58,6 +58,7 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -82,6 +83,7 @@ STRIP_PAD = 8  # CSS px to the left and right of the cues of a strip crop
 STRIP_STATES = ("personal", "protected", "temporary")  # the landing's three; their widest cut sets the width
 STRIP_WINDOW = (900, 640)  # as the window of the corner crop: the band has a row to itself
 NOT_ATTEMPTED = ["band-agent (C2e): needs a live AI Bridge session", "assistant (C4): not attempted"]
+SCENES = {"window", "bands", "guard"}  # what --only can name
 RAW = "site-shots"  # under the artifacts directory: what the capture step leaves for compose
 DOM_CHANGES = ["removed the remotecontrol attribute from the browser window's root element (automation cue)"]
 
@@ -674,12 +676,14 @@ def capture(raw: Path, locales: list[str], only: set[str]) -> int:
     left_out: list[str] = []
 
     def run(label: str, scene, *scene_args) -> None:
+        entries, figures = list(out.entries), {k: dict(v) for k, v in out.figures.items()}
         try:
             if scene(*scene_args) is False:
                 left_out.append(f"{label}: not available in this environment")
         except Exception as e:  # a figure that cannot be made real is left out, never faked
             left_out.append(f"{label}: {type(e).__name__}: {e}")
             print(f"  {label} left out: {e}", flush=True)
+            out.entries, out.figures = entries, figures  # nor half made: what it saved before failing goes too
         record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"],
                   "args": argv, "scale": SCALE,
                   "dom_changes": DOM_CHANGES, "left_out": left_out, "figures": out.figures, "entries": out.entries}  # fmt: skip
@@ -718,6 +722,10 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
             groups.setdefault((e["meta"]["locale"], e["meta"]["theme"]), []).append(e)
     boxes = {}
     for key, group in groups.items():
+        states = sorted(e["meta"]["state"] for e in group)
+        if states != sorted(STRIP_STATES):
+            # One width for the three is only known from the three: a strip cut alone could differ from the others.
+            raise SystemExit(f"{key}: strips of {states} only; the three come from one run (--only window,bands)")
         spans = {
             e["name"]: (min(c["x"] for c in e["strip"]["cues"]), max(c["x"] + c["w"] for c in e["strip"]["cues"])) for e in group
         }
@@ -737,12 +745,22 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
     return boxes
 
 
+NAME = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")  # a file name of words and hyphens: no separator, no dot
+RAW_FILE = re.compile(r"[0-9a-f]{20}\.png")
+
+
 def compose(raw: Path) -> int:
-    """Step 2: cut and encode what the capture left, into the tree, and write the manifest."""
+    """Step 2: cut and encode what the capture left, into the tree, and write the manifest.
+
+    Nothing in the tree changes until every cut is made: a capture that cannot be composed whole leaves the
+    set as it was."""
     from PIL import Image  # here, not at the top: the capture step runs where Pillow is not installed
 
     record = json.loads((raw / "captures.json").read_text(encoding="utf-8"))
     scale = record["scale"]
+    for e in record["entries"]:  # names become paths in the tree: only the shapes the capture step writes
+        if not NAME.fullmatch(e["name"]) or not RAW_FILE.fullmatch(e["raw"]):
+            raise SystemExit(f"captures.json: not a capture's name or file: {e['name']!r}, {e['raw']!r}")
     commit, clean = git("rev-parse", "--short=7", "HEAD"), not git("status", "--porcelain")
     manifest_path = SHOTS / "manifest.json"
     old = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
@@ -752,23 +770,23 @@ def compose(raw: Path) -> int:
         # The manifest names one build for every capture, and the pages print it.
         raise SystemExit(f"this run leaves {len(kept)} captures of build {old.get('buildid')} in place: capture the whole set")
     strips = strip_boxes(record["entries"])
-    SHOTS.mkdir(parents=True, exist_ok=True)
-    MASTERS.mkdir(parents=True, exist_ok=True)
-    files = []
+    files, staged = [], {}
     entries = [e for e in record["entries"] if not e.get("strip") or e["name"] in strips]  # the landing's states only
     for e in entries:
         image = Image.open(raw / e["raw"]).convert("RGB")
         crop = strips.get(e["name"], e["crop_css"])
         if crop:
-            image = image.crop(
-                tuple(round(v * scale) for v in (crop["x"], crop["y"], crop["x"] + crop["w"], crop["y"] + crop["h"]))
-            )
+            box = tuple(round(v * scale) for v in (crop["x"], crop["y"], crop["x"] + crop["w"], crop["y"] + crop["h"]))
+            if box[0] < 0 or box[1] < 0 or box[2] > image.width or box[3] > image.height:
+                raise SystemExit(f"{e['name']}: the cut {crop} leaves the screenshot ({image.width}x{image.height} px)")
+            image = image.crop(box)
         name = e["name"]
-        image.save(MASTERS / f"{name}.png", "PNG", optimize=True)
+        master = io.BytesIO()
+        image.save(master, "PNG", optimize=True)
         webp = io.BytesIO()
         image.save(webp, "WEBP", lossless=True, quality=100, method=6)
         data = webp.getvalue()
-        (SHOTS / f"{name}.webp").write_bytes(data)
+        staged[name] = (master.getvalue(), data)
         files.append({
             "file": f"{name}.webp",
             "master": f"docs/design/screenshots/site/{name}.png",
@@ -789,6 +807,9 @@ def compose(raw: Path) -> int:
             "bytes": len(data),
         })  # fmt: skip
         print(f"  {name}.webp {image.width}x{image.height} {len(data) // 1024} KiB", flush=True)
+    figures = {key: dict(by_locale) for key, by_locale in old.get("figures", {}).items()} if kept else {}
+    for key, by_locale in record["figures"].items():  # a run of one language keeps the other's words
+        figures.setdefault(key, {}).update(by_locale)
     manifest = {
         "schema": 1,
         "commit": commit,
@@ -800,13 +821,18 @@ def compose(raw: Path) -> int:
         "harness": record["harness"],
         "dom_changes": record["dom_changes"],
         "not_captured": [*NOT_ATTEMPTED, *record["left_out"]],
-        "figures": {**old.get("figures", {}), **record["figures"]} if kept else record["figures"],
+        "figures": figures,
         "files": sorted(kept + files, key=lambda f: f["file"]),
     }
     text = json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"
     for private in (str(Path.home()), os.environ.get("USER", ""), os.uname().nodename):
         if private and private in text:
             raise SystemExit(f"manifest would contain a personal value ({private!r}); not written")
+    SHOTS.mkdir(parents=True, exist_ok=True)
+    MASTERS.mkdir(parents=True, exist_ok=True)
+    for name, (master, data) in staged.items():
+        (MASTERS / f"{name}.png").write_bytes(master)
+        (SHOTS / f"{name}.webp").write_bytes(data)
     manifest_path.write_text(text, encoding="utf-8")
     listed = {f["file"] for f in manifest["files"]}
     for stale in sorted(SHOTS.glob("*.webp")):  # a capture the set no longer has (a renamed state) is not served
@@ -828,8 +854,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--locales", nargs="+", default=["pt-BR", "en-US"], choices=sorted(TEXT))
     parser.add_argument("--only", default="window,bands,guard", help="comma list of: window, bands, guard")
     args = parser.parse_args(argv)
+    only = set(args.only.split(","))
+    if not only or not only <= SCENES:
+        parser.error(f"--only: {sorted(only - SCENES)} not among {sorted(SCENES)}")
     with tempfile.TemporaryDirectory(prefix="nulavio-shots-") as tmp:
-        status = capture(Path(tmp) / RAW, args.locales, set(args.only.split(",")))
+        status = capture(Path(tmp) / RAW, args.locales, only)
         if status == 2:
             return 2
         return compose(Path(tmp) / RAW) or status

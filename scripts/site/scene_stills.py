@@ -50,9 +50,15 @@ def frame_at(timeline: dict, t: float) -> dict:
     return max((f for f in timeline["frames"] if f["t"] <= t), key=lambda f: f["t"])
 
 
-def cut(frame: Path, box: tuple, scale: float, lossless: bool) -> tuple[bytes, tuple[int, int]]:
+def cut(frame: Path, box: tuple, scale: float, lossless: bool, captured_px: list[int]) -> tuple[bytes, tuple[int, int]]:
     x, y, w, h = box
-    image = Image.open(frame).convert("RGB").crop(tuple(round(v * scale) for v in (x, y, x + w, y + h)))
+    image = Image.open(frame).convert("RGB")
+    if list(image.size) != list(captured_px):  # Pillow would pad a rectangle that leaves a smaller frame
+        raise SystemExit(f"{frame.name}: {image.width}x{image.height} px, not the capture's {captured_px[0]}x{captured_px[1]}")
+    left, top, right, bottom = (round(v * scale) for v in (x, y, x + w, y + h))
+    if left < 0 or top < 0 or right > image.width or bottom > image.height:
+        raise SystemExit(f"{frame.name}: the rectangle {box} leaves the frame")
+    image = image.crop((left, top, right, bottom))
     out = io.BytesIO()
     if lossless:
         image.save(out, "WEBP", lossless=True, quality=100, method=6)
@@ -85,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
             ("detail", last, spec.get("detail", DETAIL), True),
         ):
             name = f"{key}-{suffix}.webp"
-            data, size = cut(src / frame["file"], box, timeline["scale"], lossless)
+            data, size = cut(src / frame["file"], box, timeline["scale"], lossless, clip["captured_px"])
             if len(data) > BUDGET:
                 raise SystemExit(f"{name}: {len(data)} bytes, over the budget of {BUDGET}")
             written[name] = data
