@@ -802,8 +802,10 @@ class AuditTest(Home):
         agent, _ = registry.add("js", "other", "full_control", accept_full_control=True)
         registry.grant(agent["id"], "execute_js", "allow")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        # still_at reads the address twice, around its check of the session (OpenCodeReview on #812, round 3).
+        moved = ["https://blog.example/", "https://bank.example/", "https://bank.example/"]
         with (
-            mock.patch.object(tools.Bridge, "_url_of", side_effect=["https://blog.example/", "https://bank.example/"]),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=moved),
             mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
         ):
             result = bridge.call("evaluate", {"tab": "t1", "expression": "1"})
@@ -2365,6 +2367,388 @@ class AuditTest(Home):
         self.assertIn(f"'{policy.CAPABILITIES['files']}'", result["content"][0]["text"])
         self.assertEqual(approver.asked, [("files", "https://example.org")])
         self.assertEqual((done.count("drop"), page["held"], "input.setFiles" in done), (0, 1, False))
+
+    # Issue #764: what can change while the page is read or a host is looked up is checked again before the result is
+    # acted on: where the tab is, the cancel, the session.
+    ELSEWHERE = "https://elsewhere.example/"
+
+    def moving_tab(self):
+        """Where the tab is (`where["url"]`, changed by the test) and the patch of _url_of that reads it."""
+        where = {"url": self.CART}
+        return where, mock.patch.object(tools.Bridge, "_url_of", side_effect=lambda *_a, **_k: where["url"])
+
+    @staticmethod
+    def looks_up(hosts: list[str], when=lambda: True):
+        """A patch of this computer's lookup that lists the hosts looked up while `when()`."""
+        return mock.patch.object(policy, "_resolves_locally", side_effect=lambda h: when() and hosts.append(h) and False)
+
+    def test_a_page_the_tab_moved_to_while_its_forms_were_counted_is_not_read(self):
+        # Case 1: the tab went to another site while the look counted its forms (none there): the element is not read
+        # in that page. The move is said after the question, as before.
+        approver = Approve("once")
+        bridge, done, _page = self.element_page("restricted", approver, self.LINK)
+        where, moving = self.moving_tab()
+
+        def forms_where(_self, _tab, _cancel, **_k):
+            where["url"] = self.ELSEWHERE
+            done.append("moved")
+            return []
+
+        with moving, mock.patch.object(tools.Bridge, "_forms_where", forms_where):
+            result = bridge.call("click", {"tab": "t1", "element": "e1"})
+        self.assertTrue(result["isError"], result)
+        self.assertIn("the tab moved to", result["content"][0]["text"])
+        self.assertNotIn("look", done)
+        self.assertEqual(approver.asked, [("interact", "https://example.org")])
+
+    def test_a_link_read_in_a_page_the_tab_moved_to_is_not_looked_up_or_asked_about(self):
+        # Case 1: the tab went to another site while the element was read, in the look before the question or in the
+        # page after it: that page's link is not looked up on this computer, nor asked about.
+        for in_sandbox in (True, False):
+            with self.subTest(in_sandbox=in_sandbox):
+                approver = Approve("once")
+                bridge, done, _page = self.element_page("restricted", approver, self.LINK)
+                where, moving = self.moving_tab()
+
+                def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False, in_sandbox=in_sandbox, where=where, done=done,
+                            **_k):  # fmt: skip
+                    done.append(("look" if sandbox else "inspect") if fn == tools.INSPECT_FN else "page")
+                    if fn == tools.INSPECT_FN and sandbox == in_sandbox:
+                        where["url"] = self.ELSEWHERE
+                    return self.LINK
+
+                hosts: list[str] = []
+                with (
+                    moving,
+                    mock.patch.object(tools.Bridge, "_call_fn", call_fn),
+                    self.looks_up(hosts, lambda where=where: where["url"] != self.CART),
+                ):
+                    result = bridge.call("click", {"tab": "t1", "element": "e1"})
+                self.assertTrue(result["isError"], result)
+                self.assertIn("the tab moved to", result["content"][0]["text"])
+                self.assertNotIn("other.example", hosts)  # (the new site's is, to know whether the error may name it)
+                self.assertEqual(approver.asked, [("interact", "https://example.org")])
+                self.assertNotIn("input.performActions", done)
+
+    def test_a_page_the_tab_moved_to_while_an_earlier_form_was_looked_for_is_not_read_or_watched(self):
+        # Case 1: after the question, the tab went to another site while the call looked for a form held from an
+        # earlier action (none there): the forms guard is not set in that page, and nothing more is read there.
+        for tool, extra, info in (("click", {}, {"connected": True}), ("type", {"text": "x"}, self.FIELD)):
+            with self.subTest(tool=tool):
+                approver = Approve("once")
+                bridge, done, _page = self.element_page("restricted", approver, info)
+                where, moving = self.moving_tab()
+
+                def forms_where(_self, _tab, _cancel, where=where, done=done, **kwargs):
+                    if "deadline" not in kwargs:  # not the look's count: the one after the question
+                        where["url"] = self.ELSEWHERE
+                        done.append("moved")
+                    return []
+
+                with moving, mock.patch.object(tools.Bridge, "_forms_where", forms_where):
+                    result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra})
+                self.assertTrue(result["isError"], result)
+                self.assertIn("the tab moved to", result["content"][0]["text"])
+                after = set(done[done.index("moved") :])
+                self.assertFalse({"guard", "inspect", "page", "input.performActions"} & after, done)
+
+    def test_a_call_cancelled_during_a_host_lookup_asks_nothing(self):
+        # Case 2: cancelled while this computer looked up the tab's own host, or the host of the link the look read:
+        # the lookup does not watch the cancel, and the call asks nothing after it.
+        for host in ("example.org", "other.example"):
+            with self.subTest(host=host):
+                approver = Approve("once")
+                bridge, done, _page = self.element_page("restricted", approver, self.LINK)
+                cancel = threading.Event()
+
+                def resolves(name, host=host, cancel=cancel):
+                    if name == host:
+                        cancel.set()
+                    return False
+
+                with mock.patch.object(policy, "_resolves_locally", side_effect=resolves):
+                    result = bridge.call("click", {"tab": "t1", "element": "e1"}, cancel)
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(approver.asked, [])
+                self.assertNotIn("input.performActions", done)
+
+    def called_off_in_registry_read(self, cancel: threading.Event, name: str, armed: list[bool]):
+        """A patch of the call's read of its agent record (_held) that, while `armed`, cancels the call (`name`
+        "cancel") or turns the emergency stop on ("stop") during that read, after the cancel and the stop were looked
+        at, and disarms."""
+        real_agent = tools.Bridge._agent
+
+        def agent(bridge, cancel=cancel, name=name, armed=armed):
+            record = real_agent(bridge)
+            if armed:
+                armed.clear()
+                cancel.set() if name == "cancel" else registry.set_stopped(True)
+            return record
+
+        return mock.patch.object(tools.Bridge, "_agent", agent)
+
+    def test_a_call_called_off_while_its_session_is_read_before_a_lookup_looks_nothing_up(self):
+        # OpenCodeReview on #812 (round 2): a cancel, or the emergency stop, that comes while the call reads its agent
+        # record before a host lookup (_go_on), after it looked at the cancel and the stop: nothing is looked up on this
+        # computer, nothing is asked, nothing is done.
+        self.addCleanup(registry.set_stopped, False)
+        real_go_on = tools.Bridge._go_on
+        for name in ("cancel", "stop"):
+            with self.subTest(name):
+                registry.set_stopped(False)
+                approver = Approve("once")
+                bridge, done, _page = self.element_page("restricted", approver, self.LINK)
+                cancel = threading.Event()
+                armed: list[bool] = []
+
+                def go_on(bridge, *args, armed=armed, cancel=cancel, **kwargs):
+                    if kwargs.get("at") and not cancel.is_set() and not registry.stopped():
+                        armed.append(True)  # the check before (or after) a host lookup
+                    return real_go_on(bridge, *args, **kwargs)
+
+                hosts: list[str] = []
+                with (
+                    mock.patch.object(tools.Bridge, "_go_on", go_on),
+                    self.called_off_in_registry_read(cancel, name, armed),
+                    self.looks_up(hosts),
+                ):
+                    result = bridge.call("click", {"tab": "t1", "element": "e1"}, cancel)
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(hosts, [])
+                self.assertEqual(approver.asked, [])
+                self.assertNotIn("input.performActions", done)
+
+    def test_a_key_replaced_while_the_page_is_read_gets_no_lookup(self):
+        # Case 3: a new key while the element was read (in the look before the question, or in the page after it), or
+        # while the tab's address was read again after the question: nothing is looked up for the old session on
+        # this computer, and it is refused for the new key.
+        for when, asked in (("look", []), ("inspect", [("interact", "https://example.org")]),
+                            ("recheck", [("interact", "https://example.org")])):  # fmt: skip
+            with self.subTest(when=when):
+                approver = Approve("once")
+                bridge, done, _page = self.element_page("restricted", approver, self.LINK)
+                bridge.key_sha256 = registry.get(bridge.agent_id)["token_sha256"]
+                rotated: list[bool] = []
+
+                def rotate(rotated=rotated, bridge=bridge):
+                    if not rotated:
+                        registry.rotate_token(bridge.agent_id)
+                        rotated.append(True)
+
+                def call_fn(_self, _tab, fn, _args, _cancel, *, sandbox=False, when=when, rotate=rotate, done=done, **_k):
+                    done.append(("look" if sandbox else "inspect") if fn == tools.INSPECT_FN else "page")
+                    if fn == tools.INSPECT_FN and when == ("look" if sandbox else "inspect"):
+                        rotate()
+                    return self.LINK
+
+                def url_of(*_a, when=when, approver=approver, rotate=rotate, **_k):
+                    if when == "recheck" and approver.asked:  # the first read after the question: still_at's
+                        rotate()
+                    return self.CART
+
+                hosts: list[str] = []
+                with (
+                    mock.patch.object(tools.Bridge, "_call_fn", call_fn),
+                    mock.patch.object(tools.Bridge, "_url_of", side_effect=url_of),
+                    self.looks_up(hosts, lambda rotated=rotated: bool(rotated)),
+                ):
+                    result = bridge.call("click", {"tab": "t1", "element": "e1"})
+                self.assertTrue(result["isError"], result)
+                self.assertEqual(hosts, [])
+                entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                self.assertEqual((entry["decision"], entry["reason"]), ("deny", "key-replaced"))
+                self.assertEqual(approver.asked, asked)
+                self.assertNotIn("input.performActions", done)
+
+    def test_a_session_held_while_the_tab_is_read_again_before_acting_does_nothing(self):
+        # OpenCodeReview on #812: a pause or a new key while the tab's address was read again after the count of forms
+        # held from an earlier action (none there), the last read before click, type and upload act: nothing is set up
+        # or done in the page, and the call is refused for it.
+        for tool, extra, level in (("click", {}, "restricted"), ("type", {"text": "x"}, "restricted"),
+                                   ("upload", {"file": "report.txt"}, "assisted")):  # fmt: skip
+            for held, change in (("paused", lambda a: registry.pause(a, True)), ("key-replaced", registry.rotate_token)):
+                with self.subTest(tool=tool, held=held):
+                    approver = Approve("once")
+                    bridge, done, _page = self.element_page(level, approver, self.FIELD)
+                    bridge.key_sha256 = registry.get(bridge.agent_id)["token_sha256"]
+                    counted: list[bool] = []
+
+                    def forms_where(_self, _tab, _cancel, counted=counted, done=done, **kwargs):
+                        if "deadline" not in kwargs:  # not the look's count: the one after the question
+                            counted.append(True)
+                            done.append("counted")
+                        return []
+
+                    def url_of(*_a, counted=counted, change=change, bridge=bridge, **_k):
+                        if counted == [True]:  # the read after that count
+                            counted.append(True)
+                            change(bridge.agent_id)
+                        return self.CART
+
+                    folder = self.home / "uploads"
+                    folder.mkdir(exist_ok=True)
+                    (folder / "report.txt").write_text("artificial")
+                    bridge.workspace = mock.Mock(uploads=True, bidi=None)
+                    with (
+                        mock.patch.object(tools.Bridge, "_forms_where", forms_where),
+                        mock.patch.object(tools.Bridge, "_url_of", side_effect=url_of),
+                        mock.patch.object(tools, "_uploads", return_value=folder),
+                        mock.patch.object(tools.Bridge, "_owner", return_value=""),
+                    ):
+                        result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra})
+                    self.assertTrue(result["isError"], result)
+                    self.assertEqual(len(counted), 2, done)  # the read after the count came, and changed the session
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    self.assertEqual((entry["decision"], entry["reason"]), ("deny", held))
+                    after = set(done[done.index("counted") :])
+                    self.assertFalse({"guard", "inspect", "page", "input.performActions", "input.setFiles"} & after, done)
+
+    def test_a_call_called_off_while_its_session_is_read_again_before_acting_does_nothing(self):
+        # OpenCodeReview on #812 (round 2): a cancel, or the emergency stop, that comes while the call reads its agent
+        # record after the tab's address was read again before acting (still_at's _go_on), after it looked at the cancel
+        # and the stop: click, type and upload do nothing in the page.
+        self.addCleanup(registry.set_stopped, False)
+        for tool, extra, level in (("click", {}, "restricted"), ("type", {"text": "x"}, "restricted"),
+                                   ("upload", {"file": "report.txt"}, "assisted")):  # fmt: skip
+            for name in ("cancel", "stop"):
+                with self.subTest(tool=tool, name=name):
+                    registry.set_stopped(False)
+                    approver = Approve("once")
+                    bridge, done, _page = self.element_page(level, approver, self.FIELD)
+                    cancel = threading.Event()
+                    counted: list[bool] = []
+                    armed: list[bool] = []
+
+                    def forms_where(_self, _tab, _cancel, counted=counted, done=done, **kwargs):
+                        if "deadline" not in kwargs:  # not the look's count: the one after the question
+                            counted.append(True)
+                            done.append("counted")
+                        return []
+
+                    def url_of(*_a, counted=counted, armed=armed, **_k):
+                        if counted == [True]:  # the read after that count: still_at's, the last before acting
+                            counted.append(True)
+                            armed.append(True)
+                        return self.CART
+
+                    folder = self.home / "uploads"
+                    folder.mkdir(exist_ok=True)
+                    (folder / "report.txt").write_text("artificial")
+                    bridge.workspace = mock.Mock(uploads=True, bidi=None)
+                    with (
+                        mock.patch.object(tools.Bridge, "_forms_where", forms_where),
+                        mock.patch.object(tools.Bridge, "_url_of", side_effect=url_of),
+                        mock.patch.object(tools, "_uploads", return_value=folder),
+                        mock.patch.object(tools.Bridge, "_owner", return_value=""),
+                        self.called_off_in_registry_read(cancel, name, armed),
+                    ):
+                        result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra}, cancel)
+                    self.assertTrue(result["isError"], result)
+                    self.assertEqual((len(counted), armed), (2, []), done)  # that read came, and the record was read
+                    after = set(done[done.index("counted") :])
+                    self.assertFalse({"guard", "inspect", "page", "input.performActions", "input.setFiles"} & after, done)
+
+    def test_a_form_held_from_an_earlier_action_in_a_page_the_tab_moved_to_is_not_settled(self):
+        # OpenCodeReview on #812: after the question, the tab went to another site while the call counted the forms
+        # held from an earlier action, and that page holds one. Nothing of this call took the tab there: that site's
+        # form is not asked about, sent or dropped; it stays held, and the move is said.
+        for grants in ((("submit_forms", "allow"),), ()):
+            with self.subTest(grants=grants):
+                approver = Approve("once")
+                bridge, done, page = self.element_page("restricted", approver, self.FIELD, grants=grants)
+                where, moving = self.moving_tab()
+
+                def forms_where(_self, _tab, _cancel, where=where, done=done, page=page, **kwargs):
+                    if "deadline" not in kwargs:  # not the look's count: the one after the question
+                        where["url"] = self.ELSEWHERE
+                        page["held"] = 1  # the page it moved to tried to send a form
+                        done.append("moved")
+                        return ["realm-1"]
+                    return []
+
+                with moving, mock.patch.object(tools.Bridge, "_forms_where", forms_where):
+                    result = bridge.call("click", {"tab": "t1", "element": "e1"})
+                self.assertTrue(result["isError"], result)
+                self.assertIn("the tab moved to", result["content"][0]["text"])
+                self.assertIn("while the page was read", result["content"][0]["text"])
+                self.assertEqual(approver.asked, [("interact", "https://example.org")])
+                self.assertEqual(page["held"], 1)
+                after = set(done[done.index("moved") :])
+                self.assertFalse({"send", "open", "drop", "guard", "inspect", "input.performActions"} & after, done)
+
+    def test_the_last_read_before_acting_is_the_tabs_address(self):
+        # OpenCodeReview on #812 (round 3): still_at read the agent record (_go_on) after it read the tab's address, so a
+        # move during that read reached the action unseen. The tab moves at the last read of the agent record before
+        # the action (found in a first run): the action is not done in the page it moved to.
+        page_text = {"title": "t", "url": self.CART, "text": "x"}
+        for tool, extra, info in (("click", {}, {"connected": True}), ("type", {"text": "x"}, self.FIELD),
+                                  ("page_read", {}, {"connected": True})):  # fmt: skip
+
+            def run(move_at, tool=tool, extra=extra, info=info):
+                bridge, _done, _page = self.element_page("restricted", Approve("once"), info)
+                where, events = {"url": self.CART}, []
+                real_agent = tools.Bridge._agent
+
+                def agent(bridge_, where=where, events=events, move_at=move_at):
+                    if len(events) == move_at:
+                        where["url"] = self.ELSEWHERE
+                    events.append("agent")
+                    return real_agent(bridge_)
+
+                def url_of(*_a, where=where, events=events, **_k):
+                    events.append("url")
+                    return where["url"]
+
+                def act(where=where, events=events):
+                    events.append(("act", where["url"]))
+
+                engine = bridge.bidi("t1")
+                engine.command.side_effect = lambda method, *_a, act=act, **_k: (
+                    method == "input.performActions" and act()) or {}  # fmt: skip
+                with (
+                    mock.patch.object(tools.Bridge, "_url_of", side_effect=url_of),
+                    mock.patch.object(tools.Bridge, "_agent", agent),
+                    mock.patch.object(tools.Bridge, "_eval", side_effect=lambda *_a, act=act, **_k: act() or page_text),
+                ):
+                    result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra} if tool != "page_read" else
+                                         {"tab": "t1"})  # fmt: skip
+                return result, events
+
+            with self.subTest(tool=tool):
+                result, events = run(None)
+                self.assertFalse(result["isError"], result)
+                acted = next(i for i, event in enumerate(events) if isinstance(event, tuple))
+                last = max(i for i in range(acted) if events[i] == "agent")
+                result, events = run(last)
+                self.assertNotIn(("act", self.ELSEWHERE), events, events)
+                self.assertTrue(result["isError"], result)
+                self.assertIn("the tab moved to", result["content"][0]["text"])
+
+    def test_a_call_refused_at_a_host_lookup_names_the_address_looked_up(self):
+        # OpenCodeReview on #812: a call paused or cancelled while a host was looked up is refused there, before the
+        # question that would have named the address: the activity record still names it, as on main.
+        for stop in ("pause", "cancel"):
+            for tool, args, host, origin in (
+                ("tab_new", {"url": "https://other.example/x"}, "other.example", "https://other.example"),
+                ("click", {"tab": "t1", "element": "e1"}, "example.org", "https://example.org"),
+            ):
+                with self.subTest(stop=stop, tool=tool):
+                    approver = Approve("once")
+                    bridge, _done, _page = self.element_page("restricted", approver, {"connected": True})
+                    cancel = threading.Event()
+
+                    def resolves(name, host=host, stop=stop, cancel=cancel, bridge=bridge):
+                        if name == host:
+                            registry.pause(bridge.agent_id, True) if stop == "pause" else cancel.set()
+                        return False
+
+                    with mock.patch.object(policy, "_resolves_locally", side_effect=resolves):
+                        result = bridge.call(tool, args, cancel)
+                    self.assertTrue(result["isError"], result)
+                    self.assertEqual(approver.asked, [])
+                    entry = json.loads(audit.audit_path().read_text().splitlines()[-1])
+                    outcome = ("denied", "paused") if stop == "pause" else ("error:cancelled", None)
+                    self.assertEqual((entry["outcome"], entry.get("reason"), entry.get("target")), (*outcome, origin))
 
     def test_where_a_redirect_ends_is_one_of_the_agents_sites_or_is_not_described(self):
         agent, _ = registry.add("redirected", "other", "autonomous", domains=["example.org"])
@@ -4389,6 +4773,103 @@ class AutonomyControlsTest(Home):
                 seen.join()
                 self.assertEqual(list(registry.requests_dir().iterdir()), [])
                 registry.set_stopped(False)
+
+    def test_a_request_called_off_before_it_is_written_is_never_shown(self):
+        """#764: a call cancelled (or a session stopped, paused or revoked) before its question writes no request
+        file for the person to see; it is denied at once."""
+        cancel = threading.Event()
+        cases = (
+            ("cancel", lambda a: cancel.set()),
+            ("stop", lambda a: registry.set_stopped(True)),
+            ("pause", lambda a: registry.pause(a, True)),
+        )
+        real_write = registry.paths.write_private_file
+        for name, act in cases:
+            with self.subTest(name):
+                agent, _ = registry.add("o", "other", "restricted")
+                cancel.clear()
+                act(agent["id"])
+                written: list[str] = []
+                shown: list[dict] = []
+
+                def write(path, *args, written=written, **kwargs):
+                    written.append(str(path))
+                    return real_write(path, *args, **kwargs)
+
+                approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05,
+                                                    on_request=shown.append)  # fmt: skip
+                with mock.patch.object(registry.paths, "write_private_file", write):
+                    self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, cancel=cancel), "deny")
+                self.assertEqual((written, shown), ([], []))
+                registry.set_stopped(False)
+
+    def test_a_request_cancelled_while_the_registry_is_read_is_never_shown(self):
+        """OpenCodeReview on #812: a cancel that comes while the approver reads the registry, after it looked at the
+        cancel, still writes no request file for the person to see (not even one removed right after: CodeRabbit on
+        #812)."""
+        agent, _ = registry.add("o", "other", "restricted")
+        cancel = threading.Event()
+        real_load, real_write = registry.load, registry.paths.write_private_file
+        written: list[str] = []
+
+        def load(*args, **kwargs):
+            cancel.set()
+            return real_load(*args, **kwargs)
+
+        def write(path, *args, **kwargs):
+            if Path(path).parent == registry.requests_dir():
+                written.append(str(path))
+            return real_write(path, *args, **kwargs)
+
+        shown: list[dict] = []
+        approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05,
+                                            on_request=shown.append)  # fmt: skip
+        calling = registry.get(agent["id"])
+        with mock.patch.object(registry, "load", load), mock.patch.object(registry.paths, "write_private_file", write):
+            self.assertEqual(approver.ask(calling, "interact", None, cancel=cancel), "deny")
+        self.assertEqual((written, shown), ([], []))
+        self.assertEqual(list(registry.requests_dir().iterdir()), [])
+
+    def test_a_request_called_off_while_it_is_written_or_the_registry_is_read_is_never_shown(self):
+        """OpenCodeReview on #812 (round 2): the emergency stop turned on while the approver reads the registry, after it
+        looked at the stop, or a cancel or the stop while it writes the request: no approval event is sent, the
+        request file is removed (or, for the stop during the read, never written: CodeRabbit on #812), and the request
+        is denied."""
+        self.addCleanup(registry.set_stopped, False)
+        cancel = threading.Event()
+        real_load, real_write = registry.load, registry.paths.write_private_file
+        for number, (when, name) in enumerate((("read", "stop"), ("write", "cancel"), ("write", "stop"))):
+            with self.subTest(when=when, name=name):
+                registry.set_stopped(False)
+                cancel.clear()
+                agent, _ = registry.add(f"off {number}", "other", "restricted")
+                calling = registry.get(agent["id"])
+
+                def act(name=name):
+                    cancel.set() if name == "cancel" else registry.set_stopped(True)
+
+                def load(*args, when=when, act=act, **kwargs):
+                    if when == "read":
+                        act()
+                    return real_load(*args, **kwargs)
+
+                written: list[str] = []
+
+                def write(path, *args, when=when, act=act, written=written, **kwargs):
+                    real_write(path, *args, **kwargs)
+                    if Path(path).parent == registry.requests_dir():
+                        written.append(str(path))
+                        if when == "write":
+                            act()  # while the request was written: it is there now
+
+                shown: list[dict] = []
+                approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05,
+                                                    on_request=shown.append)  # fmt: skip
+                with mock.patch.object(registry, "load", load), mock.patch.object(registry.paths, "write_private_file", write):
+                    self.assertEqual(approver.ask(calling, "interact", None, cancel=cancel), "deny")
+                self.assertEqual(shown, [])
+                self.assertEqual(len(written), 0 if when == "read" else 1)  # a stop during the read writes nothing
+                self.assertEqual(list(registry.requests_dir().iterdir()), [])
 
     def test_a_session_marker_says_who_is_connected_only_while_it_runs(self):
         """UX5-I2: the bridge writes <state>/ai/sessions/<id>.json (0600) with its pid, removed at the end."""
