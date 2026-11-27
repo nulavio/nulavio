@@ -129,6 +129,37 @@ class ReleaseMetadataTest(unittest.TestCase):
         self.assertEqual(readme.read_bytes(), b"Now " + link + b".\r\n")
         self.assertEqual(other.read_bytes(), b"Latin-1 \xe9, no markers.\n")
 
+    def test_a_stray_opening_marker_before_the_pair_keeps_the_text_between(self):
+        # Independent review of OCR round 2 on #878: with re.S, a lone "<!--release-->" quoted before the real pair
+        # made the match run from it to the pair's end and drop everything between.
+        link = b"<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        readme = self.repo / "README.md"
+        readme.write_bytes(b"Intro `<!--release-->`.\n\nline A\nline B\n\nNow <!--release-->[v1](x)<!--/release-->.\n")
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), b"Intro `<!--release-->`.\n\nline A\nline B\n\nNow " + link + b".\n")
+
+    def import_script(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        self.addCleanup(sys.path.remove, str(SCRIPT.parent))
+        import release_metadata
+
+        return release_metadata
+
+    def test_only_the_files_that_differ_are_written(self):
+        # Independent review of OCR round 2 on #878: a rename replaces a read-only file, so read-only files cannot
+        # prove that the metadata and the changelog are left alone; the writes themselves are recorded instead.
+        release_metadata = self.import_script()
+        manifest = {**self.manifest, "nulavio_base_commit": self.sha}
+        self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        (self.repo / "README.md").write_bytes(b"Now <!--release-->[v160.0-0.1](drifted)<!--/release-->.\n")
+        with mock.patch.object(release_metadata, "replace", wraps=release_metadata.replace) as written:
+            self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertEqual([call.args[0].name for call in written.call_args_list], ["README.md"])
+        with mock.patch.object(release_metadata, "replace", wraps=release_metadata.replace) as written:
+            self.assertFalse(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertEqual(written.call_args_list, [])
+
     def test_a_symlinked_output_is_refused_before_anything_is_written(self):
         # OCR round 2 on #878: a README that is a link would have its target rewritten, outside the paths the
         # workflow stages.
@@ -154,7 +185,15 @@ class ReleaseMetadataTest(unittest.TestCase):
         readme.chmod(0o640)
         manifest = {**self.manifest, "nulavio_base_commit": self.sha}
         listing = sorted(p.name for p in self.repo.iterdir())
-        with mock.patch.object(release_metadata.os, "replace", side_effect=OSError("disk full")), self.assertRaises(OSError):
+        real_replace = release_metadata.os.replace
+
+        def fail_on_the_readme(src, dst):
+            # The README's own rename fails, after the files before it were written.
+            if Path(dst).name == "README.md":
+                raise OSError("disk full")
+            real_replace(src, dst)
+
+        with mock.patch.object(release_metadata.os, "replace", side_effect=fail_on_the_readme), self.assertRaises(OSError):
             release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest)
         self.assertEqual(readme.read_text(), self.readmes["README.md"])
         self.assertEqual(sorted(p.name for p in self.repo.iterdir()), listing)

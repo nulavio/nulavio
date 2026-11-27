@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
 # The READMEs' status names the latest release between these markers (#857).
 READMES = ("README.md", "README.pt-BR.md")
-# Matched as bytes, across line breaks: a README is never decoded, and a wrapped link is still one pair.
-README_RELEASE = re.compile(rb"<!--release-->.*?<!--/release-->", re.S)
+# Matched as bytes, across line breaks: a README is never decoded, and a wrapped link is still one pair. A pair holds no
+# other opening marker, so a stray "<!--release-->" before the real pair (prose quoting it) never swallows the text between.
+README_RELEASE = re.compile(rb"<!--release-->(?:(?!<!--release-->).)*?<!--/release-->", re.S)
 
 
 def version_key(version: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
