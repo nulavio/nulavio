@@ -80,6 +80,8 @@ async function module(store) {
 }
 
 const LOOKALIKE = "https://paypa1.example/login";
+const SHOWN = { site: "paypa1.example", similar: "paypal.example" }; // the pair checkLogin() gives the warning page
+const OTHER = "https://examp1e.example/login"; // imitates example.example
 const WARNING = "moz-extension://shell/passwords/lookalike.html?url=https%3A%2F%2Fpaypa1.example%2F&in=frame";
 
 /** A tab's browser at entry `index` of its session history, showing `address`. */
@@ -102,6 +104,13 @@ async function check(passwords) {
 }
 
 const result = (store, extra) => ({ ...extra, reads: store.reads, prompts: store.prompts });
+
+/** The engine's notice that the saved logins changed. */
+function changed() {
+  for (const fn of observers.get("passwordmgr-storage-changed") ?? []) {
+    fn();
+  }
+}
 
 const cases = {
   // No Primary Password: the look-alike of a saved site is found, and the logins are read once.
@@ -137,7 +146,7 @@ const cases = {
     const remembered = () => passwords.listConfirmed().length;
     const dismiss = browser =>
       passwords
-        .dismissFor(LOOKALIKE, { back: true, browser })
+        .dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser })
         .then(answer => ({ ...answer, remembered: remembered() }))
         .catch(e => ({ threw: e.code, remembered: remembered() }));
     const answers = {};
@@ -164,7 +173,126 @@ const cases = {
     const browser = tab(3, WARNING);
     passwords.bindWarning(browser, { index: 3, url: WARNING });
     store.onRead = () => at(browser, 4, "https://elsewhere.example/");
-    const answer = await passwords.dismissFor(LOOKALIKE, { back: true, browser }).catch(e => ({ threw: e.code }));
+    const answer = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser }).catch(e => ({ threw: e.code }));
+    return result(store, { answer, remembered: passwords.listConfirmed().length });
+  },
+  // "Continue" remembers the pair the warning showed, as checkLogin() gave it to the page.
+  dismiss_shown_pair: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const shown = await check(passwords);
+    const answer = await passwords.dismissFor(LOOKALIKE, { site: shown.site, similar: shown.similar });
+    return result(store, { answer, confirmed: passwords.listConfirmed(), after: await check(passwords) });
+  },
+  // The saved logins change while the warning is open, so the address now imitates another saved site: the pair the
+  // warning showed is not remembered, and neither is the pair found now.
+  dismiss_pair_changed: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const shown = await check(passwords);
+    store.origins = ["https://paypa.example"];
+    changed();
+    const now = await check(passwords);
+    const answer = await passwords.dismissFor(LOOKALIKE, { site: shown.site, similar: shown.similar });
+    return result(store, { shown, now, answer, confirmed: passwords.listConfirmed() });
+  },
+  // The saved login is removed while the warning is open: no pair is left, nothing is remembered.
+  dismiss_no_pair_left: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    await check(passwords);
+    store.origins = [];
+    changed();
+    const answer = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    return result(store, { answer, confirmed: passwords.listConfirmed() });
+  },
+  // A pair the warning never showed (a caller naming its own, or none) is never remembered.
+  dismiss_other_pair: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const answers = {
+      other_similar: await passwords.dismissFor(LOOKALIKE, { site: SHOWN.site, similar: "example.example" }),
+      other_site: await passwords.dismissFor(LOOKALIKE, { site: "evil.example", similar: SHOWN.similar }),
+      no_pair: await passwords.dismissFor(LOOKALIKE),
+      not_strings: await passwords.dismissFor(LOOKALIKE, { site: ["paypa1.example"], similar: { x: 1 } }),
+    };
+    return result(store, { ...answers, confirmed: passwords.listConfirmed() });
+  },
+  // The same pair already confirmed (the same warning open in another tab): still the pair shown, kept once.
+  dismiss_already_confirmed: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const first = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    const again = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    return result(store, { first, again, confirmed: passwords.listConfirmed() });
+  },
+  // Continue on a pair already confirmed (the same warning open in another tab) after another pair was confirmed: the
+  // list keeps its order (Settings shows the newest first).
+  dismiss_already_confirmed_keeps_order: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const first = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    const other = await passwords.dismissFor(OTHER, { site: "examp1e.example", similar: "example.example" });
+    const again = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    return result(store, { first, other, again, confirmed: passwords.listConfirmed() });
+  },
+  // The saved logins change during every read of a Continue, and the last change removes the login: the read it
+  // answers with still has that login, but the saved logins no longer give the pair, so nothing is remembered.
+  dismiss_after_a_burst_of_changes: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    let reads = 0;
+    store.onRead = () => {
+      if (++reads === 3) {
+        store.origins = [];
+      }
+      changed();
+    };
+    const answer = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    store.onRead = null;
+    return result(store, { answer, confirmed: passwords.listConfirmed(), after: await check(passwords) });
+  },
+  // The saved logins change (the login is removed) `hops` microtasks after a Continue starts, from a list read before:
+  // for each `hops`, whether Continue answered dismissed and whether the pair was already saved when they changed. It
+  // may remember the pair only if it saved it before the change.
+  dismiss_while_the_logins_change: async () => {
+    const runs = [];
+    for (let hops = 0; hops < 8; hops++) {
+      const store = loginManager();
+      const passwords = await module(store);
+      await check(passwords); // the saved logins are read and kept
+      let savedBeforeChange = null;
+      let wait = Promise.resolve();
+      for (let i = 0; i < hops; i++) {
+        wait = wait.then(() => {});
+      }
+      const pending = passwords.dismissFor(LOOKALIKE, SHOWN);
+      wait.then(() => {
+        savedBeforeChange = prefs.size > 0;
+        store.origins = [];
+        changed();
+      });
+      const answer = await pending;
+      await flush();
+      runs.push({ dismissed: answer.dismissed, savedBeforeChange, confirmed: passwords.listConfirmed().length });
+    }
+    return { runs };
+  },
+  // While the saved logins are read for a Continue that goes back, the tab moves to another entry of its history (a
+  // fragment) and the saved logins change so the address imitates another site: the tab has left the warning, which
+  // says so first (no way back), not that the pair changed.
+  dismiss_back_left_and_pair_changed: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const browser = tab(3, WARNING);
+    passwords.bindWarning(browser, { index: 3, url: WARNING });
+    store.onRead = () => {
+      store.onRead = null;
+      at(browser, 4, `${WARNING}#x`);
+      store.origins = ["https://paypa.example"];
+      changed();
+    };
+    const answer = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser }).catch(e => ({ threw: e.code }));
     return result(store, { answer, remembered: passwords.listConfirmed().length });
   },
   // Two checks at once (two frames of one tab) share one read of the saved logins.
@@ -208,7 +336,7 @@ const cases = {
   locked_dismiss: async () => {
     const store = loginManager({ primaryPassword: true });
     const passwords = await module(store);
-    const answer = await passwords.dismissFor(LOOKALIKE).catch(e => ({ threw: e.message }));
+    const answer = await passwords.dismissFor(LOOKALIKE, SHOWN).catch(e => ({ threw: e.message }));
     return result(store, { answer, remembered: prefs.size });
   },
   // A Primary Password set, but no saved login: still nothing read.
