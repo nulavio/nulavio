@@ -8,7 +8,8 @@ by name, where the integration tests run (the release test container, with FUSE 
 
 Each scene and language is one case, so one that fails leaves the others recorded. Frames and a timeline
 go to ``<artifacts>/recordings/<scene>-<locale>/``; ``scripts/site/record_site.py compose`` turns them into
-video on the host. A scene that cannot reach the state it shows fails: it is never staged.
+video on the host. A scene that cannot reach the state it shows fails: it is never staged. Every run empties
+``<artifacts>/recordings/`` first, so compose never finds a timeline of an earlier run there.
 """
 
 from __future__ import annotations

@@ -11,13 +11,26 @@
 #    [out-dir] (default docs/design/recordings/2026-11).
 # The capture runs the engine: on a machine whose test slot is shared, queue it as an integration module
 # instead, and run step 2 by hand on the artifacts directory.
+# When a step fails, the captures are kept and their directory is printed: the scenes that were recorded
+# can be composed again without running the browser.
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 install=$(realpath "${1:?usage: record_site.sh <install-dir> [out-dir]}")
 out=${2:-$repo/docs/design/recordings/2026-11}
-work=$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/nulavio-record.XXXXXX")
-trap 'rm -rf "$work"' EXIT
+cache=${XDG_CACHE_HOME:-$HOME/.cache}
+mkdir -p "$cache"
+work=$(mktemp -d "$cache/nulavio-record.XXXXXX")
+finish() {
+    local status=$?
+    if [[ $status -eq 0 ]]; then
+        rm -rf "$work"
+    else
+        echo "record_site: failed (status $status); the captures are kept in $work/recordings" >&2
+        echo "record_site: compose them again with: python3 -I scripts/site/record_site.py compose $work/recordings" >&2
+    fi
+}
+trap finish EXIT
 
 NULAVIO_INTEGRATION_IMAGE=fedora-release-itest NULAVIO_TEST_ARTIFACTS="$work" \
     "$repo/scripts/release/run_integration.sh" "$install" record_site_scenes.py
