@@ -2,8 +2,10 @@
 # third-party resources, no cookies. form-action 'self' is for the waitlist forms,
 # which post to /api/waitlist and to the link page on this origin (site/_worker.js
 # sets its own headers, and repeats these for the link page it serves).
+# media-src 'self' is for the landing's recorded scenes (assets/clips/): videos from
+# this origin only, fetched when the person presses play.
 /*
-  Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'none'; style-src 'self'; img-src 'self'; media-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Permissions-Policy: camera=(), microphone=(), geolocation=()

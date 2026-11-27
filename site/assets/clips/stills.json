@@ -1,0 +1,411 @@
+{
+  "schema": 1,
+  "script": "scripts/site/scene_stills.py",
+  "source": "frames of the captures that manifest.json describes (same capture time, build and recording script), as captured: before the cursor and the click ripples are drawn",
+  "edits": [
+    "one rectangle of one frame; nothing drawn, nothing put together"
+  ],
+  "encoders": {
+    "still": "Pillow WebP q84",
+    "detail": "Pillow WebP lossless"
+  },
+  "budget_bytes_per_file": 150000,
+  "stills": {
+    "profile-opens-pt-BR-still.webp": {
+      "recording": "profile-opens-pt-BR",
+      "frame": "0013.png",
+      "t": 3.943,
+      "shown_s": [
+        3.967,
+        7.367
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 33982,
+      "sha256": "58774f47a6ba68a54c8da3175886891b0a26b4f20cc08c6baeb27e43be495d2e"
+    },
+    "profile-opens-pt-BR-still-narrow.webp": {
+      "recording": "profile-opens-pt-BR",
+      "frame": "0013.png",
+      "t": 3.943,
+      "shown_s": [
+        3.967,
+        7.367
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 448,
+        "h": 280
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        420
+      ],
+      "bytes": 9278,
+      "sha256": "7ffc603825e92eb7dcd41a16ee706d46673ac69a2359095568b7643e79dd0aa0"
+    },
+    "profile-opens-pt-BR-detail.webp": {
+      "recording": "profile-opens-pt-BR",
+      "frame": "0013.png",
+      "t": 3.943,
+      "shown_s": [
+        3.967,
+        7.367
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 44
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        66
+      ],
+      "bytes": 2900,
+      "sha256": "273dff26a4c43fcc7d6e68b46296351a720f5fb9d3b42dd2e3c7f7d2a04beed2"
+    },
+    "profile-opens-en-US-still.webp": {
+      "recording": "profile-opens-en-US",
+      "frame": "0016.png",
+      "t": 3.984,
+      "shown_s": [
+        4.0,
+        7.4
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 31648,
+      "sha256": "7989dc2ea27410ac2a69c71e30b1e3d70ea349c0f32ef0d37e65e47bcdefb031"
+    },
+    "profile-opens-en-US-still-narrow.webp": {
+      "recording": "profile-opens-en-US",
+      "frame": "0016.png",
+      "t": 3.984,
+      "shown_s": [
+        4.0,
+        7.4
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 448,
+        "h": 280
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        420
+      ],
+      "bytes": 8902,
+      "sha256": "d1c2b9e698db4bca7e725fe0c8f7caacd1ccb97c5e30692e6495798aa876636c"
+    },
+    "profile-opens-en-US-detail.webp": {
+      "recording": "profile-opens-en-US",
+      "frame": "0016.png",
+      "t": 3.984,
+      "shown_s": [
+        4.0,
+        7.4
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 44
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        66
+      ],
+      "bytes": 3022,
+      "sha256": "7484bce5e8c95e901f5cf5323e83a06c60451d2fb790359b46493c5aa36cf2dc"
+    },
+    "link-routed-pt-BR-still.webp": {
+      "recording": "link-routed-pt-BR",
+      "frame": "0046.png",
+      "t": 6.414,
+      "shown_s": [
+        6.433,
+        8.533
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 36214,
+      "sha256": "941544260838ab80907e39fcd10b184ff6dd63cbe68ecee6194b9eba9003ebf3"
+    },
+    "link-routed-pt-BR-still-narrow.webp": {
+      "recording": "link-routed-pt-BR",
+      "frame": "0046.png",
+      "t": 6.414,
+      "shown_s": [
+        6.433,
+        8.533
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 448,
+        "h": 280
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        420
+      ],
+      "bytes": 14894,
+      "sha256": "79ec8dd89643fadced47631c0dcae62a167c16d070793a43fb2aa993aa2ef893"
+    },
+    "link-routed-pt-BR-detail.webp": {
+      "recording": "link-routed-pt-BR",
+      "frame": "0046.png",
+      "t": 6.414,
+      "shown_s": [
+        6.433,
+        8.533
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 27
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        40
+      ],
+      "bytes": 3586,
+      "sha256": "d74329f450f71b7e75988a7ba4950c221ea4c0b6338bc4eb5876149b1655461e"
+    },
+    "link-routed-en-US-still.webp": {
+      "recording": "link-routed-en-US",
+      "frame": "0048.png",
+      "t": 6.438,
+      "shown_s": [
+        6.467,
+        8.567
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 33250,
+      "sha256": "073c84c801a38facabbe12012f782355dcbec027ce4321b24a2b687e521973f9"
+    },
+    "link-routed-en-US-still-narrow.webp": {
+      "recording": "link-routed-en-US",
+      "frame": "0048.png",
+      "t": 6.438,
+      "shown_s": [
+        6.467,
+        8.567
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 448,
+        "h": 280
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        420
+      ],
+      "bytes": 13908,
+      "sha256": "72f6baac9a2fff50c367b859e3c38dc4fd383ccf7788262e91d23c205dadd0f7"
+    },
+    "link-routed-en-US-detail.webp": {
+      "recording": "link-routed-en-US",
+      "frame": "0048.png",
+      "t": 6.438,
+      "shown_s": [
+        6.467,
+        8.567
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 27
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        40
+      ],
+      "bytes": 3760,
+      "sha256": "d91d562d9fa989308f1d75f0a2898b5a86135f8352939da1e1839785e4fe0605"
+    },
+    "protected-unlocks-pt-BR-still.webp": {
+      "recording": "protected-unlocks-pt-BR",
+      "frame": "0022.png",
+      "t": 6.574,
+      "shown_s": [
+        6.6,
+        7.4
+      ],
+      "crop_css": {
+        "x": 225,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 38362,
+      "sha256": "adba288e42bd75a8c550f83d7164aecfde6422e8c5a816be8082d7000351b51c"
+    },
+    "protected-unlocks-pt-BR-still-narrow.webp": {
+      "recording": "protected-unlocks-pt-BR",
+      "frame": "0022.png",
+      "t": 6.574,
+      "shown_s": [
+        6.6,
+        7.4
+      ],
+      "crop_css": {
+        "x": 452,
+        "y": 234,
+        "w": 448,
+        "h": 272
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        408
+      ],
+      "bytes": 14340,
+      "sha256": "9646ebf9c8c975bf0bda03e0798465eeb926b9f1760ad29cd1d9fca22f1988a0"
+    },
+    "protected-unlocks-pt-BR-detail.webp": {
+      "recording": "protected-unlocks-pt-BR",
+      "frame": "0042.png",
+      "t": 9.197,
+      "shown_s": [
+        9.2,
+        12.8
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 44
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        66
+      ],
+      "bytes": 3238,
+      "sha256": "7358ba4461b595324131c511330d4efbb31cf20f7c5177120c34af4a2fa9b93e"
+    },
+    "protected-unlocks-en-US-still.webp": {
+      "recording": "protected-unlocks-en-US",
+      "frame": "0026.png",
+      "t": 6.13,
+      "shown_s": [
+        6.133,
+        6.933
+      ],
+      "crop_css": {
+        "x": 225,
+        "y": 0,
+        "w": 800,
+        "h": 500
+      },
+      "scale": 1.5,
+      "px": [
+        1200,
+        750
+      ],
+      "bytes": 33532,
+      "sha256": "ef17c272aba77c2d1b08b08c03d5b6e5d74355c6ff734cd7dd3b7318c89b5538"
+    },
+    "protected-unlocks-en-US-still-narrow.webp": {
+      "recording": "protected-unlocks-en-US",
+      "frame": "0026.png",
+      "t": 6.13,
+      "shown_s": [
+        6.133,
+        6.933
+      ],
+      "crop_css": {
+        "x": 452,
+        "y": 234,
+        "w": 448,
+        "h": 272
+      },
+      "scale": 1.5,
+      "px": [
+        672,
+        408
+      ],
+      "bytes": 12622,
+      "sha256": "f26ae5fd0bcdd090e6ab5e636d9c6eb75518c64eb6a3486ad12404324f3d69e5"
+    },
+    "protected-unlocks-en-US-detail.webp": {
+      "recording": "protected-unlocks-en-US",
+      "frame": "0044.png",
+      "t": 8.76,
+      "shown_s": [
+        8.767,
+        12.367
+      ],
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 384,
+        "h": 44
+      },
+      "scale": 1.5,
+      "px": [
+        576,
+        66
+      ],
+      "bytes": 3116,
+      "sha256": "1ff73f5c2c07ebdc07db161431dc7a88b9e4aad996dc1beffad9f90830a558c4"
+    }
+  }
+}

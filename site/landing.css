@@ -1,20 +1,36 @@
 /* nulavio.net, the landing and the waitlist pages. Static, no scripts.
    Every colour, space, radius and font comes from tokens.css (served as
    /assets/tokens.css), which follows the system light/dark preference.
-   data-theme="dark" on an element keeps the window mock-up and the closing
-   band in the brand's dark palette in both schemes. */
+   data-theme="dark" on the closing band keeps it in the brand's dark palette
+   in both schemes.
+
+   The landing is read along the symbol's route: one line runs down the left
+   from its three points, every section's heading is a stop on it, every
+   recorded scene a numbered stop, and it turns towards the waitlist at the
+   end. The line is drawn, never animated. The product is shown close: the
+   corner of the real window and a detail of each scene at their real size. */
 
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
   color-scheme: light dark;
-  --page: 75rem;
+  --page: 76rem;
   --gutter: var(--nv-space-5);
   --section: clamp(4rem, 2.5rem + 6vw, 7.5rem);
   --hairline: 1px solid var(--nv-color-border-subtle);
+  /* the route: from the content edge to the text, where the line runs in it, its stops */
+  --lane: 1.75rem;
+  --line-x: 0.25rem;
+  --line: var(--nv-route-vertical-width);
+  --node: 1.75rem;
+  --stop-bg: var(--nv-color-bg-canvas);
+  --hero-top: clamp(2.5rem, 1.5rem + 4vw, 4.5rem);
 }
 @media (min-width: 48rem) {
-  :root { --gutter: var(--nv-space-7); }
+  :root { --gutter: var(--nv-space-7); --lane: 2.5rem; --line-x: 0.5rem; }
+}
+@media (min-width: 64rem) {
+  :root { --lane: 5rem; --line-x: 1.25rem; }
 }
 
 html {
@@ -42,23 +58,25 @@ body {
 
 h1, h2, h3 { margin: 0; text-wrap: balance; }
 h1 {
-  font-size: clamp(2.625rem, 1.35rem + 5.6vw, 4.75rem);
-  font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+  font-size: clamp(2.5rem, 1.6rem + 3.8vw, 3.75rem);
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
 }
 h2 {
-  font-size: clamp(1.875rem, 1.4rem + 2.1vw, 2.875rem);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
+  font-size: clamp(1.75rem, 1.35rem + 1.9vw, 2.625rem);
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 h3 { font-size: 1.125rem; font-weight: var(--nv-font-weight-semibold); line-height: 1.3; }
 
 p { margin: 0 0 var(--nv-space-5); }
 p:last-child { margin-bottom: 0; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
-img, svg { display: block; max-width: 100%; }
+img, svg, video { display: block; max-width: 100%; }
+img, video { height: auto; }
+figure { margin: 0; }
 strong { font-weight: var(--nv-font-weight-semibold); }
 code, .mono { font-family: var(--nv-font-family-mono); font-size: 0.9em; }
 
@@ -72,6 +90,7 @@ a {
 a:hover { text-decoration-thickness: 2px; }
 a:focus-visible,
 summary:focus-visible,
+video:focus-visible,
 [tabindex="0"]:focus-visible {
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
   outline-offset: var(--nv-state-focusRingOffset);
@@ -140,16 +159,15 @@ summary:focus-visible,
   cursor: pointer;
   transition:
     background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
-    border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard),
-    transform var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+    border-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
 }
 .btn:focus-visible {
   outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
   outline-offset: var(--nv-state-focusRingOffset);
 }
-.btn:active { transform: translateY(1px); }
 .btn-primary { background: var(--nv-color-accent-default); color: var(--nv-color-accent-on); }
 .btn-primary:hover { background: color-mix(in oklab, var(--nv-color-accent-default) 86%, var(--nv-color-text-primary)); }
+.btn-primary:active { background: color-mix(in oklab, var(--nv-color-accent-default) 76%, var(--nv-color-text-primary)); }
 .btn-quiet { border-color: var(--nv-color-border-control); background: transparent; color: var(--nv-color-text-primary); }
 .btn-quiet:hover { background: color-mix(in oklab, var(--nv-color-text-primary) 8%, transparent); }
 .btn-sm { min-height: 2.5rem; padding-inline: var(--nv-space-5); font-size: 0.9375rem; }
@@ -224,26 +242,63 @@ select.field { padding-right: var(--nv-space-7); }
   .top-actions { margin-left: auto; }
 }
 
+/* -- the route -------------------------------------------------------------------------- */
+
+/* One line for the whole page, at the content edge whatever the viewport's width. It stops
+   where the waitlist band starts; the band draws the turn. */
+.route { position: relative; counter-reset: step; }
+.route::before {
+  content: "";
+  position: absolute;
+  left: calc(max(var(--gutter), (100% - var(--page)) / 2) + var(--line-x));
+  top: calc(var(--hero-top) + 2.75rem);
+  bottom: 0;
+  width: var(--line);
+  border-radius: 2px 2px 0 0;
+  background: var(--nv-color-route-vertical);
+}
+.route .wrap,
+.cta .wrap { position: relative; padding-left: calc(var(--gutter) + var(--lane)); }
+
+/* The origin: the line starts under the symbol's three points, smallest first. */
+.origin {
+  position: absolute;
+  left: calc(var(--gutter) + var(--line-x));
+  top: calc(var(--hero-top) + 0.25rem);
+  flex-direction: column;
+  gap: 7px;
+  width: var(--line);
+}
+.origin i { flex: none; margin-inline: -2.5px; }
+.origin i:nth-child(1) { margin-inline: -0.5px; }
+.origin i:nth-child(2) { margin-inline: -1.5px; }
+
+/* A stop: every section heading sits on the line. */
+.route h2 { position: relative; }
+.route h2::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--line-x) - var(--lane) + var(--line) / 2 - 0.5rem);
+  top: 0.55em;
+  width: 1rem;
+  height: 1rem;
+  border: var(--line) solid var(--nv-color-route-vertical);
+  border-radius: 50%;
+  background: var(--stop-bg);
+  translate: 0 -50%;
+}
+
 /* -- hero ------------------------------------------------------------------------------ */
 
-.hero {
-  overflow: clip;
-  background:
-    radial-gradient(70% 75% at 82% 62%, var(--nv-color-ambience-to), transparent 72%),
-    var(--nv-color-bg-canvas);
-  border-bottom: var(--hairline);
-}
+.hero { overflow: clip; }
 .hero-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--nv-space-8);
-  padding-block: clamp(2.5rem, 1.5rem + 4vw, 4.5rem) clamp(3rem, 2rem + 5vw, 5.5rem);
+  padding-block: var(--hero-top) var(--nv-space-8);
 }
 .kicker {
-  display: flex;
-  align-items: center;
-  gap: var(--nv-space-4);
-  margin-bottom: var(--nv-space-6);
+  margin-bottom: var(--nv-space-5);
   color: var(--nv-color-text-secondary);
   font-size: 0.9375rem;
   font-weight: var(--nv-font-weight-medium);
@@ -255,7 +310,7 @@ select.field { padding-right: var(--nv-space-7); }
   margin-top: var(--nv-space-6);
   color: var(--nv-color-text-secondary);
   font-size: 1.125rem;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .lead strong { color: var(--nv-color-text-primary); }
 
@@ -269,60 +324,63 @@ select.field { padding-right: var(--nv-space-7); }
   .join-row { grid-template-columns: minmax(0, 1fr) auto; }
 }
 @media (min-width: 48rem) {
-  .lead { font-size: 1.3125rem; }
+  .lead { font-size: 1.1875rem; }
 }
 
-@media (min-width: 64rem) {
-  .hero-grid { grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr); align-items: center; gap: var(--nv-space-8); }
+/* A capture of the real window: a hairline, never a drawn frame. */
+.shot { border: var(--hairline); background: var(--nv-color-bg-surface); }
+
+/* What a capture is: its commit, its build, the start of its hash. Stamped by the build. */
+.prov {
+  display: block;
+  font-family: var(--nv-font-family-mono);
+  font-size: var(--nv-type-caption-size);
+  font-variant-numeric: tabular-nums;
+  color: var(--nv-color-text-secondary);
+  overflow-wrap: anywhere;
 }
 
-/* The window: the product's own layout, drawn in HTML. Sizes are in em so the
-   whole drawing scales with its width (container query units). */
-.win {
-  container-type: inline-size;
-  border: 1px solid var(--nv-color-border-subtle);
-  border-radius: var(--nv-radius-lg);
-  background: var(--nv-color-bg-canvas);
-  color: var(--nv-color-text-primary);
-  box-shadow: var(--nv-elevation-3);
-  overflow: hidden;
-  font-family: var(--nv-font-family-ui);
-  line-height: 1.35;
-}
-.win-bar, .win-main { font-size: clamp(0.625rem, 3.5cqi, 0.875rem); }
-.win-bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 1em;
-  min-height: 3.5em;
-  padding-inline: 1em;
-  background: var(--nv-color-band-bg);
-  border-bottom: 1px solid var(--nv-color-border-subtle);
-}
-.win-band { display: flex; align-items: center; gap: 0.65em; white-space: nowrap; }
-.win-band b { font-weight: var(--nv-font-weight-semibold); }
-.win-band .meta { display: inline-flex; align-items: center; gap: 0.35em; margin-left: 0.5em; color: var(--nv-color-band-meta); }
-.win-nav, .win-tools { display: none; align-items: center; gap: 1em; color: var(--nv-color-text-secondary); }
-.win-url {
-  display: flex;
-  align-items: center;
-  gap: 0.6em;
+/* The corner of the window at its real size (a 2x capture shown at half its pixels). The
+   figure runs to the edge of the viewport and cuts the capture there: the window goes on.
+   Where the figure is wider than the capture, the capture and its caption move right, so that
+   the capture still ends at the viewport's edge and never stops short of it. Its width is in
+   px, not rem: the capture's 600 CSS px and its 1px left border, so a larger default font
+   size never enlarges the window it shows. */
+.closeup {
+  --capture: calc(600px + 1px);
   min-width: 0;
-  height: 2.3em;
-  padding-inline: 0.9em;
-  border: 1px solid var(--nv-color-border-subtle);
-  border-radius: var(--nv-radius-pill);
-  background: var(--nv-color-bg-surface);
-  color: var(--nv-color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
+  margin-right: calc(-1 * var(--gutter));
+  margin-left: calc(-1 * var(--nv-space-5));
+  padding: var(--nv-space-3) 0 0 var(--nv-space-5);
+  overflow-x: clip;
 }
-.win-url span { overflow: hidden; text-overflow: ellipsis; }
-.win-main { display: grid; }
-.win-side { display: none; }
-.win-page { padding: 1.4em; }
+.closeup .shot {
+  width: var(--capture);
+  max-width: none;
+  margin-left: max(0px, 100% - var(--capture));
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: var(--nv-radius-md) 0 0 0;
+  box-shadow: var(--nv-elevation-2);
+}
+.closeup figcaption {
+  max-width: 27rem;
+  margin-left: max(0px, 100% - var(--capture));
+  padding: var(--nv-space-4) var(--gutter) 0 0;
+  border-top: var(--hairline);
+  color: var(--nv-color-text-secondary);
+  font-size: 0.875rem;
+}
+.closeup .prov { margin-top: var(--nv-space-2); }
+/* A column beside text is capped by a share of its row: the wide layouts start at a width in rem of the
+   browser's initial size, and a reader's own style sheet can make the page's rem larger than that. At the
+   default size the share is the wider of the two, so the rem decides. */
+@media (min-width: 64rem) {
+  .hero-grid { grid-template-columns: minmax(0, 1fr) min(27rem, 50%); gap: var(--nv-space-9); align-items: center; padding-bottom: var(--nv-space-9); }
+  .closeup { margin-right: calc(-1 * max(var(--gutter), (100vw - var(--page)) / 2)); }
+}
 
+/* The interface's own tiles, used by the drawn panels below. */
 .tile {
   display: inline-grid;
   place-items: center;
@@ -342,157 +400,182 @@ select.field { padding-right: var(--nv-space-7); }
 .tile-coral { background: var(--nv-color-identityTile-coral); color: var(--nv-color-identityGlyph-coral); }
 .tile-slate { background: var(--nv-color-identityTile-slate); color: var(--nv-color-identityGlyph-slate); }
 
-.tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.7em;
-  height: 2.6em;
-  padding-inline: 0.85em;
-  border-radius: 0.7em;
-  color: var(--nv-color-text-secondary);
-  white-space: nowrap;
-}
-.tab-on { background: var(--nv-color-bg-raised); color: var(--nv-color-text-primary); }
-.tab-on::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: var(--nv-route-vertical-width);
-  height: 1.4em;
-  border-radius: 2px;
-  background: var(--nv-color-route-vertical);
-  transform: translateY(-50%);
-}
-.side-foot { display: flex; justify-content: space-between; margin-top: auto; padding: 0.6em 0.5em 0.2em; color: var(--nv-color-text-secondary); }
+/* -- numbers: the first stop, read as a receipt along the line ------------------------------ */
 
-.nt-search {
-  display: flex;
-  align-items: center;
-  gap: 0.7em;
-  height: 3em;
-  margin-bottom: 1.2em;
-  padding-inline: 1em;
-  border: 1px solid var(--nv-color-border-control);
-  border-radius: 0.8em;
-  background: var(--nv-color-bg-surface);
-  color: var(--nv-color-text-muted);
-}
-.nt-card {
-  padding: 1.5em 1.6em;
-  border: 1px solid var(--nv-color-border-subtle);
-  border-radius: 1em;
-  background: var(--nv-color-bg-surface);
-}
-.nt-title { display: flex; align-items: center; gap: 0.6em; margin-bottom: 0.5em; font-size: 1.35em; font-weight: var(--nv-font-weight-semibold); }
-.nt-title img { width: auto; height: 1.3em; }
-.nt-card > p { margin-bottom: 1em; color: var(--nv-color-text-secondary); }
-.nt-checks { display: grid; gap: 0.6em; }
-.nt-checks li { display: flex; align-items: flex-start; gap: 0.6em; }
-.nt-checks .ico { margin-top: 0.05em; color: var(--nv-color-accent-default); }
-.nt-actions { display: flex; align-items: center; gap: 1.4em; margin-top: 1.4em; color: var(--nv-color-text-secondary); }
-.nt-actions b {
-  display: inline-flex;
-  align-items: center;
-  height: 2.6em;
-  padding-inline: 1.3em;
-  border-radius: 0.7em;
-  background: var(--nv-color-accent-default);
-  color: var(--nv-color-accent-on);
-  font-weight: var(--nv-font-weight-semibold);
-}
-
-@media (min-width: 40rem) {
-  .win-bar, .win-main { font-size: clamp(0.5rem, 1.95cqi, 0.9375rem); }
-  .win-bar { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 1.2em; }
-  .win-nav, .win-tools { display: flex; }
-  .win-main { grid-template-columns: 13.6em minmax(0, 1fr); min-height: 27em; }
-  .win-side {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25em;
-    padding: 0.7em;
-    background: var(--nv-color-bg-sunken);
-  }
-  .win-page { padding: 1.6em 2em 2em; }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .win { animation: rise 520ms var(--nv-motion-easing-enter) 80ms both; }
-  .nt-checks li { animation: settle 320ms var(--nv-motion-easing-enter) both; }
-  .nt-checks li:nth-child(1) { animation-delay: 520ms; }
-  .nt-checks li:nth-child(2) { animation-delay: 660ms; }
-  .nt-checks li:nth-child(3) { animation-delay: 800ms; }
-  .nt-checks li:nth-child(4) { animation-delay: 940ms; }
-}
-@keyframes rise {
-  from { opacity: 0; transform: translateY(18px); }
-}
-@keyframes settle {
-  from { opacity: 0; transform: translateX(-6px); }
-}
-
-/* -- numbers --------------------------------------------------------------------------- */
-
-.proof { border-bottom: var(--hairline); }
 .proof dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nv-space-5) var(--nv-space-7);
   margin: 0;
+  padding-block: var(--nv-space-6);
+  border-block: var(--hairline);
 }
 .proof dl > div {
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: flex-end;
-  gap: var(--nv-space-3);
-  padding: var(--nv-space-6) var(--nv-space-5) var(--nv-space-6) 0;
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  column-gap: var(--nv-space-4);
+  align-items: baseline;
 }
-.proof dl > div:nth-child(even) { padding-left: var(--nv-space-5); border-left: var(--hairline); }
-.proof dl > div:nth-child(n + 3) { border-top: var(--hairline); }
 .proof dd {
+  grid-column: 1;
+  grid-row: 1;
   margin: 0;
-  font-size: clamp(1.875rem, 1.4rem + 2.1vw, 2.875rem);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.025em;
+  font-size: 1.625rem;
+  font-weight: var(--nv-font-weight-semibold);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.proof dt { max-width: 15rem; color: var(--nv-color-text-secondary); font-size: 0.9375rem; line-height: 1.4; }
-@media (min-width: 56rem) {
+.proof dt { grid-column: 2; grid-row: 1; color: var(--nv-color-text-secondary); font-size: 0.9375rem; line-height: 1.45; }
+@media (min-width: 40rem) {
+  .proof dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 72rem) {
   .proof dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .proof dl > div { padding: var(--nv-space-7) var(--nv-space-6); }
-  .proof dl > div:first-child { padding-left: 0; }
-  .proof dl > div:nth-child(n) { border-top: 0; }
-  .proof dl > div:nth-child(n + 2) { border-left: var(--hairline); }
+  .proof dl > div { grid-template-columns: minmax(0, 1fr); row-gap: var(--nv-space-3); align-content: start; }
+  .proof dd { font-size: 2rem; }
+  .proof dt { grid-column: 1; grid-row: 2; max-width: 15rem; }
 }
 
-/* -- features -------------------------------------------------------------------------- */
+/* -- features: the text, a drawn panel beside it, then the recorded scenes as stops -------- */
 
 .features { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--section); padding-block: var(--section); }
-.feature { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-7); align-items: center; }
-.feature-text { max-width: 33rem; }
-.feature-text > p { margin-top: var(--nv-space-5); color: var(--nv-color-text-secondary); }
+.feature { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-7); align-items: start; }
+.feature-text { max-width: 36rem; }
+.feature-text > p { margin-top: var(--nv-space-5); color: var(--nv-color-text-secondary); font-size: 1.0625rem; line-height: 1.6; }
 .points { display: grid; gap: var(--nv-space-4); margin-top: var(--nv-space-6); }
 .points li { display: flex; align-items: flex-start; gap: var(--nv-space-4); }
 .points .ico { margin-top: 0.15em; color: var(--nv-color-accent-default); }
-.fine {
+.feature-text > .fine {
   margin-top: var(--nv-space-6);
-  padding-left: var(--nv-space-5);
-  border-left: 2px solid var(--nv-color-border-separator);
+  padding-top: var(--nv-space-5);
+  border-top: var(--hairline);
   color: var(--nv-color-text-secondary);
   font-size: 0.9375rem;
 }
 .fine strong { color: var(--nv-color-text-primary); }
 
 .stage {
-  padding: clamp(1rem, 0.4rem + 3vw, 2.75rem);
+  padding: clamp(0.5rem, -0.4rem + 4vw, 2rem);
   border-radius: var(--nv-radius-xl);
   background: var(--nv-color-bg-sunken);
 }
-@media (min-width: 60rem) {
-  .feature { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--nv-space-9); }
-  .feature:nth-child(even) .feature-text { order: 2; }
+@media (min-width: 64rem) {
+  .feature { grid-template-columns: minmax(0, 1fr) min(29rem, 55%); column-gap: var(--nv-space-9); row-gap: var(--nv-space-9); }
+  .stage { margin-top: var(--nv-space-3); }
+  .steps { grid-column: 1 / -1; }
+}
+
+/* The band alone, in three states, cropped from real windows at their real size. The capture
+   gives the three one width and one height (the band's row), with the same space around what
+   each says, so they stack as one column of one width at any page width. The hairline frames
+   the two plain ones; the temporary one keeps the band's own dashed edge and no other (its
+   frame stays transparent, so the three keep one size). */
+.bands { margin-top: var(--nv-space-6); }
+.bands ul { display: grid; justify-items: start; gap: var(--nv-space-2); }
+/* The hairline goes outside the band's pixels (content-box): inside them, it would scale the picture down by 2 px. */
+.bands img { display: block; box-sizing: content-box; max-width: calc(100% - 2px); height: auto; border: var(--hairline); border-radius: var(--nv-radius-xs); }
+.bands li:last-child img { border-color: transparent; border-radius: 0; }
+.bands figcaption { margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
+.bands .prov { margin-top: var(--nv-space-2); }
+
+/* A recorded scene: a numbered stop on the line. */
+.steps { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-9); }
+.step { counter-increment: step; }
+.step h3 { position: relative; font-size: 1.25rem; }
+.step h3::before {
+  content: counter(step);
+  position: absolute;
+  left: calc(var(--line-x) - var(--lane) + var(--line) / 2 - var(--node) / 2);
+  top: 0.65em;
+  display: grid;
+  place-items: center;
+  width: var(--node);
+  height: var(--node);
+  border-radius: 50%;
+  background: var(--nv-color-accent-default);
+  box-shadow: 0 0 0 0.25rem var(--stop-bg);
+  color: var(--nv-color-accent-on);
+  font-size: 0.875rem;
+  font-weight: var(--nv-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  translate: 0 -50%;
+}
+.scene { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-4); max-width: 46rem; margin-top: var(--nv-space-5); }
+.scene picture { display: block; }
+.scene picture .shot { width: 100%; height: auto; border-radius: var(--nv-radius-md); box-shadow: var(--nv-elevation-2); }
+.scene figcaption { display: grid; gap: var(--nv-space-4); }
+.scene .said { font-size: 1.0625rem; }
+
+/* The detail: the band of the window the scene ends in, a picture of its own cut from the
+   capture at the capture's scale (1.5x) and shown at the window's real size, its width and
+   height attributes (smaller only where the page is narrower than it), its hairline outside them. */
+.detail .shot { display: block; box-sizing: content-box; max-width: calc(100% - 2px); height: auto; border-radius: var(--nv-radius-xs); }
+/* What was done to the video after its capture: words, set as the caption, not as a stamp. */
+.scene .edits { font-family: inherit; }
+.detail p { margin-top: var(--nv-space-2); color: var(--nv-color-text-secondary); font-size: var(--nv-type-caption-size); }
+
+/* The whole scene, on request: nothing of the video is fetched before play is pressed. */
+.whole summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--nv-space-3);
+  width: fit-content;
+  min-height: 2.75rem;
+  font-size: 0.9375rem;
+  font-weight: var(--nv-font-weight-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+.whole summary::-webkit-details-marker { display: none; }
+.whole summary::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-block: 0.35em solid transparent;
+  border-left: 0.55em solid var(--nv-color-accent-default);
+}
+.whole[open] summary::before { rotate: 90deg; }
+.whole .meta { flex-basis: 100%; padding-left: calc(0.55em + var(--nv-space-3)); color: var(--nv-color-text-secondary); font-weight: var(--nv-font-weight-regular); }
+.scene-video {
+  width: 100%;
+  margin-top: var(--nv-space-3);
+  border: var(--hairline);
+  border-radius: var(--nv-radius-md);
+  background: var(--nv-color-bg-sunken);
+  aspect-ratio: 1280 / 800;
+}
+.transcript { margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.9375rem; }
+@media (min-width: 30rem) {
+  .whole .meta { flex-basis: auto; padding-left: 0; }
+}
+@media (min-width: 75rem) {
+  .scene { grid-template-columns: minmax(0, 1fr) min(27rem, 50%); column-gap: var(--nv-space-7); max-width: none; }
+  .scene picture, .scene .whole { grid-column: 1; }
+  .scene figcaption { grid-column: 2; grid-row: 1 / span 2; align-content: start; }
+}
+
+/* The recorded scenes exist in the light theme only. On a dark page they are the brightest
+   things there, and are framed as what they are, pictures of a light window: the control
+   border all round, and no shadow, which a light surface does not cast on a dark one. The
+   captures (the corner in the hero, the bands) have a dark version and are not touched. */
+@media (prefers-color-scheme: dark) {
+  .scene picture .shot, .detail .shot, .scene-video { border-color: var(--nv-color-border-control); box-shadow: none; }
+}
+
+/* The one entrance: opacity and at most 16 px, on a scene's picture only (never on a caption,
+   a transcript or a control), only for people who did not ask for less motion, and only where
+   the engine has scroll-driven animations. Without them the picture is simply there. */
+@keyframes arrive {
+  from { opacity: 0; translate: 0 16px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    .arrive { animation: arrive linear both; animation-timeline: view(); animation-range: entry 0% entry 60%; }
+  }
 }
 
 .panel {
@@ -533,7 +616,7 @@ select.field { padding-right: var(--nv-space-7); }
   border-top: var(--hairline);
   background: color-mix(in oklab, var(--nv-color-bg-sunken) 55%, var(--nv-color-bg-surface));
 }
-.panel-foot .grow { flex: 1; min-width: 0; }
+.panel-foot .grow { flex: 1 1 10rem; min-width: 0; }
 
 .chip {
   display: inline-flex;
@@ -599,6 +682,8 @@ select.field { padding-right: var(--nv-space-7); }
   font-weight: var(--nv-font-weight-semibold);
 }
 .guard-rows > li { flex-wrap: wrap; }
+.guard-rows .grow { flex-basis: 12rem; }
+.panel-foot { flex-wrap: wrap; }
 
 .lock { display: grid; justify-items: center; gap: var(--nv-space-3); padding: var(--nv-space-7) var(--nv-space-5) var(--nv-space-6); text-align: center; }
 .lock .ico { width: 2rem; height: 2rem; color: var(--nv-color-text-secondary); }
@@ -615,6 +700,9 @@ select.field { padding-right: var(--nv-space-7); }
   color: var(--nv-color-control-selected-text);
   font-weight: var(--nv-control-selected-weight);
 }
+@media (max-width: 30rem) {
+  .levels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .levels-row { display: block; padding: var(--nv-space-4) var(--nv-space-5); border-bottom: var(--hairline); }
 .state { display: inline-flex; align-items: center; gap: 0.4em; color: var(--nv-color-text-secondary); white-space: nowrap; }
 .state .ico { width: 1.1em; height: 1.1em; }
@@ -622,7 +710,7 @@ select.field { padding-right: var(--nv-space-7); }
 
 /* -- also built in --------------------------------------------------------------------- */
 
-.more { padding-block: var(--section); border-top: var(--hairline); background: var(--nv-color-bg-sunken); }
+.more { --stop-bg: var(--nv-color-bg-sunken); padding-block: var(--section); background: var(--nv-color-bg-sunken); }
 .section-head { max-width: 42rem; margin-bottom: var(--nv-space-8); }
 .section-head p { margin-top: var(--nv-space-5); color: var(--nv-color-text-secondary); font-size: 1.125rem; }
 .more-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 var(--nv-space-9); }
@@ -676,7 +764,10 @@ select.field { padding-right: var(--nv-space-7); }
 .legend li { display: inline-flex; align-items: center; gap: var(--nv-space-3); }
 .sources { max-width: 46rem; margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
 .swipe { margin-bottom: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
-@media (min-width: 66rem) {
+/* Hidden only where the table fits whole: the width the table's box really has (its 62rem and
+   two 1px borders), measured on its column, so a classic scrollbar or a wider lane is counted. */
+.compare .wrap { container-type: inline-size; }
+@container (min-width: calc(62rem + 2px)) {
   .swipe { display: none; }
 }
 
@@ -693,7 +784,7 @@ select.field { padding-right: var(--nv-space-7); }
 
 /* -- questions ------------------------------------------------------------------------- */
 
-.faq { padding-block: var(--section); border-top: var(--hairline); }
+.faq { padding-block: var(--section); }
 .faq-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-7); }
 .faq-list { border-top: 1px solid var(--nv-color-border-separator); }
 .faq-list details { border-bottom: 1px solid var(--nv-color-border-separator); }
@@ -711,36 +802,67 @@ select.field { padding-right: var(--nv-space-7); }
   cursor: pointer;
 }
 .faq-list summary::-webkit-details-marker { display: none; }
-.faq-list summary .ico { color: var(--nv-color-text-secondary); transition: transform var(--nv-motion-duration-base) var(--nv-motion-easing-standard); }
-.faq-list details[open] summary .ico { transform: rotate(45deg); }
+.faq-list summary .ico { color: var(--nv-color-text-secondary); }
+.faq-list details[open] summary .ico { rotate: 45deg; }
 .faq-list summary:hover .ico { color: var(--nv-color-text-primary); }
 .faq-list details > div { max-width: 44rem; padding-bottom: var(--nv-space-6); color: var(--nv-color-text-secondary); }
 @media (min-width: 60rem) {
   .faq-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); gap: var(--nv-space-9); }
-  .faq-grid h2 { position: sticky; top: 6rem; align-self: start; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .faq-list summary .ico, .btn, .field { transition: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .faq-list summary .ico { transition: rotate var(--nv-motion-duration-base) var(--nv-motion-easing-standard); }
 }
 
-/* -- closing band ---------------------------------------------------------------------- */
+/* -- closing band: the line runs into the brand's dark home and turns towards the form ---- */
 
 .cta {
+  --turn: 6.5rem;
   color-scheme: dark;
-  padding-block: var(--section);
+  padding-block: 0 var(--section);
   background:
-    radial-gradient(60% 90% at 12% 100%, var(--nv-color-ambience-to), transparent 70%),
+    radial-gradient(55% 90% at 100% 100%, var(--nv-color-ambience-to), transparent 70%),
     var(--nv-color-bg-sunken);
   color: var(--nv-color-text-primary);
 }
-.cta-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); align-items: center; }
-.cta .trail { display: flex; margin-bottom: var(--nv-space-6); }
+.cta .wrap::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--gutter) + var(--line-x));
+  top: 0;
+  width: calc(var(--lane) - var(--line-x) - 0.5rem);
+  height: var(--turn);
+  border-bottom: var(--line) solid var(--nv-color-route-vertical);
+  border-left: var(--line) solid var(--nv-color-route-vertical);
+  border-bottom-left-radius: 0.75rem;
+}
+.cta .wrap::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--gutter) + var(--lane) - 0.5rem - 4px);
+  top: calc(var(--turn) - var(--line) / 2 - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nv-color-route-vertical);
+}
+/* Forced colours paint backgrounds over: the line and its dots are drawn in the text's colour,
+   as the window's band draws its glyphs (browser/shell/shared/window-band.css). */
+@media (forced-colors: active) {
+  .route::before, .trail i, .cta .wrap::after { forced-color-adjust: none; background: CanvasText; }
+}
+.cta-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); }
+/* the heading's first line sits level with the turn */
+.cta h2 { margin-top: calc(var(--turn) - 0.55em); }
 .cta p { max-width: 30rem; margin-top: var(--nv-space-5); color: var(--nv-color-text-secondary); font-size: 1.125rem; }
 .cta .join { max-width: none; margin-top: 0; }
 .cta .join-row { grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-5); }
 .cta .join-note { font-size: 0.875rem; }
-@media (min-width: 60rem) {
-  .cta-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: var(--nv-space-9); }
+@media (min-width: 64rem) {
+  .cta .wrap::before { width: calc(var(--lane) - var(--line-x) - 0.75rem); border-bottom-left-radius: 1.25rem; }
+  .cta .wrap::after { left: calc(var(--gutter) + var(--lane) - 0.75rem - 4px); }
+  .cta-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: var(--nv-space-9); align-items: start; }
+  /* the form starts level with the turn */
+  .cta .join { margin-top: calc(var(--turn) - 1.25rem); }
 }
 
 /* -- footer ---------------------------------------------------------------------------- */

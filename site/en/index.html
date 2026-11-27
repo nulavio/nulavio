@@ -88,15 +88,17 @@
 </div>
 </header>
 <main id="main">
+<div class="route">
 <section class="hero" aria-labelledby="hero-h">
 <div class="wrap hero-grid">
+<span class="trail origin" aria-hidden="true"><i></i><i></i><i></i></span>
 <div class="hero-text" itemscope itemtype="https://schema.org/SoftwareApplication" itemid="https://nulavio.net/#software">
 <meta itemprop="name" content="Nulavio">
 <meta itemprop="applicationCategory" content="BrowserApplication">
 <meta itemprop="operatingSystem" content="Linux">
 <meta itemprop="inLanguage" content="en">
 <link itemprop="url" href="https://nulavio.net/">
-<p class="kicker"><span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>Alpha out for Fedora and Ubuntu · <a href="/en/download/">Download</a></p>
+<p class="kicker">Alpha out for Fedora and Ubuntu · <a href="/en/download/">Download</a></p>
 <h1 id="hero-h"><span>Your web.</span> <span class="mine">Your rules.</span></h1>
 <p class="lead" itemprop="description">Nulavio is the Linux browser that is <strong>protected from the start</strong>: it blocks ads and trackers on the first launch and encrypts your profiles on disk. No telemetry, no account, and on its own the browser contacts no Nulavio server.</p>
 <form class="join" action="/api/waitlist" method="post">
@@ -110,39 +112,13 @@
 <p class="join-note">One email, when it is your turn. <a href="/en/waitlist/#data">What we keep</a></p>
 </form>
 </div>
-<div class="hero-visual">
-<div class="win" data-theme="dark" role="img" aria-label="A Nulavio window in the Personal profile, protected, with the tabs on the side. The welcome page says: you are protected from the start. Tracking protection in all windows, HTTPS-Only in all windows, the uBlock Origin content filter active, and nothing is sent to Nulavio.">
-<div class="win-bar">
-<span class="win-band"><span class="tile">P</span><b>Personal</b><span class="meta"><svg class="ico"><use href="#i-lock"/></svg>Protected</span></span>
-<span class="win-nav"><svg class="ico"><use href="#i-sidebar"/></svg><svg class="ico"><use href="#i-back"/></svg><svg class="ico"><use href="#i-reload"/></svg></span>
-<span class="win-url"><svg class="ico"><use href="#i-shield"/></svg><span>Search with DuckDuckGo or enter an address</span></span>
-<span class="win-tools"><svg class="ico"><use href="#i-ext"/></svg><svg class="ico"><use href="#i-menu"/></svg></span>
-</div>
-<div class="win-main">
-<div class="win-side">
-<span class="tab tab-on"><img src="/assets/nulavio-symbol.svg" alt="" width="14" height="16">New tab</span>
-<span class="tab"><svg class="ico"><use href="#i-globe"/></svg>Meeting notes</span>
-<span class="tab"><svg class="ico"><use href="#i-globe"/></svg>Documentation</span>
-<span class="tab"><svg class="ico"><use href="#i-plus"/></svg>New tab</span>
-<span class="side-foot"><svg class="ico"><use href="#i-star"/></svg><svg class="ico"><use href="#i-clock"/></svg><svg class="ico"><use href="#i-key"/></svg><svg class="ico"><use href="#i-sliders"/></svg></span>
-</div>
-<div class="win-page">
-<div class="nt-search"><svg class="ico"><use href="#i-search"/></svg>Search with DuckDuckGo</div>
-<div class="nt-card">
-<div class="nt-title"><img src="/assets/nulavio-symbol.svg" alt="" width="14" height="16">Welcome to Nulavio</div>
-<p>You are protected from the start. Everything here can be changed later.</p>
-<ul class="nt-checks">
-<li><svg class="ico"><use href="#i-check"/></svg>Tracking protection: in all windows</li>
-<li><svg class="ico"><use href="#i-check"/></svg>HTTPS-Only: in all windows</li>
-<li><svg class="ico"><use href="#i-check"/></svg>Content filter: uBlock Origin {{ubo}} active</li>
-<li><svg class="ico"><use href="#i-check"/></svg>Nothing is sent to Nulavio</li>
-</ul>
-<div class="nt-actions"><b>Get started</b><span>Skip</span></div>
-</div>
-</div>
-</div>
-</div>
-</div>
+<figure class="closeup">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/window-crop-en-US-dark.webp" {{wh:window-crop-en-US-dark.webp}}>
+<img class="shot" src="/assets/shots/window-crop-en-US-light.webp" {{wh:window-crop-en-US-light.webp}} alt="The top left corner of the Nulavio window, at its real size. The band shows the profile's yellow icon, the name Banking and a padlock with the word Protected; below it, the address bar with 127.0.0.1 and the vertical list with three tabs: Monthly statement, selected, Bills to pay and Savings." loading="eager" fetchpriority="high">
+</picture>
+<figcaption>The corner of the window, at its real size. The band says whose window it is, “Banking”, and how it stands, “Protected”. <span class="prov">commit {{shot:window-crop-en-US-light.webp}} · build {{buildid}} · Firefox {{shots_firefox}}</span></figcaption>
+</figure>
 </div>
 </section>
 <section class="proof" aria-label="Nulavio in numbers">
@@ -171,7 +147,7 @@
 <div class="panel" role="img" aria-label="Site panel for news.example: a secure connection and 35 items blocked on this page, among ads, cross-site cookies, social media trackers and fingerprinters. Protection on this site is on.">
 <div class="panel-head"><svg class="ico"><use href="#i-shield"/></svg><b>news.example</b><span class="end">Secure connection</span></div>
 <ul class="rows">
-<li><span class="grow">Ads<small>uBlock Origin</small></span><span class="count">21 blocked</span></li>
+<li><span class="grow">Ads<small>uBlock Origin {{ubo}}</small></span><span class="count">21 blocked</span></li>
 <li><span class="grow">Cross-site cookies</span><span class="count">9 blocked</span></li>
 <li><span class="grow">Social media trackers</span><span class="count">3 blocked</span></li>
 <li><span class="grow">Fingerprinters</span><span class="count">2 blocked</span></li>
@@ -184,6 +160,23 @@
 <div class="feature-text">
 <h2 id="profiles-h">Work, banking and personal life, each in its own profile</h2>
 <p>Each profile has its own logins, cookies, history and extensions. You say once where each site opens, and Nulavio takes every link to the right profile: the ones that come from other apps, the ones you type and the ones you click on pages.</p>
+<figure class="bands">
+<ul role="list">
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-personal-strip-en-US-dark.webp" {{wh:band-personal-strip-en-US-dark.webp}}>
+<img src="/assets/shots/band-personal-strip-en-US-light.webp" {{wh:band-personal-strip-en-US-light.webp}} alt="Nulavio band in the Personal, no password state." decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-protected-strip-en-US-dark.webp" {{wh:band-protected-strip-en-US-dark.webp}}>
+<img src="/assets/shots/band-protected-strip-en-US-light.webp" {{wh:band-protected-strip-en-US-light.webp}} alt="Nulavio band in the Banking, protected state." decoding="async">
+</picture></li>
+<li><picture>
+<source media="(prefers-color-scheme: dark)" srcset="/assets/shots/band-temporary-strip-en-US-dark.webp" {{wh:band-temporary-strip-en-US-dark.webp}}>
+<img src="/assets/shots/band-temporary-strip-en-US-light.webp" {{wh:band-temporary-strip-en-US-light.webp}} alt="Nulavio band in the Temporary profile: deleted on close." decoding="async">
+</picture></li>
+</ul>
+<figcaption>The band in three states, cropped from real windows. The text of each one was read from the band at capture time. <span class="prov">commit {{shot:band-protected-strip-en-US-light.webp}} · build {{buildid}} · Firefox {{shots_firefox}}</span></figcaption>
+</figure>
 <ul class="points">
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Switch profiles in one click, with colour and name always in view</li>
 <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Temporary profile: gone from the disk when you close its window</li>
@@ -203,6 +196,64 @@
 <div class="chips"><span class="chip"><span class="tile tile-violet">R</span>Research</span><span class="chip chip-temp">Temporary · deleted on close</span></div>
 </div>
 </div>
+<ol class="steps" role="list" aria-label="Recorded scenes">
+<li class="step">
+<h3>A profile opens in a window of its own</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(max-width: 47.9375rem)" srcset="/assets/clips/profile-opens-en-US-still-narrow.webp" type="image/webp" width="448" height="280">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/profile-opens-en-US-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/profile-opens-en-US-still.webp" width="800" height="500" alt="The Work window, opened by a click on Open in Settings › Profiles: its band reads “Work · No password”, and its one tab shows a page of open support tickets." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>See the whole scene<span class="visually-hidden">: a profile opens in a window of its own</span> <span class="meta">{{clip_s:profile-opens}} s, no sound, with captions</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/profile-opens-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A profile opens in a window of its own">
+<source src="/assets/clips/profile-opens-en-US.webm" type="video/webm">
+<source src="/assets/clips/profile-opens-en-US.mp4" type="video/mp4">
+<track kind="captions" srclang="en" label="English" src="/assets/clips/profile-opens-en-US.vtt" default>
+</video>
+<p class="transcript">{{clip_said:profile-opens}}</p>
+</details>
+<figcaption>
+<p class="said">Opening “Work” opens a window that is only its own, with the profile's colour and name on the band.</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/profile-opens-en-US-detail.webp" width="384" height="44" alt="" loading="lazy" decoding="async">
+<p>This window's band, from the same frame</p>
+</div>
+<p class="prov">{{clip:profile-opens}}</p>
+<p class="prov edits">{{clip_edits:profile-opens}}</p>
+</figcaption>
+</figure>
+</li>
+<li class="step">
+<h3>A link goes to the right profile</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(max-width: 47.9375rem)" srcset="/assets/clips/link-routed-en-US-still-narrow.webp" type="image/webp" width="448" height="280">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/link-routed-en-US-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/link-routed-en-US-still.webp" width="800" height="500" alt="The Work window with the team intranet in a new tab, after its address was typed in the Personal profile: the band reads “Work · No password · Opened by your rule · Change”." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>See the whole scene<span class="visually-hidden">: a link goes to the right profile</span> <span class="meta">{{clip_s:link-routed}} s, no sound, with captions</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/link-routed-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A link goes to the right profile">
+<source src="/assets/clips/link-routed-en-US.webm" type="video/webm">
+<source src="/assets/clips/link-routed-en-US.mp4" type="video/mp4">
+<track kind="captions" srclang="en" label="English" src="/assets/clips/link-routed-en-US.vtt" default>
+</video>
+<p class="transcript">{{clip_said:link-routed}}</p>
+</details>
+<figcaption>
+<p class="said">The link opens in the “Work” window, and the band says your rule did it: “Opened by your rule · Change”.</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/link-routed-en-US-detail.webp" width="384" height="27" alt="" loading="lazy" decoding="async">
+<p>This window's band, from the same frame</p>
+</div>
+<p class="prov">{{clip:link-routed}}</p>
+<p class="prov edits">{{clip_edits:link-routed}}</p>
+</figcaption>
+</figure>
+</li>
+</ol>
 </section>
 <section class="feature" aria-labelledby="vault-h">
 <div class="feature-text">
@@ -227,6 +278,36 @@
 <div class="panel-foot"><span class="grow"><small>Lost everything? Use the recovery code.</small></span></div>
 </div>
 </div>
+<ol class="steps" role="list" start="3" aria-label="Recorded scenes">
+<li class="step">
+<h3>A protected profile asks for its password, then opens</h3>
+<figure class="scene">
+<picture class="arrive">
+<source media="(max-width: 47.9375rem)" srcset="/assets/clips/protected-unlocks-en-US-still-narrow.webp" type="image/webp" width="448" height="272">
+<source media="(prefers-reduced-motion: no-preference)" srcset="/assets/clips/protected-unlocks-en-US-loop.webp" type="image/webp" width="800" height="500">
+<img class="shot" src="/assets/clips/protected-unlocks-en-US-still.webp" width="800" height="500" alt="The unlock page of the Banking profile, opened from Settings › Profiles: “This profile is locked”, with the password already typed in the Profile password field, before Unlock is clicked." loading="lazy" decoding="async">
+</picture>
+<details class="whole">
+<summary>See the whole scene<span class="visually-hidden">: a protected profile asks for its password, then opens</span> <span class="meta">{{clip_s:protected-unlocks}} s, no sound, with captions</span></summary>
+<video class="scene-video" controls preload="none" playsinline muted poster="/assets/clips/protected-unlocks-en-US-poster.webp" width="1280" height="800" aria-label="The whole scene: A protected profile asks for its password, then opens">
+<source src="/assets/clips/protected-unlocks-en-US.webm" type="video/webm">
+<source src="/assets/clips/protected-unlocks-en-US.mp4" type="video/mp4">
+<track kind="captions" srclang="en" label="English" src="/assets/clips/protected-unlocks-en-US.vtt" default>
+</video>
+<p class="transcript">{{clip_said:protected-unlocks}}</p>
+</details>
+<figcaption>
+<p class="said">“Banking” keeps its files encrypted until it is unlocked, in this scene with its password. Only then does its window open, and the band reads “Protected”.</p>
+<div class="detail" aria-hidden="true">
+<img class="shot" src="/assets/clips/protected-unlocks-en-US-detail.webp" width="384" height="44" alt="" loading="lazy" decoding="async">
+<p>After the password: the band of the “Banking” window</p>
+</div>
+<p class="prov">{{clip:protected-unlocks}}</p>
+<p class="prov edits">{{clip_edits:protected-unlocks}}</p>
+</figcaption>
+</figure>
+</li>
+</ol>
 </section>
 <section class="feature" aria-labelledby="guard-h">
 <div class="feature-text">
@@ -417,10 +498,10 @@
 </div>
 </div>
 </section>
+</div>
 <section class="cta" id="join" data-theme="dark" aria-labelledby="join-h">
 <div class="wrap cta-grid">
 <div>
-<span class="trail" aria-hidden="true"><i></i><i></i><i></i></span>
 <h2 id="join-h">Browse forward. Leave no trail.</h2>
 <p>Join the waitlist and get the word when Nulavio reaches your system. Fedora first, Ubuntu next.</p>
 </div>

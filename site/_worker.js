@@ -71,7 +71,7 @@ const HEADERS = {
 const PAGE_HEADERS = {
   "Cache-Control": "no-store",
   "Content-Security-Policy":
-    "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'self'; img-src 'self'; media-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",

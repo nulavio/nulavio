@@ -97,7 +97,9 @@ class DiscoveryTest(unittest.TestCase):
             faq = [n for n in tree.all() if n.attrs.get("itemtype") == "https://schema.org/FAQPage"]
             self.assertEqual(len(faq), 1, page)
             questions = [n for n in faq[0].walk() if n.attrs.get("itemtype") == "https://schema.org/Question"]
-            self.assertEqual(len(questions), len(tree.all("details")), page)
+            # every question of the list is one; the landing's other <details> open a recorded scene
+            self.assertEqual(len(questions), len([n for n in faq[0].walk() if n.tag == "details"]), page)
+            self.assertGreaterEqual(len(questions), 5, page)
             for question in questions:
                 self.assertEqual(question.attrs.get("itemprop"), "mainEntity")
                 self.assertTrue(question.attrs.get("id"))
