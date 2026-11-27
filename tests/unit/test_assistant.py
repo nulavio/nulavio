@@ -2224,6 +2224,38 @@ pageHeld.splice(0).forEach(answer => answer());
 await idle();
 out.tabChangedOfferAfter = $("include-page").hidden ? null : $("include-page").textContent;
 out.tabChangedSummarizeAfter = !$("summarize").hidden;
+// The same refusals, and Task then Ask chosen while the selected tab is read again (OpenCodeReview, round 3): the
+// mode change voids that read, so it is made again, and back in Ask the page of the tab selected now is offered.
+out.modeAfterRefusal = {};
+for (const [n, reason] of [[48, "tab-changed"], [49, "page-changed"]]) {
+  selected = tab;
+  $("allow-profile").fire("click");
+  await idle();
+  kept = [item(`c${n}`, "Antiga")];
+  $("allow-profile").fire("click");
+  await idle();
+  holdStart = true;
+  refuse = reason;
+  await send(`Pergunta ${n - 5}`);
+  selected = otherTab;
+  holdPage = true;
+  holdStart = false;
+  startHeld.splice(0).forEach(answer => answer());
+  await idle();
+  refuse = null;
+  $("ask").elements.mode.value = "task";
+  $("ask").fire("change", { target: { name: "mode" } });
+  $("ask").elements.mode.value = "ask";
+  $("ask").fire("change", { target: { name: "mode" } });
+  holdPage = false;
+  pageHeld.splice(0).forEach(answer => answer());
+  await idle();
+  out.modeAfterRefusal[reason] = [
+    $("include-page").hidden ? null : $("include-page").textContent,
+    !$("summarize").hidden,
+    !$("no-page").hidden,
+  ];
+}
 selected = tab;
 console.log(JSON.stringify(out));
 """
@@ -2542,6 +2574,14 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["tabChangedOfferWhileReading"], [None, False])  # not the left tab's page, nor Resumir
         self.assertIn("assistantIncludePage|Outra", out["tabChangedOfferAfter"])  # the tab selected now
         self.assertTrue(out["tabChangedSummarizeAfter"])
+
+    def test_a_mode_change_after_a_refusal_still_brings_the_page_offer_back(self):
+        out = self._run()  # #861, OpenCodeReview round 3
+        for reason in ("tab-changed", "page-changed"):
+            offer, summarize, no_page = out["modeAfterRefusal"][reason]
+            self.assertIn("assistantIncludePage|Outra", offer or "", reason)  # the tab selected now
+            self.assertTrue(summarize, reason)
+            self.assertFalse(no_page, reason)  # a web page is selected: no "no page" hint
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()

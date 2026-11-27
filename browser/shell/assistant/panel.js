@@ -1096,7 +1096,13 @@ $("prompt").addEventListener("keydown", event => {
 $("ask").addEventListener("change", event => {
   if (event.target.name === "mode") {
     cancelWait(); // a Send that waits was pressed for the mode before: nothing goes (#816)
-    newContext();
+    // An Include on its way is void either way. A read of the selected tab on its way is made again, not dropped: after
+    // a refusal (#861) it is the only one that brings the page offer back.
+    if (tabCheck) {
+      refreshPage();
+    } else {
+      newContext();
+    }
     syncMode();
   }
 });
