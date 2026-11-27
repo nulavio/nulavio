@@ -532,6 +532,71 @@ class PhoneSessionTest(unittest.TestCase):
         self.assertFalse(phone_session.is_current_request(box, "a-session"))
         self.assertFalse((box.root / phone_session.REQUEST_RECORD).exists())
 
+    def test_07e_a_request_lock_with_a_broader_mode_is_made_private(self):
+        # #823 review, round 2 (I9): a lock file put back with 0644, say from a backup, is 0600 once it is used.
+        box = profiles.container(self.prof)
+        lock = box.root / f"{phone_session.REQUEST_RECORD}.lock"
+        lock.touch()
+        os.chmod(lock, 0o644)  # not through the open's mode: the umask would narrow that one
+        phone_session.claim_request(box, "a-session")
+        self.assertEqual(lock.stat().st_mode & 0o777, 0o600)
+
+    def test_07f_a_held_request_lock_is_waited_for_a_bounded_time(self):
+        # #823 review, round 2: a helper stopped while it holds the record's lock does not hold up the others for
+        # ever. The last check gives up and opens nothing; the claim fails, so the start answers storage-failed.
+        box = profiles.container(self.prof)
+        phone_session.claim_request(box, "a-session")
+        held = os.open(box.root / f"{phone_session.REQUEST_RECORD}.lock", os.O_RDWR)
+        self.addCleanup(os.close, held)
+        phone_session.fcntl.flock(held, phone_session.fcntl.LOCK_EX)
+        answers = []
+
+        def ask():
+            answers.append(phone_session.is_current_request(box, "a-session"))
+            try:
+                phone_session.claim_request(box, "a-later-session")
+            except OSError as exc:
+                answers.append(type(exc))
+
+        with mock.patch.object(phone_session, "REQUEST_LOCK_WAIT", 0.5):
+            thread = threading.Thread(target=ask, daemon=True)
+            thread.start()
+            thread.join(5)
+        self.addCleanup(phone_session.fcntl.flock, held, phone_session.fcntl.LOCK_UN)
+        self.assertFalse(thread.is_alive(), "still waiting for the record's lock")
+        self.assertEqual(answers, [False, BlockingIOError])
+
+    def test_07g_a_replaced_notice_is_believed_only_when_the_record_names_another_session(self):
+        # #823 review, round 2: a record that cannot be read for a moment (or is missing) is no proof that another
+        # request took this one's place. The helper keeps waiting, and still unlocks once the record is back.
+        self.pair()
+        session, first, thread = self.start("unlock", {"autolock": False})
+        box = profiles.container(self.prof)
+        record = box.root / phone_session.REQUEST_RECORD
+        aside = box.root / "phone-request.aside"
+        os.rename(record, aside)
+        os.symlink(aside, record)  # not read: a link is refused
+        self.assertEqual(session.handle({"action": "replaced"}), {"error": "bad-state"})
+        os.unlink(record)  # missing
+        self.assertEqual(session.handle({"action": "replaced"}), {"error": "bad-state"})
+        self.assertFalse(session.cancelled.is_set())
+        os.rename(aside, record)
+
+        phone = self.phone.unlock(first["qr"])
+        thread.join(20)
+        phone.join(20)
+        self.assertEqual(session.state, "unlocked")
+        self.assertTrue(profiles.container(self.prof).mounted())
+        profiles.lock(self.prof)
+
+    def test_07h_a_replaced_helper_that_cannot_be_reached_is_left_alone(self):
+        # #823 review, round 2: telling the replaced helper is a courtesy. When the runtime folder cannot be used
+        # any more, the new request still goes on to wait for the phone.
+        unsafe = phone_session.paths.UnsafePathError("refusing to use symlink")
+        for error in (unsafe, PermissionError(13, "Permission denied")):
+            with self.subTest(error=type(error).__name__), mock.patch.object(phone_session, "sessions_dir", side_effect=error):
+                phone_session._end_replaced("an-earlier-session", "this-session")
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):

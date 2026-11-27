@@ -12,7 +12,7 @@ A profile has one pending phone unlock at a time, across helper processes
 (#669, U-T19): its folder of encrypted files (`P.vault/`) records the session id
 of the latest request (`phone-request`, 0600). A new request replaces that
 record and tells the earlier helper it was replaced, which stops once its own
-record agrees; a helper opens the profile only while the record still names its
+record, read, names another session; a helper opens the profile only while the record still names its
 own session, checked under the profile's state lock just before the volume is
 mounted.
 """
@@ -42,6 +42,7 @@ REQUEST_LIMIT = 8192
 LINGER = 30  # seconds the final state stays readable
 CONTROL_LIMIT = 1024
 REQUEST_RECORD = "phone-request"  # in P.vault/: the session id of the profile's one pending phone unlock (#669)
+REQUEST_LOCK_WAIT = 5.0  # seconds to wait for the record's lock; it is held only to read or write that small file
 
 
 def sessions_dir() -> Path:
@@ -121,7 +122,8 @@ class Session:
             return {"cancelled": True}
         if action == "replaced":
             # Believed only when this helper's own profile agrees: a copy of the profile's folder carries the record
-            # naming this session, and a request on that copy must not end this one (#823 review).
+            # naming this session, and a request on that copy must not end this one (#823 review). Agreeing means
+            # a record read and naming another session: one missing or unreadable for a moment proves nothing.
             if self.superseded is None or not self.superseded():
                 return {"error": "bad-state"}
             self.cancelled.set()
@@ -193,15 +195,26 @@ def control(session_id: str, request: dict, timeout: float = 5.0) -> dict:
 
 
 @contextlib.contextmanager
-def _request_lock(box: storage.Container):
+def _request_lock(box: storage.Container, wait: float | None = None):
     """A lock of its own for the record, never the state lock: a rekey or a mount holds that one for long, and a
-    new request must show its QR before the browser gives up on the helper."""
+    new request must show its QR before the browser gives up on the helper. Waited for `wait` seconds at most
+    (REQUEST_LOCK_WAIT), then BlockingIOError: a helper stopped while holding it holds up no one for ever."""
     fd = os.open(box.root / f"{REQUEST_RECORD}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():  # I9: not a FIFO, not someone else's file
             raise paths.UnsafePathError(f"not a private regular file: {REQUEST_RECORD}.lock")
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if stat.S_IMODE(st.st_mode) & ~paths.PRIVATE_FILE_MODE:
+            os.fchmod(fd, paths.PRIVATE_FILE_MODE)  # I9: one put back with a broader mode is made 0600
+        deadline = time.monotonic() + (REQUEST_LOCK_WAIT if wait is None else wait)
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
         yield
     finally:
         os.close(fd)  # releases the lock
@@ -225,6 +238,17 @@ def claim_request(box: storage.Container, session_id: str) -> str:
     return previous
 
 
+def is_replaced(box: storage.Container, session_id: str) -> bool:
+    """Whether the profile's record, read, names another session: what a "replaced" notice needs to be believed.
+    Briefly, for the helper's control loop; a record that cannot be read or the lock not had in time is "no"."""
+    try:
+        with _request_lock(box, wait=1.0):
+            recorded = _recorded(box)
+    except (OSError, UnicodeDecodeError, paths.UnsafePathError):
+        return False
+    return bool(recorded) and not secrets.compare_digest(recorded, session_id)
+
+
 def is_current_request(box: storage.Container, session_id: str) -> bool:
     """Whether the profile's record still names this session. Anything else (another session, no record, one that
     cannot be read) means a later request took its place: the profile is not opened for this one."""
@@ -242,8 +266,8 @@ def _end_replaced(previous: str, session_id: str) -> None:
         return
     try:
         control(previous, {"action": "replaced"}, timeout=2.0)
-    except VaultError:
-        pass  # not a session id: nothing to tell
+    except (VaultError, OSError, paths.UnsafePathError):
+        pass  # not a session id, or the runtime folder cannot be used: nothing to tell, the new request goes on
 
 
 # -- the two operations ------------------------------------------------------------------
@@ -355,7 +379,7 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
         emit({"error": coordinator.error or "failed"})
         return
     req_id, expiry = signed["r"]["req_id"], signed["r"]["expiry"]
-    session.superseded = lambda: not is_current_request(box, session.id)  # before the claim: a later one may tell at once
+    session.superseded = lambda: is_replaced(box, session.id)  # before the claim: a later one may tell at once
     try:
         previous = claim_request(box, session.id)  # this request is now the profile's only pending one
     except (OSError, paths.UnsafePathError):
