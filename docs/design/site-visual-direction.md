@@ -2,7 +2,7 @@
 
 Status: 2026-11-27, steps 1 and 2 of [#173](https://github.com/nulavio/nulavio/issues/173). The maintainer delegated the draft and the choice to the agents ("pode você mesmo fazer", recorded on the issue the same day): three directions were drawn, one was chosen with the reasons below, and **the maintainer can still change it**. Chosen: **«Rota», with two grafts** ([the choice](#the-choice)).
 
-This document picks a look. What holds whatever the look (the page structure, the motion rules, the media rules, the budgets, the recording pipeline) is the specification of phase 1, in [pull request #859](https://github.com/nulavio/nulavio/pull/859) (`docs/design/site-redesign.md`); nothing here changes it. No page under `site/` changes either: the mock-ups live in [mockups/site/](mockups/site/palco.html) and are not deployed.
+This document picks a look. What holds whatever the look (the page structure, the motion rules, the media rules, the budgets, the recording pipeline) is the specification of phase 1, in [pull request #859](https://github.com/nulavio/nulavio/pull/859) (`docs/design/site-redesign.md`); this pull request does not edit it, and the two things the mock-ups add to it are named under [what phase 2 needs](#what-phase-2-needs-from-it), for that document to take in or for the maintainer to refuse. No page under `site/` changes either: the mock-ups live in [mockups/site/](mockups/site/palco.html) and are not deployed.
 
 ![The three directions side by side, light scheme, 1440 px](assets/visual-direction/overview-light.webp)
 
