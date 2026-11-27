@@ -460,6 +460,8 @@ class Bridge:
         if registry.stopped():
             return "stopped"
         agent = self._agent()
+        if registry.stopped():
+            return "stopped"  # turned on while the record was read (#764)
         if agent is None or agent.get("revoked"):
             return "revoked"
         if self.key_sha256 and agent.get("token_sha256") != self.key_sha256:
@@ -490,6 +492,8 @@ class Bridge:
             if self._cancel is not None and self._cancel.is_set():
                 raise Cancelled()
             self._refuse_if_held(capability or self._capability, self._checked if checked is None else checked)
+            if self._cancel is not None and self._cancel.is_set():
+                raise Cancelled()  # cancelled while the registry was read just now
         except (Cancelled, Denied):
             if at:
                 self._target = at

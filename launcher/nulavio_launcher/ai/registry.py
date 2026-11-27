@@ -479,10 +479,12 @@ class BrowserApprover(Approver):
                 "place": {"kind": "profile", "profile": place} if place else {"kind": "workspace"},
                 "created": now().isoformat(timespec="seconds"),
                 "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
-        if cancel is not None and cancel.is_set():
-            return "deny"  # cancelled while the registry was read above: still never written (#764)
+        if _off(cancel):
+            return "deny"  # cancelled or stopped while the registry was read above: still never written (#764)
         paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
         try:
+            if _off(cancel):
+                return "deny"  # called off while it was written: removed below, and no one is told of it
             if self.on_request:
                 self.on_request(body)
             deadline = time.monotonic() + self.notice
@@ -508,9 +510,14 @@ class BrowserApprover(Approver):
                 base.with_suffix(suffix).unlink(missing_ok=True)
 
 
+def _off(cancel: threading.Event | None) -> bool:
+    """The call was cancelled or the stop is on (read from memory and one file: nothing slow)."""
+    return (cancel is not None and cancel.is_set()) or stopped()
+
+
 def _called_off(agent_id: str, cancel: threading.Event | None) -> bool:
     """While a request waits: the call was cancelled, the stop is on, or the agent was paused or revoked."""
-    if (cancel is not None and cancel.is_set()) or stopped():
+    if _off(cancel):
         return True
     try:
         agent = load()["agents"].get(agent_id)
