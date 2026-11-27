@@ -19,7 +19,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher.ai import assistant, audit, registry  # noqa: E402
+from nulavio_launcher.ai import assistant, audit, registry, tools  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "tests" / "lib"))
 from fake_keyring import FAKE_SECRET_TOOL  # noqa: E402
@@ -806,6 +806,28 @@ class AssistantTest(unittest.TestCase):
         with mock.patch.object(sys, "stdin", io.StringIO("not json")), redirect_stdout(out):
             cli.main(["ai", "assistant"])
         self.assertEqual(json.loads(out.getvalue())["error"], "bad-request")
+
+    def test_the_bridges_note_on_page_text_does_not_cut_what_the_result_said(self):
+        # OpenCodeReview on #854: the note naming the fields that hold page text has an allowance of its own. A
+        # page_read that fitted the 20,000 characters the model gets, with the note it had before, still fits.
+        for size in (100, 20_000):
+            with self.subTest(size=size):
+                data = {"tab": "t1", "url": "https://example.org/", "title": "t", "dialog": None, "truncated": False}
+                head = f"Title: t\nURL: {data['url']}\n\n"
+                data["text"] = "x" * (size - len(tools.UNTRUSTED) - 2 - len(head) - 3) + "END"
+                result = tools.Bridge._ok(data, ("url", "title", "text", "dialog.message"), head + data["text"])
+                text = assistant._tool_text(result)
+                note = f"{tools.UNTRUSTED} {tools.PAGE_FIELDS % 'url, title, text, dialog.message'}\n\n"
+                self.assertTrue(text.startswith(note), text[:200])
+                self.assertTrue(text.endswith("\n\n" + head + data["text"]), text[-50:])
+        # A longer result is still cut at 20,000 characters after the note, which stays whole.
+        result = tools.Bridge._ok({"value": "y" * 30_000}, ("value",))
+        text = assistant._tool_text(result)
+        note = text.split("\n\n", 1)[0]
+        self.assertEqual(note, tools.UNTRUSTED + " " + tools.PAGE_FIELDS % "value")
+        self.assertEqual(len(text), len(note) + 2 + 20_000)
+        # Without the note, the cut is where it was.
+        self.assertEqual(len(assistant._tool_text({"content": [{"type": "text", "text": "z" * 30_000}]})), 20_000)
 
 
 # The Shell's side of #653 under Node: the module, with a stand-in for the one engine call it makes when loaded.

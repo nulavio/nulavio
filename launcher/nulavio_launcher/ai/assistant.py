@@ -44,7 +44,7 @@ from pathlib import Path
 
 from .. import paths
 from . import audit, registry
-from .tools import TOOLS, Bridge
+from .tools import TOOLS, UNTRUSTED, Bridge
 from .workspace import WorkspaceError
 
 SCHEMA = 1
@@ -56,6 +56,7 @@ MAX_QUESTION_CHARS = 8_000
 MAX_REQUEST_CHARS = 200_000  # a conversation above this is refused, never cut silently (Q20)
 MAX_TURNS = 50
 MAX_STEPS = 8
+MAX_NOTE_CHARS = 400  # the Bridge's note on page text in a tool's result, kept whole beside the 20,000 of the rest
 TIMEOUT = 120
 ANTHROPIC_MAX_TOKENS = 4096  # Anthropic needs a limit; OpenAI-compatible requests set none (Q14)
 TRUNCATED = {"max_tokens", "length"}  # stop reasons that mean the provider's limit cut the answer
@@ -864,9 +865,14 @@ def _origin(url: str | None) -> str | None:
 
 
 def _tool_text(result: dict) -> str:
-    """What the model gets back from a tool: its text parts (screenshots are not sent)."""
+    """What the model gets back from a tool: its text parts (screenshots are not sent), cut at 20,000 characters. The
+    Bridge's note that names the fields holding page text (UNTRUSTED, up to its blank line) is not counted: the rest
+    keeps the budget it had before the note named them (OpenCodeReview on #854)."""
     texts = [c.get("text", "") for c in result.get("content", []) if c.get("type") == "text"]
-    return "\n".join(texts)[:20_000] or json.dumps(result.get("structuredContent", {}))[:20_000]
+    text, note = "\n".join(texts), ""
+    if text.startswith(UNTRUSTED) and (end := text.find("\n\n", 0, MAX_NOTE_CHARS)) != -1:
+        note, text = text[: end + 2], text[end + 2 :]
+    return (note + text[:20_000]) or json.dumps(result.get("structuredContent", {}))[:20_000]
 
 
 def run_task(task: str, profile: str, *, headless: bool = False, bridge: Bridge | None = None,
