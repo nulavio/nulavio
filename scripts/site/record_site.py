@@ -985,6 +985,8 @@ class Scenes:
             "return n && !n.hidden ? n.textContent.trim() : null;"
         )
         said = wait(lambda: child.chrome(notice), 15, "the band's note that the rule opened it")
+        wait(lambda: not child.chrome("return gBrowser.selectedTab.hasAttribute('busy');"), 15, "the routed page loaded")
+        time.sleep(0.8)  # the tab's own loading animation is over before the frame the poster is made from
         if fx.hits.count("/intranet") != 1:
             raise RuntimeError(f"the routed page was requested {fx.hits.count('/intranet')} times")
         rec.cut(t["work"], time.monotonic() - started)

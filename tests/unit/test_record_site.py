@@ -286,7 +286,8 @@ class SamplesTest(unittest.TestCase):
     def test_captions_last_to_the_end_of_the_video_and_can_be_read(self):
         for key, recording in self.manifest["recordings"].items():
             end = recording["duration_s"]
-            self.assertAlmostEqual(end * recording["fps"], round(end * recording["fps"]), places=2, msg=key)
+            frames = end * recording["fps"]  # a whole number of frames, written to the millisecond
+            self.assertAlmostEqual(frames, round(frames), delta=0.02, msg=key)
             self.assertEqual(record_site.fast_cues(recording["captions"], end), [], key)
             track = (self.DIR / f"{key}.vtt").read_text(encoding="utf-8")
             self.assertEqual(track, record_site.webvtt(recording["captions"], end), key)
