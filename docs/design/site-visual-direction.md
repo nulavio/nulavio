@@ -22,9 +22,9 @@ The inputs, and the state they are in:
 | Input | Where it comes from | In the mock-ups |
 |---|---|---|
 | Tokens | `browser/startpage/tokens.css` on `main` | Linked, not copied. [Pull request #858](https://github.com/nulavio/nulavio/pull/858) adds one token to it, which no mock-up uses |
-| Lockup ("N" + "ulavio", proposal A of [#175](https://github.com/nulavio/nulavio/issues/175)) | #858 at commit `05dadc39` | The two files copied as they are there, to `mockups/site/brand/`, because `main` still has the earlier lockup. Phase 2 uses `docs/brand/assets/logo/` |
+| Lockup ("N" + "ulavio", proposal A of [#175](https://github.com/nulavio/nulavio/issues/175)) | #858 at commit `05dadc39` | The two files copied as they are there, to `mockups/site/brand/`, because `main` had the earlier lockup when the mock-ups were drawn. #858 has since merged, and the copies are byte for byte its files on `main`. Phase 2 uses `docs/brand/assets/logo/` |
 | The window and the band | [site/assets/shots/](../../site/assets/shots/manifest.json) on `main`: commit `f08daf3`, build `20261104050259`, Firefox 159.0 | Linked, not copied |
-| Two recorded scenes, pt-BR | #859 at commit `83a4e98b`: build `20261119020726`, Firefox 160.0.1 | The loop, the still frame, the WebM and the captions of `profile-opens` and `link-routed`, copied to `mockups/site/media/`, because #859 is not on `main`. The MP4 fallback is left out to keep the copy small. Two of their captions are on screen for less than #859's later rule allows (at most 20 characters a second), which #859's later recordings meet. Phase 2 records them again |
+| Two recorded scenes, pt-BR | #859 at commit `83a4e98b`: build `20261119020726`, Firefox 160.0.1 | The loop, the still frame, the WebM and the captions of `profile-opens` and `link-routed`, copied to `mockups/site/media/`, because #859 was not on `main` when the mock-ups were drawn. #859 has since merged with newer recordings (`docs/design/recordings/2026-11/`), which differ from these copies. The MP4 fallback is left out to keep the copy small. Two of their captions are on screen for less than #859's later rule allows (at most 20 characters a second), which #859's later recordings meet. Phase 2 records them again |
 
 The copies, byte for byte the files of those pull requests (SHA-256):
 
