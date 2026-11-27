@@ -1329,5 +1329,63 @@ class LayoutModuleTest(unittest.TestCase):
         self.assertRegex(panes, r"try\s*\{\s*stops\.push\(shell\.NulavioLayout\.subscribe\(")
 
 
+class ImmersiveDevicesTest(unittest.TestCase):
+    """#627: Immersive keeps the toolbar while the engine draws an in-use icon in it. Besides capture (camera,
+    microphone, screen: the tab's `sharing` attribute), the engine 160 draws one for the location, a serial port and
+    a VR device from the browser's `_sharingState` keys `geo`, `serial` and `xr`, on `#geo-sharing-icon`,
+    `#serial-sharing-icon` and `#xr-sharing-icon`, for the selected tab only (browser-sitePermissionPanel.js,
+    updateSharingIndicator), and marks no tab for them. `test_immersive` 06d drives the real path."""
+
+    SOURCE = (SHELL / "modules" / "NulavioWindow.sys.mjs").read_text(encoding="utf-8")
+
+    def constant(self, name: str) -> list[str]:
+        found = re.search(rf"const {name} = Object\.freeze\(\[([^\]]*)\]\);", self.SOURCE)
+        self.assertIsNotNone(found, name)
+        return re.findall(r'"([^"]+)"', found.group(1))
+
+    def method(self, name: str) -> str:
+        start = self.SOURCE.index(f"  {name}(")
+        end = self.SOURCE.index("\n  }\n", start)
+        return self.SOURCE[start:end]
+
+    def test_every_in_use_icon_of_the_engine_is_read(self):
+        self.assertEqual(self.constant("DEVICE_STATES"), ["geo", "serial", "xr"])
+        self.assertEqual(self.constant("DEVICE_ICONS"), ["geo-sharing-icon", "serial-sharing-icon", "xr-sharing-icon"])
+
+    def test_the_selected_tab_is_what_counts_and_the_reason_is_sharing(self):
+        block = self.method("#immersiveBlock")
+        self.assertRegex(
+            block,
+            r"const devices = win\.gBrowser\.selectedBrowser\?\._sharingState;\s*"
+            r"if \(DEVICE_STATES\.some\(key => devices\?\.\[key\]\)\) \{\s*return \"sharing\";",
+        )
+
+    def test_a_change_of_icon_decides_again_and_the_observer_goes_with_the_window(self):
+        attach = self.SOURCE[self.SOURCE.index("const deviceIcons = new win.MutationObserver") :]
+        self.assertRegex(attach, r"^const deviceIcons = new win\.MutationObserver\(\(\) => this\.#applyImmersive\(win\)\);")
+        self.assertRegex(attach, r"for \(const id of DEVICE_ICONS\) \{")
+        self.assertRegex(attach, r'deviceIcons\.observe\(icon, \{ attributes: true, attributeFilter: \["sharing"\] \}\);')
+        self.assertIn("deviceIcons, opened,", self.SOURCE)
+        self.assertIn("state.deviceIcons.disconnect();", self.method("#detach"))
+
+    def test_the_docs_name_the_devices_and_no_longer_say_any_device(self):
+        risks = (ROOT / "docs/security/residual-risks.md").read_text(encoding="utf-8")
+        r64 = next(line for line in risks.splitlines() if line.startswith("| R64 |"))
+        principles = (ROOT / "docs/design/ux-principles.md").read_text(encoding="utf-8")
+        for name, text in (("R64", r64), ("ux-principles", principles)):
+            with self.subTest(doc=name):
+                self.assertNotIn("while a device is shared", text)
+                for device in ("the camera, the microphone or the screen", "location", "serial"):
+                    self.assertIn(device, text)
+        adr = (ROOT / "docs/adr/0009-immersive-layout.md").read_text(encoding="utf-8")
+        self.assertIn("(#627): while the engine draws its in-use icon for the location, a serial port", adr)
+        model = (ROOT / "docs/security/threat-model.md").read_text(encoding="utf-8")
+        s6 = model[model.index("### S6") : model.index("### S7")]
+        limitations = next(line for line in s6.splitlines() if line.startswith("| Limitations |"))
+        self.assertIn("[R64](residual-risks.md)", limitations)
+        matrix = (ROOT / "docs/security/threat-matrix.md").read_text(encoding="utf-8")
+        self.assertIn("R64", next(line for line in matrix.splitlines() if line.startswith("| S6 |")))
+
+
 if __name__ == "__main__":
     unittest.main()
