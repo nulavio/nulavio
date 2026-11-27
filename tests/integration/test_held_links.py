@@ -9,6 +9,11 @@ it held the link, and the look-alike page has the passwords module check the add
 Each test installs a throwaway extension that opens one Shell page with its own parameters, the
 way such an extension would, and checks that the page offers nothing it did not get from a module.
 The module calls that would open another profile are replaced by recorders, so nothing is started.
+
+Tests 08 to 10 (#670): a link another program sends that routing holds or lets stay, and the page shown for it, open
+in a normal window of the profile, a new one when only private windows are open, also when the window used last is a
+private one. The command line goes through the routing handler as one from the remote service does (an instance
+cannot send one to itself).
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from urllib.parse import quote
@@ -44,6 +50,13 @@ return {
   buttons: [...document.querySelectorAll('button')].filter(seen).map(b => [b.id || b.className, b.textContent.trim()]),
 };
 """
+PBU = 'const PBU = ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs").PrivateBrowsingUtils;'
+BROWSER_WINDOWS = "[...Services.wm.getEnumerator('navigator:browser')].filter(w => !w.closed && w.gBrowser)"
+WINDOWS = (
+    PBU + f"return {BROWSER_WINDOWS}.map(w => ({{private: PBU.isWindowPrivate(w),"
+    " tabs: w.gBrowser.browsers.map(b => b.currentURI.spec)}));"
+)
+TOP_IS_PRIVATE = PBU + "return PBU.isWindowPrivate(Services.wm.getMostRecentBrowserWindow());"
 
 
 def chrome_async(m, body: str, args=()):
@@ -252,6 +265,103 @@ class HeldLinksTest(unittest.TestCase):
         self.m.switch_to(self.home)  # the page closes its tab after the call
         self.assertTrue(harness.wait_until(self.calls, timeout=10))
         self.assertEqual(self.calls(), [["openIn", self.other, "https://held.example/default"]])
+
+    # -- #670: never in a private window -------------------------------------------------------------
+
+    def windows(self) -> list[dict]:
+        return self.m.chrome(WINDOWS)
+
+    def open_private_window(self) -> None:
+        """Open a private window and leave it the window used last, where the link once opened."""
+        before = set(self.m.window_handles())
+        self.m.chrome("OpenBrowserWindow({private: true});")
+        opened = harness.wait_until(lambda: set(self.m.window_handles()) - before, timeout=20)
+        self.assertTrue(opened, "no private window opened")
+        self.m.switch_to(next(iter(opened)))
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", timeout=20))
+        self.m.chrome("window.focus();")
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(TOP_IS_PRIVATE), timeout=10), self.windows())
+
+    def close_private_windows(self) -> None:
+        self.m.switch_to(self.home)
+        self.m.chrome(PBU + f"for (const w of {BROWSER_WINDOWS}) {{ if (PBU.isWindowPrivate(w)) {{ w.close(); }} }}")
+        self.assertTrue(harness.wait_until(lambda: not any(w["private"] for w in self.windows()), timeout=20))
+
+    def from_another_app(self, url: str, state: str = "STATE_REMOTE_EXPLICIT") -> int:
+        """A command line with one link, through the routing handler; what is left of it for the browser."""
+        return self.call(
+            f"const line = Cu.createCommandLine([args[0]], null, Ci.nsICommandLine.{state});"
+            "R.handleCommandLine(line); return line.length;",
+            url,
+        )
+
+    def tabs_showing(self, needle: str) -> list[tuple[bool, str]]:
+        """(private, address) of every tab whose address contains `needle`."""
+        return [(w["private"], u) for w in self.windows() for u in w["tabs"] if needle in u]
+
+    def test_08_an_asked_link_from_another_app_is_asked_in_a_normal_window(self):
+        rule = self.call(
+            "return R.addRule({site: 'pedido.example', match: 'host', action: 'ask', profileId: args[0]});", self.other
+        )
+        try:
+            self.open_private_window()
+            earlier = self.tabs_showing("/routing/ask.html")  # the pages test 02 had another extension open
+            self.assertEqual(self.from_another_app("https://pedido.example/asked"), 0, "the link was left to the browser")
+            new = lambda: [tab for tab in self.tabs_showing("/routing/ask.html") if tab not in earlier]  # noqa: E731
+            shown = harness.wait_until(new, timeout=20)
+            self.assertTrue(shown, self.windows())
+            self.assertEqual([private for private, _ in shown], [False], self.windows())
+            held = shown[0][1].split("h=", 1)[1]
+            self.assertEqual(
+                self.call("const h = R.held(args[0], 'routing/ask.html'); return [h.u, h.src];", held),
+                ["https://pedido.example/asked", "app"],
+            )
+            self.assertFalse([u for w in self.windows() for u in w["tabs"] if "//pedido.example" in u], "the site was loaded")
+        finally:
+            self.close_private_windows()
+            self.call("await R.removeRule(args[0]);", rule)
+
+    def test_09_a_held_link_that_stays_opens_in_a_normal_window(self):
+        """A link that arrives with the start of the browser waits for the rules; with none for it, it opens here."""
+        with harness.FixtureServer() as server:
+            url = server.url("/page/held-stays")
+            try:
+                self.open_private_window()
+                self.assertEqual(self.from_another_app(url, "STATE_INITIAL_LAUNCH"), 0, "the link was not held")
+                self.assertTrue(harness.wait_until(lambda: self.tabs_showing("/page/held-stays"), timeout=20), self.windows())
+                self.assertEqual(self.tabs_showing("/page/held-stays"), [(False, url)], self.windows())
+                time.sleep(1)
+                self.assertEqual(len(server.requests_to("/page/held-stays")), 1)
+            finally:
+                self.close_private_windows()
+
+    def test_10_with_only_private_windows_a_normal_window_is_opened(self):
+        """The last test of the class: it closes the window the session started with."""
+        rule = self.call(
+            "return R.addRule({site: 'banco.example', match: 'host', action: 'ask', profileId: args[0]});", self.other
+        )
+        try:
+            self.open_private_window()
+            self.m.chrome(PBU + f"for (const w of {BROWSER_WINDOWS}) {{ if (!PBU.isWindowPrivate(w)) {{ w.close(); }} }}")
+            self.assertTrue(harness.wait_until(lambda: all(w["private"] for w in self.windows()), timeout=20), self.windows())
+            before = set(self.m.window_handles())
+            self.assertEqual(self.from_another_app("https://banco.example/alone"), 0)
+            opened = harness.wait_until(lambda: [w for w in self.windows() if not w["private"]], timeout=30)
+            self.assertTrue(opened, self.windows())
+            self.assertEqual(len(opened), 1, self.windows())
+            self.assertTrue(harness.wait_until(lambda: self.tabs_showing("/routing/ask.html"), timeout=20), self.windows())
+            self.assertEqual([private for private, _ in self.tabs_showing("/routing/ask.html")], [False], self.windows())
+            # The window opened for the page shows only the page, as the engine's own handler opens one for a link.
+            self.assertEqual(len(next(w for w in self.windows() if not w["private"])["tabs"]), 1, self.windows())
+            # The session goes on from the new window.
+            type(self).home = next(iter(set(self.m.window_handles()) - before))
+        finally:
+            handles = self.m.window_handles()
+            if self.home in handles:
+                self.close_private_windows()
+            elif handles:  # it failed after closing the first window: tearDown needs one that is still open
+                type(self).home = handles[0]
+            self.call("await R.removeRule(args[0]);", rule)
 
 
 if __name__ == "__main__":
