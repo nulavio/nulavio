@@ -402,6 +402,7 @@
 <h3><span class="num">3.4</span> Extensões assinadas e o uBlock Origin</h3>
 <p>Extensões só carregam com a assinatura da Mozilla. O uBlock Origin é instalado por uma política do build: na primeira abertura, o navegador baixa do addons.mozilla.org a versão registrada pelo projeto (hoje a {{ubo}}) e confere a assinatura da Mozilla. Depois disso, ele se atualiza como qualquer extensão, e as listas de filtros dele também se atualizam pela rede. Ele funciona nas janelas privadas, e você pode desativá-lo ou desligá-lo só num site.</p>
 <p class="limit"><strong>Limite:</strong> Nesse caminho, o motor confere a assinatura, mas não o SHA-256 registrado no projeto. O SHA-256 é conferido quando o Nulavio instala uma extensão de senhas (seção 9).</p>
+<p class="limit"><strong>Limite:</strong> Na primeira abertura de um perfil novo, o uBlock Origin leva alguns segundos para começar a filtrar: de 10 a 17 segundos nas medições de novembro de 2026, e cerca de 40 em duas de catorze. Uma página aberta nesse intervalo, como um link de outro app que abre o navegador, pode pedir o que as listas dele bloqueariam. Depois disso, tudo é filtrado, também nas abas abertas antes. A proteção contra rastreamento do motor vale desde o primeiro instante.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">Como conferir</p>

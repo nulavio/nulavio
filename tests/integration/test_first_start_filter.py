@@ -1,7 +1,8 @@
 """A page opened in a new profile's first seconds, before uBlock Origin is ready (#875): a measurement.
 
 On a new profile's first start the build's policy installs uBlock Origin from addons.mozilla.org, and uBlock Origin
-then loads its lists. A page that loads before that is not filtered. This module measures that window on the real
+then loads its lists. A request made before that is not filtered, and the requests made while it loads them are held
+back and then let through, mostly filtered (docs/security/residual-risks.md, R91). This module measures that window on the real
 first start of a new profile, with the first-run sequence on as a person gets it, in the two ways a person can reach
 a page that early:
 
@@ -16,10 +17,11 @@ moment the filter is ready for a new page. Then the early tab is checked, in thi
 before it): an image added to the page it shows, a new address in the same tab, a reload.
 
 What is asserted holds however fast the network is: uBlock Origin is installed, a new tab is filtered within
-`READY_WITHIN` seconds of the start, and reloading the early tab filters it (what docs/security/residual-risks.md
-R91 tells people to do). Whether the first page's image left, and how long each part of the window lasted, is
+`READY_WITHIN` seconds of the start, and once it is, nothing the test asks for afterwards leaves, in new tabs or in
+the early tab (R91 says so). Whether the first page's image left, and how long each part of the window lasted, is
 recorded and not asserted: a JSON file per run in NULAVIO_TEST_ARTIFACTS and one line on stderr. The times depend on
-the network, addons.mozilla.org and the machine, and the residual-risk entry gives what the runs measured.
+the network, addons.mozilla.org and the machine, and the residual-risk entry gives what the runs measured. What
+uBlock Origin hides inside a page (by element, not by request) is not measured here.
 
 It needs the network, as a first start does: without it uBlock Origin is never installed, and the module is skipped
 and says so, or fails where the run requires the network (NULAVIO_REQUIRE_NETWORK=1).
@@ -49,37 +51,13 @@ const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonM
 AddonManager.getAddonByID(arguments[0]).then(
   a => done(a ? {active: a.isActive, version: a.version} : null), e => done({error: String(e)}));
 """
-# What the add-on manager says while uBlock Origin is installed and started, each with the time (Date.now()). Set up
-# in chrome as soon as Marionette answers: what happened before that is missing, and `seen_at_listen` says where the
-# install was by then. Only read by the test.
-LISTEN = """
+# Where uBlock Origin's install was when Marionette first answered (in the runs of 2026-11-27 it was always active).
+FIRST_ANSWER = """
 const done = arguments[arguments.length - 1];
-const id = arguments[0];
 const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
-const events = window.nulavioFirstStart = [];
-const note = what => events.push({what, at: Date.now()});
-const ours = install =>
-  install.addon?.id === id || install.existingAddon?.id === id || /ublock/i.test(install.sourceURI?.spec ?? "");
-const installs = {};
-for (const name of ["onNewInstall", "onDownloadStarted", "onDownloadEnded", "onInstallStarted", "onInstallEnded",
-                    "onDownloadFailed", "onInstallFailed"]) {
-  installs[name] = install => { if (ours(install)) note(name); };
-}
-AddonManager.addInstallListener(installs);
-const addons = {};
-for (const name of ["onInstalling", "onInstalled", "onEnabling", "onEnabled"]) {
-  addons[name] = addon => { if (addon.id === id) note(name); };
-}
-AddonManager.addAddonListener(addons);
-try {
-  const {ExtensionParent} = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
-  ExtensionParent.apiManager.on("startup", (_, extension) => { if (extension.id === id) note("extension startup"); });
-} catch (e) {
-  note("no extension startup event: " + e);
-}
-Promise.all([AddonManager.getAddonByID(id), AddonManager.getAllInstalls()]).then(([addon, all]) => done({
-  addon: addon ? {active: addon.isActive} : null,
-  installs: all.filter(ours).map(install => install.state),
+Promise.all([AddonManager.getAddonByID(arguments[0]), AddonManager.getAllInstalls()]).then(([addon, all]) => done({
+  active: addon ? addon.isActive : null,
+  installs: all.filter(install => /ublock/i.test(install.sourceURI?.spec ?? "")).map(install => install.state),
 }), e => done({error: String(e)}));
 """
 IMAGES_DONE = "return document.readyState === 'complete' && [...document.images].every(i => i.complete);"
@@ -121,10 +99,10 @@ class FirstStartFilterWindowTest(unittest.TestCase):
     def started(self) -> None:
         """Set the clock's zero to the moment the engine process started."""
         since = seconds_since_start(self.session.process.pid)
-        self.zero, self.zero_wall = time.monotonic() - since, time.time() - since
+        self.zero = time.monotonic() - since
         self.m.set_context("chrome")
         try:
-            self.record["seen_at_listen"] = {"at": self.now(), **self.m.execute_async(LISTEN, [UBLOCK])}
+            self.record["ublock_at_first_answer"] = {"at": self.now(), **self.m.execute_async(FIRST_ANSWER, [UBLOCK])}
         finally:
             self.m.set_context("content")
 
@@ -221,8 +199,6 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
     def finish(self, case: str) -> None:
         self.record["case"] = case
-        events = self.m.chrome("return window.nulavioFirstStart;")
-        self.record["ublock_events"] = [{"what": e["what"], "at": round(e["at"] / 1000 - self.zero_wall, 2)} for e in events]
         self.record["engine"] = self.m.chrome("return Services.appinfo.version + ' ' + Services.appinfo.appBuildID;")
         name = f"first-start-filter-{case}-{time.strftime('%Y%m%dT%H%M%S')}.json"
         (self.artifacts / name).write_text(json.dumps(self.record, indent=2) + "\n")
@@ -233,7 +209,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
         print(
             f"\nfirst-start-filter {case}: first page asked@{r['first_page']['asked']}s {word(r['first_page'])},"
-            f" uBlock Origin events {[(e['what'], e['at']) for e in r['ublock_events']]}, active@{r['ublock_active_at']}s,"
+            f" uBlock Origin at the first answer {r['ublock_at_first_answer']}, active@{r['ublock_active_at']}s,"
             f" last new tab leaked@{r['last_new_tab_leaked_at']}s, new tab filtered@{r['new_tab_filtered_at']}s,"
             f" early page after ready {[word(e) for e in r['early_page_after_ready']]},"
             f" new address {word(r['early_tab_new_address'])}, reload {word(r['early_tab_reload'])};"
@@ -241,8 +217,9 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             f"/{len(r['new_tabs_after_ready'])}; uBlock Origin {r.get('ublock_version')}, engine {r['engine']}; {name}",
             file=sys.stderr,
         )
-        # The way out that R91 gives: a reload of the early tab is filtered.
-        self.assertFalse(r["early_tab_reload"]["leaked"], f"the early tab was still not filtered after a reload: {r}")
+        # What R91 says of the time after the window: once a new tab is filtered, everything is, the early tab too.
+        after = [*r["new_tabs_after_ready"], *r["early_page_after_ready"], r["early_tab_new_address"], r["early_tab_reload"]]
+        self.assertEqual([e for e in after if e["leaked"]], [], f"a request left after the filter was ready: {name}")
 
     def find_tab(self, address: str) -> str:
         for handle in self.m.window_handles():
