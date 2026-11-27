@@ -1,10 +1,12 @@
 """Agent Registry and approvals for the AI Bridge.
 
 Each connected agent has an id, an autonomy preset, explicit grants, an
-optional site list and a secret token. Only the token's SHA-256 is stored;
-the token sits in the agent's MCP configuration, so it identifies *that
-configuration*, not the program (any process of the same user that reads it
-can present it). The bridge re-reads this file on every call, so revocation,
+optional site list and a secret token. The registry keeps only the token's
+SHA-256, which is what it compares; the token itself is also kept in clear in
+the agent's key file, tokens/<agent>.token (0600), which the agent's MCP
+configuration points to. So it identifies *that configuration*, not the
+program (any process of the same user that reads the key file can present it,
+R27). The bridge re-reads the registry on every call, so revocation,
 grant changes and the emergency stop apply to the next call, also in a profile
 of the user's that the session has open (tools.Bridge._sync_profiles and
 _enter_profile).
