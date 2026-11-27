@@ -88,6 +88,8 @@ class FramesTest(unittest.TestCase):
     def test_duration_holds_the_last_frame(self):
         timeline = {"frames": [{"t": 0, "file": "a"}, {"t": 4.0, "file": "b"}], "cursor": [{"t": 4.5, "xy": None}]}
         self.assertEqual(record_site.duration_of(timeline), 4.5 + record_site.TAIL)
+        # A hold after the last frame (the result left on screen) counts.
+        self.assertEqual(record_site.duration_of({**timeline, "end": 7.0}), 7.0 + record_site.TAIL)
 
     def test_the_short_loop_lasts_five_seconds_at_most_from_the_highlight(self):
         self.assertEqual(record_site.loop_window({"highlight": 2.0}, 12.0), (2.0, 2.0 + record_site.LOOP_MAX))

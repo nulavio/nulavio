@@ -57,7 +57,7 @@ LOCALES = ("pt-BR", "en-US")
 WINDOW_CSS = (1280, 800)
 SCALE = 1.5
 FPS = 30
-TAIL = 1.2  # seconds the last frame stays at the end
+TAIL = 0.6  # seconds added after the last hold
 LOOP_MAX = 5.0  # an image that moves by itself stops within 5 s (WCAG 2.2.2), so the loop plays once
 CLICK_LENGTH = 0.45  # seconds a click's ripple lasts
 TYPE_STEP = 0.075  # seconds per typed key in the video
@@ -109,7 +109,8 @@ def ripples_at(clicks: list[dict], t: float, length: float = CLICK_LENGTH) -> li
 
 
 def duration_of(timeline: dict) -> float:
-    times = [f["t"] for f in timeline["frames"]] + [k["t"] for k in timeline["cursor"]]
+    """The scene's length: up to its last hold (`end`), its last frame or cursor move, plus the tail."""
+    times = [f["t"] for f in timeline["frames"]] + [k["t"] for k in timeline["cursor"]] + [timeline.get("end", 0.0)]
     return round(max(times) + TAIL, 3)
 
 
@@ -231,6 +232,7 @@ class Recorder:
             "locale": self.locale,
             "size": list(self.size),
             "scale": round(self.scale, 3),
+            "end": round(self.t, 3),
             "frames": self.frames,
             "cursor": self.keys,
             "clicks": self.clicks,
