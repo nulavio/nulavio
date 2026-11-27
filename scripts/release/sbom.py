@@ -14,7 +14,10 @@ patches in browser/patches (each listed in the pedigree, with its SHA-256 as
 a "nulavio:patch-sha256:<patch>" property of the engine), and the package
 file's own SHA-256 identifies what it describes. The package is named by its
 release (<Firefox version>-<Nulavio revision>, as its own version field and
-packaging/release.json name it), the engine by the Firefox version:
+packaging/release.json name it), the engine by the Firefox version. The
+package is hashed, not read: the caller vouches for both versions, as
+rehearse_release.sh does (it builds the package with them and refuses one
+whose file name is of another release):
 
     python3 -I scripts/release/sbom.py --package dist/packages/x86_64/nulavio-158.0.1-0.1.fc44.x86_64.rpm \
         --engine-version 158.0.1 --release-version 158.0.1-0.1 > nulavio-158.0.1-0.1.fc44.x86_64.rpm.cdx.json
@@ -302,7 +305,9 @@ def main() -> int:
     parser.add_argument("--package", type=Path, help="describe this RPM or .deb instead of the preview")
     parser.add_argument("--engine-version", help="with --package: the Firefox version of the engine inside the package")
     parser.add_argument(
-        "--release-version", help="with --package: the package's release, <engine version>-<Nulavio revision> (e.g. 160.0.1-0.3)"
+        "--release-version",
+        help="with --package: the package's release, <engine version>-<Nulavio revision> (e.g. 160.0.1-0.3);"
+        " the caller vouches for it, the package is not read",
     )
     parser.add_argument("--companion", action="store_true", help="describe the Android Companion app instead")
     parser.add_argument(
