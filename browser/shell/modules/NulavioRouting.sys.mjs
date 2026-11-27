@@ -865,12 +865,17 @@ class NulavioRoutingClass {
    * would be forgotten with it. With permanent private browsing every window is private, and any of them is used.
    */
   async #openInNormalWindow(url) {
+    this.#openFrom(await this.#browserWindow(), url);
+  }
+
+  #openFrom(win, url) {
     const forceNonPrivate = !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;
-    (await this.#browserWindow()).openTrustedLinkIn(url, "tab", { forceNonPrivate });
+    win.openTrustedLinkIn(url, "tab", { forceNonPrivate });
   }
 
   /** A local Nulavio page (never the site itself). */
   async #openPage(page, params) {
+    const win = await this.#browserWindow(); // before hold(): no wait between keeping the link and showing its page
     let policy = WebExtensionPolicy.getByID(SHELL_ID);
     for (let i = 0; !policy && i < 300; i++) {
       await sleep(100);
@@ -882,7 +887,7 @@ class NulavioRoutingClass {
     // Only the id: the page reads the rest from this module (the unlock page also names its profile).
     const id = this.hold(page, params);
     const query = new URLSearchParams(page === "vault/unlock.html" ? { p: String(params.p), h: id } : { h: id });
-    await this.#openInNormalWindow(`${policy.getURL(page)}?${query}`);
+    this.#openFrom(win, `${policy.getURL(page)}?${query}`);
   }
 
   // -- change notifications ---------------------------------------------------

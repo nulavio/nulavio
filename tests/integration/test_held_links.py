@@ -356,8 +356,11 @@ class HeldLinksTest(unittest.TestCase):
             # The session goes on from the new window.
             type(self).home = next(iter(set(self.m.window_handles()) - before))
         finally:
-            if self.home in self.m.window_handles():  # not when the test failed before a normal window opened
+            handles = self.m.window_handles()
+            if self.home in handles:
                 self.close_private_windows()
+            elif handles:  # it failed after closing the first window: tearDown needs one that is still open
+                type(self).home = handles[0]
             self.call("await R.removeRule(args[0]);", rule)
 
 
