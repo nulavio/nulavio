@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 SHELL = ROOT / "browser" / "shell"
 MODULE = SHELL / "modules" / "NulavioSearch.sys.mjs"
 
@@ -48,7 +52,8 @@ class ReservedAliasListTest(unittest.TestCase):
         tests/integration/test_settings_search.py (05) reads it on the page with such a name."""
         panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
         call = re.search(r'msg\("searchAliasReserved", ([^\n]*)', panes).group(1)
-        self.assertIn(".map(name => `“${name}”`)", call)
+        # Isolated too (#796, tests/unit/test_name_isolation.py): a name may hold direction controls.
+        self.assertIn(".map(name => `“${inSentence(name)}”`)", call)
         self.assertIn('.join(", ")', call)
 
     def test_settings_says_it_under_the_search_shortcuts(self):
@@ -61,7 +66,7 @@ class ReservedAliasListTest(unittest.TestCase):
         self.assertIn('"searchShortcuts", "nulavioSearchAdd"', panes)
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class ReservedAliasTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

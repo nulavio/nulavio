@@ -3,6 +3,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { keyElements, nulavioKeys } from "../lib/keys.js";
+import { inSentence } from "../lib/names.js";
 import { providerName, providerStatus } from "../lib/providers.js";
 import { wireSettingsLinks } from "../lib/settings.js";
 import { chip, confirmDialog, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
@@ -148,7 +149,8 @@ async function showEngine() {
   const name = await defaultEngineName();
   shownEngine = name;
   const input = document.getElementById("search-input");
-  input.placeholder = name ? t("searchWith", [name]) : t("searchPlaceholder");
+  // The engine names itself: isolated, so direction controls in its name do not reorder the words (#796).
+  input.placeholder = name ? t("searchWith", [inSentence(name)]) : t("searchPlaceholder");
 }
 const engineShown = showEngine().catch(() => {});
 
