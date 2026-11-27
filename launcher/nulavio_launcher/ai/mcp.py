@@ -6,7 +6,8 @@ Dual-era, as the 2026-07-28 specification describes: modern clients send
 earlier) and get those semantics for the life of the process. Only the
 `tools` feature is offered. stdout carries protocol messages only; logs go
 to stderr. Tool calls run one at a time on a worker thread so `ping` and
-`notifications/cancelled` are answered while a call is in progress.
+`notifications/cancelled` are answered while a call is in progress. When
+stdin ends, every call in progress or queued is cancelled.
 """
 
 from __future__ import annotations
@@ -44,20 +45,23 @@ class Server:
         self._out = threading.Lock()
         self._jobs: queue.Queue = queue.Queue()
         self._cancels: dict[object, threading.Event] = {}
+        self._gone = threading.Event()  # stdin ended: no call starts and no response goes out any more (#646)
         self._worker = threading.Thread(target=self._work, name="mcp-tools", daemon=True)
 
     # -- output ---------------------------------------------------------------------
 
-    def _send(self, message: dict) -> None:
+    def _send(self, message: dict, cancel: threading.Event | None = None) -> None:
         line = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
         with self._out:
+            if cancel is not None and (cancel.is_set() or self._gone.is_set()):
+                return  # a tool's result: its call was cancelled, or its client went away, while it was serialized
             self.stdout.write(line)
             self.stdout.flush()
 
-    def _result(self, request_id, result: dict, modern: bool) -> None:
+    def _result(self, request_id, result: dict, modern: bool, cancel: threading.Event | None = None) -> None:
         if modern:
             result = {"resultType": "complete", **result, "_meta": {META_SERVER: SERVER_INFO}}
-        self._send({"jsonrpc": "2.0", "id": request_id, "result": result})
+        self._send({"jsonrpc": "2.0", "id": request_id, "result": result}, cancel)
 
     def _error(self, request_id, code: int, message: str, data=None) -> None:
         error = {"code": code, "message": message}
@@ -81,9 +85,16 @@ class Server:
                 if line.strip():
                     self.handle_line(line)
         finally:
+            # The client is gone (stdin closed, or it exited): nothing it asked for may still happen (#646). Every call
+            # is cancelled, so one waiting for the person's answer is denied at once and its request removed, and one
+            # still queued never starts. A call still running after the wait starts no engine (Bridge.end). The
+            # server's own state comes first: the worker may take the next job before the sweep reaches its event.
+            self._gone.set()
+            for event in list(self._cancels.values()):
+                event.set()
             self._jobs.put(None)
             self._worker.join(timeout=30)
-            self.bridge.close()
+            self.bridge.end()
 
     def _skip_rest(self) -> None:
         while True:
@@ -171,6 +182,11 @@ class Server:
             if not isinstance(arguments, dict):
                 self._error(request_id, -32602, "arguments must be an object")
                 return
+            if request_id in self._cancels:
+                # Ids are unique among a client's requests in progress: a second one would take the first call's cancel
+                # away from notifications/cancelled and from the end of stdin (#646).
+                self._error(request_id, -32600, "a request with this id is still in progress")
+                return
             cancel = threading.Event()
             self._cancels[request_id] = cancel
             self._jobs.put((request_id, name, arguments, cancel, modern))
@@ -184,14 +200,14 @@ class Server:
                 return
             request_id, name, arguments, cancel, modern = job
             try:
-                if cancel.is_set():
-                    continue  # cancelled before it started: no response, as the spec requires
+                if cancel.is_set() or self._gone.is_set():
+                    continue  # cancelled before it started, or its client went away: no response, as the spec requires
                 try:
                     result = self.bridge.call(name, arguments, cancel)
                 except Exception as exc:
                     print(f"nulavio-ai: tool {name} failed: {type(exc).__name__}", file=sys.stderr)
                     result = {"content": [{"type": "text", "text": f"Internal error in {name}"}], "isError": True}
-                if not cancel.is_set():
-                    self._result(request_id, result, modern)
+                if not cancel.is_set() and not self._gone.is_set():
+                    self._result(request_id, result, modern, cancel)
             finally:
                 self._cancels.pop(request_id, None)
