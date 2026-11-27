@@ -147,11 +147,11 @@ class DnsChoiceTest(unittest.TestCase):
         self.use_dns("strict", provider="custom", uri=self.doh.uri)  # what 02 saves through Settings
         settings_page.open_pane(self.m, "privacy")
         settings_page.wait_control(self.m, "nulavio-dns-choice")
-        self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED])
-        # The engine's test pref: the computer's resolver answers every name with 127.0.0.1, as the local DoH
-        # resolver does, so the answer's address alone cannot tell who answered; the resolver's query log does.
-        self.m.chrome("Services.prefs.setBoolPref('network.dns.native-is-localhost', true);")
-        try:
+        try:  # the two prefs are set inside, so a failure part-way through still clears them for test 03
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED])
+            # The engine's test pref: the computer's resolver answers every name with 127.0.0.1, as the local DoH
+            # resolver does, so the answer's address alone cannot tell who answered; the resolver's query log does.
+            self.m.chrome("Services.prefs.setBoolPref('network.dns.native-is-localhost', true);")
             now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: EXCLUDED in (c["description"] or ""))
             self.assertIn("excluídos da consulta criptografada", now["description"])
             self.assertIn("somente DNS criptografado", now["description"])
