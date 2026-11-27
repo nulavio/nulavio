@@ -441,19 +441,74 @@ class SiteTest(unittest.TestCase):
                 self.assertIn(f"uBlock Origin {build_site.ublock_version(ROOT)}", self.read(page))
                 self.assertIn(f"Firefox {build_site.firefox_version(ROOT)}", self.read(page))
 
-    def test_link_preview_image_is_ours_and_has_the_declared_size(self):
-        for page in (*LANDING, *COMPARISON):
+    def test_every_page_to_share_has_a_whole_link_preview(self):
+        """#199: every page a search engine may list has the preview's tags, about itself and in its
+        language, and a picture of ours with the size and the type it declares. A page behind noindex has none."""
+        pages = sorted(str(p.relative_to(self.out)) for p in self.out.rglob("*.html"))
+        self.assertGreater(len(pages), 12)
+        shared = 0
+        for page in pages:
             html = self.read(page)
-            image = re.search(r'<meta property="og:image" content="([^"]+)">', html).group(1)
+            head = Tree(html.partition("</head>")[0] + "</head>")
+            metas = [n.attrs for n in head.all("meta")]
+            og = {m["property"]: m.get("content", "") for m in metas if m.get("property", "").startswith("og:")}
+            twitter = {m["name"]: m.get("content", "") for m in metas if m.get("name", "").startswith("twitter:")}
+            named = {m["name"]: m.get("content", "") for m in metas if "name" in m}
+            canonical = [n.attrs["href"] for n in head.all("link") if n.attrs.get("rel") == "canonical"]
             with self.subTest(page=page):
-                self.assertTrue(image.startswith(SAME_SITE), image)
+                self.assertLessEqual(len([m for m in metas if m.get("property") == "og:image"]), 1, "one picture a page")
+                if "noindex" in named.get("robots", "") or not canonical:
+                    self.assertEqual((og, twitter), ({}, {}), "an address that is not to be shared has no preview")
+                    continue
+                shared += 1
+                language = head.all("html")[0].attrs["lang"]
+                locale, other = {"pt-BR": ("pt_BR", "en_US"), "en": ("en_US", "pt_BR")}[language]
+                self.assertIn(og["og:type"], ("website", "article"))
+                self.assertEqual(og["og:site_name"], "Nulavio")
+                self.assertEqual(og["og:locale"], locale)
+                self.assertEqual(og["og:locale:alternate"], other)
+                self.assertEqual([og["og:url"]], canonical)
+                self.assertTrue(og["og:url"].startswith(SAME_SITE))
+                self.assertTrue(og["og:title"].strip() and og["og:description"].strip())
+                self.assertEqual(og["og:description"], named["description"])
+                image = og["og:image"]
+                self.assertTrue(image.startswith(SAME_SITE + "assets/og-"), "an absolute https address of this site")
+                self.assertIn(f"-{language[:2]}.png", image, "the picture in the page's language")
                 data = (self.out / image.removeprefix(SAME_SITE)).read_bytes()
+                self.assertEqual(og["og:image:type"], "image/png")
                 self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
                 size = (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big"))
-                declared = tuple(
-                    int(re.search(rf'og:image:{side}" content="(\d+)"', html).group(1)) for side in ("width", "height")
-                )
-                self.assertEqual(size, declared)
+                self.assertEqual((int(og["og:image:width"]), int(og["og:image:height"])), size)
+                self.assertEqual(size, build_site.LINK_PREVIEW_SIZE)
+                self.assertLess(len(data), 300_000, "the project's budget for a link-preview picture")
+                self.assertGreater(len(og["og:image:alt"]), 20)
+                self.assertNotEqual(og["og:image:alt"], og["og:title"], "the alternative text says what the picture shows")
+                self.assertEqual(twitter["twitter:card"], "summary_large_image")
+                self.assertEqual((twitter["twitter:image"], twitter["twitter:image:alt"]), (image, og["og:image:alt"]))
+                if page not in COMPARISON:  # the comparison draws its own picture
+                    self.assertEqual(image, SAME_SITE + build_site.LINK_PREVIEW[language]["image"])
+                    self.assertEqual(og["og:image:alt"], build_site.LINK_PREVIEW[language]["alt"])
+        self.assertGreater(shared, 10)
+
+    def test_the_previews_alternative_text_is_what_the_picture_shows(self):
+        """The site's two pictures are captures of scripts/site/og-template.html: its texts, in each
+        language, are the alternative text, and its colours are the brand's tokens."""
+        template = (ROOT / "scripts" / "site" / "og-template.html").read_text(encoding="utf-8")
+        tree = Tree(template)
+        for language, short in (("pt-BR", "pt"), ("en", "en")):
+            shown = []  # the title's two lines, the line under it, the footer
+            for node in tree.all():
+                if node.attrs.get("data-lang") == short:
+                    lines = [span.text() for span in node.walk() if span.tag == "span" and span is not node] or [node.text()]
+                    shown += [" ".join(line.split()) for line in lines]
+            with self.subTest(language=language):
+                self.assertEqual(len(shown), 4)
+                self.assertEqual(build_site.LINK_PREVIEW[language]["alt"], "Nulavio. " + " ".join(shown))
+        tokens = json.dumps(json.loads((ROOT / "docs/brand/tokens.json").read_text(encoding="utf-8"))).upper()
+        colours = set(re.findall(r"#[0-9A-Fa-f]{6}\b", template))
+        self.assertGreaterEqual(len(colours), 4)
+        for colour in colours:
+            self.assertIn(f'"{colour.upper()}"', tokens, f"{colour} in the template is not a brand token")
 
     def test_waitlist_forms_post_to_this_origin(self):
         accepted = re.search(r"PLATFORMS = new Set\(\[(.*?)\]\)", WORKER.read_text(encoding="utf-8")).group(1)

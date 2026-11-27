@@ -123,6 +123,29 @@ NOTES = {
               "numbers": "numbers and excerpts", "shots": "captures", "and": " and ", "then": " and commit "},
 }  # fmt: skip
 REF = re.compile(r'(<code class="ref"[^>]*>)([^<]*)(</code>)')
+# The link preview (#199). The landing and the fingerprinting comparison write their own; every other
+# page that a search engine may list takes the site's picture in its language, with the page's own
+# title, description and address (link_preview). The pictures come from scripts/site/og-template.html
+# and the alternative text is what each one shows; a page behind noindex (the waitlist's link page,
+# the 404) gets none, because its address is not one to share.
+LINK_PREVIEW = {
+    "pt-BR": {
+        "image": "assets/og-pt.png",
+        "locale": "pt_BR",
+        "other": "en_US",
+        "alt": "Nulavio. A web é sua. Seus dados também. O navegador para Linux que já vem protegido. "
+        "Lista de espera aberta · nulavio.net",
+    },
+    "en": {
+        "image": "assets/og-en.png",
+        "locale": "en_US",
+        "other": "pt_BR",
+        "alt": "Nulavio. Your web. Your rules. The Linux browser that is protected from the start. "
+        "Waitlist open · nulavio.net/en",
+    },
+}
+LINK_PREVIEW_SIZE = (1200, 630)
+ORIGIN = "https://nulavio.net/"
 
 
 class BuildError(RuntimeError):
@@ -410,6 +433,45 @@ def keep_addresses(text: str, page: str) -> str:
     return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
+def link_preview(text: str, page: str) -> str:
+    """The page with the link-preview tags in its head, when it is to have them and has none."""
+    head = text.partition("</head>")[0]
+    if 'property="og:' in head or 'name="twitter:' in head:
+        return text  # the page wrote its own
+    discovery = Discovery(text)
+    if discovery.noindex or not discovery.canonicals:
+        return text
+    language = re.search(r'<html lang="([^"]+)"', head)
+    title = re.search(r"<title>([^<]+)</title>", head)
+    description = re.search(r'<meta name="description" content="([^"]+)">', head)
+    if not (language and language.group(1) in LINK_PREVIEW and title and description and len(discovery.canonicals) == 1):
+        raise BuildError(f"{page}: a link preview needs a language of the site, a title, a description and one canonical address")
+    preview = LINK_PREVIEW[language.group(1)]
+    image = ORIGIN + preview["image"]
+    # The title and the description are the page's own, already written as HTML text; a quotation
+    # mark is the one character that text may hold and an attribute may not.
+    said = {"title": title.group(1).replace('"', "&quot;"), "description": description.group(1)}
+    alternate = f'<meta property="og:locale:alternate" content="{preview["other"]}">\n' if discovery.alternates else ""
+    tags = (
+        '<meta property="og:type" content="website">\n'
+        '<meta property="og:site_name" content="Nulavio">\n'
+        f'<meta property="og:locale" content="{preview["locale"]}">\n'
+        f"{alternate}"
+        f'<meta property="og:url" content="{html.escape(discovery.canonicals[0])}">\n'
+        f'<meta property="og:title" content="{said["title"]}">\n'
+        f'<meta property="og:description" content="{said["description"]}">\n'
+        f'<meta property="og:image" content="{image}">\n'
+        '<meta property="og:image:type" content="image/png">\n'
+        f'<meta property="og:image:width" content="{LINK_PREVIEW_SIZE[0]}">\n'
+        f'<meta property="og:image:height" content="{LINK_PREVIEW_SIZE[1]}">\n'
+        f'<meta property="og:image:alt" content="{html.escape(preview["alt"])}">\n'
+        '<meta name="twitter:card" content="summary_large_image">\n'
+        f'<meta name="twitter:image" content="{image}">\n'
+        f'<meta name="twitter:image:alt" content="{html.escape(preview["alt"])}">\n'
+    )
+    return text.replace("</head>", tags + "</head>", 1)
+
+
 # -- build --------------------------------------------------------------------------------
 
 
@@ -540,7 +602,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
-            path.write_text(text, encoding="utf-8")
+            path.write_text(link_preview(text, page), encoding="utf-8")
         # The fingerprinting probes side by side (#437), from tests/fixtures/privacytests/.
         try:
             comparison = privacytests_pages.pages(src, {"pt-BR": values["date_pt"], "en-US": values["date_en"]})
@@ -550,7 +612,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
         for page, text in generated.items():
             locale = "pt-BR" if page.startswith((whats_new_pages.BASE["pt-BR"], privacytests_pages.BASE["pt-BR"])) else "en-US"
             (out / page).parent.mkdir(parents=True, exist_ok=True)
-            (out / page).write_text(stamp_page(text, values, manifest, locale, page), encoding="utf-8")
+            (out / page).write_text(link_preview(stamp_page(text, values, manifest, locale, page), page), encoding="utf-8")
             pages[page] = locale
         write_sitemap(out, pages)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())

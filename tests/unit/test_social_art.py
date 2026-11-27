@@ -45,7 +45,7 @@ class SocialArtTest(unittest.TestCase):
                 self.assertEqual((build_social.OUT / rel).read_text(encoding="utf-8"), text, "run scripts/brand/build_social.py")
 
     def test_every_file_has_its_size(self):
-        expected = {"profile/avatar": (400, 400)}
+        expected = {"profile/avatar": (400, 400), "github/social-preview": build_social.GITHUB_SIZE}
         expected |= {f"profile/header-{lang}": build_social.HEADER_SIZE for lang in build_social.TAGLINE}
         for lang in build_social.SAMPLES:
             for fmt, (w, h, _margin, _free) in build_social.FORMATS.items():
@@ -62,6 +62,71 @@ class SocialArtTest(unittest.TestCase):
                 self.assertEqual(png_size(build_social.OUT / f"{stem}.png"), size, "run scripts/brand/build_social.py")
         # Two 750 px panels (black, white) over the 1500 x 500 header: the avatar samples at their real 400 and 48 px.
         self.assertEqual(png_size(build_social.OUT / "crop-check.png"), (1500, 460 + build_social.HEADER_SIZE[1]))
+        # Three columns of 620 px; a row at 600 px wide, a row of small ones with their squares, a row of centre crops.
+        self.assertEqual(png_size(build_social.OUT / "link-previews.png"), (1860, 357 + 178 + 357))
+
+    def test_the_github_preview_is_what_github_asks_for(self):
+        """#199, and GitHub's page on the social preview: 1280 x 640, a PNG under 1 MB, a solid background."""
+        self.assertEqual(build_social.GITHUB_SIZE, (1280, 640))
+        data = (build_social.OUT / "github" / "social-preview.png").read_bytes()
+        self.assertLess(len(data), build_social.GITHUB_MAX_BYTES)
+        self.assertEqual(data[25], 2, "colour type 2: RGB, no alpha channel for a network to fill in")
+        self.assertNotIn(b"tRNS", data[:200])
+        root = ET.fromstring(build_social.github_svg())
+        self.assertEqual((root.get(XML_LANG), root.find(f"{SVG_NS}title").text), ("en", "Nulavio"))
+        said = " ".join(build_social.GITHUB_LINE.split())
+        self.assertEqual(root.find(f"{SVG_NS}desc").text, f"{said} {build_social.GITHUB_FOOTER}")
+        drawn = ["".join(span.itertext()) for span in root.iter(f"{SVG_NS}tspan")]
+        self.assertEqual(
+            drawn, [*build_social.GITHUB_LINE.split("\n"), build_social.GITHUB_FOOTER], "the name, one line, the address"
+        )
+        self.assertNotRegex(" ".join(drawn).lower(), r"\d|protect|secur|safe|private|privacy", "no count and no promise")
+        self.assertNotRegex(
+            " ".join(drawn).lower(), r"mozilla|firefox|gecko", "the engine is named with its notice, or not at all"
+        )
+
+    def test_the_github_preview_keeps_what_is_read_inside_the_margin(self):
+        width, height = build_social.GITHUB_SIZE
+        margin = build_social.GITHUB_MARGIN
+        self.assertGreaterEqual(margin, (width - height * 16 / 9) / 2 + 16, "a 16:9 centre crop leaves the text a margin")
+        text = build_social.github_svg()
+        self.assertIn(f'd="{build_logo.initial_route()}"', text)  # the lockup, never the symbol beside the name
+        self.assertNotIn(f'd="{build_logo.ROUTE}"', text)
+        root = ET.fromstring(text)
+        group = next(g for g in root.iter(f"{SVG_NS}g") if g.get("transform", "").startswith("translate("))
+        x, y = (float(v) for v in group.get("transform")[len("translate(") :].split(")")[0].split())
+        scale = float(group.get("transform").split("scale(")[1].split(")")[0])
+        view = [float(v) for v in build_logo.initial_lockup_parts(build_logo.MINT, build_logo.CLOUD)[0].split()]
+        self.assertGreaterEqual(x, margin)
+        self.assertGreaterEqual(y, margin)
+        self.assertLessEqual(x + view[2] * scale, width - margin)
+        self.assertGreaterEqual(view[2] * scale, width * 0.45, "the name is the picture: read at a thumbnail's size")
+        for element in root.iter(f"{SVG_NS}text"):
+            size, weight = float(element.get("font-size")), int(element.get("font-weight"))
+            for span in element.iter(f"{SVG_NS}tspan"):
+                sx, sy = numbers(span, "x", "y")
+                self.assertGreaterEqual(sx, margin)
+                self.assertLessEqual(sx + build_social.advance(span.text, size, weight), width - margin)
+                self.assertGreater(sy - size, y, "below the name's top")
+                self.assertLessEqual(sy, height - margin)
+        # The mark's detail is decoration: hidden from assistive technology, and clear of the text's column.
+        detail = next(g for g in root.iter(f"{SVG_NS}g") if g.get("aria-hidden") == "true")
+        left = min(float(c.get("cx")) - float(c.get("r")) for c in detail.iter(f"{SVG_NS}circle"))
+        stroke = detail.find(f"{SVG_NS}path")
+        left = min(left, float(stroke.get("d").split()[0][1:]) - float(stroke.get("stroke-width")) / 2)
+        widest = max(
+            float(s.get("x")) + build_social.advance(s.text, float(e.get("font-size")), int(e.get("font-weight")))
+            for e in root.iter(f"{SVG_NS}text")
+            for s in e.iter(f"{SVG_NS}tspan")
+        )
+        self.assertGreater(left, max(widest, x + view[2] * scale) + 48)
+
+    def test_a_line_too_wide_for_the_github_preview_is_refused(self):
+        with (
+            mock.patch.object(build_social, "GITHUB_LINE", "An open-source browser " * 4),
+            self.assertRaisesRegex(ValueError, "wider"),
+        ):
+            build_social.github_svg()
 
     def test_both_languages_for_every_post_format(self):
         self.assertEqual(sorted(build_social.SAMPLES), ["en", "pt-BR"])

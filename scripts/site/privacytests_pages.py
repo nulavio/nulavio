@@ -868,10 +868,12 @@ def page(c: dict, locale: str, revision_date: str) -> str:
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Nulavio">
 <meta property="og:locale" content="{w["og_locale"]}">
+<meta property="og:locale:alternate" content="{"en_US" if w["og_locale"] == "pt_BR" else "pt_BR"}">
 <meta property="og:url" content="{url}">
 <meta property="og:title" content="{e(w["title"])}">
 <meta property="og:description" content="{description}">
 <meta property="og:image" content="{image}">
+<meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="{OG_SIZE[0]}">
 <meta property="og:image:height" content="{OG_SIZE[1]}">
 <meta property="og:image:alt" content="{alt}">

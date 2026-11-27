@@ -1,10 +1,15 @@
 <!doctype html>
-<!-- The link-preview image of nulavio.net (site/assets/og-pt.png, og-en.png; og:image on the landing).
+<!-- The link-preview image of nulavio.net (site/assets/og-pt.png, og-en.png; og:image on every page
+     without a picture of its own: scripts/site/build_site.py, LINK_PREVIEW, which also holds the
+     alternative text, so a text changed here changes there; tests/unit/test_site.py compares them).
      Not published. To regenerate, open this file in any browser at 1200 x 630 with ?lang=pt or ?lang=en
      in the address and capture the viewport as PNG, for example:
        chromium --headless --screenshot=site/assets/og-pt.png --window-size=1200,630 --hide-scrollbars \
          "file://$PWD/scripts/site/og-template.html?lang=pt"
-     Colours and the lockup are the brand's (docs/brand/tokens.json, docs/brand/assets/logo/). -->
+     Then run scripts/brand/build_social.py, which puts both beside GitHub's image on
+     docs/brand/assets/social/link-previews.png: look at the small sizes and the crops there.
+     Colours and the lockup are the brand's (docs/brand/tokens.json, docs/brand/assets/logo/). The name
+     is 264 px wide and the small texts 36 and 28 px, so that they are still read at 300 px wide. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -17,12 +22,12 @@
     background: radial-gradient(60% 90% at 88% 100%, #0E3B33, transparent 70%), #0F1C2A;
     color: #F1F7F5; font-family: Inter, "Noto Sans", Cantarell, system-ui, sans-serif;
   }
-  img { width: 187px; height: auto; }
+  img { width: 264px; height: auto; }
   h1 { margin: auto 0 0; font-size: 104px; font-weight: 700; line-height: 1.02; letter-spacing: -0.035em; }
   h1 span { display: block; }
   h1 .mine { color: #6FE0C5; }
-  p { margin: 36px 0 0; font-size: 34px; line-height: 1.3; color: #BFD0D6; }
-  .foot { display: flex; align-items: center; gap: 18px; margin-top: 40px; font-size: 26px; font-weight: 600; }
+  p { margin: 32px 0 0; font-size: 36px; line-height: 1.3; color: #BFD0D6; }
+  .foot { display: flex; align-items: center; gap: 18px; margin-top: 36px; font-size: 28px; font-weight: 600; }
   .trail { display: inline-flex; align-items: center; gap: 9px; }
   .trail i { display: block; border-radius: 50%; background: #6FE0C5; }
   .trail i:nth-child(1) { width: 8px; height: 8px; opacity: .4; }
