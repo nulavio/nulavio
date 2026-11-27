@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -211,6 +212,24 @@ class DocsTest(unittest.TestCase):
                     continue
                 broken.append(f"{md.relative_to(ROOT)} -> {target}")
         self.assertEqual(broken, [])
+
+    def test_readme_status_names_the_published_release_and_its_systems(self):
+        # #857: the status names packaging/release.json's version (release_metadata.py keeps it there), and Ubuntu's
+        # steps check the sources file the site serves.
+        release = json.loads((ROOT / "packaging" / "release.json").read_text(encoding="utf-8"))
+        tag = f"v{release['version']}"
+        link = f"<!--release-->[{tag}](https://github.com/nulavio/nulavio/releases/tag/{tag})<!--/release-->"
+        digest = hashlib.sha256((ROOT / "site" / "apt" / "nulavio.sources").read_bytes()).hexdigest()
+        for readme, ubuntu in (("README.md", "On Ubuntu 24.04 or later"), ("README.pt-BR.md", "No Ubuntu 24.04 ou mais novo")):
+            with self.subTest(readme=readme):
+                text = (ROOT / readme).read_text(encoding="utf-8")
+                self.assertEqual(re.findall(r"<!--release-->.*?<!--/release-->", text), [link])
+                self.assertIsNotNone(release.get("apt_sources"))
+                self.assertIn(ubuntu, text)
+                self.assertIn(f"curl -fsSLO --proto '=https' {release['apt_sources']}\n", text)
+                self.assertIn(f"`{digest}`", text)
+                # A test count goes stale with the next test; the README names none.
+                self.assertNotRegex(text, r"\b\d+ (tests|testes)\b")
 
     def test_adr_has_required_sections(self):
         text = (ROOT / "docs" / "adr" / "0001-engine-selection.md").read_text()

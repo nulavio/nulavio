@@ -27,6 +27,12 @@ class ReleaseMetadataTest(unittest.TestCase):
         (self.repo / "browser/build").mkdir(parents=True)
         (self.repo / "browser/build/engine.json").write_text(json.dumps({"firefox": "160.0"}))
         (self.repo / "CHANGELOG.md").write_text("# Changelog\n\nRelease history.\n\n<!-- releases -->\n")
+        self.readmes = {
+            "README.md": "Now <!--release-->[v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1)<!--/release-->.\n",
+            "README.pt-BR.md": "Agora na <!--release-->[v160.0-0.0](old)<!--/release-->, [v160.0-0.1](keep).\n",
+        }
+        for name, text in self.readmes.items():
+            (self.repo / name).write_text(text)
         self.git("add", ".")
         self.git("commit", "-qm", "base")
         self.sha = self.git("rev-parse", "HEAD").strip()
@@ -80,6 +86,20 @@ class ReleaseMetadataTest(unittest.TestCase):
         result = self.run_metadata()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_text()), before)
+
+    def test_the_readmes_status_names_the_published_release_between_its_markers(self):
+        # #857: the release step keeps the READMEs' status on the latest release, even one that drifted.
+        link = "<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "README.md").read_text(), f"Now {link}.\n")
+        self.assertEqual((self.repo / "README.pt-BR.md").read_text(), f"Agora na {link}, [v160.0-0.1](keep).\n")
+        # An older release leaves them as they are.
+        (self.repo / "README.md").write_text(self.readmes["README.md"])
+        self.metadata.write_text(json.dumps({"version": "160.0-0.10", "channel": "alpha"}))
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "README.md").read_text(), self.readmes["README.md"])
 
     def test_the_first_release_with_the_companion_apk_names_it_for_the_download_pages(self):
         # ADR 0014: the pages offer the Companion once a published release carries its APK.

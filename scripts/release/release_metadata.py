@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update published download metadata and CHANGELOG.md; never publish or approve a release."""
+"""Update published download metadata, CHANGELOG.md and the READMEs' status; never publish or approve a release."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ import release_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
 TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
+# The READMEs' status names the latest release between these markers (#857).
+READMES = ("README.md", "README.pt-BR.md")
+README_RELEASE = re.compile(r"<!--release-->.*?<!--/release-->")
 
 
 def version_key(version: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -96,10 +99,25 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     if companion:
         metadata["companion_apk"] = companion[-1]
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
-    changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")
+    # Built only from the checked tag and URL; a README without the markers is left as it is.
+    link = f"<!--release-->[{tag}]({url})<!--/release-->"
+    readmes = {}
+    for name in READMES:
+        path = repo / name
+        if path.is_file():
+            text = path.read_text(encoding="utf-8")
+            readmes[path] = (text, README_RELEASE.sub(lambda _: link, text))
+    changed = (
+        serialized != metadata_path.read_text(encoding="utf-8")
+        or changelog != changelog_path.read_text(encoding="utf-8")
+        or any(old != new for old, new in readmes.values())
+    )
     if changed:
         metadata_path.write_text(serialized, encoding="utf-8")
         changelog_path.write_text(changelog, encoding="utf-8")
+        for path, (old, new) in readmes.items():
+            if old != new:
+                path.write_text(new, encoding="utf-8")
     return changed
 
 

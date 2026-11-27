@@ -56,6 +56,8 @@ class MetadataWorkflowTest(unittest.TestCase):
             "CHANGELOG.md": "# Changelog\n\n<!-- releases -->\n",
             "packaging/release.json": '{"version": "160.0-0.1", "channel": "alpha"}',
             "browser/build/engine.json": '{"firefox": "160.0"}',
+            "README.md": "Now <!--release-->[v160.0-0.1](x)<!--/release-->.\n",
+            "README.pt-BR.md": "Agora na <!--release-->[v160.0-0.1](x)<!--/release-->.\n",
         }.items():
             path = self.repo / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -135,6 +137,7 @@ class MetadataWorkflowTest(unittest.TestCase):
         patch = (Path(self.env["RUNNER_TEMP"]) / "release-metadata.patch").read_text()
         self.assertIn("160.0-0.2", patch)
         self.assertIn("Profiles.", patch)
+        self.assertIn("+Now <!--release-->[v160.0-0.2]", patch)
         result = self.step("Open the metadata pull request, or report recovery instructions")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("not configured", result.stdout)
@@ -149,7 +152,8 @@ class MetadataWorkflowTest(unittest.TestCase):
         branch = "agent/release/chore-metadata-v160.0-0.2"
         self.assertIn(branch, self.git("ls-remote", "--heads", "origin"))
         changed = self.git("diff", "--name-only", self.sha, "HEAD").splitlines()
-        self.assertEqual(changed, ["CHANGELOG.md", "packaging/release.json"])
+        self.assertEqual(changed, ["CHANGELOG.md", "README.md", "README.pt-BR.md", "packaging/release.json"])
+        self.assertIn("releases/tag/v160.0-0.2)<!--/release-->", self.git("show", "HEAD:README.pt-BR.md"))
         self.assertIn("Signed-off-by:", self.git("log", "-1", "--format=%B"))
         self.env["EXISTING_PR"] = "https://github.com/nulavio/nulavio/pull/999"
         result = self.step("Open the metadata pull request, or report recovery instructions")

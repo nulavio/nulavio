@@ -49,7 +49,7 @@ Nulavio is an open-source desktop browser for Linux, built from Mozilla's signat
 
 ## Status
 
-**Alpha.** The public alpha, now [v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2) (Firefox 160.0, a security update of v160.0-0.1), is out for **Fedora**, through a signed dnf repository; Ubuntu (APT) follows. Unlocking a profile with a phone comes with the next release, together with the Nulavio Companion app on F-Droid; a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
+**Alpha.** The public alpha, now <!--release-->[v160.0.1-0.3](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3)<!--/release-->, is out for **Fedora** and **Ubuntu**, through signed dnf and APT repositories. A profile can be unlocked with a phone through the Nulavio Companion app for Android, which comes with each release (it is not on F-Droid yet); a FIDO2 security key comes after 1.0 and is shown as "not available yet" in the browser. The [release criteria](docs/product/release-criteria.md) list what is done and what is left, and the [roadmap](docs/product/roadmap.md) the phases.
 
 Nulavio follows Firefox's release channel and aims to ship each Firefox security release within 24 hours, 72 at most ([update policy](docs/architecture/update-policy.md)).
 
@@ -61,6 +61,18 @@ On Fedora 44 or later, x86_64:
 sudo dnf config-manager addrepo --from-repofile=https://nulavio.net/rpm/nulavio.repo
 sudo dnf install nulavio
 ```
+
+On Ubuntu 24.04 or later, x86_64:
+
+```sh
+curl -fsSLO --proto '=https' https://nulavio.net/apt/nulavio.sources
+sha256sum nulavio.sources
+sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
+sudo apt update
+sudo apt install nulavio
+```
+
+Go on after `sha256sum` only if it prints `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`, and delete the file if it does not. The file carries the public key named just below, and apt accepts only what that key signed.
 
 Packages and the repository metadata are signed with the OpenPGP key `298A 9093 BAAB B26F 79BB  29F4 BF47 E5FA 9EDB 8DB1` ([public key](https://nulavio.net/keys/nulavio-packages.asc)). Every [release](https://github.com/nulavio/nulavio/releases) comes with a CycloneDX SBOM and a signed `SHA256SUMS`. Other systems: [join the waitlist](https://nulavio.net/en/) and you get an e-mail when yours is supported.
 
@@ -99,7 +111,7 @@ python3 -I tests/run.py unit          # no engine, no network
 python3 -I tests/run.py integration   # the real engine, headless
 ```
 
-The integration suite drives the real browser through Marionette: 363 tests on the Firefox 160 build, the ones that need the network, a phone or a visible window run on request.
+The integration suite drives the real browser through Marionette; the tests that need the network, a phone or a visible window run on request.
 
 ## Documentation
 

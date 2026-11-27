@@ -50,7 +50,7 @@ jobs:
             "$RUNNER_TEMP/published-release.json" "$RUNNER_TEMP/release-event.json"
           python3 -I scripts/release/release_metadata.py --event "$RUNNER_TEMP/release-event.json" \
             --repository "$GITHUB_REPOSITORY" --manifest "$RUNNER_TEMP/release-manifest/manifest.json"
-          git diff --binary -- CHANGELOG.md packaging/release.json > "$RUNNER_TEMP/release-metadata.patch"
+          git diff --binary -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md > "$RUNNER_TEMP/release-metadata.patch"
           if [ -s "$RUNNER_TEMP/release-metadata.patch" ]; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
@@ -82,7 +82,7 @@ jobs:
           git switch -c "$branch"
           git config user.name 'nulavio-release-bot'
           git config user.email 'nulavio-release-bot@users.noreply.github.com'
-          git add -- CHANGELOG.md packaging/release.json
+          git add -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md
           git commit -s -m "chore(release): record $TAG"
           gh auth setup-git
           # A retry after a failed PR creation reuses only an identical remote tree; never force-push.
@@ -92,6 +92,6 @@ jobs:
           else
             git push origin "HEAD:refs/heads/$branch"
           fi
-          printf 'Record published release %s in CHANGELOG.md and the download metadata.\n\nGenerated from the published notes and verified build provenance. The site deploys after merge. Security impact and SLA reporting remain an editorial review in docs/security/changelog.md.\n\nRefs #192\n' "$TAG" > "$RUNNER_TEMP/pr-body.md"
+          printf 'Record published release %s in CHANGELOG.md, the download metadata and the status in the READMEs.\n\nGenerated from the published notes and verified build provenance. The site deploys after merge. Security impact and SLA reporting remain an editorial review in docs/security/changelog.md.\n\nRefs #192\n' "$TAG" > "$RUNNER_TEMP/pr-body.md"
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
             --title "chore(release): record $TAG" --body-file "$RUNNER_TEMP/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
