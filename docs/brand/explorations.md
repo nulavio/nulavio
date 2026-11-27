@@ -98,3 +98,16 @@ Why B: it fuses the brief's four ideas, N, null, route/navigation and the space 
 ![Lockups](assets/review/lockups.png)
 
 ![Small-size review: 16, 24, 32, 48 px at 4× on light and dark](assets/review/small-size-review.png)
+
+## Revision, 2026-11: the route is the initial (#175)
+
+The first lockup set the symbol, an N, beside the wordmark "nulavio", so it read "N nulavio" wherever the name was shown. The [brand review of 2026-11](review-2026-11.md) audited the marks where people meet them, looked at eight browser and privacy brands and drew three proposals. On 2026-11-27 the maintainer chose **proposal A**, with the review's other recommendations:
+
+- **Lockup.** The symbol takes the place of the wordmark's first letter: the route, at the wordmark's stroke and between its ascender and its baseline, then "ulavio". It reads "Nulavio", as the name is written in running text. The tile lockup, which put the app icon beside the whole wordmark, is retired.
+- **Symbol and palette.** Kept. The review measured three other accent hues: each passes every contrast pair, and each falls under the tokens' rule that keeps the accent apart from the identity, status and private colours.
+- **App icon.** The route is drawn 15 % larger in its tile (55 % of its width, 65 % of its height) from 32 px up, the proportion of the hand-tuned 16 px master. The 16 and 24 px masters are unchanged. The Companion's adaptive icon is generated with the others and centred.
+- **Mint never means "safe", applied.** The Settings privacy status drew its "on guard" shield in the mint scale; it now uses the neutral secure colours, keeping the shape.
+- **Not chosen.** B, the wordmark alone with the symbol only as the icon (the symbol would never appear with the name); C, a new symbol that is not a letter (the least distinctive picture, and it gives up the N every surface already shows).
+
+Why A: one mark where there were two, the weights match, and the symbol people already see in the window, the tab and the launcher is the one in the name. It changes least outside the lockup. What it costs: the logo is no longer all lowercase, and at the site header's size the trail's points are small (2.9, 2.0 and 1.2 px), so the trail reads more in the icon than in the name.
+

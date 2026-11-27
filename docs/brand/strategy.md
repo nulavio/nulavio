@@ -5,7 +5,7 @@
 **Nulavio** blends *null* (`/dev/null`, where unwanted data goes), *navio* (Portuguese for "ship") and *navegação* ("navigation"). It suggests a vessel for moving through the web that leaves nothing useful behind for trackers.
 
 - Pronunciation: PT-BR /nuˈla.vju/ ("nu-LA-viu"); EN "noo-LAH-vee-oh".
-- In running text: **Nulavio** (capital N). The wordmark is lowercase: **nulavio**.
+- In running text: **Nulavio** (capital N). The logo writes it the same way: the symbol is the capital, then "ulavio" in the lowercase wordmark's letters (the lockup, decided on 2026-11-27, #175). The lowercase wordmark **nulavio** stays for text-only contexts.
 - The preview is called **Nulavio Preview** (Track A). Never "Nulavio Firefox" or "Firefox Nulavio".
 
 ## Mission
@@ -74,7 +74,7 @@ Strikethrough marks phrases we never use (the docs test ignores text inside `~~�
 
 ## Correct use of the name and marks
 
-- Use the official SVGs in [`assets/logo/`](assets/logo/). Never retype the wordmark in a font.
+- Use the official SVGs in [`assets/logo/`](assets/logo/). Never retype the wordmark or the lockup in a font, and never set the symbol beside the whole wordmark ("N nulavio"): the symbol already is the name's initial.
 - Follow [guidelines.md](guidelines.md) for clear space, minimum sizes and prohibited uses.
 - When mentioning the engine: "built on Mozilla's Gecko engine" or, for the preview, "runs on the unmodified Mozilla Firefox engine" plus "Nulavio is not affiliated with Mozilla. Firefox is a trademark of the Mozilla Foundation."
 
