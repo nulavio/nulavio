@@ -1287,6 +1287,7 @@ let lateRead = false; // and the browser reads its list only when a held reply i
 let reads = 0;
 const held = [];
 let holdThread = false; // the same for the conversation's reply (assistantThread)
+let threadReply = null; // the conversation the browser has (assistantThread): one with an answer to retry shows Retry
 const threadHeld = [];
 let holdPage = false; // and for the selected tab's (assistantPage)
 const pageHeld = [];
@@ -1316,7 +1317,8 @@ globalThis.browser = {
       const list = [...kept]; // as the browser has it now
       return hold ? new Promise(resolve => held.push(() => resolve(lateRead ? [...kept] : list))) : Promise.resolve(list);
     },
-    assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
+    assistantThread: () =>
+      holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(threadReply),
     // The selected tab: the panel keeps the items that came from it.
     assistantPage() {
       ++pageReads;
@@ -2370,6 +2372,48 @@ for (const [n, reason] of [[48, "tab-changed"], [49, "page-changed"]]) {
     !$("no-page").hidden,
   ];
 }
+// The same refusals, and Retry pressed while the selected tab is read again (CodeRabbit on #881): Task then Ask chosen
+// meanwhile show Retry again, and the retry sends no item and voids that read, so it is made again, and the page of the
+// tab selected now is offered once it is read.
+out.retryAfterRefusal = {};
+threadReply = { turns: [], historyTurns: 1, historyChars: 10, retryChars: 5, recipient };
+for (const [n, reason] of [[50, "tab-changed"], [51, "page-changed"]]) {
+  selected = tab;
+  $("allow-profile").fire("click");
+  await idle();
+  kept = [item(`c${n}`, "Antiga")];
+  $("allow-profile").fire("click");
+  await idle();
+  holdStart = true;
+  refuse = reason;
+  await send(`Pergunta ${n - 5}`);
+  selected = otherTab;
+  holdPage = true;
+  holdStart = false;
+  startHeld.splice(0).forEach(answer => answer());
+  await idle();
+  refuse = null;
+  $("ask").elements.mode.value = "task";
+  $("ask").fire("change", { target: { name: "mode" } });
+  $("ask").elements.mode.value = "ask";
+  $("ask").fire("change", { target: { name: "mode" } });
+  await idle();
+  const retryShown = !$("retry-actions").hidden;
+  $("retry").fire("click");
+  await idle();
+  const retried = started.at(-1)?.retry === true;
+  holdPage = false;
+  pageHeld.splice(0).forEach(answer => answer());
+  await idle();
+  await finish();
+  out.retryAfterRefusal[reason] = [
+    retryShown,
+    retried,
+    $("include-page").hidden ? null : $("include-page").textContent,
+    !$("summarize").hidden,
+  ];
+}
+threadReply = null;
 selected = tab;
 console.log(JSON.stringify(out));
 """
@@ -2696,6 +2740,15 @@ class PanelChipsTest(unittest.TestCase):
             self.assertIn("assistantIncludePage|Outra", offer or "", reason)  # the tab selected now
             self.assertTrue(summarize, reason)
             self.assertFalse(no_page, reason)  # a web page is selected: no "no page" hint
+
+    def test_a_retry_after_a_refusal_still_brings_the_page_offer_back(self):
+        out = self._run()  # #861, CodeRabbit on #881
+        for reason in ("tab-changed", "page-changed"):
+            shown, retried, offer, summarize = out["retryAfterRefusal"][reason]
+            self.assertTrue(shown, reason)  # Retry is offered while the selected tab is read again
+            self.assertTrue(retried, reason)
+            self.assertIn("assistantIncludePage|Outra", offer or "", reason)  # the tab selected now
+            self.assertTrue(summarize, reason)
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()

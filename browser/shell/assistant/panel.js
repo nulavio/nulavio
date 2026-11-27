@@ -1032,6 +1032,11 @@ async function send(question, { retry = false } = {}) {
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
   // The browser drops its copy too, whatever the start (#678).
   setChips([]);
+  if (tabCheck) {
+    // A Retry or a Task does not wait for a read of the selected tab on its way, and this Send made it void: it is made
+    // again, so the page offer that a refusal hid comes back once the tab is read (#861).
+    refreshPage();
+  }
   if (!dropNotice) {
     $("drift").hidden = true;
   }
