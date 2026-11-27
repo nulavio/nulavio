@@ -88,7 +88,7 @@ def review_sheets() -> list[Path]:
     for name, bg in (
         ("nulavio-lockup-horizontal", "#F1F7F5"),
         ("nulavio-lockup-horizontal-on-dark", "#0B1623"),
-        ("nulavio-lockup-horizontal-tile", "#FFFFFF"),
+        ("nulavio-lockup-horizontal-mono-black", "#FFFFFF"),
     ):
         cmd += [
             "(",

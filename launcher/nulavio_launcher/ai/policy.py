@@ -394,7 +394,8 @@ def classify_url(url: str, resolve: bool = True) -> Target:
         return Target(url, None, ("local_resources", "debugging") if privileged else ("local_resources",))
     if scheme == "javascript":
         raise UrlRefused("javascript: addresses are not opened; scripts need the evaluate tool")
-    raise UrlRefused(f"'{scheme or '?'}:' addresses are not supported")
+    # Not quoted: a link's address, and so its scheme, is the page's text (AI-T1), and an error is not marked.
+    raise UrlRefused("addresses with that scheme are not supported")
 
 
 def origin(url: str | None) -> str | None:
