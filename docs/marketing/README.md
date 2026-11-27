@@ -1,5 +1,7 @@
 # Promotion material (drafts)
 
+> **These are drafts.** Before anything is recorded or published, each claim is checked again against `main`, and the open points in [#888](https://github.com/nulavio/nulavio/issues/888) are settled.
+>
 > **Draft, not approved (2026-11-27).** Nothing here has been recorded, generated or published. Each item waits for the maintainer's approval, as the decisions of 2026-11-14 and 2026-11-27 on [#176](https://github.com/nulavio/nulavio/issues/176) say.
 
 These files are the plan for Nulavio's trailer, feature shorts and launch material ([#176](https://github.com/nulavio/nulavio/issues/176)). They are text only. They contain no media, no generated asset and no paid work.

@@ -45,7 +45,7 @@ For Bruno and the team lead: work and personal life in separate profiles.
 | 0:24–0:27 | Motion card | "Profiles keep data apart. They don't hide your IP." / "Perfis separam dados. Não escondem seu IP." | — | — | C20 |
 | 0:27–0:30 | End card | as above | — | — | C24 |
 
-The picture of R04 is a typed address, which is what the pipeline records; a link from another app starts outside the window (C07 covers both). The rule in the recording is an "open there" rule for a profile that is not locked, which is why the site opens at once. The line says what happens otherwise for a locked profile; an "ask first" rule, which the short does not show, asks before it loads anything (C07). Nothing here says "every link": a link clicked inside a page stays in the current profile unless in-page routing is turned on (C07).
+The picture of R04 is a typed address, which is what the pipeline records; a link from another app starts outside the window (C07 covers both). The rule in the recording is an "open there" rule for a profile that is not locked, which is why the site opens at once. The line says what happens otherwise for a locked profile; an "ask first" rule, which the short does not show, asks before it switches profile (C07). Nothing here says "every link": a link clicked inside a page stays in the current profile unless in-page routing is turned on (C07).
 
 ## S3 · Encrypted profiles, and you hold the key (30 s)
 
@@ -89,12 +89,12 @@ For Ana and the team lead: agents, without handing over the keys.
 | 0:00–0:03 | Motion: hook | "Let an AI agent browse?" / "Deixar um agente de IA navegar?" | "An AI agent in your browser?" | "Um agente de IA no seu navegador?" | — |
 | 0:03–0:12 | R08 `ai-bridge` (connect, workspace band) | "By default: its own profile, away from your logins" / "Por padrão: perfil próprio, longe dos seus logins" | "By default, an MCP client gets a profile of its own, away from your logins, unless you give it one of yours." | "Por padrão, um cliente MCP ganha um perfil só dele, longe dos seus logins, a menos que você dê um dos seus." | C15 |
 | 0:12–0:18 | R08 `ai-bridge` (permission, revoke) | the permission panel as recorded | "It has the permissions you grant, and you can take them back." | "Ele tem as permissões que você dá, e você pode retirá-las." | C15 |
-| 0:18–0:27 | R08 `ai-bridge` (emergency stop, the next call refused) | "Emergency stop: next calls refused" / "Parada de emergência: próximas chamadas recusadas" | "Its actions are logged, and the emergency stop refuses every agent's next call and closes its workspace." | "As ações ficam registradas, e a parada de emergência recusa a próxima chamada de cada agente e fecha o espaço de trabalho." | C15 |
+| 0:18–0:27 | R08 `ai-bridge` (emergency stop, the next page read refused) | "Emergency stop: next actions refused" / "Parada de emergência: próximas ações recusadas" | "Its actions are logged, and the emergency stop refuses every agent's next action and closes its workspace." | "As ações ficam registradas, e a parada de emergência recusa a próxima ação de cada agente e fecha o espaço de trabalho." | C15 |
 | 0:27–0:30 | End card | as above | — | — | C24 |
 
 Rule 6: no AI product is named in the voice-over or shown on screen. The client is the project's test client, registered under a neutral name, as in T7.
 
-The stop is said as what it does: the Bridge refuses each agent's next call and closes its workspace. It does not end the agent's own program, which runs outside the browser (C15).
+The stop is said as what it does: the Bridge refuses each agent's next action, which is a call to a browser tool, and closes its workspace. The call the recording shows refused is a page read: the status call still answers, and says the session is stopped. It does not end the agent's own program, which runs outside the browser (C15).
 
 ## S6 · Your choices, no partner behind them (28 s)
 
@@ -112,7 +112,7 @@ For Carla and Bruno: the choices are theirs, among the options the build lists.
 Rule 6: each list is shown whole, as the build shows it, and the voice-over names no provider.
 
 - **Password managers.** The welcome lists the browser's own manager and the four Nulavio supports, and marks the browser's own as in use (C29). A manager outside that list is not offered there, so the hook and the line promise a choice among the listed ones, not "whatever you already use" (C16).
-- **Search.** The first run has no search step: the scene is Settings › Search. Its list has every provider and every engine by name, in alphabetical order, each with a "Use" button, none preselected and none marked as recommended. One row says "In use in normal and private windows.": in a new profile it is DuckDuckGo's, because that is where a new profile's search starts (C29). The recording shows that row as it is, among the others.
+- **Search.** The first run has no search step: the scene is Settings › Search. In the new profile recorded, its list has every provider and every engine by name, in alphabetical order, each with a "Use" button, none preselected and none marked as recommended. One row says "In use in normal and private windows.": in a new profile it is DuckDuckGo's, because that is where a new profile's search starts (C29). The recording shows that row as it is, among the others.
 - **DNS.** The first tab's card offers the network's resolver or an encrypted service that falls back to it; each option's own note is on the card. Encrypted-only is in Settings and is not shown (C18). The line says only that the question is asked once.
 
 ## Later shorts
