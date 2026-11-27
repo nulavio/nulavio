@@ -162,6 +162,10 @@ class Passwords {
   #privatePairs = new Set();
   #privateSession = 0; // advances when the last private window closes: a "Continue" under way from before keeps nothing
   #watchingPrivate = false;
+  // The profile's confirmed pairs as checkLogin() compares them, built once per value of the pref: the list has no
+  // limit, so a check looks a pair up in this set instead of going through the list. Kept by the pref's text, so a
+  // change made elsewhere (about:config, another copy of the list) is read on the next check.
+  #confirmedCache = { raw: null, pairs: new Set() };
 
   async #providers() {
     if (!this.#data) {
@@ -311,13 +315,31 @@ class Passwords {
     return this.#savedSites;
   }
 
-  #dismissed() {
+  #dismissedRaw() {
     try {
-      const list = JSON.parse(Services.prefs.getStringPref(PREF_DISMISSED, "[]"));
+      return Services.prefs.getStringPref(PREF_DISMISSED, "[]");
+    } catch {
+      return "[]";
+    }
+  }
+
+  #dismissed(raw = this.#dismissedRaw()) {
+    try {
+      const list = JSON.parse(raw);
       return Array.isArray(list) ? list : [];
     } catch {
       return [];
     }
+  }
+
+  /** The profile's confirmed pairs, each in the form pairEntry() gives. */
+  #confirmedPairs() {
+    const raw = this.#dismissedRaw();
+    if (raw !== this.#confirmedCache.raw) {
+      const pairs = new Set(this.#dismissed(raw).map(entry => pairEntry(...String(entry).split(" "))));
+      this.#confirmedCache = { raw, pairs };
+    }
+    return this.#confirmedCache.pairs;
   }
 
   /**
@@ -351,7 +373,7 @@ class Passwords {
     if (inPrivate && this.#privatePairs.has(pair)) {
       return true;
     }
-    return this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair);
+    return this.#confirmedPairs().has(pair);
   }
 
   /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null (or locked). */
@@ -508,12 +530,13 @@ class Passwords {
     );
   }
 
-  /** Not asked again for this pair of sites (kept in this profile only). */
+  /** Not asked again for this pair of sites (kept in this profile only), until it is removed in Settings: the list
+     has no limit, so no pair is ever dropped to make room for another. */
   dismiss(site, similar) {
     const entry = pairEntry(site, similar);
     const list = this.#dismissed().filter(e => e !== entry);
     list.push(entry);
-    Services.prefs.setStringPref(PREF_DISMISSED, JSON.stringify(list.slice(-200)));
+    Services.prefs.setStringPref(PREF_DISMISSED, JSON.stringify(list));
   }
 
   /** The pairs the person chose to continue on, newest first (Settings › Passwords). */

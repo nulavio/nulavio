@@ -147,6 +147,33 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["first"], case["last"]), ({"suspicious": False}, {"suspicious": False}), case)
         self.assertEqual(case["prefs"], [], case)
 
+    def test_no_pair_confirmed_in_the_profile_is_dropped(self):
+        """The page says "until you remove it in Settings": the 201st pair confirmed keeps the first (#871)."""
+        case = self.cases["dismiss_many"]
+        self.assertEqual(case["kept"], 201, case)
+        self.assertEqual((case["first"], case["last"]), ({"suspicious": False}, {"suspicious": False}), case)
+        self.assertEqual(case["listed"], 201, case)
+        self.assertEqual(case["newest"], {"site": "p200.example", "similar": "paypal.example"}, case)
+        self.assertEqual(case["oldest"], {"site": "p0.example", "similar": "paypal.example"}, case)
+        # Removed in Settings: warned again, and only that pair.
+        self.assertIs(case["firstRemoved"], True, case)
+        self.assertEqual(case["secondKept"], {"suspicious": False}, case)
+        self.assertEqual(case["listedAfter"], 200, case)
+
+    def test_a_check_reads_the_confirmed_pairs_as_they_are_now(self):
+        case = self.cases["dismissed_changed_elsewhere"]
+        self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": True}, {"suspicious": False}), case)
+        self.assertEqual(case["reset"], FOUND, case)
+        self.assertEqual(case["restored"], {"suspicious": False}, case)
+        self.assertEqual(case["damaged"], FOUND, case)
+
+    def test_a_refused_write_remembers_nothing_and_keeps_the_list(self):
+        case = self.cases["dismiss_write_refused"]
+        self.assertEqual(case["before"], {"dismissed": True}, case)
+        self.assertEqual(case["answer"], {"threw": "NS_ERROR_ILLEGAL_VALUE"}, case)
+        self.assertEqual(case["after"], FOUND, case)
+        self.assertEqual(case["confirmed"], [{"site": "examp1e.example", "similar": "example.example"}], case)
+
     def test_a_pair_confirmed_in_a_normal_window_is_not_warned_in_a_private_one(self):
         case = self.cases["dismiss_in_normal_counts_in_private"]
         self.assertEqual((case["answer"], case["inPrivate"]), ({"dismissed": True}, {"suspicious": False}), case)

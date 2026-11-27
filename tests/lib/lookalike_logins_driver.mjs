@@ -362,8 +362,8 @@ const cases = {
     const secondAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
     return result(store, { first, firstAfter, kept, second, secondAfter, prefs: [...prefs.keys()] });
   },
-  // Many pairs confirmed in one private session (more than the profile's 200): none is dropped before the last private
-  // window closes, as the page says, so the first one is still not warned.
+  // Many pairs confirmed in one private session (201): none is dropped before the last private window closes, as the
+  // page says, so the first one is still not warned.
   dismiss_in_private_many: async () => {
     const store = loginManager();
     const passwords = await module(store);
@@ -379,6 +379,74 @@ const cases = {
     const first = await passwords.checkLogin("https://paypal-login.p0.example/", { inPrivate: true });
     const last = await passwords.checkLogin("https://paypal-login.p200.example/", { inPrivate: true });
     return result(store, { kept: dismissed.filter(Boolean).length, first, last, prefs: [...prefs.keys()] });
+  },
+  // Many pairs confirmed in a normal window (201, one more than the list used to keep): none is dropped, as the page
+  // says ("until you remove it in Settings"), so the first one is still not warned and Settings still lists it.
+  dismiss_many: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const dismissed = [];
+    for (let n = 0; n <= 200; n++) {
+      const answer = await passwords.dismissFor(`https://paypal-login.p${n}.example/`, {
+        site: `p${n}.example`,
+        similar: "paypal.example",
+      });
+      dismissed.push(answer.dismissed);
+    }
+    const first = await passwords.checkLogin("https://paypal-login.p0.example/");
+    const last = await passwords.checkLogin("https://paypal-login.p200.example/");
+    const confirmed = passwords.listConfirmed();
+    // Removed in Settings: the warning comes back for that pair, and only for it.
+    passwords.removeConfirmed("p0.example", "paypal.example");
+    const firstRemoved = await passwords.checkLogin("https://paypal-login.p0.example/");
+    const secondKept = await passwords.checkLogin("https://paypal-login.p1.example/");
+    return result(store, {
+      kept: dismissed.filter(Boolean).length,
+      first,
+      last,
+      listed: confirmed.length,
+      newest: confirmed.at(0),
+      oldest: confirmed.at(-1),
+      firstRemoved: firstRemoved.suspicious,
+      secondKept,
+      listedAfter: passwords.listConfirmed().length,
+    });
+  },
+  // The list changed outside the module (about:config, a copy of the pref): the next check reads it as it is now.
+  dismissed_changed_elsewhere: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const answer = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    const confirmed = await check(passwords);
+    const kept = prefs.get("nulavio.passwords.lookalikeDismissed");
+    prefs.delete("nulavio.passwords.lookalikeDismissed"); // reset in about:config
+    const reset = await check(passwords);
+    prefs.set("nulavio.passwords.lookalikeDismissed", kept); // the same list written back
+    const restored = await check(passwords);
+    prefs.set("nulavio.passwords.lookalikeDismissed", "not a list");
+    const damaged = await check(passwords);
+    return result(store, { answer, confirmed, reset, restored, damaged });
+  },
+  // The engine refuses to write the list (a pref longer than it accepts): Continue fails, so the page says nothing was
+  // remembered and does not open the site, and the pairs already confirmed stay as they were.
+  dismiss_write_refused: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const before = await passwords.dismissFor(OTHER, { site: "examp1e.example", similar: "example.example" });
+    const write = Services.prefs.setStringPref;
+    Services.prefs.setStringPref = () => {
+      throw new Error("NS_ERROR_ILLEGAL_VALUE");
+    };
+    let answer;
+    try {
+      answer = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    } catch (e) {
+      answer = { threw: e.message };
+    } finally {
+      Services.prefs.setStringPref = write;
+    }
+    const after = await check(passwords);
+    return result(store, { before, answer, after, confirmed: passwords.listConfirmed() });
   },
   // A pair confirmed in a normal window (kept in the profile) is not warned in a private window either.
   dismiss_in_normal_counts_in_private: async () => {
