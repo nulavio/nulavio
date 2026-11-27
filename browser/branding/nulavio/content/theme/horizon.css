@@ -64,10 +64,11 @@
 
     /* UX3F A5/M4: the launcher widens and narrows on the motion tokens. The
        engine's sidebar view transition (sidebar.css) reads these design-system
-       tokens (Firefox 161's names; they are layered, so these unlayered values
-       win): expand and launcher-enter, collapse and launcher-exit. Reduced
-       motion skips the transition in the engine (gReduceMotion). Expand-on-hover
-       takes its duration from sidebar.animation.expand-on-hover.duration-ms. */
+       tokens (the engine's names since 161; they are layered, so these
+       unlayered values win): expand and launcher-enter, collapse and
+       launcher-exit. Reduced motion skips the transition in the engine
+       (gReduceMotion). Expand-on-hover takes its duration from
+       sidebar.animation.expand-on-hover.duration-ms. */
     --sidebar-motion-duration-enter: var(--nv-motion-duration-expand);
     --sidebar-motion-duration-exit: var(--nv-motion-duration-collapse);
     --sidebar-motion-easing: var(--nv-motion-easing-standard);
