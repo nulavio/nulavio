@@ -5920,9 +5920,12 @@ class DisconnectTest(Home):
         state = {"now": 0}
         ender: list[threading.Thread] = []
 
+        events: list[str] = []
+
         def stop():
             state["now"] += 1
             inside.append(state["now"])
+            events.append("stop")
             stopping.set()
             time.sleep(0.2)
             state["now"] -= 1
@@ -5936,6 +5939,7 @@ class DisconnectTest(Home):
                 ender[0].start()
                 stopping.wait(2)  # end() is stopping this engine as the start returns
                 workspace.bidi = engine
+                events.append("engine")
                 return engine
 
             workspace.start.side_effect = start
@@ -5947,6 +5951,8 @@ class DisconnectTest(Home):
         ender[0].join(5)
         self.assertTrue(stopping.is_set())
         self.assertEqual(max(inside), 1, "two threads stopped the engine at once")
+        # close() let go of the workspace while its engine started: the call stops the engine that start left running.
+        self.assertEqual(events, ["stop", "engine", "stop"])
         self.assertIsNone(bridge.workspace)
 
     def test_a_call_cancelled_while_the_registry_is_read_makes_no_workspace(self):
@@ -5965,6 +5971,67 @@ class DisconnectTest(Home):
             bridge._workspace()
         self.assertEqual(made, [])
         self.assertIsNone(bridge.workspace)
+
+    # OpenCodeReview on #853 (round 3).
+
+    def test_a_profile_whose_engine_starts_as_the_bridge_ends_is_stopped_once(self):
+        """close() still holds the target: it is its one stop. A second one, after the profile's lock was let go, could
+        take another bridge's temporary lines out of the profile."""
+        agent, _ = registry.add("t", "other", "autonomous")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.workspace = mock.Mock(bidi=mock.Mock(), downloads_dir=self.home / "downloads")
+        target = mock.Mock(bidi=None)
+
+        def start(*_a, **_k):
+            bridge._ended = True  # end() set its flag on the server's thread; its close() has not had the lock yet
+            target.bidi = mock.Mock()
+            return target.bidi
+
+        target.start.side_effect = start
+        with (
+            mock.patch.object(tools.Bridge, "require"),
+            mock.patch.object(tools, "ProfileTarget", return_value=target),
+            self.assertRaises(tools.Cancelled),
+        ):
+            bridge._open_profile(registry.get(agent["id"]), "Trabalho", None, [])
+        bridge.end()  # then end()'s close() has the lock
+        target.stop.assert_called_once()
+        self.assertEqual(bridge.profiles, {})
+
+    def test_the_end_does_not_wait_for_a_workspace_being_made(self):
+        """A workspace's folders and files take long to write (a filesystem that does not answer): end() closes what
+        is open without waiting for them, and the workspace made after it is never used and goes."""
+        from nulavio_launcher import paths
+
+        agent, _ = registry.add("m", "other", "autonomous")
+        entered, release = threading.Event(), threading.Event()
+        self.addCleanup(release.set)
+        made: list = []
+
+        def factory(_agent):
+            entered.set()
+            release.wait(10)
+            workspace = mock.Mock(bidi=None, downloads_dir=self.home / "downloads")
+            made.append(workspace)
+            return workspace
+
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), workspace_factory=factory)
+        results: list = []
+        worker = threading.Thread(target=lambda: results.append(bridge.call("tabs_list", {})), daemon=True)
+        worker.start()
+        self.assertTrue(entered.wait(5))
+        ender = threading.Thread(target=bridge.end, daemon=True)
+        ender.start()
+        ender.join(2)
+        self.assertFalse(ender.is_alive(), "end() waited for the workspace being made")
+        release.set()
+        worker.join(5)
+        self.assertTrue(results and results[0]["isError"], results)
+        made[0].start.assert_not_called()
+        made[0].stop.assert_called_once()  # never used: a disposable workspace's folder goes with it
+        self.assertIsNone(bridge.workspace)
+        self.assertEqual(list((paths.state_home() / "ai" / "local").glob("*.json")), [])  # nor its local-places file
 
 
 class ProfilesAndKeysTest(Home):

@@ -959,17 +959,22 @@ class Bridge:
                 raise Cancelled()  # a cancelled call, or one running after the client left, makes no AI Workspace (#646)
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
-            with self._closing:  # end() closes it once it is made, or this call sees end() and makes none
-                if self._called_off():
-                    raise Cancelled()  # cancelled, or the client left, while the registry was read
-                workspace = (self.workspace_factory(agent) if self.workspace_factory else
-                             Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
-                                       headless=self.headless, uploads=uploads))  # fmt: skip
-                workspace.local_file = self._local_path()
-                self.workspace = workspace
-                if self._ended:  # ended on this thread while it was made: close() did not see it
-                    self.close()
-                    raise Cancelled()
+            if self._called_off():
+                raise Cancelled()  # cancelled, or the client left, while the registry was read
+            # Made outside _closing, so folders and files that take long to write never hold end() past the server's
+            # wait; it is kept only if the call and the session still last once the lock is held.
+            workspace = (self.workspace_factory(agent) if self.workspace_factory else
+                         Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
+                                   headless=self.headless, uploads=uploads))  # fmt: skip
+            workspace.local_file = self._local_path()
+            with self._closing:  # end() closes it once it is kept, or this call sees end() and keeps none
+                if not self._called_off():
+                    self.workspace = workspace
+                    return workspace
+                if self._ended:
+                    self.close()  # end()'s close() may have come before the local file was written: it goes too
+            workspace.stop()  # never used: a disposable workspace's folder goes with it
+            raise Cancelled()
         return self.workspace
 
     def _called_off(self) -> bool:
@@ -985,7 +990,11 @@ class Bridge:
         engine = target.start()
         with self._closing:  # one stop at a time: end() may be closing the same engines on the server's thread
             if self._ended:
-                target.stop()
+                # One stop for each target: close() stops one it still holds. One it let go of while the engine
+                # started is stopped here, as that engine runs now; a second stop of a profile, after its lock was
+                # let go, could take another bridge's temporary lines out of it.
+                if target is not self.workspace and not any(t is target for t in self.profiles.values()):
+                    target.stop()
                 self.close()
                 raise Cancelled()
         return engine
