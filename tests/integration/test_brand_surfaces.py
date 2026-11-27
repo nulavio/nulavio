@@ -103,7 +103,9 @@ class BrandSurfacesTest(unittest.TestCase):
         )
         self.assertTrue(state, "the About dialog did not open")
         self.assertIn("about-wordmark.svg", state["image"])
-        self.capture_about()
+        png = self.about_png()
+        self.assertTrue(png, "the About dialog was not among the windows: no screenshot of this run")
+        (self.out / "about-dialog.png").write_bytes(png)
         self.m.chrome('Services.wm.getMostRecentWindow("Browser:About")?.close();')
 
     def window_png(self) -> bytes:
@@ -114,18 +116,21 @@ class BrandSurfacesTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
-    def capture_about(self):
-        """Evidence only: the About window's pixels. In chrome context the window handles are the
-        top-level windows; the About dialog is the one whose windowtype is Browser:About."""
+    def about_png(self) -> bytes | None:
+        """The About window's pixels, or None when no window is the About dialog. In chrome context
+        the window handles are the top-level windows; the About dialog is the one whose windowtype is
+        Browser:About. The window the session was on is selected again, found or not."""
         self.m.set_context("chrome")
         try:
             before = self.m.send("WebDriver:GetWindowHandle")["value"]
-            for handle in self.m.window_handles():
-                self.m.switch_to(handle)
-                if self.m.execute("return document.documentElement.getAttribute('windowtype');") == "Browser:About":
-                    (self.out / "about-dialog.png").write_bytes(self.m.screenshot_png())
-                    break
-            self.m.switch_to(before)
+            try:
+                for handle in self.m.window_handles():
+                    self.m.switch_to(handle)
+                    if self.m.execute("return document.documentElement.getAttribute('windowtype');") == "Browser:About":
+                        return self.m.screenshot_png()
+                return None
+            finally:
+                self.m.switch_to(before)
         finally:
             self.m.set_context("content")
 
