@@ -1,13 +1,13 @@
 WEBVTT
 
 1
-00:00:00.000 --> 00:00:03.995
-No perfil «Pessoal», digita-se o endereço da intranet do trabalho.
+00:00:00.000 --> 00:00:03.070
+Uma regra manda a intranet do trabalho para o «Trabalho».
 
 2
-00:00:03.995 --> 00:00:05.017
-Uma regra manda esse site para o perfil «Trabalho».
+00:00:03.070 --> 00:00:06.416
+No perfil «Pessoal», digita-se o endereço dela.
 
 3
-00:00:05.017 --> 00:00:10.317
+00:00:06.416 --> 00:00:11.733
 O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra.
