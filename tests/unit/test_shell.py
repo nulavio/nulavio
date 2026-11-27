@@ -633,6 +633,21 @@ class RoutingTest(unittest.TestCase):
         self.assertNotIn('params.set("u"', opener)
         self.assertNotIn('params.set("src"', opener)  # the source is in the held link; the page reads no `src`
 
+    def test_held_and_asked_links_open_in_a_normal_window(self):
+        """#670: the pages for a held link (ask, blocked, unlock) and a held link that stays open as the engine opens a
+        link from another app: in a normal window of the profile, a new one when only private windows are open; never
+        in whichever window was used last, which may be private. Behaviour: test_held_links 08, 09 and 10."""
+        routing = module_text("NulavioRouting.sys.mjs")
+        self.assertEqual(len(re.findall(r"openTrustedLinkIn\(", routing)), 1, "every open goes through #openInNormalWindow")
+        opener = routing[routing.index("async #openInNormalWindow(") :]
+        opener = opener[: opener.index("\n  }\n")]
+        self.assertIn("const forceNonPrivate = !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;", opener)
+        self.assertIn('openTrustedLinkIn(url, "tab", { forceNonPrivate })', opener)
+        page = routing[routing.index("async #openPage(") :]
+        page = page[: page.index("\n  }\n")]
+        self.assertIn("await this.#openInNormalWindow(`${policy.getURL(page)}?${query}`);", page)
+        self.assertIn("await this.#openInNormalWindow(url); // held at start-up", routing)
+
     def test_rules_are_never_inferred(self):
         # Only the settings page, the toolbar selector and the ask page create or change rules.
         for path in SHELL.rglob("*.js"):
