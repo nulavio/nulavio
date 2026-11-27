@@ -30,7 +30,7 @@ let contextVersion = 0; // late page replies cannot restore consent after a send
 // The list's revision (#759): every write of `chips` moves it, and so do every move of `contextVersion`, an entry
 // point's delivery that changed the items and the removal of a cancelled Include's item. An item-list reply is drawn only when it did not move while that reply was on its way
 // (checkedChips); otherwise the list is read again. So a reply never puts back an item removed, dropped or replaced
-// meanwhile, nor writes over one included.
+// meanwhile, nor writes over one included. A reply with the list and the tab already drawn writes nothing (#813).
 let revision = 0;
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
@@ -42,6 +42,8 @@ function setChips(list) {
   chips = list;
   ++revision;
 }
+/** Whether `list` holds the items drawn now, in that order (an item's id names its content). */
+const sameItems = list => list.length === chips.length && list.every((c, i) => c.chipId === chips[i].chipId);
 /** A Send, a mode change, a tab to read again, another state: a reply about the context before it is void. */
 function newContext() {
   ++revision;
@@ -380,7 +382,11 @@ async function checkedChips(fallback) {
       return false; // paused, private: no items there
     }
     if (read === revision) {
-      setChips(list); // another list on its way, read before this one was drawn, is read again
+      // Another list on its way, read before this one was drawn, is read again; a list and a tab as already drawn
+      // change nothing, so it is drawn as it is (#813).
+      if (!sameItems(list) || page?.tabId !== current?.tabId || page?.url !== current?.url || page?.title !== current?.title) {
+        setChips(list);
+      }
       bindToPage(page);
       showContext();
       return true;

@@ -1725,6 +1725,44 @@ out.focusOfferShown = shown();
 await send("Pergunta 24");
 out.focusOfferSent = starts.at(-1).chips;
 await finish();
+// Two deliveries that change no item, at once, after the panel has drawn its items (#813, OpenCodeReview round 2):
+// both checks read the same list and tab, and the first one's draw changes nothing, so the second is drawn as it is.
+kept = [item("c30", "Trigésima")];
+$("allow-profile").fire("click");
+await idle();
+hold = true;
+reads = 0;
+offer = { focus: true, chipId: null };
+await emit({ type: "offer", items: false });
+offer = { focus: true, chipId: null, draft: "Pergunta 25" };
+await emit({ type: "offer", items: false });
+await release();
+out.twoFocusReads = reads;
+out.twoFocusShown = shown();
+await send("Pergunta 25");
+out.twoFocusSent = starts.at(-1).chips;
+await finish();
+// The same two checks, but another tab is selected between their reads and its event has not come yet; the newer
+// reply comes first. Its tab is not the one drawn, so the older reply, which read the tab before, is read again.
+selected = tab;
+kept = [];
+$("allow-profile").fire("click");
+await idle();
+hold = true;
+reads = 0;
+offer = { focus: true, chipId: null };
+await emit({ type: "offer", items: false });
+selected = otherTab;
+offer = { focus: true, chipId: null };
+await emit({ type: "offer", items: false });
+held.pop()(); // the newer check: the other tab
+await idle();
+held.shift()(); // the older one, which read the first tab: read again
+await idle();
+await release();
+out.otherTabReads = reads;
+out.otherTabOffered = $("include-page").textContent;
+selected = tab;
 console.log(JSON.stringify(out));
 """
 
@@ -1928,6 +1966,15 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["focusOfferReads"], 2)  # the opening read and the delivery's own, no third
         self.assertEqual(out["focusOfferShown"], ["c29"])
         self.assertEqual(out["focusOfferSent"], ["c29"])
+
+    def test_a_check_that_draws_the_same_list_does_not_make_another_read_again(self):
+        out = self._run()  # #813, OpenCodeReview round 2
+        self.assertEqual(out["twoFocusReads"], 2)  # one per delivery, no third
+        self.assertEqual(out["twoFocusShown"], ["c30"])
+        self.assertEqual(out["twoFocusSent"], ["c30"])
+        # Another tab read by one of them: the other is read again and the panel offers the tab selected now.
+        self.assertEqual(out["otherTabReads"], 3)
+        self.assertIn("assistantIncludePage|Outra", out["otherTabOffered"])
 
 
 if __name__ == "__main__":
