@@ -806,9 +806,12 @@ class Bridge:
         Also after a read of the page whose result the call acts on (#764): what was read is of the page the call
         was judged at, or of one it moved to then and is dropped. `during`: what the call was doing, for the error.
         The call is checked again too, before anything is looked up for the error or done after it (_go_on): a cancel,
-        a stop, a pause, a revocation or a new key that came during the read."""
-        now = self._url_of(tab, cancel, timeout=timeout)
+        a stop, a pause, a revocation or a new key that came during the read. That check reads the registry, so the
+        address is read once more after it and judged then: the last read before the action is the tab's address, as
+        it was before that check came (OpenCodeReview on #812, round 3)."""
+        self._url_of(tab, cancel, timeout=timeout)
         self._go_on()
+        now = self._url_of(tab, cancel, timeout=timeout)
         moved = self._moved(url, now)
         if moved == "site":
             where = "another site" if self._hidden(now) else policy.origin(now)

@@ -802,8 +802,10 @@ class AuditTest(Home):
         agent, _ = registry.add("js", "other", "full_control", accept_full_control=True)
         registry.grant(agent["id"], "execute_js", "allow")
         bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        # still_at reads the address twice, around its check of the session (OpenCodeReview on #812, round 3).
+        moved = ["https://blog.example/", "https://bank.example/", "https://bank.example/"]
         with (
-            mock.patch.object(tools.Bridge, "_url_of", side_effect=["https://blog.example/", "https://bank.example/"]),
+            mock.patch.object(tools.Bridge, "_url_of", side_effect=moved),
             mock.patch.object(tools.Bridge, "_eval", side_effect=AssertionError("ran")),
         ):
             result = bridge.call("evaluate", {"tab": "t1", "expression": "1"})
@@ -2673,6 +2675,54 @@ class AuditTest(Home):
                 self.assertEqual(page["held"], 1)
                 after = set(done[done.index("moved") :])
                 self.assertFalse({"send", "open", "drop", "guard", "inspect", "input.performActions"} & after, done)
+
+    def test_the_last_read_before_acting_is_the_tabs_address(self):
+        # OpenCodeReview on #812 (round 3): still_at read the agent record (_go_on) after it read the tab's address, so a
+        # move during that read reached the action unseen. The tab moves at the last read of the agent record before
+        # the action (found in a first run): the action is not done in the page it moved to.
+        page_text = {"title": "t", "url": self.CART, "text": "x"}
+        for tool, extra, info in (("click", {}, {"connected": True}), ("type", {"text": "x"}, self.FIELD),
+                                  ("page_read", {}, {"connected": True})):  # fmt: skip
+
+            def run(move_at, tool=tool, extra=extra, info=info):
+                bridge, _done, _page = self.element_page("restricted", Approve("once"), info)
+                where, events = {"url": self.CART}, []
+                real_agent = tools.Bridge._agent
+
+                def agent(bridge_, where=where, events=events, move_at=move_at):
+                    if len(events) == move_at:
+                        where["url"] = self.ELSEWHERE
+                    events.append("agent")
+                    return real_agent(bridge_)
+
+                def url_of(*_a, where=where, events=events, **_k):
+                    events.append("url")
+                    return where["url"]
+
+                def act(where=where, events=events):
+                    events.append(("act", where["url"]))
+
+                engine = bridge.bidi("t1")
+                engine.command.side_effect = lambda method, *_a, act=act, **_k: (
+                    method == "input.performActions" and act()) or {}  # fmt: skip
+                with (
+                    mock.patch.object(tools.Bridge, "_url_of", side_effect=url_of),
+                    mock.patch.object(tools.Bridge, "_agent", agent),
+                    mock.patch.object(tools.Bridge, "_eval", side_effect=lambda *_a, act=act, **_k: act() or page_text),
+                ):
+                    result = bridge.call(tool, {"tab": "t1", "element": "e1", **extra} if tool != "page_read" else
+                                         {"tab": "t1"})  # fmt: skip
+                return result, events
+
+            with self.subTest(tool=tool):
+                result, events = run(None)
+                self.assertFalse(result["isError"], result)
+                acted = next(i for i, event in enumerate(events) if isinstance(event, tuple))
+                last = max(i for i in range(acted) if events[i] == "agent")
+                result, events = run(last)
+                self.assertNotIn(("act", self.ELSEWHERE), events, events)
+                self.assertTrue(result["isError"], result)
+                self.assertIn("the tab moved to", result["content"][0]["text"])
 
     def test_a_call_refused_at_a_host_lookup_names_the_address_looked_up(self):
         # OpenCodeReview on #812: a call paused or cancelled while a host was looked up is refused there, before the
