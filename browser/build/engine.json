@@ -1,5 +1,5 @@
 {
   "comment": "The Firefox release the Nulavio build ships, and the SHA-256 of its source tarball from Mozilla's signed SHA256SUMS. Change both with scripts/release/bump_engine.py <version> (it verifies the signature), in the commit that moves the build to a new release. scripts/release/watch_upstream.py compares the version with Mozilla's releases (update policy, docs/architecture/update-policy.md); scripts/upstream/fetch_firefox_source.py refuses a tarball that differs from this digest.",
-  "firefox": "160.0.1",
-  "source_sha256": "7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d"
+  "firefox": "161.0",
+  "source_sha256": "c649de11e4dc6266bc905ce4b33eb8672a1947c2e210ec53dce285cb86296a5a"
 }
