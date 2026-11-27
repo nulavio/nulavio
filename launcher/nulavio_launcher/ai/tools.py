@@ -442,6 +442,8 @@ class Bridge:
         self._entered: set[tuple[str, str]] = set()  # (profile, tab) the current call was allowed to act in
         # Questions the person answered yes to: a change since a tab was looked at means it may have moved meanwhile.
         self._questions = 0
+        self._ended = False  # the agent's client went away (end()): no engine is started for this session again
+        self._closing = threading.RLock()  # close() and making or starting an engine around it (end(), #646)
 
     # -- policy ----------------------------------------------------------------------
 
@@ -953,14 +955,49 @@ class Bridge:
 
     def _workspace(self) -> Workspace:
         if self.workspace is None:
+            if self._called_off():
+                raise Cancelled()  # a cancelled call, or one running after the client left, makes no AI Workspace (#646)
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
+            if self._called_off():
+                raise Cancelled()  # cancelled, or the client left, while the registry was read
+            # Made outside _closing, so folders and files that take long to write never hold end() past the server's
+            # wait; it is kept only if the call and the session still last once the lock is held.
             workspace = (self.workspace_factory(agent) if self.workspace_factory else
                          Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
                                    headless=self.headless, uploads=uploads))  # fmt: skip
             workspace.local_file = self._local_path()
-            self.workspace = workspace
+            with self._closing:  # end() closes it once it is kept, or this call sees end() and keeps none
+                if not self._called_off():
+                    self.workspace = workspace
+                    return workspace
+                if self._ended:
+                    self.close()  # end()'s close() may have come before the local file was written: it goes too
+            workspace.stop()  # never used: a disposable workspace's folder goes with it
+            raise Cancelled()
         return self.workspace
+
+    def _called_off(self) -> bool:
+        """The client went away (end()), or the current call was cancelled (its client's cancel, or the end of stdin)."""
+        return self._ended or (self._cancel is not None and self._cancel.is_set())
+
+    def _start(self, target: Workspace) -> Bidi:
+        """Starts an engine (or returns the running one), never for a call that was cancelled or a session whose client
+        went away (#646): one that ended while the engine started is closed again at once. A cancelled call still gets
+        an engine that runs already (what it does with it then stops at the cancel, as an engine command does)."""
+        if self._ended or (target.bidi is None and self._called_off()):
+            raise Cancelled()
+        engine = target.start()
+        with self._closing:  # one stop at a time: end() may be closing the same engines on the server's thread
+            if self._ended:
+                # One stop for each target: close() stops one it still holds. One it let go of while the engine
+                # started is stopped here, as that engine runs now; a second stop of a profile, after its lock was
+                # let go, could take another bridge's temporary lines out of it.
+                if target is not self.workspace and not any(t is target for t in self.profiles.values()):
+                    target.stop()
+                self.close()
+                raise Cancelled()
+        return engine
 
     def _engines(self) -> list[tuple[str, Workspace]]:
         """Running engines: ("", AI Workspace) and (label, one of the user's profiles)."""
@@ -974,7 +1011,7 @@ class Bridge:
         owner = "" if tab is None else self._owner(tab)
         if owner and enter:
             self._enter_profile(owner, tab)
-        engine = self.profiles[owner].bidi if owner else self._workspace().start()
+        engine = self.profiles[owner].bidi if owner else self._start(self._workspace())
         if engine not in self._forms_engines:  # just started: before its first navigation
             self._sync_forms()
         if engine not in self._net_engines:
@@ -987,7 +1024,7 @@ class Bridge:
             return known
         engines = self._engines() or [("", self._workspace())]
         for label, target in engines:
-            bidi = target.start() if not label else target.bidi
+            bidi = self._start(target) if not label else target.bidi
             for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}).get("contexts", []):
                 self.owner[context["context"]] = label
         if tab not in self.owner:
@@ -1074,19 +1111,26 @@ class Bridge:
             self.elements.pop(tab, None)
         self._downloads_mode.pop(label, None)
 
+    def end(self) -> None:
+        """The agent's client went away (the MCP server's stdin ended): the engines close, and a call that is still
+        running starts no new one (#646). close() alone, on a stop or a revocation, lets a later call start again."""
+        self._ended = True
+        self.close()
+
     def close(self) -> None:
-        for target in self.profiles.values():
-            target.stop()
-        self.profiles.clear()
-        if self.workspace is not None:
-            self.workspace.stop()
-            self.workspace = None
-        self.elements.clear()
-        self.owner.clear()
-        self._downloads_mode = {}
-        if self._local_file is not None:
-            self._local_file.unlink(missing_ok=True)
-            self._local_file, self._local_written = None, None
+        with self._closing:  # end() on the server's thread and a call that sees it on the worker: one after the other
+            for target in list(self.profiles.values()):
+                target.stop()
+            self.profiles.clear()
+            if self.workspace is not None:
+                self.workspace.stop()
+                self.workspace = None
+            self.elements.clear()
+            self.owner.clear()
+            self._downloads_mode = {}
+            if self._local_file is not None:
+                self._local_file.unlink(missing_ok=True)
+                self._local_file, self._local_written = None, None
 
     def _sync_downloads(self) -> None:
         """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""
@@ -1129,7 +1173,7 @@ class Bridge:
         engines = self._engines() or [("", self._workspace())]
         out = []
         for label, target in engines:
-            bidi = target.start() if not label else target.bidi
+            bidi = self._start(target) if not label else target.bidi
             for context in bidi.command("browsingContext.getTree", {"maxDepth": 0}, cancel=cancel).get("contexts", []):
                 self.owner[context["context"]] = label
                 out.append({**context, "profile": label or "AI Workspace"})
@@ -1762,7 +1806,7 @@ class Bridge:
             target.local_file = self._local_path()
             self.profiles[label] = target
         try:
-            bidi = target.start()
+            bidi = self._start(target)
         except TargetError as exc:
             self.profiles.pop(label, None)
             messages = {
@@ -1772,7 +1816,7 @@ class Bridge:
                 "profile-busy": f"the profile {label} is being locked or changed right now; try again in a minute",
             }
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
-        except EngineError:
+        except (EngineError, Cancelled):  # Cancelled: a call cancelled before its engine started (_start, #646)
             self.profiles.pop(label, None)  # not open: profiles_list says so, and the next call looks again
             raise
         self._sync_downloads()
@@ -2322,4 +2366,5 @@ def _why(decision: policy.Decision) -> str:
         "internal-pages-off": "blocked: the browser's internal pages are not offered to agents",
         "no-approver": "set to 'ask' and there is no way to ask the user right now",
         "denied": "set to 'ask' and the user said no",
+        "cancelled": "not used: the call was cancelled while the user answered",
     }.get(decision.reason, f"blocked for this agent ({decision.reason})")
