@@ -92,6 +92,15 @@ class DnsChoiceTest(unittest.TestCase):
         finally:
             self.m.set_context("content")
 
+    def use_dns(self, choice: str, **where) -> None:
+        """Start a case from `choice` itself, so it also runs alone; in the journey it is the state the case before left."""
+        self.m.set_context("chrome")
+        try:
+            self.m.execute(f"{PRIVACY}.setDns(arguments[0]);", [{"choice": choice, **where}])
+        finally:
+            self.m.set_context("content")
+        self.assertEqual(self.state()["choice"], choice)
+
     def test_01_new_tab_asks_once_and_keeping_the_system_resolver_is_explicit(self):
         self.assertEqual(self.state()["choice"], "default")
         self.open("newtab/newtab.html")
@@ -135,7 +144,7 @@ class DnsChoiceTest(unittest.TestCase):
     def test_02b_an_excluded_name_goes_to_the_computers_resolver_and_settings_lists_it(self):
         # #626: with encrypted DNS only, the engine still asks the computer's resolver for a name a setting (the
         # person's or a policy's) excludes from encrypted lookups. The option says so; Settings names the names.
-        self.assertEqual(self.state()["choice"], "strict")
+        self.use_dns("strict", provider="custom", uri=self.doh.uri)  # what 02 saves through Settings
         settings_page.open_pane(self.m, "privacy")
         settings_page.wait_control(self.m, "nulavio-dns-choice")
         self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED])
@@ -250,6 +259,7 @@ class DnsChoiceTest(unittest.TestCase):
     def test_06_settings_follow_the_mode_the_engine_changes_while_open(self):
         # #626: the regional roll-out changes the mode in effect under "default" with no change to a pref the
         # DNS group observes; the engine says so with network:trr-mode-changed, as its own DNS setting hears it.
+        self.use_dns("system")  # what 05 leaves
         settings_page.open_pane(self.m, "privacy")
         settings_page.wait_control(
             self.m, "nulavio-dns-choice", lambda c: c["shown"] and c["description"] == "Agora: o resolvedor do computador."
