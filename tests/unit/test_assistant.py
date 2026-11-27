@@ -1762,6 +1762,97 @@ await idle();
 await release();
 out.otherTabReads = reads;
 out.otherTabOffered = $("include-page").textContent;
+
+// #816: another tab is selected while the panel shows an item, and Send is pressed before the panel's check of the
+// selected tab comes back. Send waits for that check, so the item leaves first and the question goes without it; a
+// second press meanwhile starts nothing more.
+hold = false;
+selected = tab;
+kept = [item("c31", "Trigésima primeira")];
+$("allow-profile").fire("click");
+await idle();
+out.waitBefore = shown();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+let before = starts.length;
+await send("Pergunta 26");
+$("ask").fire("submit");
+await idle();
+out.waitHeldStarts = starts.length - before;
+out.waitHeldShown = shown(); // still drawn, with its remove control, until the check comes back
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.waitStarts = starts.length - before;
+out.waitSent = starts.at(-1).chips;
+out.waitRemoved = removed.includes("c31");
+await finish();
+// A trip to another tab and back before the checks come back: Send waits for the newer one, which reads the first tab
+// again, so the item is still bound to the selected tab and goes.
+selected = tab;
+kept = [item("c32", "Trigésima segunda")];
+$("allow-profile").fire("click");
+await idle();
+out.tripBefore = shown();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+selected = tab;
+activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 }));
+await idle();
+before = starts.length;
+await send("Pergunta 27");
+out.tripHeldStarts = starts.length - before;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.tripSent = starts.at(-1).chips;
+await finish();
+// A mode change while Send waits makes that check void: Send reads the selected tab again before it takes the items.
+selected = tab;
+kept = [item("c33", "Trigésima terceira")];
+$("allow-profile").fire("click");
+await idle();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+before = starts.length;
+await send("Pergunta 28");
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.voidStarts = starts.length - before;
+out.voidSent = starts.at(-1).chips;
+out.voidRemoved = removed.includes("c33");
+await finish();
+// The assistant is paused while Send waits: nothing goes, and the question stays in the composer.
+selected = tab;
+kept = [item("c34", "Trigésima quarta")];
+$("allow-profile").fire("click");
+await idle();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+before = starts.length;
+await send("Pergunta 29");
+blocked = "assistant-paused";
+$("allow-profile").fire("click");
+await idle();
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.pausedStarts = starts.length - before;
+out.pausedPrompt = $("prompt").value;
+blocked = null;
+$("allow-profile").fire("click");
+await idle();
+out.pausedAfter = shown(); // read again on resume: the item is from the tab left, so it leaves then
 selected = tab;
 console.log(JSON.stringify(out));
 """
@@ -1975,6 +2066,33 @@ class PanelChipsTest(unittest.TestCase):
         # Another tab read by one of them: the other is read again and the panel offers the tab selected now.
         self.assertEqual(out["otherTabReads"], 3)
         self.assertIn("assistantIncludePage|Outra", out["otherTabOffered"])
+
+    def test_a_send_waits_for_the_check_of_a_tab_selected_meanwhile(self):
+        out = self._run()  # #816: another tab selected, Send pressed before the panel's check of it comes back
+        self.assertEqual(out["waitBefore"], ["c31"])
+        self.assertEqual(out["waitHeldStarts"], 0)  # nothing starts while the check is on its way
+        self.assertEqual(out["waitHeldShown"], ["c31"])
+        self.assertEqual(out["waitStarts"], 1)  # one message, although Send was pressed twice
+        self.assertEqual(out["waitSent"], [])  # the item of the tab left does not go
+        self.assertTrue(out["waitRemoved"])
+
+    def test_a_send_after_a_trip_back_carries_the_item_of_the_tab_selected_again(self):
+        out = self._run()
+        self.assertEqual(out["tripBefore"], ["c32"])
+        self.assertEqual(out["tripHeldStarts"], 0)
+        self.assertEqual(out["tripSent"], ["c32"])
+
+    def test_a_send_reads_the_tab_again_when_its_check_was_made_void(self):
+        out = self._run()  # a mode change while Send waits
+        self.assertEqual(out["voidStarts"], 1)
+        self.assertEqual(out["voidSent"], [])
+        self.assertTrue(out["voidRemoved"])
+
+    def test_a_send_that_waits_sends_nothing_when_the_assistant_is_paused_meanwhile(self):
+        out = self._run()
+        self.assertEqual(out["pausedStarts"], 0)
+        self.assertEqual(out["pausedPrompt"], "Pergunta 29")
+        self.assertEqual(out["pausedAfter"], [])
 
 
 if __name__ == "__main__":

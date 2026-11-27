@@ -2,8 +2,9 @@
    when the user included that page in this message. Consent is per message and bound to one tab
    (AI-02): "Incluir" reads that tab's text at once and keeps it in the browser (UX5-B, Q4), the item
    shows the tab, its size and whether it was cut, and it leaves the message after every Send, or when
-   that tab goes elsewhere or another tab is selected. The line above Send says where the message goes
-   and its whole size; the tools refuse it if either changed. Off in private windows (D-UX6) and while
+   that tab goes elsewhere or another tab is selected (a Send waits for the panel's check of it, #816).
+   The line above Send says where the message goes and its whole size; the tools refuse it if either
+   changed. Off in private windows (D-UX6) and while
    the emergency stop is on or the assistant's agent is paused or revoked (D-UX5). Tasks run in the
    assistant's Área de IA under the permissions the user gave it. Answers are shown as plain text. */
 
@@ -35,6 +36,7 @@ let revision = 0;
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
 let drawn = false; // a ready render read the conversation and the items since the panel was last in another state
+let tabCheck = null; // the last check of the selected tab (refreshPage) that has not bound the items yet (#816)
 
 const $ = id => document.getElementById(id);
 /** The one way `chips` changes: the revision moves with it. */
@@ -356,15 +358,38 @@ function bindToPage(page, changedTab = null) {
   current = page;
 }
 
-/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
-async function refreshPage(changedTab = null) {
+/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. Until it comes back it is
+    `tabCheck`, which a Send waits for (#816); one that another change made void stays there for that Send. */
+function refreshPage(changedTab = null) {
   const version = newContext();
-  const page = await ai.assistantPage().catch(() => null);
-  if (version !== contextVersion) {
-    return;
+  const check = ai
+    .assistantPage()
+    .catch(() => null)
+    .then(page => {
+      if (version !== contextVersion) {
+        return; // a newer check is `tabCheck` now, or a Send checks again
+      }
+      if (tabCheck === check) {
+        tabCheck = null;
+      }
+      bindToPage(page, changedTab);
+      showContext();
+    });
+  tabCheck = check;
+  return check;
+}
+
+/** Send waits for the panel's check of the selected tab on its way, and for a newer one started meanwhile, so it takes
+    only the items still bound to the tab selected then (#816). A check that another change made void (a mode change,
+    an item removed, an Include) is made again. */
+async function tabChecked() {
+  while (tabCheck && document.body.dataset.state === "ready") {
+    const check = tabCheck;
+    await check.catch(() => {});
+    if (tabCheck === check) {
+      refreshPage(); // void: nothing newer came, so the tab is read again
+    }
   }
-  bindToPage(page, changedTab);
-  showContext();
 }
 
 /** The items the browser keeps for this window's next message, checked against the tab selected now before they are
@@ -463,6 +488,7 @@ async function render() {
   } else {
     newContext();
     setChips([]);
+    tabCheck = null; // no items to check: when the composer shows again, its own reads check them
     drawn = false;
     // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
     // carry, no offer of a page, no hint, no size.
@@ -899,6 +925,26 @@ async function finishRun(result) {
 }
 
 async function send(question, { retry = false } = {}) {
+  if (busy) {
+    return; // a Send that waits for the tab check below: one is enough
+  }
+  if (tabCheck && mode() !== "task" && !retry) {
+    // Another tab was selected, or an included one changed, and the panel's check of the selected tab is on its way:
+    // Send waits for it, so an item that tab does not hold leaves first and never goes (#816, AI-02).
+    busy = true;
+    $("send").disabled = true;
+    $("prompt").readOnly = true;
+    try {
+      await tabChecked();
+    } finally {
+      busy = false;
+      $("prompt").readOnly = false;
+      showSendLine(); // the size of what is left
+    }
+    if (run || document.body.dataset.state !== "ready") {
+      return; // the panel went to another state meanwhile: nothing goes, the question stays for the person
+    }
+  }
   const task = mode() === "task";
   // What the line above Send says now is what the tools check: where it goes, and its size.
   const expected = { recipient: state.recipient, model: state.provider.model };
