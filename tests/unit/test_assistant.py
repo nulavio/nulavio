@@ -1789,6 +1789,24 @@ out.waitStarts = starts.length - before;
 out.waitSent = starts.at(-1).chips;
 out.waitRemoved = removed.includes("c31");
 await finish();
+// An "@ia" draft delivered while Send waits: it does not replace the question Send took, and is written in at the end.
+selected = tab;
+kept = [];
+$("allow-profile").fire("click");
+await idle();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+await send("Pergunta 26b");
+offer = { draft: "Rascunho na espera" };
+await emit({ type: "offer" });
+out.waitDraftPrompt = $("prompt").value;
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+await finish();
+out.waitDraftAfter = $("prompt").value;
 // A trip to another tab and back before the checks come back: Send waits for the newer one, which reads the first tab
 // again, so the item is still bound to the selected tab and goes.
 selected = tab;
@@ -2075,6 +2093,8 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["waitStarts"], 1)  # one message, although Send was pressed twice
         self.assertEqual(out["waitSent"], [])  # the item of the tab left does not go
         self.assertTrue(out["waitRemoved"])
+        self.assertEqual(out["waitDraftPrompt"], "Pergunta 26b")  # an "@ia" draft meanwhile waits for the end
+        self.assertEqual(out["waitDraftAfter"], "Rascunho na espera")
 
     def test_a_send_after_a_trip_back_carries_the_item_of_the_tab_selected_again(self):
         out = self._run()

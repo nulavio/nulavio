@@ -758,8 +758,9 @@ async function takeOffer() {
   }
   if (delivery.draft) {
     // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
-    // Decided before the list is read: a later read must not write it over a question typed since.
-    if (run) {
+    // Decided before the list is read: a later read must not write it over a question typed since. A Send that waits
+    // for a tab check (#816) counts as a run: the question it took stays until it goes.
+    if (run || busy) {
       laterDraft = delivery.draft;
     } else {
       $("prompt").value = delivery.draft;
@@ -942,6 +943,7 @@ async function send(question, { retry = false } = {}) {
       showSendLine(); // the size of what is left
     }
     if (run || document.body.dataset.state !== "ready") {
+      applyLaterDraft(); // an "@ia" draft that came meanwhile, as after a refused start
       return; // the panel went to another state meanwhile: nothing goes, the question stays for the person
     }
   }
