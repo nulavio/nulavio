@@ -17,9 +17,9 @@ Only the proposals are still written here:
 The sheets (--render) and the measured tables of docs/brand/review-2026-11.md (--report) read the
 approved marks, the tokens and the Settings shield as they are in the checkout. Those are now the applied
 brand, so made here they would no longer be the review: both options refuse. The code below is how
-they were made; it gives the committed sheets and tables on a checkout of 532ef2d0, the last of main
-with the brand of that day (needs ImageMagick 7 with librsvg, a font for the labels, and git for the
-captures).
+they were made. It runs on a checkout from before the choice was applied, such as main at 532ef2d0
+(--report gives the review's tables there; --render needs ImageMagick 7 with librsvg, a font for the
+labels, and git for the captures).
 """
 
 from __future__ import annotations

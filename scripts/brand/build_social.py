@@ -140,7 +140,7 @@ ADVANCES = {
 """,
 }
 _ADVANCE = {weight: dict(zip(MEASURED, (int(v) for v in row.split()), strict=True)) for weight, row in ADVANCES.items()}
-# Semibold (the footer) lies between the two masters, so the wider of them bounds it.
+# Semibold (the footer) is bounded by the wider of the two, checked against NotoSans-SemiBold.ttf for every character.
 _ADVANCE[600] = {c: max(_ADVANCE[400][c], _ADVANCE[700][c]) for c in MEASURED}
 
 # A language tag as BCP 47 writes the common ones (en, pt-BR, es-419, zh-Hant-TW). It becomes part of a
