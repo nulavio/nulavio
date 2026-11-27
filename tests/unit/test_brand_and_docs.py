@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
+import os
 import re
 import subprocess
 import struct
@@ -23,6 +26,19 @@ import contrast  # noqa: E402
 
 ASSETS = ROOT / "docs" / "brand" / "assets"
 SVG_NS = "{http://www.w3.org/2000/svg}"
+
+
+# Colours and near-colours that the status illustrations do not take, because they write #RRGGBB only.
+NOT_WRITTEN_AS_HEX = (
+    "rgba(226, 235, 238, 1)",
+    "rgba(226,\x0b235, 238, 1)",
+    "rgba(\u0662\u0662\u0666, 235, 238, 1)",
+    "rgba(226., 235, 238, 1)",
+    "rgba(226, 235, 238, 0.5)",
+    "#E2EBEE\n",
+    "#E2EBEEFF",
+    "#\uff25\uff12EBEE",
+)
 
 
 def png_size(path: Path) -> tuple[int, int]:
@@ -45,6 +61,8 @@ class TokensTest(unittest.TestCase):
             (build_tokens.build_chrome, build_tokens.CHROME_OUTPUT),
             (build_tokens.build_identity, build_tokens.IDENTITY_OUTPUT),
             (build_tokens.build_sidebar_focus, build_tokens.SIDEBAR_OUTPUT),
+            (build_tokens.build_shield_ok, build_tokens.SHIELD_OK_OUTPUT),
+            (build_tokens.build_shield_alert, build_tokens.SHIELD_ALERT_OUTPUT),
         ):
             with self.subTest(output=output):
                 self.assertEqual(generate(data), output.read_text(), "run scripts/brand/build_tokens.py")
@@ -105,9 +123,156 @@ class TokensTest(unittest.TestCase):
             accent = contrast.resolve(tokens, f"color.{theme}.accent.default")
             self.assertNotEqual(secure, accent, "secure state must not rely on the mint/green accent")
 
+    def test_the_secure_status_illustration_is_neutral_not_mint(self):
+        # #175 (finding 8): the Settings privacy status drew its "on guard" shield in the mint scale,
+        # so mint read as "safe". It takes status.secure on status.secureTint, the same shape.
+        tokens = contrast.flatten(json.loads(contrast.TOKENS.read_text()))
+        mint = {contrast.resolve(tokens, f"color.primitive.mint.{s}").upper() for s in ("100", "200", "400", "700", "900")}
+        shield = build_tokens.SHIELD_OK_OUTPUT.read_text()
+        used = {c.upper() for c in re.findall(r"#[0-9A-Fa-f]{6}", shield)}
+        self.assertEqual(used & mint, set())
+        for theme in ("light", "dark"):
+            for name in ("secure", "secureTint"):
+                self.assertIn(contrast.resolve(tokens, f"color.{theme}.status.{name}").upper(), used)
+        alert = build_tokens.SHIELD_ALERT_OUTPUT.read_text()
+        outline = 'd="M50 10 L84 22 V50 C84 72 70 88 50 96 C30 88 16 72 16 50 V22 Z"'
+        self.assertIn(outline, shield)
+        self.assertIn(outline, alert)
+        checked = {(p["fg"], p["bg"]) for p in contrast.checked_pairs(json.loads(contrast.TOKENS.read_text()))}
+        for theme in ("light", "dark"):
+            self.assertIn((f"color.{theme}.status.secure", f"color.{theme}.status.secureTint"), checked)
+
+    def test_the_status_illustrations_refuse_a_value_that_is_not_a_colour(self):
+        # The value goes into the SVG as it is: one the engine cannot read would leave the shield without
+        # its outline or its mark, and the generator would still succeed. Only #RRGGBB is taken: the
+        # rgba() form contrast.py reads allows a vertical tab (not XML), digits outside ASCII and "226."
+        # (not CSS), and every one of the spellings below is a colour to contrast.rgba.
+        for value in NOT_WRITTEN_AS_HEX[:4]:
+            self.assertEqual(contrast.rgba(value), (226.0, 235.0, 238.0, 1.0), value)
+        cases = (
+            (build_tokens.build_shield_ok, "secure"),
+            (build_tokens.build_shield_ok, "secureTint"),
+            (build_tokens.build_shield_alert, "warning"),
+            (build_tokens.build_shield_alert, "warningTint"),
+        )
+        for build, name in cases:
+            for theme in ("light", "dark"):
+                for value in ("#GGGGGG", "#ABC", "navy", 5, None, "", *NOT_WRITTEN_AS_HEX):
+                    data = json.loads(build_tokens.TOKENS.read_text())
+                    data["color"][theme]["status"][name]["$value"] = value
+                    refused = self.assertRaisesRegex(build_tokens.TokenError, rf"color\.{theme}\.status\.{name}")
+                    with self.subTest(build=build.__name__, theme=theme, name=name, value=value), refused:
+                        build(data)
+        data = json.loads(build_tokens.TOKENS.read_text())
+        data["color"]["light"]["status"]["secure"]["$value"] = "#123abc"
+        self.assertIn("stroke: #123ABC;", build_tokens.build_shield_ok(data))
+
     def test_known_contrast_values(self):
         self.assertAlmostEqual(contrast.ratio("#000000", "#FFFFFF"), 21.0, places=2)
         self.assertAlmostEqual(contrast.ratio("#FFFFFF", "#FFFFFF"), 1.0, places=2)
+
+
+class DatedReviewTest(unittest.TestCase):
+    """docs/brand/review-2026-11.md is the record of 2026-11-20. Its sheets and tables were made from that
+    day's brand; scripts/brand/build_review.py now reads the applied one."""
+
+    def test_the_sheets_and_tables_are_not_made_again_from_the_applied_brand(self):
+        import build_review
+
+        for flag in ("--render", "--report"):
+            # The functions that write and print are replaced: a missing refusal fails here instead of
+            # rendering over the committed sheets.
+            with self.subTest(flag=flag), contextlib.ExitStack() as stack:
+                names = ("render", "write_proposals", "mark_report")
+                replaced = [stack.enter_context(mock.patch.object(build_review, name)) for name in names]
+                stack.enter_context(mock.patch.object(sys, "argv", ["build_review.py", flag]))
+                said = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                with self.assertRaises(SystemExit) as stopped:
+                    build_review.main()
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertIn("532ef2d0", said.getvalue())  # where they can still be made
+                for function in replaced:
+                    function.assert_not_called()
+
+    def test_the_proposals_stay_as_drawn(self):
+        import build_review
+
+        # The files are the record; the generator reads A's geometry from build_logo.py, the applied brand.
+        # The day that changes on purpose this fails, and the files are not what gives way.
+        stale = (
+            "the proposal files are the review's record and are not made again: give build_review.py the "
+            "value it drew them with on 2026-11-27 instead of build_logo.py's new one"
+        )
+        committed = sorted(p.name for p in (build_review.OUT / "proposals").glob("*.svg"))
+        generated = build_review.proposal_svgs()
+        self.assertEqual(committed, sorted(generated))
+        for name, text in generated.items():
+            with self.subTest(svg=name):
+                self.assertEqual((build_review.OUT / "proposals" / name).read_text(encoding="utf-8"), text, stale)
+                self.assertIn("a proposal, not an approved asset", text)
+
+    def test_writing_the_proposals_touches_nothing_else(self):
+        import build_review
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            written = build_review.write_proposals()
+            self.assertEqual({p.parent for p in written}, {Path(tmp) / "review" / "proposals"})
+            self.assertEqual(sorted(p.name for p in Path(tmp).rglob("*") if p.is_file()), sorted(p.name for p in written))
+
+    def test_a_proposal_drawn_differently_is_never_replaced(self):
+        import build_review
+
+        def files(folder: Path) -> dict[str, str]:
+            return {p.name: p.read_text(encoding="utf-8") for p in folder.iterdir()}
+
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            proposals = Path(tmp) / "review" / "proposals"
+            build_review.write_proposals()
+            as_reviewed = files(proposals)
+            # The applied lockup's spacing and the icon's scale change, as a later revision of the brand may
+            # (ROUTE_SCALE is build_logo.ICON_SCALE as this script read it when it was loaded).
+            self.assertEqual(build_review.ROUTE_SCALE, build_logo.ICON_SCALE)
+            with mock.patch.object(build_logo, "A_GAP", 21.0), mock.patch.object(build_review, "ROUTE_SCALE", 1.3):
+                moved = build_review.proposal_svgs()
+                self.assertNotEqual(moved["a-lockup-initial.svg"], as_reviewed["a-lockup-initial.svg"])
+                self.assertNotEqual(moved["ab-icon.svg"], as_reviewed["ab-icon.svg"])
+                (proposals / "c-icon.svg").unlink()  # a missing file is not written either, once one is refused
+                with self.assertRaisesRegex(ValueError, "a-lockup-initial-on-dark.svg, a-lockup-initial.svg, ab-icon.svg"):
+                    build_review.write_proposals()
+                self.assertEqual(files(proposals), {k: v for k, v in as_reviewed.items() if k != "c-icon.svg"})
+                with mock.patch.object(sys, "argv", ["build_review.py"]), contextlib.redirect_stderr(io.StringIO()) as said:
+                    self.assertEqual(build_review.main(), 1)
+                self.assertIn("stay as they were shown", said.getvalue())
+            build_review.write_proposals()  # with the brand as it was, the missing file comes back
+            self.assertEqual(files(proposals), as_reviewed)
+
+    def test_a_proposal_that_is_there_is_not_written_again(self):
+        import build_review
+
+        # A run with every file there and as drawn opened each one for writing and listed it as written.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            proposals = Path(tmp) / "review" / "proposals"
+            first = build_review.write_proposals()
+            self.assertEqual(sorted(p.name for p in first), sorted(build_review.proposal_svgs()))
+            (proposals / "c-icon.svg").unlink()
+            for path in proposals.iterdir():
+                path.chmod(0o444)  # the record, read-only: a file opened for writing would fail here
+                os.utime(path, ns=(1, 1))
+            self.assertEqual(build_review.write_proposals(), [proposals / "c-icon.svg"])  # only the missing one
+            self.assertEqual(
+                [p.name for p in proposals.iterdir() if p.stat().st_mtime_ns != 1], ["c-icon.svg"]
+            )  # and no other was touched
+            self.assertEqual(build_review.write_proposals(), [])
+
+    def test_every_mark_pair_meets_its_minimum(self):
+        import build_review
+
+        # What the marks need of the palette that was kept: 3:1 for a graphic (WCAG 1.4.11), 4.5:1 for the name.
+        self.assertEqual(sorted({minimum for _what, _fg, _bg, minimum in build_review.MARK_PAIRS}), [3.0, 4.5])
+        self.assertEqual(len(build_review.MARK_PAIRS), 9)
+        for what, fg, bg, minimum in build_review.MARK_PAIRS:
+            with self.subTest(pair=what):
+                self.assertGreaterEqual(contrast.ratio(fg, bg), minimum)
 
 
 class AssetsTest(unittest.TestCase):
@@ -143,6 +308,80 @@ class AssetsTest(unittest.TestCase):
         self.assertIn("ColorScheme-Text", text)
         self.assertIn("currentColor", text)
         self.assertNotRegex(text, r"#6FE0C5|#0B1623")
+
+    def test_android_adaptive_icon_is_generated_and_centred(self):
+        # #175 (finding 6): the foreground was hand-written and 1.2 units off centre.
+        text = build_logo.ANDROID_FOREGROUND.read_text()
+        self.assertEqual(text, build_logo.android_foreground(), "run scripts/brand/build_logo.py")
+        group = dict(re.findall(r'android:(\w+)="([^"]*)"', re.search(r"<group\b[^>]*>", text).group(0)))
+        scale = float(group["scaleX"])
+        self.assertEqual(scale, float(group["scaleY"]))
+        px, py, tx, ty = (float(group[k]) for k in ("pivotX", "pivotY", "translateX", "translateY"))
+        # The route's box on the 96 grid (x 25..71, y 21..75.1, stroke and points included), mapped as a
+        # VectorDrawable group maps it: scaled about the pivot, then moved.
+        box = [((x - px) * scale + px + tx, (y - py) * scale + py + ty) for x in (25, 71) for y in (21, 75.1)]
+        centre = (sum(x for x, _ in box) / 4, sum(y for _, y in box) / 4)
+        self.assertAlmostEqual(centre[0], 54, places=1)
+        self.assertAlmostEqual(centre[1], 54, places=1)
+        for x, y in box:  # every corner inside the 66-unit circle a launcher's mask always keeps
+            self.assertLessEqual(((x - 54) ** 2 + (y - 54) ** 2) ** 0.5, build_logo.ANDROID_SAFE_RADIUS)
+        background = (ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "ic_launcher_background.xml").read_text()
+        self.assertIn(f'android:color="{build_logo.NAVY}"', background)
+
+    def test_no_lockup_shows_the_initial_twice(self):
+        # #175, proposal A (chosen 2026-11-27): the route is the name's initial, then "ulavio".
+        wordmark = build_logo.wordmark_paths()[0]
+        lowercase_n = wordmark[: wordmark.index(" M41.0 ")]
+        lockups = sorted((ASSETS / "logo").glob("nulavio-lockup-*.svg"))
+        self.assertEqual(
+            [p.name for p in lockups],
+            [
+                "nulavio-lockup-horizontal-mono-black.svg",
+                "nulavio-lockup-horizontal-mono-white.svg",
+                "nulavio-lockup-horizontal-on-dark.svg",
+                "nulavio-lockup-horizontal.svg",
+            ],
+        )
+        for path in lockups:
+            text = path.read_text()
+            with self.subTest(lockup=path.name):
+                self.assertEqual(text.count(f'd="{build_logo.initial_route()}"'), 1)
+                self.assertNotIn(lowercase_n, text)
+                self.assertNotIn(f'd="{build_logo.ROUTE}"', text, "the symbol beside the name")
+                self.assertIn(wordmark[len(lowercase_n) + 1 :], text, '"ulavio" follows the initial')
+
+    def test_the_initial_keeps_the_symbols_trail(self):
+        dots = build_logo.initial_dots()
+        self.assertEqual(len(dots), len(build_logo.DOTS))
+        radii = [r for _cx, _cy, r in dots]
+        self.assertEqual(radii, sorted(radii, reverse=True), "the points shrink away from the stem")
+        self.assertEqual(radii[0], build_logo.W_STROKE / 2, "the first point is as wide as the wordmark's stroke")
+        self.assertGreater(dots[0][1] - radii[0], build_logo.A_STEM_END + build_logo.W_STROKE / 2, "clear of the stem's cap")
+
+    def test_the_app_icon_draws_the_route_larger_and_the_small_masters_stay(self):
+        scalable = (ASSETS / "icons" / "hicolor" / "scalable" / "apps" / "nulavio.svg").read_text()
+        self.assertIn(f"scale({build_logo.n(build_logo.ICON_SCALE)})", scalable)
+        self.assertAlmostEqual(46 * build_logo.ICON_SCALE / 96, 0.55, places=2)  # 55 % of the tile's width
+        for path in (ASSETS / "favicon" / "favicon.svg", ASSETS / "logo" / "nulavio-tile.svg"):
+            self.assertIn(f"scale({build_logo.n(build_logo.ICON_SCALE)})", path.read_text(), path.name)
+        for size in (16, 24):  # hand-tuned, one point (guidelines §1)
+            master = (ASSETS / "icons" / "masters" / f"nulavio-{size}.svg").read_text()
+            self.assertEqual(master.count("<circle"), 1, size)
+            self.assertNotIn("scale(", master, size)
+
+    def test_about_dialog_name_is_the_lockup_with_an_adaptive_initial(self):
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import make_branding
+
+        text = make_branding.context_fill_wordmark()
+        ET.fromstring(text)
+        self.assertIn(f'd="{build_logo.initial_route()}" class="nv-mark"', text)
+        self.assertIn('stroke="context-fill light-dark(#0B1623, #F1F7F5)"', text)  # the letters follow the chrome
+        # The initial: Mint 700 by default, mint only where the scheme is dark (never mint on light).
+        default, dark = text.split("@media (prefers-color-scheme: dark)")
+        self.assertIn(build_logo.MINT_DARK, default)
+        self.assertNotIn(build_logo.MINT, default)
+        self.assertIn(build_logo.MINT, dark)
 
     def test_logo_generator_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:

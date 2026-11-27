@@ -2,7 +2,7 @@
   <a href="https://nulavio.net/">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/brand/assets/logo/nulavio-lockup-horizontal-on-dark.svg">
-      <img src="docs/brand/assets/logo/nulavio-lockup-horizontal.svg" alt="Nulavio" width="300">
+      <img src="docs/brand/assets/logo/nulavio-lockup-horizontal.svg" alt="Nulavio" width="238">
     </picture>
   </a>
 </p>
