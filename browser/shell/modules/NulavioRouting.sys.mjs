@@ -49,6 +49,7 @@ const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
   NulavioAgentNetwork: "resource://builtin-addons/nulavio-shell/modules/NulavioAgentNetwork.sys.mjs",
   NulavioProfiles: "resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs",
+  PrivateBrowsingUtils: "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
   profileLockState: "resource://builtin-addons/nulavio-shell/modules/NulavioVaultState.sys.mjs",
   SelectableProfileService: "resource:///modules/profiles/SelectableProfileService.sys.mjs",
 });
@@ -804,7 +805,7 @@ class NulavioRoutingClass {
     }
     const decision = decide({ url, rules, enabled, currentProfileId: current, fallbackProfileId });
     if (decision.action === "stay") {
-      await this.#openHere(url); // held at start-up; it belongs here after all
+      await this.#openInNormalWindow(url); // held at start-up; it belongs here after all
       return;
     }
     await this.#handOff(url, decision, "app");
@@ -844,6 +845,7 @@ class NulavioRoutingClass {
     }
   }
 
+  /** Any browser window, private or not, once there is one (at start-up the first may not be open yet). */
   async #browserWindow() {
     let win = Services.wm.getMostRecentBrowserWindow();
     for (let i = 0; !win && i < 300; i++) {
@@ -857,13 +859,23 @@ class NulavioRoutingClass {
     return win;
   }
 
-  async #openHere(url) {
-    (await this.#browserWindow()).openTrustedLinkIn(url, "tab");
+  /**
+   * A new tab in a normal window of this profile, a new normal window when only private ones are open (#670). As the
+   * engine opens a link from another app: in a private window the link would have none of the profile's sessions and
+   * would be forgotten with it. With permanent private browsing every window is private, and any of them is used.
+   */
+  async #openInNormalWindow(url) {
+    this.#openFrom(await this.#browserWindow(), url);
+  }
+
+  #openFrom(win, url) {
+    const forceNonPrivate = !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;
+    win.openTrustedLinkIn(url, "tab", { forceNonPrivate });
   }
 
   /** A local Nulavio page (never the site itself). */
   async #openPage(page, params) {
-    const win = await this.#browserWindow();
+    const win = await this.#browserWindow(); // before hold(): no wait between keeping the link and showing its page
     let policy = WebExtensionPolicy.getByID(SHELL_ID);
     for (let i = 0; !policy && i < 300; i++) {
       await sleep(100);
@@ -875,7 +887,7 @@ class NulavioRoutingClass {
     // Only the id: the page reads the rest from this module (the unlock page also names its profile).
     const id = this.hold(page, params);
     const query = new URLSearchParams(page === "vault/unlock.html" ? { p: String(params.p), h: id } : { h: id });
-    win.openTrustedLinkIn(`${policy.getURL(page)}?${query}`, "tab");
+    this.#openFrom(win, `${policy.getURL(page)}?${query}`);
   }
 
   // -- change notifications ---------------------------------------------------
