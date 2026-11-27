@@ -1804,7 +1804,7 @@ activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
 await idle();
 await send("Pergunta 26b");
 offer = { draft: "Rascunho na espera" };
-await emit({ type: "offer" });
+await emit({ type: "offer", items: false }); // "@ia" changes no item, as the browser says
 out.waitDraftPrompt = $("prompt").value;
 holdPage = false;
 pageHeld.splice(0).forEach(answer => answer());
@@ -1919,6 +1919,7 @@ await idle();
 await endWait();
 out.recipientStarts = starts.length - before;
 out.recipientExpected = started.at(-1)?.expected?.recipient;
+out.recipientAnnounced = announced.filter(([level]) => level === "progress").at(-1)?.[1] ?? "";
 await finish();
 recipient = recipientBefore;
 // "Continuar" pressed while Send waits leaves the question Send took, and a redraw meanwhile (a render) keeps Send off;
@@ -2003,6 +2004,56 @@ runs = [];
 await emit({ type: "done", runId: "task-1", answer: "Ok.", chars: 1, recipient: "Provedor" });
 out.adoptAfterOff = controls();
 out.adoptAfterReadOnly = $("prompt").readOnly;
+$("allow-profile").fire("click");
+await idle();
+
+// OpenCodeReview on #852, round 3. An entry point's selection whose delivery is still being read when the tab check
+// comes back: the offer ends the wait, so nothing goes and the browser keeps the selection, drawn for another Send.
+await waitForCheck("c43", "Pergunta 38");
+kept = [...kept, { ...item("s43", "Trecho", otherTab), kind: "selection" }];
+offer = { chipId: "s43" };
+holdOffer = true;
+await emit({ type: "offer" });
+await endWait();
+holdOffer = false;
+offerHeld.splice(0).forEach(answer => answer());
+await idle();
+out.offerReadStarts = starts.length - before;
+out.offerReadShown = shown();
+out.offerReadPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+// A Task taken on while Send waits ends before the tab check comes back: the Send was cancelled when the panel took the
+// Task on, so the question typed since is not replaced by the one pressed before.
+await waitForCheck("c44", "Pergunta 39");
+runs = [{ runId: "task-2", kind: "task", state: "running", steps: [] }];
+await emit({ type: "approval", place: "panel", id: "r2" });
+runs = [];
+await emit({ type: "done", runId: "task-2", answer: "Ok.", chars: 1, recipient: "Provedor" });
+$("prompt").value = "Escrita depois";
+await endWait();
+out.adoptEndStarts = starts.length - before;
+out.adoptEndPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+$("allow-profile").fire("click");
+await idle();
+// A pause that ends before the tab check comes back: the Send was cancelled when the panel left the ready state.
+await waitForCheck("c45", "Pergunta 40");
+blocked = "assistant-paused";
+$("allow-profile").fire("click");
+await idle();
+blocked = null;
+$("allow-profile").fire("click");
+await idle();
+await endWait();
+out.pauseEndStarts = starts.length - before;
+out.pauseEndPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
 $("allow-profile").fire("click");
 await idle();
 selected = tab;
@@ -2257,6 +2308,7 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()
         self.assertEqual(out["recipientStarts"], 1)
         self.assertEqual(out["recipientExpected"], "Antes")  # the tools refuse it: the recipient changed
+        self.assertTrue(out["recipientAnnounced"].endswith("assistantAsking|Antes"), out["recipientAnnounced"])  # never "Novo"
 
     def test_a_send_that_waits_is_cancelled_by_task_even_when_ask_is_chosen_again(self):
         out = self._run()  # OpenCodeReview on #852, round 2
@@ -2291,6 +2343,22 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["adoptSend"], "assistantStop")
         self.assertEqual(out["adoptAfterOff"], [])
         self.assertFalse(out["adoptAfterReadOnly"])
+
+    def test_a_send_that_waits_is_cancelled_by_a_selection_whose_delivery_is_still_read(self):
+        out = self._run()  # OpenCodeReview on #852, round 3
+        self.assertEqual(out["offerReadStarts"], 0)  # a start would empty the browser's items, the selection too
+        self.assertEqual(out["offerReadShown"], ["s43"])
+        self.assertEqual(out["offerReadPrompt"], "Pergunta 38")
+
+    def test_a_send_that_waits_stays_cancelled_after_a_task_taken_on_meanwhile_ends(self):
+        out = self._run()
+        self.assertEqual(out["adoptEndStarts"], 0)
+        self.assertEqual(out["adoptEndPrompt"], "Escrita depois")
+
+    def test_a_send_that_waits_stays_cancelled_after_a_pause_that_ends_meanwhile(self):
+        out = self._run()
+        self.assertEqual(out["pauseEndStarts"], 0)
+        self.assertEqual(out["pauseEndPrompt"], "Pergunta 40")
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()

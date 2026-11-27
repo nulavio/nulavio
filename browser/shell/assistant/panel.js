@@ -490,6 +490,7 @@ async function render() {
     await takeOffer();
     await adoptTask();
   } else {
+    cancelWait(); // a Send that waits sends nothing from another state, even once the composer shows again (#816)
     newContext();
     setChips([]);
     tabCheck = null; // no items to check: when the composer shows again, its own reads check them
@@ -547,6 +548,7 @@ async function adoptTask() {
     return;
   }
   const stopping = going.state === "cancelling";
+  cancelWait(); // the composer is the Task's now: a Send that waits sends nothing, even after the Task ends (#816)
   run = { runId: going.runId, kind: "task", text: "", stopping, steps: [...going.steps] };
   setRunning(true);
   $("send").disabled = stopping; // a stop already asked for: it ends by itself
@@ -792,6 +794,7 @@ function onRunEvent(event) {
     // The shortcut and "@ia" change no item (`items` false): a list read on its way is drawn as it is.
     if (event.items !== false) {
       ++revision;
+      cancelWait(); // a Send that waits did not see this item: it may not take the browser's items with it (#816)
     }
     takeOffer();
     return;
@@ -1019,7 +1022,7 @@ async function send(question, { retry = false } = {}) {
   setRunning(true);
   renderThread(); // the turn that was below joins the list above
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
-  const asking = t(task ? "assistantWorking" : "assistantAsking", [state.recipient]);
+  const asking = t(task ? "assistantWorking" : "assistantAsking", [expected.recipient]); // where it goes, as at the press
   announce(dropNotice ? `${$("drift-text").textContent} ${asking}` : asking, "progress");
   try {
     const { runId } = task
