@@ -1779,7 +1779,7 @@ class Bridge:
                 "profile-busy": f"the profile {label} is being locked or changed right now; try again in a minute",
             }
             raise ToolError(messages.get(exc.code, f"the profile {label} could not be opened")) from None
-        except EngineError:
+        except (EngineError, Cancelled):  # Cancelled: a call cancelled before its engine started (_start, #646)
             self.profiles.pop(label, None)  # not open: profiles_list says so, and the next call looks again
             raise
         self._sync_downloads()

@@ -5539,6 +5539,23 @@ class DisconnectTest(Home):
         made[0].start.assert_called_once()
         made[0].stop.assert_not_called()
 
+    def test_a_profile_a_cancelled_call_did_not_open_is_not_left_as_open(self):
+        agent, _ = registry.add("o", "other", "autonomous")
+        registry.set_profiles(agent["id"], [{"label": "Trabalho", "path": "/home/u/.nulavio/p1"}])
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver())
+        bridge.workspace = mock.Mock(bidi=mock.Mock(), downloads_dir=self.home / "downloads")
+        bridge._cancel = threading.Event()
+        bridge._cancel.set()  # cancelled once its permissions were checked, before the profile's engine started
+        target = mock.Mock(bidi=None)
+        with (
+            mock.patch.object(tools.Bridge, "require"),
+            mock.patch.object(tools, "ProfileTarget", return_value=target),
+            self.assertRaises(tools.Cancelled),
+        ):
+            bridge._open_profile(registry.get(agent["id"]), "Trabalho", None, [])
+        target.start.assert_not_called()
+        self.assertNotIn("Trabalho", bridge.profiles)  # profiles_list does not say it is open; the next call opens it
+
     def test_an_allow_cancelled_while_the_registry_is_read_again_does_nothing(self):
         agent, _ = registry.add("r", "other", "restricted")
         cancel = threading.Event()
