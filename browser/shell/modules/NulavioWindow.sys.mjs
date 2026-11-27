@@ -77,6 +77,10 @@ const STILL_PANELS = Object.freeze(
 );
 // ADR 0009: the toolbar and the tab list hide; the band stays and carries the origin.
 const PREF_IMMERSIVE = "nulavio.layout.immersive";
+// ADR 0009, decision 6 (#627): the devices besides capture whose in-use icon the engine draws in the identity box
+// (browser-sitePermissionPanel.js, updateSharingIndicator): the keys of the browser's sharing state, and the icons.
+const DEVICE_STATES = Object.freeze(["geo", "serial", "xr"]);
+const DEVICE_ICONS = Object.freeze(["geo-sharing-icon", "serial-sharing-icon", "xr-sharing-icon"]);
 // ADR 0009, decision 4: how long a tab opened in the background keeps its part of the chrome in view.
 const BACKGROUND_TAB_MS = 1500;
 // The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
@@ -586,6 +590,16 @@ class WindowUI {
     // ...and a device that starts or stops being shared in any tab is decided at once.
     const sharing = event => event.detail?.changed?.includes("sharing") && this.#applyImmersive(win);
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
+    // ...and so is the engine's in-use icon for the location, a serial port or a VR device (#627). The engine marks
+    // no tab for those: it sets the browser's sharing state and redraws these icons of the identity box, for the
+    // selected tab only (gPermissionPanel.updateSharingIndicator), also when another tab is selected.
+    const deviceIcons = new win.MutationObserver(() => this.#applyImmersive(win));
+    for (const id of DEVICE_ICONS) {
+      const icon = doc.getElementById(id);
+      if (icon) {
+        deviceIcons.observe(icon, { attributes: true, attributeFilter: ["sharing"] });
+      }
+    }
     // ...and a tab opened in the background is shown for a moment where it went (ADR 0009, decision 4).
     const opened = event => this.#backgroundTab(win, event.target);
     win.gBrowser.tabContainer.addEventListener("TabOpen", opened);
@@ -702,7 +716,7 @@ class WindowUI {
     }
     const menuItem = this.#addViewMenuItem(win);
     this.#windows.set(win, { bar, compact, fullscreen, line, sheet, progress, header, unload, pointer, screenObserver, identityObserver, edge,
-      popup, sharing, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, panelEdge, panelShown, panelFocus, sides, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
+      popup, sharing, deviceIcons, opened, drag, dialog, downloads, notices, sizes, outside, menuItem, panelEdge, panelShown, panelFocus, sides, holds: new Map(), on: false, named: false, noticeTimer: null, safety: null, restoreGroupPalette: this.#groupPalette(win),
       restoreIdentity: this.#ownPagesIdentity(win) });
     this.#downloadHold(win);
     this.#noticeHold(win);
@@ -898,6 +912,14 @@ class WindowUI {
     // indicators are the cue, so the toolbar stays. Read from what those indicators are drawn from (the
     // browser's sharing state; the tab's attribute goes away while a capture is paused).
     if ([...win.gBrowser.tabs].some(tab => tab.linkedBrowser?._sharingState?.webRTC?.sharing || tab.hasAttribute("sharing"))) {
+      return "sharing";
+    }
+    // The location, a serial port or a VR device in use by the selected tab (#627): the engine draws their icon in
+    // the identity box, in the toolbar, from the same state, and only for the selected tab, so only that tab
+    // counts. The state stays from the site's first use until its document goes (another page, the permission
+    // revoked from the identity panel), as the engine's icon does.
+    const devices = win.gBrowser.selectedBrowser?._sharingState;
+    if (DEVICE_STATES.some(key => devices?.[key])) {
       return "sharing";
     }
     // A prompt on the selected tab (HTTP authentication, alert, confirm, before-unload). For a cross-site
@@ -1687,6 +1709,7 @@ class WindowUI {
       win.removeEventListener(type, state.popup, true);
     }
     win.gBrowser.tabContainer.removeEventListener("TabAttrModified", state.sharing);
+    state.deviceIcons.disconnect();
     win.gBrowser.tabContainer.removeEventListener("TabOpen", state.opened);
     for (const type of ["dragstart", "dragend"]) {
       win.gBrowser.tabContainer.removeEventListener(type, state.drag);

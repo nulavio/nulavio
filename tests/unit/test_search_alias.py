@@ -48,7 +48,8 @@ class ReservedAliasListTest(unittest.TestCase):
         tests/integration/test_settings_search.py (05) reads it on the page with such a name."""
         panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
         call = re.search(r'msg\("searchAliasReserved", ([^\n]*)', panes).group(1)
-        self.assertIn(".map(name => `“${name}”`)", call)
+        # Isolated too (#796, tests/unit/test_name_isolation.py): a name may hold direction controls.
+        self.assertIn(".map(name => `“${inSentence(name)}”`)", call)
         self.assertIn('.join(", ")', call)
 
     def test_settings_says_it_under_the_search_shortcuts(self):
