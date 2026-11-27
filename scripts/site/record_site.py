@@ -57,7 +57,8 @@ LOCALES = ("pt-BR", "en-US")
 WINDOW_CSS = (1280, 800)
 SCALE = 1.5
 FPS = 30
-TAIL = 1.2  # seconds the last frame stays before a loop starts again
+TAIL = 1.2  # seconds the last frame stays at the end
+LOOP_MAX = 5.0  # an image that moves by itself stops within 5 s (WCAG 2.2.2), so the loop plays once
 CLICK_LENGTH = 0.45  # seconds a click's ripple lasts
 TYPE_STEP = 0.075  # seconds per typed key in the video
 MOVE = 0.75  # seconds for a cursor move
@@ -154,6 +155,7 @@ class Recorder:
         self.size: tuple[int, int] | None = None
         self.scale: float | None = None
         self.poster: str | None = None
+        self.highlight_t: float | None = None
         self.notes: list[str] = []
 
     def shot(self, m, poster: bool = False) -> str:
@@ -210,6 +212,10 @@ class Recorder:
         self.clicks.append({"t": round(self.t, 3), "xy": list(self.xy)})
         self.t += 0.12
 
+    def highlight(self) -> None:
+        """Where the short loop starts: the 5 s that tell the scene."""
+        self.highlight_t = round(self.t, 3)
+
     def caption(self, text: str) -> None:
         self.captions.append({"t": round(self.t, 3), "text": text})
 
@@ -231,6 +237,7 @@ class Recorder:
             "captions": self.captions,
             "cuts": self.cuts,
             "poster": self.poster or self.frames[-1]["file"],
+            "highlight": self.highlight_t,
             "transcript": transcript,
             "notes": self.notes,
             **meta,
@@ -614,11 +621,13 @@ class Scenes:
         prepare_profile(self.h, path, locale)
         window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
         self.open_profiles_pane(m)  # the selected tab becomes Settings
+        row = self.row_button(t["work"], "open")
+        button = prefs_point(m, row)  # scrolls the row into view before the first frame
         rec.caption(cap[0])
         rec.shot(m)
         rec.hold(1.4)
-        row = self.row_button(t["work"], "open")
-        rec.move(prefs_point(m, row))
+        rec.highlight()
+        rec.move(button)
         rec.shot(m)
         rec.click()
         self.press(m, row)
@@ -627,7 +636,7 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["work"] in " ".join(band(child)), 30, "the work profile's band")
-        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
+        window_ready(child, [])  # what the new window shows by itself
         rec.cut(t["work"], time.monotonic() - started)
         rec.caption(cap[1])
         rec.shot(child, poster=True)
@@ -636,7 +645,6 @@ class Scenes:
         rec.shot(child)
         rec.hold(2.6)
         cues = band(child)
-        rec.notes.append("the work window's tab was opened by the script before its first frame")
         if locale == "pt-BR":
             return (f"Na tela: Configurações › Perfis, com «{t['first']}» e «{t['work']}»; clique em Abrir no «{t['work']}»;"
                     f" a janela do «{t['work']}» abre, com a faixa «{' · '.join(cues)}».")  # fmt: skip
@@ -665,6 +673,7 @@ class Scenes:
         rec.move(chrome_point(m, "gURLBar.inputField"))
         rec.click()
         rec.shot(m)
+        rec.highlight()
         type_into_urlbar(rec, m, target)
         rec.caption(cap[1])
         started = time.monotonic()
@@ -710,19 +719,25 @@ class Scenes:
                             {"name": t["bank"], "templateId": "banking", "keyring": False, "password": PASSWORD})  # fmt: skip
         bank = made["id"]
         path = Path(chrome_async(m, "return (await SPS.getProfile(args[0])).path;", bank))
-        listed = chrome_async(m, "return (await P.list()).profiles.find(p => p.id === args[0]);", bank)
-        if not listed.get("locked"):
-            chrome_async(m, "return V.lock(args[0]);", bank)
-            wait(lambda: chrome_async(m, "return (await P.list()).profiles.find(p => p.id === args[0]).locked;", bank), 30,
-                 "the protected profile locked")  # fmt: skip
+        # Its prefs (Marionette, the recording's scale and language) live inside the encrypted volume: written while it
+        # is open, then it is locked again, so the scene starts from a locked profile, as a person finds it.
+        locked = "return (await P.list()).profiles.find(p => p.id === args[0]).locked;"
+        if chrome_async(m, locked, bank):
+            chrome_async(m, f"const VM = ChromeUtils.importESModule('{SHELL}/NulavioVault.sys.mjs');"
+                         "return VM.vaultHelper({op: 'unlock', path: args[0], method: 'password', secret: args[1]});",
+                         str(path), PASSWORD)  # fmt: skip
+        prepare_profile(self.h, path, locale)
+        chrome_async(m, "return V.lock(args[0]);", bank)
+        wait(lambda: chrome_async(m, locked, bank), 30, "the protected profile locked again")
         window_ready(m, [fx.url(p) for p in PERSONAL_PAGES[locale]])
         self.open_profiles_pane(m)
         row = self.row_button(t["bank"], "unlock")
         wait(lambda: m.chrome(PREFS_DOC + f"return !!({row});"), 20, "the Unlock button")
+        button = prefs_point(m, row)  # scrolls the row into view before the first frame
         rec.caption(cap[0])
         rec.shot(m)
         rec.hold(1.6)
-        rec.move(prefs_point(m, row))
+        rec.move(button)
         rec.shot(m)
         rec.click()
         before = set(m.window_handles())
@@ -739,6 +754,7 @@ class Scenes:
         rec.move(content_point(m, "document.getElementById('password')"))
         rec.click()
         type_into_field(rec, m, field, PASSWORD)
+        rec.highlight()
         rec.move(content_point(m, "document.querySelector('#password-form button[type=submit]')"), 0.6)
         rec.click()
         m.send("WebDriver:ElementClick", {"id": m.find_element("#password-form button[type=submit]")})
@@ -841,16 +857,25 @@ def encode(work: Path, fps: int, out_base: Path) -> list[Path]:
     return [webm, mp4]
 
 
-def loop_webp(work: Path, count: int, fps: int, out: Path, width: int, loop_fps: int = 10) -> Path:
-    """The loop for <picture> (reduced motion gets the poster instead): animated WebP at a lower rate and size."""
+def loop_window(timeline: dict, end: float) -> tuple[float, float]:
+    """The part of the scene the short loop shows: from its highlight, at most LOOP_MAX seconds."""
+    start = timeline.get("highlight")
+    if start is None:
+        start = max(0.0, end - LOOP_MAX)
+    return start, min(end, start + LOOP_MAX)
+
+
+def loop_webp(work: Path, span: tuple[float, float], fps: int, out: Path, width: int, loop_fps: int = 10) -> Path:
+    """The short loop for <picture> (reduced motion gets the poster instead): animated WebP at a lower rate and size,
+    played once (loop=1), so it stops by itself within LOOP_MAX seconds."""
     from PIL import Image
 
     step = max(1, round(fps / loop_fps))
     images = []
-    for i in range(0, count, step):
+    for i in range(round(span[0] * fps), round(span[1] * fps), step):
         image = Image.open(work / f"{i:05d}.png")
         images.append(image.resize((width, round(image.height * width / image.width)), Image.Resampling.LANCZOS))
-    images[0].save(out, "WEBP", save_all=True, append_images=images[1:], duration=round(1000 * step / fps), loop=0,
+    images[0].save(out, "WEBP", save_all=True, append_images=images[1:], duration=round(1000 * step / fps), loop=1,
                    quality=60, method=6, minimize_size=True)  # fmt: skip
     return out
 
@@ -887,9 +912,10 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
         timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
         key = f"{timeline['scene']}-{timeline['locale']}"
         base = out / key
-        w, h, count, end = compose_frames(src, timeline, src / "composed", width, fps)
+        w, h, _count, end = compose_frames(src, timeline, src / "composed", width, fps)
         files = encode(src / "composed", fps, base)
-        files.append(loop_webp(src / "composed", count, fps, base.with_name(f"{key}-loop.webp"), loop_width))
+        span = loop_window(timeline, end)
+        files.append(loop_webp(src / "composed", span, fps, base.with_name(f"{key}-loop.webp"), loop_width))
         files.append(poster_webp(src, timeline["poster"], base.with_name(f"{key}-poster.webp"), width))
         vtt = base.with_suffix(".vtt")
         vtt.write_text(webvtt(timeline["captions"], end), encoding="utf-8")
@@ -907,6 +933,7 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
             "scale": timeline["scale"],
             "window_css": timeline["window_css"],
             "frames_captured": len(timeline["frames"]),
+            "loop_s": [round(span[0], 3), round(span[1], 3)],
             "cuts": timeline["cuts"],
             "transcript": timeline["transcript"],
             "captions": timeline["captions"],
@@ -928,7 +955,7 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
             "encoders": {
                 "webm": "libvpx-vp9 crf 36",
                 "mp4": "libopenh264 700k",
-                "loop": "Pillow WebP q60, 10 fps",
+                "loop": "Pillow WebP q60, 10 fps, at most 5 s, played once",
                 "audio": "none",
             },
             "budget_bytes_per_file": budget,
