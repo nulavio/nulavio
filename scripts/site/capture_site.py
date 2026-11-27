@@ -29,7 +29,7 @@ password and the protected profile is "Bancos"/"Banking". The figures:
   ``nulavio-tools temporary api``, and a private window. The AI Workspace
   state needs a live bridge session and is not captured. Each state also has a
   ``strip`` crop for the landing: the cues it shows with the same space around them,
-  the band's own height, and one width for the states of a language and theme.
+  the band's row without the dashed edge some states add, and one width for the states of a language and theme.
 * C3 ``guard``: the Guard review document after part of
   tests/integration/test_guard.py::test_02 (proxy in prefs.js, malware
   protection off in user.js, a native-messaging manifest pointing to
@@ -720,16 +720,19 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
         spans = {
             e["name"]: (min(c["x"] for c in e["strip"]["cues"]), max(c["x"] + c["w"] for c in e["strip"]["cues"])) for e in group
         }
-        heights = {round(e["strip"]["band"]["h"], 1) for e in group}
-        if len(heights) > 1:
-            raise SystemExit(f"{key}: the band is not one height in every state ({sorted(heights)}); the strips are not cut")
+        # A temporary or private band adds a dashed lower edge (1.5 px) to the same row: every strip is cut at
+        # the row's height, the lowest band's, and the cues must lie inside it.
+        height = min(e["strip"]["band"]["h"] for e in group)
+        low = [e["name"] for e in group if max(c["y"] + c["h"] for c in e["strip"]["cues"]) > height]
+        if low:
+            raise SystemExit(f"{key}: cues below the band's common height of {height} px in {low}; the strips are not cut")
         width = max(right - left for left, right in spans.values()) + 2 * STRIP_PAD
         for e in group:
             (left, right), band = spans[e["name"]], e["strip"]["band"]
             x = left - STRIP_PAD if e["strip"]["align"] == "start" else right + STRIP_PAD - width
             # Where the band's own edge is nearer than the pad, the cut stops at the edge: it never leaves the band.
             x = min(max(band["x"], x), band["x"] + band["w"] - width)
-            boxes[e["name"]] = {"x": x, "y": band["y"], "w": width, "h": band["h"]}
+            boxes[e["name"]] = {"x": x, "y": band["y"], "w": width, "h": height}
     return boxes
 
 
