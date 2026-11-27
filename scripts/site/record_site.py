@@ -1214,7 +1214,8 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
         print("compose needs ffmpeg (Fedora: ffmpeg-free)", file=sys.stderr)
         return 2
     manifest_path = out / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {"recordings": {}}
+    # Only the recordings are carried over from a manifest that is already there; the rest is written anew.
+    recordings = json.loads(manifest_path.read_text(encoding="utf-8"))["recordings"] if manifest_path.exists() else {}
     composed = {
         "utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "commit": git("rev-parse", "--short=7", "HEAD"),
@@ -1250,7 +1251,7 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
             ]
             shutil.rmtree(work)
             described = [describe(f) for f in files]
-            manifest["recordings"][key] = {
+            recordings[key] = {
                 "scene": timeline["scene"],
                 "locale": timeline["locale"],
                 "duration_s": round(end, 3),
@@ -1279,24 +1280,21 @@ def compose(frames_root: Path, out: Path, width: int, loop_width: int, fps: int,
                 "files": described,
             }
             print(f"  {key}: {end:.1f} s, " + ", ".join(f"{d['file']} {d['bytes'] // 1024} KiB" for d in described), flush=True)
-        manifest.update(
-            {
-                "schema": 1,
-                "script": "scripts/site/record_site.py",
-                "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in"
-                " ci/containers/fedora-release-itest",
-                "dom_changes": DOM_CHANGES,
-                "edits": EDITS,
-                "encoders": {
-                    "webm": "libvpx-vp9 crf 36",
-                    "mp4": "libopenh264 700k",
-                    "loop": "Pillow WebP q60, 10 fps, at most 5 s, played once",
-                    "audio": "none",
-                },
-                "budget_bytes_per_file": budget,
-            }
-        )
-        manifest["recordings"] = dict(sorted(manifest["recordings"].items()))
+        manifest = {
+            "schema": 1,
+            "script": "scripts/site/record_site.py",
+            "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+            "dom_changes": DOM_CHANGES,
+            "edits": EDITS,
+            "encoders": {
+                "webm": "libvpx-vp9 crf 36",
+                "mp4": "libopenh264 700k",
+                "loop": "Pillow WebP q60, 10 fps, at most 5 s, played once",
+                "audio": "none",
+            },
+            "budget_bytes_per_file": budget,
+            "recordings": dict(sorted(recordings.items())),
+        }
         problems += [
             f"{f['file']} is {f['bytes']} bytes, over the budget of {budget}"
             for recording in manifest["recordings"].values()  # the ones kept from an earlier run too
