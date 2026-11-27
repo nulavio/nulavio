@@ -59,6 +59,6 @@ There is no Nulavio server. Nothing is sent to the project.
 
 ## Process model notes (verified on Firefox 158, Fedora 44)
 
-- Web content, RDD, utility and socket processes each run with seccomp-bpf on every thread and their own user namespace. The fork server (spawner) is not sandboxed by design.
+- Web content, RDD, utility and socket processes each run with seccomp-bpf on every thread and their own user namespace. The fork server (spawner) is not sandboxed by design. Firefox 161 removed the socket process (the process type, `network.process.enabled` and `security.sandbox.socket.process.level` are gone); WebRTC's transport, which a content process handed to it, is created in that content process.
 - A window the launcher starts has the Wayland app_id `nulavio-preview` (via `MOZ_APP_REMOTINGNAME`, `--name` and `--class`). The `nulavio-preview.desktop` entry that matched it was the preview's `nulavio desktop install`, removed with the preview (#465); the packages' entry is `nulavio.desktop`.
 - A second `nulavio run` for a running profile is forwarded to the running instance through the engine's remoting.
