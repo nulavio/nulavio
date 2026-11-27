@@ -466,7 +466,10 @@ class BrowserApprover(Approver):
     def ask(self, agent: dict, capability: str, target: str | None, place: str = "",
             cancel: threading.Event | None = None) -> str | None:  # fmt: skip
         """Denies as soon as the emergency stop is on, the agent is paused or revoked, or the call was
-        cancelled: the request page then closes as expired, and nothing waits for an answer."""
+        cancelled: the request page then closes as expired, and nothing waits for an answer. One called off already
+        is never written, so the person never sees a request that is moot (#764)."""
+        if _called_off(agent["id"], cancel):
+            return "deny"
         folder = requests_dir()
         request_id = secrets.token_hex(8)
         base = folder / request_id
@@ -476,8 +479,12 @@ class BrowserApprover(Approver):
                 "place": {"kind": "profile", "profile": place} if place else {"kind": "workspace"},
                 "created": now().isoformat(timespec="seconds"),
                 "expires": (now() + _dt.timedelta(seconds=self.timeout)).isoformat(timespec="seconds")}  # fmt: skip
+        if _off(cancel):
+            return "deny"  # cancelled or stopped while the registry was read above: still never written (#764)
         paths.write_private_file(base.with_suffix(".json"), json.dumps(body))
         try:
+            if _off(cancel):
+                return "deny"  # called off while it was written: removed below, and no one is told of it
             if self.on_request:
                 self.on_request(body)
             deadline = time.monotonic() + self.notice
@@ -503,9 +510,14 @@ class BrowserApprover(Approver):
                 base.with_suffix(suffix).unlink(missing_ok=True)
 
 
+def _off(cancel: threading.Event | None) -> bool:
+    """The call was cancelled or the stop is on (read from memory and one file: nothing slow)."""
+    return (cancel is not None and cancel.is_set()) or stopped()
+
+
 def _called_off(agent_id: str, cancel: threading.Event | None) -> bool:
     """While a request waits: the call was cancelled, the stop is on, or the agent was paused or revoked."""
-    if (cancel is not None and cancel.is_set()) or stopped():
+    if _off(cancel):
         return True
     try:
         agent = load()["agents"].get(agent_id)
