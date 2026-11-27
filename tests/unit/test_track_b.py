@@ -20,12 +20,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import apply_patches  # noqa: E402
 import fetch_firefox_l10n  # noqa: E402
 import make_distribution  # noqa: E402
 import make_tools  # noqa: E402
 import refresh_extensions_lock  # noqa: E402
+from child_env import child_env  # noqa: E402
 
 
 MOZCONFIG = ROOT / "browser" / "build" / "mozconfig"
@@ -1047,7 +1049,7 @@ class PackagingTest(unittest.TestCase):
             firefox.parent.mkdir()
             firefox.write_text("#!/bin/sh\necho 'Mozilla Firefox 160.0'\n")
             firefox.chmod(0o755)
-            env = {"PATH": f"{firefox.parent}:/usr/bin:/bin"}
+            env = child_env({"PATH": f"{firefox.parent}:/usr/bin:/bin"})
 
             def run(**extra):
                 return subprocess.run([sys.executable, "-I", str(probe), str(install)], env={**env, **extra}, capture_output=True,

@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "tests" / "lib"))
 import build_site  # noqa: E402
 import verify_live  # noqa: E402
 import waitlist_remove  # noqa: E402
+from child_env import child_env  # noqa: E402
 from contrast import ratio  # noqa: E402
 from node_tool import requires_node  # noqa: E402
 
@@ -1087,7 +1088,7 @@ class WaitlistRemovalTest(unittest.TestCase):
                     stdin=stdin,
                     capture_output=True,
                     timeout=30,
-                    env={"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"},
+                    env=child_env({"PATH": "/usr/bin:/bin", "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"}),
                 )
         self.assertEqual(done.returncode, 0, done.stderr)
         out = done.stdout.decode("ascii")  # ascii(): nothing else reaches the terminal
