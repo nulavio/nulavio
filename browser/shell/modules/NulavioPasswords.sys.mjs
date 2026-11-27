@@ -157,6 +157,10 @@ class Passwords {
   #generation = 0; // a change to the saved logins makes a read under way stale
   #observing = false;
   #warnings = new WeakMap(); // a tab's browser -> the warning the engine's actor opened in it for a field in a frame
+  // Pairs confirmed in a private window: in memory only, for private windows only, until the last one closes. A
+  // private window leaves no record in the profile (prefs.js, Settings).
+  #privatePairs = new Set();
+  #watchingPrivate = false;
 
   async #providers() {
     if (!this.#data) {
@@ -339,32 +343,56 @@ class Passwords {
     return similar ? { site: siteOf(parsed.hostname), similar, saved } : null;
   }
 
-  /** Whether the pair of `site` and `similar` was confirmed. */
-  #confirmed(site, similar) {
+  /** Whether the pair of `site` and `similar` was confirmed: in this profile, or, `inPrivate`, also in a private
+     window since the private windows were last all closed. */
+  #confirmed(site, similar, inPrivate = false) {
     const pair = pairEntry(site, similar);
+    if (inPrivate && this.#privatePairs.has(pair)) {
+      return true;
+    }
     return this.#dismissed().some(entry => pairEntry(...String(entry).split(" ")) === pair);
   }
 
   /** The site of `url` and the saved site it imitates, unless that pair was confirmed; otherwise null (or locked). */
-  async #lookalike(url) {
+  async #lookalike(url, inPrivate) {
     const found = await this.#pairFor(url);
     if (!found || found.locked) {
       return found;
     }
-    return this.#confirmed(found.site, found.similar) ? null : found;
+    return this.#confirmed(found.site, found.similar, inPrivate) ? null : found;
+  }
+
+  /** Remember a pair for private windows only, in memory, until the engine says the last private window closed. */
+  #confirmPrivate(pair) {
+    if (!this.#watchingPrivate) {
+      this.#watchingPrivate = true;
+      Services.obs.addObserver(() => this.#privatePairs.clear(), "last-pb-context-exited");
+    }
+    this.#privatePairs.delete(pair);
+    this.#privatePairs.add(pair);
+    if (this.#privatePairs.size > 200) {
+      this.#privatePairs.delete(this.#privatePairs.values().next().value);
+    }
   }
 
   /**
    * Whether a password field on `url` belongs to a site that imitates one with a saved login. Also what
    * the warning page shows: it passes only the address it was opened for, and names what this returns.
    * `locked: true` says that nothing was compared, as the Primary Password has not been entered yet.
+   * `inPrivate`: the engine says the field, or the warning page, is in a private window. Pairs confirmed in a private
+   * window count there only, and the answer says it is private (`inPrivate: true`), so the page says what
+   * "Continue" keeps there.
    */
-  async checkLogin(url) {
-    const found = await this.#lookalike(url);
+  async checkLogin(url, { inPrivate = false } = {}) {
+    const found = await this.#lookalike(url, inPrivate === true);
     if (found?.locked) {
       return { suspicious: false, locked: true };
     }
-    return found ? { suspicious: true, site: displayHost(found.site), similar: found.similar } : { suspicious: false };
+    if (!found) {
+      return { suspicious: false };
+    }
+    const answer = { suspicious: true, site: displayHost(found.site), similar: found.similar };
+    return inPrivate === true ? { ...answer, inPrivate: true } : answer;
   }
 
   /** Nulavio's own pages take a protected profile's password (unlock, protection, phone). The engine's
@@ -416,8 +444,10 @@ class Passwords {
    * profile's saved logins: the saved logins can change while the warning is open, and the person confirmed the
    * pair they read, not another one. Otherwise nothing is remembered (`dismissed: false`), and the page says so.
    * What is saved is the module's own pair, never a site the page names.
+   * `inPrivate` (the engine says the warning is in a private window): the pair is kept in memory for private windows
+   * only, until the last one closes, and nothing is written to the profile.
    */
-  async dismissFor(url, { site, similar, back = false, browser = null } = {}) {
+  async dismissFor(url, { site, similar, back = false, browser = null, inPrivate = false } = {}) {
     if (typeof site !== "string" || typeof similar !== "string" || !site || !similar) {
       return { dismissed: false };
     }
@@ -435,6 +465,10 @@ class Passwords {
     const shown = pairEntry(site, similar);
     if (!found || found.locked || found.saved !== this.#savedSites || pairEntry(found.site, found.similar) !== shown) {
       return { dismissed: false };
+    }
+    if (inPrivate === true) {
+      this.#confirmPrivate(shown);
+      return { dismissed: true };
     }
     // A pair already confirmed (in another tab with the same warning) is still the pair shown: kept as it is, in its
     // place in the list.

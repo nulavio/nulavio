@@ -1,6 +1,7 @@
 /* Flow D: this site looks like one where you keep a saved login. Going to the real site is the
    first choice; continuing is remembered for this pair of sites in this profile only, says so next
-   to the button, and can be undone in Settings › Passwords.
+   to the button, and can be undone in Settings › Passwords. In a private window it is remembered for
+   private windows only, in memory, until the last one closes, and the note says so.
 
    The page's address carries the site's address (`url`) and, when the password field was in a frame of
    the tab's page, a flag with no address (`in=frame`): "continue" then goes back to the tab's page in the
@@ -46,7 +47,13 @@ if (url && HOST.test(similar) && site) {
   real.addEventListener("click", () => location.replace(`https://${similar}/`));
   const button = document.getElementById("continue");
   const note = document.getElementById("continue-note");
-  note.textContent = t("lookalikeContinueNote", [site, similar]);
+  // In a private window (the module says so, from the engine), "continue" is kept in memory for private windows
+  // only, until the last one closes, and nothing is written to the profile: the note and the reason say that instead.
+  const inPrivate = verdict.inPrivate === true;
+  note.textContent = t(inPrivate ? "lookalikeContinueNotePrivate" : "lookalikeContinueNote", [site, similar]);
+  if (inPrivate) {
+    document.getElementById("why-continue").textContent = t("lookalikeWhy3Private");
+  }
   button.hidden = note.hidden = !onward;
   button.addEventListener("click", async () => {
     button.disabled = true;
