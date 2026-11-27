@@ -483,6 +483,23 @@ class PasswordsTest(unittest.TestCase):
         harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", 20)
         return private, main
 
+    def end_private_browsing(self) -> bool | None:
+        """Close every private window: whether the engine then said private browsing ended (None: none was open).
+        The observer and the timer go in any case, so a late notice touches nothing of a later test."""
+        return chrome_async(
+            self.m,
+            "const {PrivateBrowsingUtils} = ChromeUtils.importESModule('resource://gre/modules/PrivateBrowsingUtils.sys.mjs');"
+            "const topic = 'last-pb-context-exited'; let seen; let timer;"
+            "const ended = new Promise(resolve => { seen = () => resolve(true); Services.obs.addObserver(seen, topic); });"
+            "try {"
+            " const open = [...Services.wm.getEnumerator('navigator:browser')]"
+            "  .filter(w => !w.closed && PrivateBrowsingUtils.isWindowPrivate(w));"
+            " if (!open.length) return null;"
+            " for (const win of open) win.close();"
+            " return await Promise.race([ended, new Promise(resolve => { timer = setTimeout(() => resolve(false), 20000); })]);"
+            "} finally { Services.obs.removeObserver(seen, topic); clearTimeout(timer); }",
+        )
+
     def test_06b_continue_in_a_private_window_is_kept_for_private_windows_only_and_not_in_the_profile(self):
         """#652: a private window leaves no record. "Continue" there writes nothing to prefs.js and adds nothing to
         Settings; the pair is not warned again in private windows until the last one closes, and a normal window still
@@ -490,45 +507,37 @@ class PasswordsTest(unittest.TestCase):
         pref = f"return Services.prefs.prefHasUserValue({PASSWORDS}.PREF_DISMISSED);"
         self.assertFalse(self.m.chrome(pref), "test_06 left a confirmed pair")
         private, main = self.open_private_window()
-        try:
-            url = self.focus_password(self.fake)
-            self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), url)
-            note = self.m.execute("return document.getElementById('continue-note').textContent;")
-            for words in (FAKE, REAL, "janelas privativas", "Nada é guardado neste perfil"):
-                self.assertIn(words, note)
-            self.assertNotIn("Configurações › Senhas", note)
-            why = self.m.execute("return document.getElementById('why-continue').textContent;")
-            self.assertIn("não é guardada neste perfil", why)
-            self.shoot("lookalike-private")
-            self.m.execute("document.getElementById('continue').click();")
-            self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
-            self.assertFalse(self.m.chrome(pref), "a private window's choice was written to the profile")
-            self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
-            self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not warned again in private
-        finally:
-            self.m.switch_to(main)
-        url = self.focus_password(self.fake)
-        self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"a normal window was not warned: {url}")
+        # Whatever fails below, the next tests start in the normal tab, with no private window and no confirmed pair
+        # (test_07 expects the warning). Cleanups run last first.
+        self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref({PASSWORDS}.PREF_DISMISSED);")
+        self.addCleanup(self.end_private_browsing)
+        self.addCleanup(self.m.switch_to, main)
+        self.focus_password(self.fake)
+        self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
+        self.warning_ready()
+        note = self.m.execute("return document.getElementById('continue-note').textContent;")
+        for words in (FAKE, REAL, "janelas privativas", "Nada é guardado neste perfil"):
+            self.assertIn(words, note)
+        self.assertNotIn("Configurações › Senhas", note)
+        why = self.m.execute("return document.getElementById('why-continue').textContent;")
+        self.assertIn("não é guardada neste perfil", why)
+        self.shoot("lookalike-private")
+        self.m.execute("document.getElementById('continue').click();")
+        self.assertTrue(harness.wait_until(lambda: self.m.current_url().startswith(self.fake), 10))
+        self.assertFalse(self.m.chrome(pref), "a private window's choice was written to the profile")
+        self.assertEqual(chrome_async(self.m, f"return {PASSWORDS}.NulavioPasswords.listConfirmed();"), [])
+        self.assertTrue(self.focus_password(self.fake).startswith(self.fake))  # not warned again in private
+        self.m.switch_to(main)
+        self.focus_password(self.fake)
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"a normal window was not warned: {self.m.current_url()}")
         # Closing the last private window forgets the pair (the engine's notice that private browsing ended).
-        ended = chrome_async(
-            self.m,
-            "const {PrivateBrowsingUtils} = ChromeUtils.importESModule('resource://gre/modules/PrivateBrowsingUtils.sys.mjs');"
-            "const topic = 'last-pb-context-exited';"
-            "const ended = new Promise(resolve => { const seen = () => { Services.obs.removeObserver(seen, topic);"
-            " resolve(true); }; Services.obs.addObserver(seen, topic); });"
-            "for (const win of Services.wm.getEnumerator('navigator:browser')) {"
-            " if (PrivateBrowsingUtils.isWindowPrivate(win)) win.close(); }"
-            "return Promise.race([ended, new Promise(resolve => setTimeout(() => resolve(false), 20000))]);",
-        )
-        self.assertTrue(ended, "private browsing did not end")
+        self.assertTrue(self.end_private_browsing(), "private browsing did not end")
         self.assertNotIn(private, self.m.window_handles())
-        private, main = self.open_private_window()
-        try:
-            url = self.focus_password(self.fake)
-            self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"not warned after closing: {url}")
-        finally:
-            self.m.send("WebDriver:CloseWindow")
-            self.m.switch_to(main)
+        self.open_private_window()
+        self.focus_password(self.fake)
+        self.assertTrue(harness.wait_until(self.on_warning, 10), f"not warned after closing: {self.m.current_url()}")
+        self.m.send("WebDriver:CloseWindow")
+        self.m.switch_to(main)
         self.assertFalse(self.m.chrome(pref))
 
     def test_07_a_primary_password_not_entered_is_not_asked_for_and_is_waited_for(self):

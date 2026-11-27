@@ -131,6 +131,15 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["other"], case["none"]), ({"dismissed": False}, {"dismissed": False}), case)
         self.assertEqual((case["after"], case["prefs"]), ({**FOUND, "inPrivate": True}, []), case)
 
+    def test_a_private_continue_under_way_when_the_last_private_window_closes_keeps_nothing(self):
+        """A choice made before the private windows all closed does not carry into the next private window."""
+        case = self.cases["dismiss_in_private_ended_during_read"]
+        warned = {**FOUND, "inPrivate": True}
+        self.assertEqual((case["first"], case["firstAfter"]), ({"dismissed": False}, warned), case)
+        self.assertEqual(case["kept"], {"dismissed": True}, case)
+        self.assertEqual((case["second"], case["secondAfter"]), ({"dismissed": False}, warned), case)
+        self.assertEqual(case["prefs"], [], case)
+
     def test_a_pair_confirmed_in_a_normal_window_is_not_warned_in_a_private_one(self):
         case = self.cases["dismiss_in_normal_counts_in_private"]
         self.assertEqual((case["answer"], case["inPrivate"]), ({"dismissed": True}, {"suspicious": False}), case)

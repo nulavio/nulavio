@@ -160,6 +160,7 @@ class Passwords {
   // Pairs confirmed in a private window: in memory only, for private windows only, until the last one closes. A
   // private window leaves no record in the profile (prefs.js, Settings).
   #privatePairs = new Set();
+  #privateSession = 0; // advances when the last private window closes: a "Continue" under way from before keeps nothing
   #watchingPrivate = false;
 
   async #providers() {
@@ -362,12 +363,19 @@ class Passwords {
     return this.#confirmed(found.site, found.similar, inPrivate) ? null : found;
   }
 
-  /** Remember a pair for private windows only, in memory, until the engine says the last private window closed. */
-  #confirmPrivate(pair) {
+  /** Forget the pairs kept for private windows when the engine says the last private window closed. */
+  #watchPrivate() {
     if (!this.#watchingPrivate) {
       this.#watchingPrivate = true;
-      Services.obs.addObserver(() => this.#privatePairs.clear(), "last-pb-context-exited");
+      Services.obs.addObserver(() => {
+        this.#privatePairs.clear();
+        this.#privateSession++;
+      }, "last-pb-context-exited");
     }
+  }
+
+  /** Remember a pair for private windows only, in memory, until the engine says the last private window closed. */
+  #confirmPrivate(pair) {
     this.#privatePairs.delete(pair);
     this.#privatePairs.add(pair);
     if (this.#privatePairs.size > 200) {
@@ -451,6 +459,11 @@ class Passwords {
     if (typeof site !== "string" || typeof similar !== "string" || !site || !similar) {
       return { dismissed: false };
     }
+    // Watched before the read below: if the last private window closes while it is under way, nothing is kept.
+    if (inPrivate === true) {
+      this.#watchPrivate();
+    }
+    const session = this.#privateSession;
     // "Continue" that goes back to the tab's page (a field in a frame): nothing is remembered unless the tab has a
     // page to go back to.
     if (back && !this.canGoBack(browser)) {
@@ -467,6 +480,9 @@ class Passwords {
       return { dismissed: false };
     }
     if (inPrivate === true) {
+      if (session !== this.#privateSession) {
+        return { dismissed: false }; // the private windows all closed while the saved logins were read
+      }
       this.#confirmPrivate(shown);
       return { dismissed: true };
     }

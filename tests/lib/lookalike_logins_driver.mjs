@@ -340,6 +340,28 @@ const cases = {
     const after = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
     return result(store, { other, none, after, prefs: [...prefs.keys()] });
   },
+  // The last private window closes while a private "Continue" reads the saved logins: nothing is kept, so the next
+  // private window is warned again. First with nothing kept before, then after a pair was kept and the logins changed.
+  dismiss_in_private_ended_during_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const ended = () => {
+      for (const fn of observers.get("last-pb-context-exited") ?? []) {
+        fn();
+      }
+    };
+    store.onRead = ended;
+    const first = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    store.onRead = null;
+    const firstAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    const kept = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    changed();
+    store.onRead = ended;
+    const second = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    store.onRead = null;
+    const secondAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    return result(store, { first, firstAfter, kept, second, secondAfter, prefs: [...prefs.keys()] });
+  },
   // A pair confirmed in a normal window (kept in the profile) is not warned in a private window either.
   dismiss_in_normal_counts_in_private: async () => {
     const store = loginManager();
