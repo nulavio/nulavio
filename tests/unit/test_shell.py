@@ -13,8 +13,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import make_shell  # noqa: E402
+from node_tool import requires_node  # noqa: E402
 
 SHELL = ROOT / "browser" / "shell"
 ALLOWED_PERMISSIONS = {"activeTab", "downloads", "management", "menus", "privacy", "search"}
@@ -1111,7 +1113,7 @@ console.log(JSON.stringify(out));
 """
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class TabCloserTest(unittest.TestCase):
     """#741: two Shell pages closing at once, from their own documents, could each count the other and close their
     window. The background now decides every close, one at a time per window (lib/tab-closer.js)."""
