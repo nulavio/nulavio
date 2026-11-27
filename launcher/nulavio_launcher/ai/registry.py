@@ -257,10 +257,12 @@ def grant(agent_id: str, capability: str, mode: str, *, minutes: int | None = No
 SESSION_SCOPES_KEPT = 64  # sites and places one capability keeps a session answer for; the oldest goes first
 
 
-def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[str | None, str] = (None, "")) -> None:
+def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[str | None, str] = (None, ""),
+                  cancel: threading.Event | None = None) -> bool:  # fmt: skip
     """The answer "allow until the agent disconnects": kept apart from the user's grants, never over them. It is for
     what the request showed, `scope` = (target, place): that site (or none) in that place, not the capability
-    everywhere (policy.effective_mode)."""
+    everywhere (policy.effective_mode). False, with nothing kept, when `cancel` is set by the time the registry's lock
+    is held: the call that asked was cancelled, or its client went away (#646)."""
     if capability not in CAPABILITIES or capability == INTERNAL_CAPABILITY or not session_id:
         raise RegistryError("bad session grant")
     target, place = scope
@@ -268,6 +270,8 @@ def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[
         raise RegistryError("bad session grant")
 
     def apply(data):
+        if cancel is not None and cancel.is_set():
+            return False
         agent = data["agents"].get(agent_id)
         if agent is None:
             raise RegistryError(f"no agent {agent_id}")
@@ -277,8 +281,9 @@ def grant_session(agent_id: str, capability: str, session_id: str, scope: tuple[
         scopes = [s for s in scopes if s != [target, place]] + [[target, place]]
         held[capability] = {"session": session_id, "set": now().isoformat(timespec="seconds"),
                             "scopes": scopes[-SESSION_SCOPES_KEPT:]}  # fmt: skip
+        return True
 
-    _update(apply)
+    return _update(apply)
 
 
 def end_session(agent_id: str, session_id: str) -> None:
@@ -452,11 +457,14 @@ class KDialogApprover(Approver):
         deadline = time.monotonic() + self.timeout
         try:
             while True:
-                left = deadline - time.monotonic()
-                if left <= 0 or _called_off(agent["id"], cancel):
+                if _called_off(agent["id"], cancel):
+                    return "deny"
+                left = deadline - time.monotonic()  # after the registry read, which may have taken a while
+                if left <= 0:
                     return "deny"
                 try:
-                    code = dialog.wait(timeout=min(self.poll, left))  # an answer after the deadline counts for nothing
+                    code = dialog.wait(timeout=min(self.poll, left))
+                    answered = time.monotonic()
                     break
                 except subprocess.TimeoutExpired:
                     continue
@@ -464,8 +472,8 @@ class KDialogApprover(Approver):
             if dialog.poll() is None:
                 dialog.kill()  # the dialog goes away: an answer given now does nothing
                 dialog.wait()
-        if _off(cancel):
-            return "deny"  # cancelled as the person answered: the call that asked is gone
+        if answered > deadline or _off(cancel):
+            return "deny"  # an answer seen after the deadline, or as the call was cancelled, counts for nothing
         return {0: "once", 1: "session"}.get(code, "deny")
 
 
@@ -647,7 +655,8 @@ def decide(agent_id: str, capability: str, *, host: str | None, target: str | No
             # away, #646): an "allow" does nothing, and an answer for the session is not kept for a client that is gone.
             return Decision(False, mode, capability, "cancelled")
     if answer == "session":
-        grant_session(agent_id, capability, session_id, scope)
+        if not grant_session(agent_id, capability, session_id, scope, cancel):
+            return Decision(False, mode, capability, "cancelled")  # cancelled while the grant waited for the lock
         return Decision(True, mode, capability, "approved-session")
     if answer == "once":
         return Decision(True, mode, capability, "approved-once")

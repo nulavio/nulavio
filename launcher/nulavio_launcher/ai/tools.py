@@ -437,6 +437,7 @@ class Bridge:
         # Questions the person answered yes to: a change since a tab was looked at means it may have moved meanwhile.
         self._questions = 0
         self._ended = False  # the agent's client went away (end()): no engine is started for this session again
+        self._closing = threading.RLock()  # close() and making or starting an engine around it (end(), #646)
 
     # -- policy ----------------------------------------------------------------------
 
@@ -936,14 +937,17 @@ class Bridge:
                 raise Cancelled()  # a cancelled call, or one running after the client left, makes no AI Workspace (#646)
             agent = self._agent() or {}
             uploads = bool(agent) and policy.effective_mode(agent, "files", self.session_id)[0] != "block"
-            workspace = (self.workspace_factory(agent) if self.workspace_factory else
-                         Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
-                                   headless=self.headless, uploads=uploads))  # fmt: skip
-            workspace.local_file = self._local_path()
-            self.workspace = workspace
-            if self._ended:  # ended while it was made: close() did not see it
-                self.close()
-                raise Cancelled()
+            with self._closing:  # end() closes it once it is made, or this call sees end() and makes none
+                if self._called_off():
+                    raise Cancelled()  # cancelled, or the client left, while the registry was read
+                workspace = (self.workspace_factory(agent) if self.workspace_factory else
+                             Workspace(self.agent_id, disposable=agent.get("workspace") == "disposable",
+                                       headless=self.headless, uploads=uploads))  # fmt: skip
+                workspace.local_file = self._local_path()
+                self.workspace = workspace
+                if self._ended:  # ended on this thread while it was made: close() did not see it
+                    self.close()
+                    raise Cancelled()
         return self.workspace
 
     def _called_off(self) -> bool:
@@ -957,10 +961,11 @@ class Bridge:
         if self._ended or (target.bidi is None and self._called_off()):
             raise Cancelled()
         engine = target.start()
-        if self._ended:
-            target.stop()
-            self.close()
-            raise Cancelled()
+        with self._closing:  # one stop at a time: end() may be closing the same engines on the server's thread
+            if self._ended:
+                target.stop()
+                self.close()
+                raise Cancelled()
         return engine
 
     def _engines(self) -> list[tuple[str, Workspace]]:
@@ -1082,18 +1087,19 @@ class Bridge:
         self.close()
 
     def close(self) -> None:
-        for target in list(self.profiles.values()):
-            target.stop()
-        self.profiles.clear()
-        if self.workspace is not None:
-            self.workspace.stop()
-            self.workspace = None
-        self.elements.clear()
-        self.owner.clear()
-        self._downloads_mode = {}
-        if self._local_file is not None:
-            self._local_file.unlink(missing_ok=True)
-            self._local_file, self._local_written = None, None
+        with self._closing:  # end() on the server's thread and a call that sees it on the worker: one after the other
+            for target in list(self.profiles.values()):
+                target.stop()
+            self.profiles.clear()
+            if self.workspace is not None:
+                self.workspace.stop()
+                self.workspace = None
+            self.elements.clear()
+            self.owner.clear()
+            self._downloads_mode = {}
+            if self._local_file is not None:
+                self._local_file.unlink(missing_ok=True)
+                self._local_file, self._local_written = None, None
 
     def _sync_downloads(self) -> None:
         """Downloads follow the `files` permission in each engine: allowed into the agent's downloads folder, or refused."""

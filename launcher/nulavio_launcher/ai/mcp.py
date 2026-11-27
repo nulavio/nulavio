@@ -49,16 +49,18 @@ class Server:
 
     # -- output ---------------------------------------------------------------------
 
-    def _send(self, message: dict) -> None:
+    def _send(self, message: dict, cancel: threading.Event | None = None) -> None:
         line = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
         with self._out:
+            if cancel is not None and (cancel.is_set() or self._gone.is_set()):
+                return  # a tool's result: its call was cancelled, or its client went away, while it was serialized
             self.stdout.write(line)
             self.stdout.flush()
 
-    def _result(self, request_id, result: dict, modern: bool) -> None:
+    def _result(self, request_id, result: dict, modern: bool, cancel: threading.Event | None = None) -> None:
         if modern:
             result = {"resultType": "complete", **result, "_meta": {META_SERVER: SERVER_INFO}}
-        self._send({"jsonrpc": "2.0", "id": request_id, "result": result})
+        self._send({"jsonrpc": "2.0", "id": request_id, "result": result}, cancel)
 
     def _error(self, request_id, code: int, message: str, data=None) -> None:
         error = {"code": code, "message": message}
@@ -179,6 +181,11 @@ class Server:
             if not isinstance(arguments, dict):
                 self._error(request_id, -32602, "arguments must be an object")
                 return
+            if request_id in self._cancels:
+                # Ids are unique among a client's requests in progress: a second one would take the first call's cancel
+                # away from notifications/cancelled and from the end of stdin (#646).
+                self._error(request_id, -32600, "a request with this id is still in progress")
+                return
             cancel = threading.Event()
             self._cancels[request_id] = cancel
             self._jobs.put((request_id, name, arguments, cancel, modern))
@@ -200,6 +207,6 @@ class Server:
                     print(f"nulavio-ai: tool {name} failed: {type(exc).__name__}", file=sys.stderr)
                     result = {"content": [{"type": "text", "text": f"Internal error in {name}"}], "isError": True}
                 if not cancel.is_set() and not self._gone.is_set():
-                    self._result(request_id, result, modern)
+                    self._result(request_id, result, modern, cancel)
             finally:
                 self._cancels.pop(request_id, None)

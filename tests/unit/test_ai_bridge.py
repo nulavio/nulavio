@@ -5633,6 +5633,147 @@ class DisconnectTest(Home):
             approver = registry.KDialogApprover(str(fake), timeout=0.2, poll=5)
             self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None), "deny")
 
+    # OpenCodeReview on #853 (round 2).
+
+    def test_a_session_allow_cancelled_while_the_grant_waits_for_the_lock_is_not_kept(self):
+        agent, _ = registry.add("g", "other", "restricted")
+        cancel = threading.Event()
+        real_locked = registry._locked
+
+        @contextlib.contextmanager
+        def locked():
+            with real_locked():
+                cancel.set()  # another writer held the lock; the end of stdin came meanwhile
+                yield
+
+        with mock.patch.object(registry, "_locked", locked):
+            decision = registry.decide(agent["id"], "interact", host=None, target=None, session_id="s-1",
+                                       approver=Approve("session"), cancel=cancel)  # fmt: skip
+        self.assertEqual((decision.allowed, decision.reason), (False, "cancelled"))
+        self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+
+    def test_a_second_call_with_the_id_of_one_in_progress_is_refused_and_the_first_is_still_cancelled(self):
+        cancels: list = []
+
+        class Waiting(FakeBridge):
+            def call(self, name, arguments, cancel):
+                cancels.append(cancel)
+                self.started.set()
+                cancel.wait(5)  # waits for the person's answer until the end of stdin cancels it
+                return {"content": [{"type": "text", "text": "done"}], "isError": False}
+
+        bridge = Waiting()
+        server_in_r, server_in_w = os.pipe()
+        out = io.BytesIO()
+        server = mcp.Server(bridge, os.fdopen(server_in_r, "rb"), out)
+        thread = threading.Thread(target=server.serve, daemon=True)
+        thread.start()
+        writer = os.fdopen(server_in_w, "wb")
+        call = req(1, "tools/call", {"name": "session_state", "arguments": {}})
+        writer.write(json.dumps(INIT).encode() + b"\n" + json.dumps(call).encode() + b"\n")
+        writer.flush()
+        self.assertTrue(wait_for(bridge.started.is_set))
+        writer.write(json.dumps(call).encode() + b"\n")  # the same id again, while the first waits
+        writer.flush()
+        self.assertTrue(wait_for(lambda: len(out.getvalue().splitlines()) == 2))
+        started = time.monotonic()
+        writer.close()  # the agent's client exits
+        thread.join(10)
+        self.assertFalse(thread.is_alive())
+        self.assertLess(time.monotonic() - started, 4)  # the first call's cancel was set, not left to its own timeout
+        self.assertEqual(len(cancels), 1)
+        self.assertTrue(cancels[0].is_set())
+        messages = [json.loads(line) for line in out.getvalue().splitlines()]
+        self.assertEqual([(m.get("id"), "error" in m) for m in messages], [(0, False), (1, True)])
+
+    def test_the_desktop_dialogs_deadline_counts_the_registry_read(self):
+        fake = self.home / "kdialog-quick"
+        fake.write_text("#!/bin/sh\nsleep 0.2\nexit 0\n")  # "Allow once", before the read below ends
+        fake.chmod(0o700)
+        agent, _ = registry.add("u", "other", "restricted")
+        real_load = registry.load
+        loads: list = []
+
+        def load(*args, **kwargs):
+            loads.append(1)
+            if len(loads) == 2:  # the first look while the dialog is open: slower than the time left
+                time.sleep(0.8)
+            return real_load(*args, **kwargs)
+
+        record = registry.get(agent["id"])
+        with mock.patch.dict(os.environ, {"DISPLAY": ":0"}), mock.patch.object(registry, "load", load):
+            approver = registry.KDialogApprover(str(fake), timeout=0.5, poll=5)
+            self.assertEqual(approver.ask(record, "interact", None), "deny")
+        self.assertGreaterEqual(len(loads), 2)
+
+    def test_a_result_whose_client_went_away_while_it_was_made_is_not_written(self):
+        out = io.BytesIO()
+        server = mcp.Server(FakeBridge(), io.BytesIO(b""), out)
+        cancel = threading.Event()
+        server._gone.set()  # the end of stdin came after the worker's last look, while the result was serialized
+        server._result(1, {"content": [], "isError": False}, False, cancel)
+        self.assertEqual(out.getvalue(), b"")
+        server._gone.clear()
+        cancel.set()
+        server._result(1, {"content": [], "isError": False}, False, cancel)
+        self.assertEqual(out.getvalue(), b"")
+        server._result(2, {}, False)  # a protocol answer (no call's cancel) still goes out
+        self.assertEqual(json.loads(out.getvalue())["id"], 2)
+
+    def test_the_end_and_a_call_that_sees_it_stop_an_engine_one_after_the_other(self):
+        agent, _ = registry.add("w", "other", "autonomous")
+        bridge: tools.Bridge
+        stopping = threading.Event()
+        inside: list[int] = []
+        state = {"now": 0}
+        ender: list[threading.Thread] = []
+
+        def stop():
+            state["now"] += 1
+            inside.append(state["now"])
+            stopping.set()
+            time.sleep(0.2)
+            state["now"] -= 1
+
+        def factory(_agent):
+            workspace = mock.Mock(bidi=None, downloads_dir=self.home / "downloads")
+            engine = mock.Mock(**{"command.return_value": {"contexts": []}})
+
+            def start(*_a, **_k):
+                ender.append(threading.Thread(target=bridge.end, daemon=True))  # the server's thread, after its wait
+                ender[0].start()
+                stopping.wait(2)  # end() is stopping this engine as the start returns
+                workspace.bidi = engine
+                return engine
+
+            workspace.start.side_effect = start
+            workspace.stop.side_effect = stop
+            return workspace
+
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(), workspace_factory=factory)
+        self.assertTrue(bridge.call("tabs_list", {})["isError"])
+        ender[0].join(5)
+        self.assertTrue(stopping.is_set())
+        self.assertEqual(max(inside), 1, "two threads stopped the engine at once")
+        self.assertIsNone(bridge.workspace)
+
+    def test_a_call_cancelled_while_the_registry_is_read_makes_no_workspace(self):
+        agent, _ = registry.add("v", "other", "autonomous")
+        made: list = []
+        bridge = tools.Bridge(agent["id"], "s-1", approver=registry.Approver(),
+                              workspace_factory=lambda a: made.append(a) or mock.Mock())  # fmt: skip
+        bridge._cancel = threading.Event()
+        real_agent = bridge._agent
+
+        def read():
+            bridge._cancel.set()  # the client cancels the call during the read
+            return real_agent()
+
+        with mock.patch.object(bridge, "_agent", read), self.assertRaises(tools.Cancelled):
+            bridge._workspace()
+        self.assertEqual(made, [])
+        self.assertIsNone(bridge.workspace)
+
 
 class ProfilesAndKeysTest(Home):
     """S8: profiles an agent may use, its routes, and the key file its configuration points to."""
