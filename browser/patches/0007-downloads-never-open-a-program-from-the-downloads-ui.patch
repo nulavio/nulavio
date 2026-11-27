@@ -40,10 +40,10 @@ Upstream: not applicable (product policy).
 +          if (this.isPanel && isProgram) {
 +            let status = lazy.NulavioDownloads.statusLabel();
 +            if (sizeWithUnits) {
-+              status = lazy.DownloadsCommon.strings.statusSeparator(
-+                status,
-+                sizeWithUnits
-+              );
++              status = formatValue("downloads-status-separator", {
++                start: status,
++                end: sizeWithUnits,
++              });
 +            }
 +            this.showStatus(status, {
 +              l10n: { id: "downloads-cmd-show-description-2" },

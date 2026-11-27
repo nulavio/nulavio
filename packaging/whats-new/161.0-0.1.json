@@ -1,0 +1,54 @@
+{
+  "version": "161.0-0.1",
+  "date": "2026-11-27",
+  "channel": "alpha",
+  "firefox": "161.0",
+  "pt-BR": {
+    "summary": "Uma atualização de segurança urgente da alpha, com o motor no Firefox 161.0 e as correções de segurança da Mozilla. Além disso, o aviso de login parecido passa a valer dentro de quadros, e há correções nos agentes de IA, no assistente, no desbloqueio pelo celular e no modo confinado.",
+    "breaking": [
+      "A palavra-chave do assistente na barra de endereços não pode mais ser o atalho de um mecanismo de pesquisa. Um mecanismo que recebeu esse atalho em Configurações o perde.",
+      "Modo confinado (--confined): uma pasta de Downloads ou de dados que é um link passa a funcionar (ainda não se a própria pasta pessoal é um link: os downloads se perdem; baixe sem --confined). Alguns arranjos são recusados com uma mensagem que diz o que fazer, como um motor extraído em Downloads."
+    ],
+    "new": [
+      "O aviso de login parecido também confere os campos de senha dentro dos quadros de uma página, com o site do quadro e o de cada página em volta dele."
+    ],
+    "fixed": [
+      "O motor passa ao Firefox 161.0, com as correções de segurança do aviso da Mozilla mfsa2026-131, de gravidade alta.",
+      "O assistente envia ao provedor só a origem e o caminho do endereço de uma página incluída, sem a consulta nem o fragmento, e mostra esse endereço.",
+      "Uma página ou seleção incluída no assistente não vai mais junto com a mensagem depois que você troca de aba, nem volta depois de uma Tarefa ou de Tentar de novo.",
+      "O aviso de login parecido não pede mais a Senha principal quando você usa um campo de senha em qualquer site.",
+      "Numa janela privativa, Continuar no aviso de login parecido não grava mais o par no perfil: ele fica na memória até a última janela privativa fechar.",
+      "Um novo pedido de desbloqueio pelo celular cancela o pedido anterior do mesmo perfil.",
+      "Um perfil que um agente de IA usou volta a abrir normalmente: as preferências temporárias do agente são apagadas no fim da sessão. Um perfil já barrado pelo Guard é liberado na próxima sessão de agente nele, ou, com ele fechado, apague do prefs.js as linhas remote.prefs.recommended e nulavio.ai.*.",
+      "Configurações não oferecem mais cinco permissões de agente que nenhuma ferramenta conferia, e as dicas dos níveis dizem só o que uma ferramenta confere.",
+      "Um agente de IA não faz mais perguntas que só podiam terminar em recusa: o pedido é recusado antes da pergunta.",
+      "No Imersivo, a barra de ferramentas continua à vista enquanto um site usa a localização ou uma porta serial, como já acontecia com a câmera, o microfone e a tela.",
+      "A opção Somente DNS criptografado diz quais nomes o resolvedor do computador ainda responde.",
+      "No Ubuntu e no Debian, a atualização automática falha e diz isso no registro quando o índice do Nulavio não pode ser baixado, em vez de relatar sucesso."
+    ]
+  },
+  "en-US": {
+    "summary": "An urgent security update of the alpha, with the engine on Firefox 161.0 and Mozilla's security fixes. Also, the look-alike login warning now covers frames, with fixes in AI agents, the assistant, phone unlock and confined mode.",
+    "breaking": [
+      "The assistant's keyword in the address bar can no longer be a search engine's alias. An engine given that alias in Settings loses it.",
+      "Confined mode (--confined): a Downloads or data folder that is a link now works (not yet when the home folder itself is a link: downloads are then lost, so download without --confined). Some layouts are refused with a message that says what to do, such as an engine unpacked in Downloads."
+    ],
+    "new": [
+      "The look-alike login warning also checks password fields inside a page's frames, with the site of the frame and of each page around it."
+    ],
+    "fixed": [
+      "The engine moves to Firefox 161.0, with the security fixes of Mozilla's advisory mfsa2026-131, of high severity.",
+      "The assistant sends the provider only the origin and path of an included page's address, without its query or fragment, and shows that address.",
+      "A page or selection included in the assistant no longer goes with a message after you switch tabs, and does not come back after a Task or a retry.",
+      "The look-alike login warning no longer asks for the Primary Password when you use a password field on any site.",
+      "In a private window, Continue on the look-alike login warning no longer saves the pair in the profile: it is kept in memory until the last private window closes.",
+      "A new phone unlock request cancels the earlier request for the same profile.",
+      "A profile an AI agent used starts normally again: the agent's temporary preferences are removed when its session ends. A profile the Guard already stops is cleared by its next agent session; or, with it closed, remove the remote.prefs.recommended and nulavio.ai.* lines from its prefs.js.",
+      "Settings no longer offer five agent permissions that no tool checked, and the level hints say only what a tool checks.",
+      "An AI agent no longer asks questions that could only end in a refusal: the call is refused before the question.",
+      "In Immersive, the toolbar stays in view while a site uses the location or a serial port, as it already did for the camera, the microphone and the screen.",
+      "The Encrypted DNS only option says which names the computer's resolver still answers.",
+      "On Ubuntu and Debian, the automatic update fails and says so in the log when Nulavio's index cannot be fetched, instead of reporting success."
+    ]
+  }
+}
