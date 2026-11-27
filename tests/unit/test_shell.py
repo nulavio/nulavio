@@ -647,6 +647,15 @@ class DownloadsPanelTest(unittest.TestCase):
         self.assertFalse(any("deleteFile" in line for line in added))  # "Show in folder" and "Delete" stay
         self.assertIn(name, (ROOT / "browser" / "patches" / "series").read_text(encoding="utf-8"))
 
+    def test_the_patch_takes_the_status_separator_from_fluent(self):
+        # Firefox 161 moved the downloads strings to Fluent and removed DownloadsCommon.strings: a call to it
+        # throws in the panel, for a finished program, before its status line is set (#595).
+        name = "0007-downloads-never-open-a-program-from-the-downloads-ui.patch"
+        patch = (ROOT / "browser" / "patches" / name).read_text(encoding="utf-8")
+        added = [line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++")]
+        self.assertFalse([line for line in added if "DownloadsCommon.strings" in line])
+        self.assertTrue(any('formatValue("downloads-status-separator"' in line for line in added))
+
 
 class ProfileTemplatesTest(unittest.TestCase):
     def setUp(self):
