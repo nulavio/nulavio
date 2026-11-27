@@ -1,0 +1,3549 @@
+{
+  "schema": 1,
+  "commit": "9022b24",
+  "worktree_clean": true,
+  "buildid": "20261119020726",
+  "firefox": "160.0.1",
+  "script": "scripts/site/capture_site.py",
+  "args": [
+    "--locales",
+    "pt-BR",
+    "en-US",
+    "--only",
+    "bands,guard,window"
+  ],
+  "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+  "dom_changes": [
+    "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+  ],
+  "not_captured": [
+    "band-agent (C2e): needs a live AI Bridge session",
+    "assistant (C4): not attempted"
+  ],
+  "figures": {
+    "band-personal": {
+      "pt-BR": {
+        "transcript": "P Pessoal · Sem senha",
+        "port": 37399
+      },
+      "en-US": {
+        "transcript": "P Personal · No password",
+        "port": 38153
+      }
+    },
+    "band-private": {
+      "pt-BR": {
+        "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+        "port": 37399
+      },
+      "en-US": {
+        "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+        "port": 38153
+      }
+    },
+    "band-temporary": {
+      "pt-BR": {
+        "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+        "port": 37399
+      },
+      "en-US": {
+        "transcript": "Temporary · No password · Temporary · deleted on close",
+        "port": 38153
+      }
+    },
+    "fig-1": {
+      "pt-BR": {
+        "transcript": "Na tela: faixa «Bancos» e «Protegido»; abas «Extrato do mês», «Contas a pagar» e «Reserva»; endereço «http://127.0.0.1:37399/extrato».",
+        "port": 37399,
+        "state": "protected-unlocked"
+      },
+      "en-US": {
+        "transcript": "On screen: band «Banking» and «Protected»; tabs «Monthly statement», «Bills to pay» and «Savings»; address «http://127.0.0.1:38153/statement».",
+        "port": 38153,
+        "state": "protected-unlocked"
+      }
+    },
+    "band-protected": {
+      "pt-BR": {
+        "transcript": "Bancos · Protegido",
+        "port": 37399
+      },
+      "en-US": {
+        "transcript": "Banking · Protected",
+        "port": 38153
+      }
+    },
+    "fig-5": {
+      "pt-BR": {
+        "transcript": "Na tela: «Mudanças feitas fora do Nulavio», com um cartão para cada mudança: «Autoridade certificadora adicionada», «Programa registrado para extensões: net.nulavio.guard_test», «Configuração de proteção alterada», «Configuração de proteção alterada», «Configuração de proteção alterada», «user.js alterado».",
+        "port": null,
+        "cards": [
+          "Autoridade certificadora adicionada",
+          "Programa registrado para extensões: net.nulavio.guard_test",
+          "Configuração de proteção alterada",
+          "Configuração de proteção alterada",
+          "Configuração de proteção alterada",
+          "user.js alterado"
+        ]
+      },
+      "en-US": {
+        "transcript": "On screen: «Changes made outside Nulavio», with a card for each change: «Certificate authority added», «Program registered for extensions: net.nulavio.guard_test», «Protective setting changed», «Protective setting changed», «Protective setting changed», «user.js changed».",
+        "port": null,
+        "cards": [
+          "Certificate authority added",
+          "Program registered for extensions: net.nulavio.guard_test",
+          "Protective setting changed",
+          "Protective setting changed",
+          "Protective setting changed",
+          "user.js changed"
+        ]
+      }
+    }
+  },
+  "files": [
+    {
+      "file": "band-personal-crop-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-crop-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 175.0833282470703,
+        "h": 32
+      },
+      "width": 350,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:06Z",
+      "sha256": "b46f6fb9414b9314a155cf6992ddf3537ae8ba3e432249c0db11bce8b5ce2a5e",
+      "bytes": 2898
+    },
+    {
+      "file": "band-personal-crop-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-crop-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 175.0833282470703,
+        "h": 32
+      },
+      "width": 350,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:05Z",
+      "sha256": "4646af1f2588e17b179e00d612457589a003781b241e854af55e3759862acf6b",
+      "bytes": 2938
+    },
+    {
+      "file": "band-personal-crop-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-crop-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 155.88333129882812,
+        "h": 32
+      },
+      "width": 312,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:47Z",
+      "sha256": "49e3f7a255ac9a017bb687c0f0416ece5cda8b12731f27771e70b28b67f27f38",
+      "bytes": 2480
+    },
+    {
+      "file": "band-personal-crop-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-crop-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 155.88333129882812,
+        "h": 32
+      },
+      "width": 312,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:46Z",
+      "sha256": "0548c716c53e4ae9a6b1bae957bdd05c6b13a963e9c32a5b2b28288fdfb11ce7",
+      "bytes": 2554
+    },
+    {
+      "file": "band-personal-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:06Z",
+      "sha256": "a4f99640b615260e06929d678be6065bb782e59d3790a5450006da739e8be397",
+      "bytes": 2910
+    },
+    {
+      "file": "band-personal-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:05Z",
+      "sha256": "992920b8a8240321feb3ae7462f004bc8f9a2aada103150e22d8f82143cc8093",
+      "bytes": 2982
+    },
+    {
+      "file": "band-personal-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:47Z",
+      "sha256": "c266c4925aed43d12922b7b58e8670f7632e041cf493bf208eb4e59357afb8a0",
+      "bytes": 2522
+    },
+    {
+      "file": "band-personal-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:46Z",
+      "sha256": "48da92725072b48331d434fe109ce9170c4bc3f14ea3cf6bf14060d4ca42ce06",
+      "bytes": 2590
+    },
+    {
+      "file": "band-personal-strip-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-strip-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:10Z",
+      "sha256": "f92f8cacfcc9f3325a957eaab96bd7dd8a10b4b69bced7873fd03f05414a9b9e",
+      "bytes": 2892
+    },
+    {
+      "file": "band-personal-strip-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-strip-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "P Personal · No password",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:08Z",
+      "sha256": "ab54e1bf7607394de0bd6aaa4ccfff68af5d4a99c93684acac50d73b4259caba",
+      "bytes": 2954
+    },
+    {
+      "file": "band-personal-strip-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-personal-strip-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:51Z",
+      "sha256": "54bce17fbfb2b0867f7a56fde46a392e99a889d4745f7320a35c0537d7da58a9",
+      "bytes": 2502
+    },
+    {
+      "file": "band-personal-strip-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-personal-strip-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain)",
+      "figure": "fig-2",
+      "state": "personal",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "P Pessoal · Sem senha",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:49Z",
+      "sha256": "daa36ffcd5ac51b3d1c364850573c0a47c953a33a076f280f908f9aadbf8eeb2",
+      "bytes": 2560
+    },
+    {
+      "file": "band-private-crop-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-crop-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 182.0,
+        "h": 32
+      },
+      "width": 364,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:15Z",
+      "sha256": "401b4c3e8149f698e628a62ea795b028d6ec5cdc027c37122ffa6c4e84b665b0",
+      "bytes": 4102
+    },
+    {
+      "file": "band-private-crop-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-private-crop-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 182.0,
+        "h": 32
+      },
+      "width": 364,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:14Z",
+      "sha256": "401b4c3e8149f698e628a62ea795b028d6ec5cdc027c37122ffa6c4e84b665b0",
+      "bytes": 4102
+    },
+    {
+      "file": "band-private-crop-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-crop-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 162.63333129882812,
+        "h": 32
+      },
+      "width": 325,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:56Z",
+      "sha256": "a5c1338bb5a99c48bdb30fc0fc5b1d38db1bd7ca16bd0d4b067fdc62d175fd62",
+      "bytes": 3610
+    },
+    {
+      "file": "band-private-crop-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-private-crop-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 162.63333129882812,
+        "h": 32
+      },
+      "width": 325,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:55Z",
+      "sha256": "a5c1338bb5a99c48bdb30fc0fc5b1d38db1bd7ca16bd0d4b067fdc62d175fd62",
+      "bytes": 3610
+    },
+    {
+      "file": "band-private-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:15Z",
+      "sha256": "ead711c20062bda16e67f48d704ede9f958aabd583e83a6d7f3254d39f783661",
+      "bytes": 10252
+    },
+    {
+      "file": "band-private-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-private-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:14Z",
+      "sha256": "ead711c20062bda16e67f48d704ede9f958aabd583e83a6d7f3254d39f783661",
+      "bytes": 10252
+    },
+    {
+      "file": "band-private-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:56Z",
+      "sha256": "ace5f9cad92fa24804c3def580bf049c0d69c08a3acc8ee3ebb363ee3a8bd281",
+      "bytes": 9770
+    },
+    {
+      "file": "band-private-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-private-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:55Z",
+      "sha256": "ace5f9cad92fa24804c3def580bf049c0d69c08a3acc8ee3ebb363ee3a8bd281",
+      "bytes": 9770
+    },
+    {
+      "file": "band-private-seal-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-seal-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 942.5833129882812,
+        "y": 0,
+        "w": 333.41668701171875,
+        "h": 30
+      },
+      "width": 667,
+      "height": 60,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:15Z",
+      "sha256": "1c9847aa8101eb7752dbddd6d98f1705fc2ce6a7c5dd35d50dab3eda76b3a0a4",
+      "bytes": 5336
+    },
+    {
+      "file": "band-private-seal-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-private-seal-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Personal · No password · Private window · no browsing history · assistant off",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 942.5833129882812,
+        "y": 0,
+        "w": 333.41668701171875,
+        "h": 30
+      },
+      "width": 667,
+      "height": 60,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:14Z",
+      "sha256": "1c9847aa8101eb7752dbddd6d98f1705fc2ce6a7c5dd35d50dab3eda76b3a0a4",
+      "bytes": 5336
+    },
+    {
+      "file": "band-private-seal-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-private-seal-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 932.5166625976562,
+        "y": 0,
+        "w": 343.48333740234375,
+        "h": 30
+      },
+      "width": 687,
+      "height": 60,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:56Z",
+      "sha256": "ec3c870d7f5e540edefb486350f1abb24712b0a0c852d8b42a23e3f5a61dc051",
+      "bytes": 5250
+    },
+    {
+      "file": "band-private-seal-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-private-seal-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "first (plain), private window",
+      "figure": "fig-2",
+      "state": "private",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "P Pessoal · Sem senha · Janela privativa · sem histórico · assistente desligado",
+      "band_data": {
+        "temporary": "false",
+        "private": "true",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 932.5166625976562,
+        "y": 0,
+        "w": 343.48333740234375,
+        "h": 30
+      },
+      "width": 687,
+      "height": 60,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:15:55Z",
+      "sha256": "ec3c870d7f5e540edefb486350f1abb24712b0a0c852d8b42a23e3f5a61dc051",
+      "bytes": 5250
+    },
+    {
+      "file": "band-protected-crop-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-crop-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 170.89999389648438,
+        "h": 32
+      },
+      "width": 342,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:20Z",
+      "sha256": "b7509622621337e9a190d526d876f0012e89cd4e39998eef0bd4b5a44de66063",
+      "bytes": 2822
+    },
+    {
+      "file": "band-protected-crop-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-crop-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 170.89999389648438,
+        "h": 32
+      },
+      "width": 342,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:19Z",
+      "sha256": "7bd2a9efc35f6bd845a4d2b97fc9800cb64132e1e65e2f4a3b203476fe41dafd",
+      "bytes": 2864
+    },
+    {
+      "file": "band-protected-crop-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-crop-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 165.6999969482422,
+        "h": 32
+      },
+      "width": 331,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:58Z",
+      "sha256": "0eefb8db9217bd9618ff528e213462c04f8a1ef01029224541b3e2944232990f",
+      "bytes": 2860
+    },
+    {
+      "file": "band-protected-crop-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-crop-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 6,
+        "w": 165.6999969482422,
+        "h": 32
+      },
+      "width": 331,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:56Z",
+      "sha256": "d82b2de0089af4893cc94f740e87d4925b60d35c20f0cafe176a0e158badfbcb",
+      "bytes": 2946
+    },
+    {
+      "file": "band-protected-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:20Z",
+      "sha256": "27519fb16d871e73e09329dfd5d90bb578bcf534dda4588d7464a54b496f1108",
+      "bytes": 2858
+    },
+    {
+      "file": "band-protected-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:19Z",
+      "sha256": "c6290f12eefb8d99cd1a974282d74f4aed73cbfcf8aaf4050e84a8a17a415391",
+      "bytes": 2896
+    },
+    {
+      "file": "band-protected-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:58Z",
+      "sha256": "5312b292e738f71082388ef137bb7a777a277c808bf808133223e40c8d692705",
+      "bytes": 2888
+    },
+    {
+      "file": "band-protected-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 44
+      },
+      "width": 448,
+      "height": 88,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:56Z",
+      "sha256": "a94c1c50c6d4ae966d539b1a4e6d40ae89f952246ac3cc5493f71801dc45460d",
+      "bytes": 2934
+    },
+    {
+      "file": "band-protected-strip-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-strip-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:24Z",
+      "sha256": "540e599888fd7d5566526ce35fe8bb54c320cb1f835f8f0aa72873874e139760",
+      "bytes": 2846
+    },
+    {
+      "file": "band-protected-strip-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-strip-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Banking · Protected",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:22Z",
+      "sha256": "b2585f76ac8673dcf0494c846d228387bb5602f9fb73fcf20f7e81ad18d331a9",
+      "bytes": 2884
+    },
+    {
+      "file": "band-protected-strip-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-protected-strip-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:01Z",
+      "sha256": "6363057c3942f82c4647433986b9c7ffe2a384f3ce8964f72ffc22e24983a007",
+      "bytes": 2868
+    },
+    {
+      "file": "band-protected-strip-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-protected-strip-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "protected, unlocked",
+      "figure": "fig-2",
+      "state": "protected",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Bancos · Protegido",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:00Z",
+      "sha256": "2d9806422c810af77fa7b21a7d6f3fbe1fcc7607d4d12c4ac056c93d649d083a",
+      "bytes": 2946
+    },
+    {
+      "file": "band-temporary-crop-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-crop-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 194.21665954589844,
+        "h": 32
+      },
+      "width": 388,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:41Z",
+      "sha256": "8fb4318f0033f56e7e8a5815f9e07d9b3f059dc6047e26da5ba447afd821153f",
+      "bytes": 3200
+    },
+    {
+      "file": "band-temporary-crop-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-crop-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 194.21665954589844,
+        "h": 32
+      },
+      "width": 388,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:40Z",
+      "sha256": "780e8ef905910a8dcf29b9903343a3637d46962c9298c16e916f0e0e62a362ff",
+      "bytes": 3494
+    },
+    {
+      "file": "band-temporary-crop-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-crop-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 186.0,
+        "h": 32
+      },
+      "width": 372,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:20Z",
+      "sha256": "049dbb977e5cef3b41069afd41b2a1975b0610f8c88aab4da8c50ef62bf1be94",
+      "bytes": 2764
+    },
+    {
+      "file": "band-temporary-crop-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-crop-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 4,
+        "y": 0,
+        "w": 186.0,
+        "h": 32
+      },
+      "width": 372,
+      "height": 64,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:19Z",
+      "sha256": "78eddcd233736ad17e23d9dd987afd9188c7d5850f8397da60035338814ea034",
+      "bytes": 3012
+    },
+    {
+      "file": "band-temporary-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:41Z",
+      "sha256": "0acd2287e4c220b3d6b143d4d4fe5384acd1111545af29278b1afa0c9ee38c1d",
+      "bytes": 6510
+    },
+    {
+      "file": "band-temporary-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:40Z",
+      "sha256": "dd19751ecd7f1fcb80378aef709b12e3ddbe402ad5a109a7e909326c329aeb4d",
+      "bytes": 6642
+    },
+    {
+      "file": "band-temporary-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:20Z",
+      "sha256": "ff609af38784fb2df97f7979a726c6b6f76b72a8040c87a19c4b06fb90c4b222",
+      "bytes": 6302
+    },
+    {
+      "file": "band-temporary-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 26.5
+      },
+      "width": 2560,
+      "height": 53,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:19Z",
+      "sha256": "8552051a800875b6df1d2f4b34bc11d1694a74225c1177aa092eca745c0cd614",
+      "bytes": 6446
+    },
+    {
+      "file": "band-temporary-seal-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-seal-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 1070.5833740234375,
+        "y": 0,
+        "w": 205.4166717529297,
+        "h": 31.0
+      },
+      "width": 411,
+      "height": 62,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:41Z",
+      "sha256": "3cb14b50738eaccdb48627d7e2852a0d1a4ac2e77b2a278580f8d9a1873a3135",
+      "bytes": 3026
+    },
+    {
+      "file": "band-temporary-seal-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-seal-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 1070.5833740234375,
+        "y": 0,
+        "w": 205.4166717529297,
+        "h": 31.0
+      },
+      "width": 411,
+      "height": 62,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:40Z",
+      "sha256": "0ec3df546b5d6a1c05e1df32ba3f2931dc0c652550b2708566b0cf2a04e6bee2",
+      "bytes": 2930
+    },
+    {
+      "file": "band-temporary-seal-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-seal-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 1052.5333251953125,
+        "y": 0,
+        "w": 223.46665954589844,
+        "h": 31.0
+      },
+      "width": 447,
+      "height": 62,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:20Z",
+      "sha256": "95065a5a1345fcd29056b52a8ea7440386ef3f310078092eff66a09908ddf33d",
+      "bytes": 3260
+    },
+    {
+      "file": "band-temporary-seal-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-seal-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1280,
+        800
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 1052.5333251953125,
+        "y": 0,
+        "w": 223.46665954589844,
+        "h": 31.0
+      },
+      "width": 447,
+      "height": 62,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:19Z",
+      "sha256": "c298784ed676de9522f0883e4c3c26e4844dc053a7ab40d5b16df270c6c0ea9a",
+      "bytes": 3156
+    },
+    {
+      "file": "band-temporary-strip-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-strip-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 686.5833129882812,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:44Z",
+      "sha256": "16c01ee4d83ef0f72a06819734ca0a75785a17d038ec7c719d2d59018cf816c2",
+      "bytes": 3018
+    },
+    {
+      "file": "band-temporary-strip-en-US-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-strip-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 38153,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Temporary · No password · Temporary · deleted on close",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 686.5833129882812,
+        "y": 0,
+        "w": 213.4166717529297,
+        "h": 25
+      },
+      "width": 427,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:18:43Z",
+      "sha256": "250967afb62e9829cf3b1b8410b69eedef46cf59a6229ddbcfcc9a602a6e5cb4",
+      "bytes": 2928
+    },
+    {
+      "file": "band-temporary-strip-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/band-temporary-strip-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 668.5333251953125,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:23Z",
+      "sha256": "6629df7477b4858777aa0be3bc0797d8f2f1bd6d5a5f012d3ced05f33c4af3af",
+      "bytes": 3254
+    },
+    {
+      "file": "band-temporary-strip-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/band-temporary-strip-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "port": 37399,
+      "profile": "temporary (nulavio-tools temporary api)",
+      "figure": "fig-2",
+      "state": "temporary",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "transcript": "Temporário · Sem senha · Temporário · apagado ao fechar",
+      "band_data": {
+        "temporary": "true",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "plain",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "scale": 2,
+      "crop_css": {
+        "x": 668.5333251953125,
+        "y": 0,
+        "w": 231.46665954589844,
+        "h": 25
+      },
+      "width": 463,
+      "height": 50,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:22Z",
+      "sha256": "09b52606a7beb3df94d76a159991a35a13e9338762fca26ce536fd76a2662015",
+      "bytes": 3174
+    },
+    {
+      "file": "guard-review-en-US-800-dark.webp",
+      "master": "docs/design/screenshots/site/guard-review-en-US-800-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        800,
+        900
+      ],
+      "transcript": "On screen: «Changes made outside Nulavio», with a card for each change: «Certificate authority added», «Program registered for extensions: net.nulavio.guard_test», «Protective setting changed», «Protective setting changed», «Protective setting changed», «user.js changed».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800.0,
+        "h": 1521.5333099365234
+      },
+      "width": 1600,
+      "height": 3043,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:20:04Z",
+      "sha256": "7d55c33c66d0cad333bd4e02881e99f3b14e344465ce10bf6d84a667091e5857",
+      "bytes": 97990
+    },
+    {
+      "file": "guard-review-en-US-800-light.webp",
+      "master": "docs/design/screenshots/site/guard-review-en-US-800-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        800,
+        900
+      ],
+      "transcript": "On screen: «Changes made outside Nulavio», with a card for each change: «Certificate authority added», «Program registered for extensions: net.nulavio.guard_test», «Protective setting changed», «Protective setting changed», «Protective setting changed», «user.js changed».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800.0,
+        "h": 1521.5333099365234
+      },
+      "width": 1600,
+      "height": 3043,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:43Z",
+      "sha256": "2e70711b5cff4e263d048d37c2c0254017e23a63a4a171954dccd02999f9190a",
+      "bytes": 95990
+    },
+    {
+      "file": "guard-review-en-US-narrow-dark.webp",
+      "master": "docs/design/screenshots/site/guard-review-en-US-narrow-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        394,
+        900
+      ],
+      "transcript": "On screen: «Changes made outside Nulavio», with a card for each change: «Certificate authority added», «Program registered for extensions: net.nulavio.guard_test», «Protective setting changed», «Protective setting changed», «Protective setting changed», «user.js changed».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 394.0,
+        "h": 1770.2333984375
+      },
+      "width": 788,
+      "height": 3540,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:20:09Z",
+      "sha256": "c33253bfb06d4e437c04465d9f9bc601b6a2a2c91bf245cb37483e67539e97a5",
+      "bytes": 91672
+    },
+    {
+      "file": "guard-review-en-US-narrow-light.webp",
+      "master": "docs/design/screenshots/site/guard-review-en-US-narrow-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        394,
+        900
+      ],
+      "transcript": "On screen: «Changes made outside Nulavio», with a card for each change: «Certificate authority added», «Program registered for extensions: net.nulavio.guard_test», «Protective setting changed», «Protective setting changed», «Protective setting changed», «user.js changed».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 394.0,
+        "h": 1770.2333984375
+      },
+      "width": 788,
+      "height": 3540,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:47Z",
+      "sha256": "37b4298a0a927f17e25ba2cbf244f15213730533d9b5d3ddf257e995f8bc6b43",
+      "bytes": 89528
+    },
+    {
+      "file": "guard-review-pt-BR-800-dark.webp",
+      "master": "docs/design/screenshots/site/guard-review-pt-BR-800-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        800,
+        900
+      ],
+      "transcript": "Na tela: «Mudanças feitas fora do Nulavio», com um cartão para cada mudança: «Autoridade certificadora adicionada», «Programa registrado para extensões: net.nulavio.guard_test», «Configuração de proteção alterada», «Configuração de proteção alterada», «Configuração de proteção alterada», «user.js alterado».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800.0,
+        "h": 1605.5333099365234
+      },
+      "width": 1600,
+      "height": 3211,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:40Z",
+      "sha256": "6e7f5bd1c8477f07bc6eb6b1bde86829926b0c035c5b6e439c6e5f81fb5b9571",
+      "bytes": 102276
+    },
+    {
+      "file": "guard-review-pt-BR-800-light.webp",
+      "master": "docs/design/screenshots/site/guard-review-pt-BR-800-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        800,
+        900
+      ],
+      "transcript": "Na tela: «Mudanças feitas fora do Nulavio», com um cartão para cada mudança: «Autoridade certificadora adicionada», «Programa registrado para extensões: net.nulavio.guard_test», «Configuração de proteção alterada», «Configuração de proteção alterada», «Configuração de proteção alterada», «user.js alterado».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 800.0,
+        "h": 1605.5333099365234
+      },
+      "width": 1600,
+      "height": 3211,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:19Z",
+      "sha256": "cac2972b07502c9a3fa0c8ea530bdec75b61ca9d87b47215fdc934b7de77bdf1",
+      "bytes": 100632
+    },
+    {
+      "file": "guard-review-pt-BR-narrow-dark.webp",
+      "master": "docs/design/screenshots/site/guard-review-pt-BR-narrow-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        394,
+        900
+      ],
+      "transcript": "Na tela: «Mudanças feitas fora do Nulavio», com um cartão para cada mudança: «Autoridade certificadora adicionada», «Programa registrado para extensões: net.nulavio.guard_test», «Configuração de proteção alterada», «Configuração de proteção alterada», «Configuração de proteção alterada», «user.js alterado».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 394.0,
+        "h": 1857.2333984375
+      },
+      "width": 788,
+      "height": 3714,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:45Z",
+      "sha256": "4af1bf5685022f234b2096e348074b77cf0a4eee2c67b82f9b41b9b8d1372e98",
+      "bytes": 98886
+    },
+    {
+      "file": "guard-review-pt-BR-narrow-light.webp",
+      "master": "docs/design/screenshots/site/guard-review-pt-BR-narrow-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-5",
+      "state": "guard-review",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        394,
+        900
+      ],
+      "transcript": "Na tela: «Mudanças feitas fora do Nulavio», com um cartão para cada mudança: «Autoridade certificadora adicionada», «Programa registrado para extensões: net.nulavio.guard_test», «Configuração de proteção alterada», «Configuração de proteção alterada», «Configuração de proteção alterada», «user.js alterado».",
+      "port": null,
+      "capture": "document (content), not the window; session started in this theme",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 394.0,
+        "h": 1857.2333984375
+      },
+      "width": 788,
+      "height": 3714,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:17:23Z",
+      "sha256": "36b8bc2551f85b0c2273bd9b80345f6a09d228339376e9c8884ed771bf921f30",
+      "bytes": 97344
+    },
+    {
+      "file": "window-crop-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/window-crop-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "port": 38153,
+      "transcript": "On screen: band «Banking» and «Protected»; tabs «Monthly statement», «Bills to pay» and «Savings»; address «http://127.0.0.1:38153/statement».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 420
+      },
+      "width": 1200,
+      "height": 840,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:16Z",
+      "sha256": "01520fe99a2bc61c08a13115c35077c28e3aa3adfe5454d99cd7152352772b73",
+      "bytes": 31592
+    },
+    {
+      "file": "window-crop-en-US-light.webp",
+      "master": "docs/design/screenshots/site/window-crop-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "port": 38153,
+      "transcript": "On screen: band «Banking» and «Protected»; tabs «Monthly statement», «Bills to pay» and «Savings»; address «http://127.0.0.1:38153/statement».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 420
+      },
+      "width": 1200,
+      "height": 840,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:15Z",
+      "sha256": "da00ac3337d342b615818f254c3af127f8bcc5d802dc35a2ebbb9265301b4364",
+      "bytes": 31116
+    },
+    {
+      "file": "window-crop-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/window-crop-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "port": 37399,
+      "transcript": "Na tela: faixa «Bancos» e «Protegido»; abas «Extrato do mês», «Contas a pagar» e «Reserva»; endereço «http://127.0.0.1:37399/extrato».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 420
+      },
+      "width": 1200,
+      "height": 840,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:54Z",
+      "sha256": "ca7c713067c104da5c4f416c36a043b18cd3ed82afcac43cecd77bdc6cb82892",
+      "bytes": 32748
+    },
+    {
+      "file": "window-crop-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/window-crop-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        900,
+        640
+      ],
+      "port": 37399,
+      "transcript": "Na tela: faixa «Bancos» e «Protegido»; abas «Extrato do mês», «Contas a pagar» e «Reserva»; endereço «http://127.0.0.1:37399/extrato».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 420
+      },
+      "width": 1200,
+      "height": 840,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:53Z",
+      "sha256": "050139f6a64cfcce30ec4cbf940d126fc008720fd6fcabe85a65976870e42110",
+      "bytes": 32438
+    },
+    {
+      "file": "window-en-US-dark.webp",
+      "master": "docs/design/screenshots/site/window-en-US-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "en-US",
+      "theme": "dark",
+      "viewport_css": [
+        1366,
+        768
+      ],
+      "port": 38153,
+      "transcript": "On screen: band «Banking» and «Protected»; tabs «Monthly statement», «Bills to pay» and «Savings»; address «http://127.0.0.1:38153/statement».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": null,
+      "width": 2732,
+      "height": 1536,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:13Z",
+      "sha256": "192b79d23a63a9c00f1a00f12cf494e77ace21d06a99b0dc44404c59e54eefce",
+      "bytes": 41700
+    },
+    {
+      "file": "window-en-US-light.webp",
+      "master": "docs/design/screenshots/site/window-en-US-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "en-US",
+      "theme": "light",
+      "viewport_css": [
+        1366,
+        768
+      ],
+      "port": 38153,
+      "transcript": "On screen: band «Banking» and «Protected»; tabs «Monthly statement», «Bills to pay» and «Savings»; address «http://127.0.0.1:38153/statement».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": null,
+      "width": 2732,
+      "height": 1536,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:19:12Z",
+      "sha256": "b9b8521653c7a7e0a548084599eb214b833a970a5c57280727d0204ff71d8bfc",
+      "bytes": 41680
+    },
+    {
+      "file": "window-pt-BR-dark.webp",
+      "master": "docs/design/screenshots/site/window-pt-BR-dark.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "pt-BR",
+      "theme": "dark",
+      "viewport_css": [
+        1366,
+        768
+      ],
+      "port": 37399,
+      "transcript": "Na tela: faixa «Bancos» e «Protegido»; abas «Extrato do mês», «Contas a pagar» e «Reserva»; endereço «http://127.0.0.1:37399/extrato».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": null,
+      "width": 2732,
+      "height": 1536,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:50Z",
+      "sha256": "7d091b7f90e3d0481cbb7a0d786c2ccfadcdb34652ab27ba262edde0b1b9337b",
+      "bytes": 43430
+    },
+    {
+      "file": "window-pt-BR-light.webp",
+      "master": "docs/design/screenshots/site/window-pt-BR-light.png",
+      "commit": "9022b24",
+      "worktree_clean": true,
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "script": "scripts/site/capture_site.py",
+      "args": [
+        "--locales",
+        "pt-BR",
+        "en-US",
+        "--only",
+        "bands,guard,window"
+      ],
+      "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+      "figure": "fig-1",
+      "state": "protected-unlocked",
+      "locale": "pt-BR",
+      "theme": "light",
+      "viewport_css": [
+        1366,
+        768
+      ],
+      "port": 37399,
+      "transcript": "Na tela: faixa «Bancos» e «Protegido»; abas «Extrato do mês», «Contas a pagar» e «Reserva»; endereço «http://127.0.0.1:37399/extrato».",
+      "band_data": {
+        "temporary": "false",
+        "private": "false",
+        "agent": "false",
+        "workspace": "false",
+        "protection": "unlocked",
+        "agentStatus": "paused",
+        "activity": "false"
+      },
+      "profile": "protected (gocryptfs volume, unlocked by password)",
+      "scale": 2,
+      "crop_css": null,
+      "width": 2732,
+      "height": 1536,
+      "dom_changes": [
+        "removed the remotecontrol attribute from the browser window's root element (automation cue)"
+      ],
+      "date": "2026-11-27T13:16:49Z",
+      "sha256": "64e0b499d1b4b5435534a3c6ad7ff037ee2aa15b977b466a003e88dd19ff1df9",
+      "bytes": 43230
+    }
+  ]
+}
