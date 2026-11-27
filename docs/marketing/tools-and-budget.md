@@ -74,8 +74,8 @@ WebVTT captions and transcripts in both languages are generated from these scrip
 
 Every video says it in three places (rule 4):
 
-1. **In the video:** the line on the end card ([message house](message-house.md#every-piece-carries)).
-2. **In the description:** the same line, plus the link to the claims.
+1. **In the video:** the AI notice, on screen from the first frame until the first recorded scene ends ([message house](message-house.md#every-piece-carries)). It is not left to the end card, where there is no time to read it.
+2. **In the description:** the AI line in full, plus the link to the claims.
 3. **The platform's label**, where one exists:
    - YouTube: "Altered or synthetic content" set to yes on upload ([YouTube help](https://support.google.com/youtube/answer/14328491), checked 2026-11-27).
    - TikTok, Instagram and Facebook: their AI-generated content labels. Not verified.
