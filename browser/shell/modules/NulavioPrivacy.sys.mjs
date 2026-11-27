@@ -148,11 +148,17 @@ const DNS_PREFS = ["network.trr.mode", "network.trr.uri"];
 const DNS_EXCLUSION_PREFS = Object.freeze(["network.trr.excluded-domains", "network.trr.builtin-excluded-domains"]);
 const DNS_EXCLUSIONS_NAMED = new Set(["localhost", "local"]);
 
-/** The excluded names beyond the ones the option's note names, as the engine reads the lists (comma-separated). */
+// The engine's tokens (TRRService::ReadPrefs, nsCCharSeparatedTokenizerTemplate<NS_IsAsciiWhitespace,
+// SeparatorOptional>): a comma or any run of space, tab, CR or LF ends a name. Only those four are whitespace to it.
+const DNS_EXCLUSION_TOKEN = /[^ \t\r\n,]+/g;
+// The engine keeps each name as written and looks names up in their lowercase ASCII form (the UTS #46 ToASCII of
+// nsDNSService::PreprocessHostname): a name with a capital or a non-ASCII letter is never matched, so it is not listed.
+const DNS_EXCLUSION_MATCHABLE = /^[\x21-\x40\x5b-\x7e]+$/;
+
+/** The excluded names beyond the ones the option's note names, as the engine reads the lists and can match them. */
 function dnsExclusions() {
-  const names = DNS_EXCLUSION_PREFS.flatMap(pref => Services.prefs.getStringPref(pref, "").split(","))
-    .map(name => name.trim().toLowerCase())
-    .filter(name => name && !DNS_EXCLUSIONS_NAMED.has(name));
+  const names = DNS_EXCLUSION_PREFS.flatMap(pref => Services.prefs.getStringPref(pref, "").match(DNS_EXCLUSION_TOKEN) ?? [])
+    .filter(name => DNS_EXCLUSION_MATCHABLE.test(name) && !DNS_EXCLUSIONS_NAMED.has(name));
   return [...new Set(names)];
 }
 

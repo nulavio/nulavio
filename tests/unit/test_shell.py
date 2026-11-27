@@ -414,6 +414,72 @@ class DnsExclusionsTest(unittest.TestCase):
             self.assertIn(named, row)
 
 
+# Runs NulavioPrivacy.dns() against stand-ins for the engine's prefs and DNS service, for each pair of
+# (network.trr.excluded-domains, network.trr.builtin-excluded-domains), and prints its `excluded` for each.
+DNS_EXCLUSIONS = """
+const { pathToFileURL } = await import("node:url");
+const prefs = new Map();
+globalThis.ChromeUtils = { defineESModuleGetters: () => {}, generateQI: () => () => {} };
+const DNS = { MODE_TRROFF: 5, MODE_TRRFIRST: 2, MODE_TRRONLY: 3 };
+globalThis.Ci = new Proxy({}, { get: (_, name) => (name === "nsIDNSService" ? DNS : {}) });
+const read = (name, fallback) => (prefs.has(name) ? prefs.get(name) : fallback);
+globalThis.Services = {
+  prefs: { getIntPref: read, getBoolPref: read, getStringPref: read, prefIsLocked: () => false },
+  dns: { currentTrrMode: DNS.MODE_TRRONLY, currentTrrURI: "https://dns.quad9.net/dns-query" },
+};
+prefs.set("network.trr.mode", DNS.MODE_TRRONLY);
+const { NulavioPrivacy } = await import(pathToFileURL(process.argv[1]).href);
+console.log(JSON.stringify(JSON.parse(process.argv[2]).map(([user, builtin]) => {
+  prefs.set("network.trr.excluded-domains", user);
+  prefs.set("network.trr.builtin-excluded-domains", builtin);
+  return NulavioPrivacy.dns().excluded;
+})));
+"""
+
+
+DNS_TEN = tuple(f"n{i}.nulavio-dns.example" for i in range(10))
+DNS_CASES = {
+    "spaces": (" ".join(DNS_TEN), ""),
+    "mixed": ("a.example b.example\tc.example,d.example , e.example\r\nf.example,,g.example, ", ""),
+    "named": ("localhost local", "localhost,local"),
+    "both": ("a.example,shared.example", "shared.example b.example"),
+    "case": ("INTRANET.example,Ok.example,ok.example,ok.example", ""),
+    "ascii": ("b\u00fccher.example\u00a0,xn--bcher-kva.example,\fform.example", ""),
+    "empty": ("", ""),
+}
+
+
+@requires_node
+class DnsExclusionTokensTest(unittest.TestCase):
+    """#626 (CodeRabbit on #849): Settings lists the excluded names the engine reads and can match. TRRService::ReadPrefs
+    splits each list on commas and on runs of space, tab, CR and LF (nsCCharSeparatedTokenizerTemplate with
+    NS_IsAsciiWhitespace and SeparatorOptional) and keeps each name as written; it looks names up in their lowercase
+    ASCII form (nsDNSService::PreprocessHostname), so a name with a capital or a non-ASCII letter is never matched."""
+
+    @classmethod
+    def setUpClass(cls):
+        module = str(DnsExclusionsTest.PRIVACY)
+        done = subprocess.run(["node", "--input-type=module", "-e", DNS_EXCLUSIONS, module, json.dumps(list(DNS_CASES.values()))],
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        cls.out = dict(zip(DNS_CASES, json.loads(done.stdout), strict=True))
+
+    def test_space_separated_names_are_one_each_so_the_eight_shown_limit_applies(self):
+        self.assertEqual(self.out["spaces"], list(DNS_TEN))  # ten names: Settings shows eight "and 2 more"
+
+    def test_commas_and_runs_of_whitespace_both_end_a_name(self):
+        self.assertEqual(self.out["mixed"], [f"{c}.example" for c in "abcdefg"])
+
+    def test_the_two_names_the_note_names_and_duplicates_are_left_out(self):
+        self.assertEqual(self.out["named"], [])
+        self.assertEqual(self.out["both"], ["a.example", "shared.example", "b.example"])
+
+    def test_a_name_the_engine_never_matches_is_not_listed(self):
+        self.assertEqual(self.out["case"], ["ok.example"])  # as written, not lowercased into one the engine matches
+        # Only space, tab, CR and LF are whitespace to the engine: a no-break space or a form feed stays in the name.
+        self.assertEqual(self.out["ascii"], ["xn--bcher-kva.example"])
+        self.assertEqual(self.out["empty"], [])
+
+
 class FailureAnnouncementsTest(unittest.TestCase):
     """#546: a temporary window that cannot be launched after its profile was made, and a link that cannot be written to
     the clipboard, are announced as what they are, by the module itself so every entry point says the same."""

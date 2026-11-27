@@ -162,12 +162,28 @@ class DnsChoiceTest(unittest.TestCase):
             self.assertEqual(resolve(self.m, NAME), ["127.0.0.1"])  # which still answers the rest
             self.assertNotIn(EXCLUDED, self.doh.queries[before:])
             self.assertIn(NAME, self.doh.queries[before:])
-            # A long list is cut short, and says how many more there are.
-            many = [EXCLUDED, *(f"n{i}.nulavio-dns.example" for i in range(9))]
-            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [",".join(many)])
+            # The engine keeps a name as written and looks names up in lowercase: a capital never matches, so the
+            # name goes to the encrypted resolver and Settings does not list it (CodeRabbit on #849).
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [EXCLUDED.upper()])
+            now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "excluídos" not in (c["description"] or ""))
+            self.assertEqual(self.state()["excluded"], [])
+            before = len(self.doh.queries)
+            self.assertEqual(resolve(self.m, EXCLUDED), ["127.0.0.1"])
+            self.assertIn(EXCLUDED, self.doh.queries[before:])
+            # A long list is cut short, and says how many more there are. The engine ends a name at a comma or at
+            # whitespace, so the names in a list written with spaces, tabs and new lines are counted one by one.
+            many = [f"n{i}.nulavio-dns.example" for i in range(9)]
+            many.insert(3, EXCLUDED)
+            separators = [" ", "\t", ", ", "\n", "  ", ",", " ,", "\r\n", " ", ""]
+            written = "".join(name + sep for name, sep in zip(many, separators, strict=True))
+            self.m.chrome("Services.prefs.setStringPref('network.trr.excluded-domains', arguments[0]);", [written])
             now = settings_page.wait_control(self.m, "nulavio-dns-choice", lambda c: "e mais 2" in (c["description"] or ""))
+            self.assertEqual(self.state()["excluded"], many)
             self.assertIn(", ".join(many[:8]), now["description"])
             self.assertNotIn(many[8], now["description"])
+            before = len(self.doh.queries)
+            self.assertEqual(sorted(set(resolve(self.m, EXCLUDED))), ["127.0.0.1"])  # between a tab and a comma
+            self.assertNotIn(EXCLUDED, self.doh.queries[before:])
         finally:
             self.m.chrome(
                 "for (const p of ['network.trr.excluded-domains', 'network.dns.native-is-localhost'])"
