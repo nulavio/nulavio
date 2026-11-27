@@ -860,6 +860,17 @@ class SiteTest(unittest.TestCase):
                 self.assertIn("box-sizing: content-box", rule.group(1))
                 self.assertIn("max-width: calc(100% - 2px)", rule.group(1), "and the frame still fits a narrow page")
 
+    def test_a_column_beside_text_is_capped_by_the_rows_width(self):
+        # The wide layouts start at a width in rem of the browser's initial size; a reader's own style sheet can
+        # make the page's rem larger than that. A column sized in rem alone then takes the whole row and leaves
+        # the text beside it none: it is capped by a share of the row, which at the default size is wider.
+        css = (ROOT / "site" / "landing.css").read_text(encoding="utf-8")
+        for selector in (".hero-grid", ".feature", ".scene"):
+            with self.subTest(selector=selector):
+                tracks = re.findall(r"(?m)^  " + re.escape(selector) + r" \{ grid-template-columns: ([^;]+);", css)
+                self.assertEqual(len(tracks), 1, selector)
+                self.assertRegex(tracks[0], r"^minmax\(0, 1fr\) min\(\d+rem, \d+%\)$")
+
     def test_the_link_page_is_one_form_that_posts_to_its_own_address(self):
         """What a sign-up is answered with: the worker serves it with the key in the address (?k=…), and
         the key is nowhere in the page. A form with no action posts to the address it is on."""

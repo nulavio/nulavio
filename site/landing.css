@@ -372,8 +372,11 @@ select.field { padding-right: var(--nv-space-7); }
   font-size: 0.875rem;
 }
 .closeup .prov { margin-top: var(--nv-space-2); }
+/* A column beside text is capped by a share of its row: the wide layouts start at a width in rem of the
+   browser's initial size, and a reader's own style sheet can make the page's rem larger than that. At the
+   default size the share is the wider of the two, so the rem decides. */
 @media (min-width: 64rem) {
-  .hero-grid { grid-template-columns: minmax(0, 1fr) 27rem; gap: var(--nv-space-9); align-items: center; padding-bottom: var(--nv-space-9); }
+  .hero-grid { grid-template-columns: minmax(0, 1fr) min(27rem, 50%); gap: var(--nv-space-9); align-items: center; padding-bottom: var(--nv-space-9); }
   .closeup { margin-right: calc(-1 * max(var(--gutter), (100vw - var(--page)) / 2)); }
 }
 
@@ -459,7 +462,7 @@ select.field { padding-right: var(--nv-space-7); }
   background: var(--nv-color-bg-sunken);
 }
 @media (min-width: 64rem) {
-  .feature { grid-template-columns: minmax(0, 1fr) minmax(0, 29rem); column-gap: var(--nv-space-9); row-gap: var(--nv-space-9); }
+  .feature { grid-template-columns: minmax(0, 1fr) min(29rem, 55%); column-gap: var(--nv-space-9); row-gap: var(--nv-space-9); }
   .stage { margin-top: var(--nv-space-3); }
   .steps { grid-column: 1 / -1; }
 }
@@ -550,7 +553,7 @@ select.field { padding-right: var(--nv-space-7); }
   .whole .meta { flex-basis: auto; padding-left: 0; }
 }
 @media (min-width: 75rem) {
-  .scene { grid-template-columns: minmax(0, 1fr) 27rem; column-gap: var(--nv-space-7); max-width: none; }
+  .scene { grid-template-columns: minmax(0, 1fr) min(27rem, 50%); column-gap: var(--nv-space-7); max-width: none; }
   .scene picture, .scene .whole { grid-column: 1; }
   .scene figcaption { grid-column: 2; grid-row: 1 / span 2; align-content: start; }
 }
