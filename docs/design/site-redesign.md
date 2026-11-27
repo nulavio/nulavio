@@ -93,7 +93,7 @@ Motion on the site has one job, as in the window ([motion map](motion-map.md)): 
 - Flashing: nothing flashes more than three times in a second, whatever the motion preference (WCAG 2.3.1).
 - `animation-duration: 0.01ms` blanket overrides: reduced motion is handled where each animation is declared (opt in under `no-preference`).
 
-**Reduced motion: nothing moves.** Every movement above lives inside `@media (prefers-reduced-motion: no-preference)`. The loops are behind `<source media="(prefers-reduced-motion: no-preference)">`, so a person who asked for less motion gets the poster. Phase 2 tests it: the built pages have no `animation`, `transition` of a spatial property or animated image outside those conditions (`test_site.py`).
+**Reduced motion: nothing moves.** Every movement above lives inside `@media (prefers-reduced-motion: no-preference)`. The loops are behind `<source media="(prefers-reduced-motion: no-preference)">`, so a person whose browser tells the page they asked for less motion gets the poster. The media query follows what the browser tells the page, not the system's setting itself: Nulavio by default tells sites nothing of the system's motion preference (`+CSSPrefersReducedMotion` in `browser/config/prefs/baseline.js`), so on a default Nulavio profile, as in any browser that hides it, the site sees `no-preference`, the loops play once and stop within 5 s, and the videos still wait for play. The person gets the posters by turning on Settings' "Let sites see my motion and contrast preferences" (`nulavio.fingerprinting.shareAccessibility`), which a new window also offers once when the system asks for less motion. Phase 2 tests it: the built pages have no `animation`, `transition` of a spatial property or animated image outside those conditions (`test_site.py`).
 
 ## Media policy
 
@@ -140,7 +140,7 @@ These are #173's done criteria, with how phase 2 checks them.
 | First view under 1.5 MB | Static: `test_site.py` sums what each built page loads before any scroll (HTML, CSS, fonts, `<img>` and posters above the fold); no browser needed |
 | No layout shift from media (CLS under 0.1) | Static: every `<img>`, `<video>` and `<picture>` carries `width` and `height` (or the CSS gives it an `aspect-ratio`) |
 | No video downloaded before play | Static: every `<video>` has `preload="none"`, a `poster`, `controls`, no `autoplay`, no `loop` |
-| Reduced motion: no animation, no moving image | Static: animations and loops only inside `prefers-reduced-motion: no-preference`; on a build of the site in Nulavio, with `ui.prefersReducedMotion` set, no running animation and the posters shown (an integration test, through the queue) |
+| Reduced motion: no animation, no moving image | Static: animations and loops only inside `prefers-reduced-motion: no-preference`; on a build of the site in Nulavio, with `ui.prefersReducedMotion` set and `nulavio.fingerprinting.shareAccessibility` on, no running animation and the posters shown; with `ui.prefersReducedMotion` set and the default (sites not told), the page as under `no-preference`, its loops stopped within 5 s (an integration test, through the queue) |
 | AA contrast from the tokens | `scripts/brand/contrast.py`, as today, for every new pair the direction uses |
 | Keyboard and visible focus | Every control reachable, focus ring from the tokens; the media's controls are the browser's own |
 | Captions and transcripts | Static: every `<video>` has a captions track in the page's language, and a transcript in the page |
@@ -207,5 +207,5 @@ The promotion pieces need more than the site: 4K at 60 frames a second, longer t
 The maintainer's, with a recommendation each:
 
 - **How LCP is measured in CI.** A browser in the site workflow is a new dependency. Recommendation: Nulavio's own build through the existing integration container and queue (no new tool), measuring LCP from the engine's own `largest-contentful-paint` entries on the built pages (support to check on the build); the static checks above cover the rest.
-- **Loops on the landing, or videos only.** Recommendation: loops of at most 5 s that stop, plus the video for the whole scene; if the chosen direction wants a calmer page, posters only, with the video.
+- **Loops on the landing, or videos only.** Recommendation: loops of at most 5 s that stop, plus the video for the whole scene; if the chosen direction wants a calmer page, posters only, with the video. Posters only is also the choice if the site must stay still for a person whose browser hides their motion preference (Nulavio's default, above).
 - **Xvfb in the test container for #176's 60 fps capture.** Recommendation: decide with #176's tool list and budget, not here.
