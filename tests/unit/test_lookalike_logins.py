@@ -55,6 +55,60 @@ class LookalikeLoginsTest(unittest.TestCase):
         case = self.cases["dismiss_back_left_during_the_read"]
         self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)
 
+    def test_continue_remembers_the_pair_the_warning_showed(self):
+        case = self.cases["dismiss_shown_pair"]
+        self.assertEqual(case["answer"], {"dismissed": True}, case)
+        self.assertEqual(case["confirmed"], [{"site": FOUND["site"], "similar": FOUND["similar"]}])
+        self.assertEqual(case["after"], {"suspicious": False})  # not warned again for this pair
+
+    def test_continue_remembers_nothing_when_the_saved_logins_now_give_another_pair(self):
+        """#762: the saved logins change while the warning is open; neither the pair shown nor the new one is saved."""
+        case = self.cases["dismiss_pair_changed"]
+        self.assertEqual(case["shown"], FOUND)
+        self.assertEqual(case["now"], {**FOUND, "similar": "paypa.example"}, case)  # the address imitates another site
+        self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": False}, []), case)
+
+    def test_continue_remembers_nothing_when_no_pair_is_left(self):
+        case = self.cases["dismiss_no_pair_left"]
+        self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": False}, []), case)
+
+    def test_continue_never_remembers_a_pair_the_warning_did_not_show(self):
+        case = self.cases["dismiss_other_pair"]
+        for name in ("other_similar", "other_site", "no_pair", "not_strings"):
+            self.assertEqual(case[name], {"dismissed": False}, name)
+        self.assertEqual(case["confirmed"], [])
+
+    def test_continue_on_a_pair_already_confirmed_keeps_it_once(self):
+        case = self.cases["dismiss_already_confirmed"]
+        self.assertEqual((case["first"], case["again"]), ({"dismissed": True}, {"dismissed": True}), case)
+        self.assertEqual(case["confirmed"], [{"site": FOUND["site"], "similar": FOUND["similar"]}])
+
+    def test_continue_on_a_pair_already_confirmed_keeps_the_list_order(self):
+        case = self.cases["dismiss_already_confirmed_keeps_order"]
+        self.assertEqual((case["first"], case["other"], case["again"]), ({"dismissed": True},) * 3, case)
+        newest_first = [
+            {"site": "examp1e.example", "similar": "example.example"},
+            {"site": FOUND["site"], "similar": FOUND["similar"]},
+        ]
+        self.assertEqual(case["confirmed"], newest_first)
+
+    def test_continue_remembers_nothing_from_a_read_the_saved_logins_changed_after(self):
+        case = self.cases["dismiss_after_a_burst_of_changes"]
+        self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": False}, []), case)
+        self.assertEqual(case["after"], {"suspicious": False}, case)  # the saved logins give no pair now
+
+    def test_continue_remembers_the_pair_only_if_saved_before_the_logins_changed(self):
+        runs = self.cases["dismiss_while_the_logins_change"]["runs"]
+        for hops, run in enumerate(runs):
+            # The change lands at every step of the Continue in turn: a pair remembered was saved before it.
+            self.assertEqual(run["dismissed"], run["savedBeforeChange"], (hops, run))
+            self.assertEqual(run["confirmed"], int(run["dismissed"]), (hops, run))
+        self.assertEqual({run["dismissed"] for run in runs}, {True, False}, runs)  # both sides of the save are reached
+
+    def test_continue_back_says_no_way_back_first_when_the_tab_left_and_the_pair_changed(self):
+        case = self.cases["dismiss_back_left_and_pair_changed"]
+        self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)
+
     def test_checks_at_once_share_one_read_of_the_saved_logins(self):
         case = self.cases["concurrent_checks"]
         self.assertEqual((case["first"], case["second"]), (FOUND, FOUND))
