@@ -94,6 +94,7 @@ class EveryNodeClassUsesTheHelperTest(unittest.TestCase):
             "test_site.py": 1,
             "test_search_alias.py": 1,
             "test_routing_open_in.py": 1,
+            "test_name_isolation.py": 1,
         }
         for module, count in known.items():
             with self.subTest(module):
