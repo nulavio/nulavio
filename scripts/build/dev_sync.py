@@ -25,7 +25,9 @@ in one of three ways, and the last line printed says which:
 
 --reset puts omni.ja and the window icons back from their .orig copies. The
 distribution files and the tools are generated in place and are not put back:
-unpack the package again for those.
+unpack the package again for those, into an empty directory (or delete the
+*.orig files first): a newer build unpacked over an old copy keeps the old
+build's .orig files, and the next run would put those back.
 
 Test profiles are fresh, so no startup cache needs purging; for a long-lived
 profile start the engine with -purgecaches.
@@ -34,6 +36,7 @@ profile start the engine with -purgecaches.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -117,17 +120,34 @@ def original_of(path: Path) -> Path:
     return path.with_name(path.name + ".orig")
 
 
+def fresh_temp(target: Path) -> Path:
+    """A new, empty file beside `target`, created exclusively (never an existing file or link there)."""
+    fd, name = tempfile.mkstemp(prefix=f".{target.name}.", suffix=".tmp", dir=target.parent)
+    os.close(fd)
+    return Path(name)
+
+
+def into_place(target: Path, fill, keep_mode: bool = True) -> None:
+    """`target` becomes what `fill(tmp)` writes, whole or not at all: written beside it, then renamed;
+    the temporary file is removed when anything fails. The file keeps `target`'s permissions."""
+    tmp = fresh_temp(target)
+    try:
+        fill(tmp)
+        if keep_mode and target.is_file():
+            shutil.copymode(target, tmp)
+        tmp.replace(target)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def copy_into_place(source: Path, target: Path) -> None:
-    """`target` becomes a copy of `source`, whole or not at all: written beside it, then renamed."""
-    tmp = target.with_name(target.name + ".tmp")
-    shutil.copy2(source, tmp)
-    tmp.replace(target)
+    """`target` becomes a copy of `source`, whole or not at all."""
+    into_place(target, lambda tmp: shutil.copy2(source, tmp), keep_mode=False)
 
 
 def write_into_place(target: Path, data: bytes) -> None:
-    tmp = target.with_name(target.name + ".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(target)
+    into_place(target, lambda tmp: tmp.write_bytes(data))
 
 
 def keep_original(path: Path) -> Path:
@@ -149,23 +169,25 @@ def restore(path: Path) -> bool:
 
 def rewrite(omni: Path, new: dict[str, bytes]) -> tuple[int, int]:
     original = keep_original(omni)
-    tmp = omni.with_name("omni.ja.tmp")
-    replaced = added = 0
-    with zipfile.ZipFile(original) as src, zipfile.ZipFile(tmp, "w") as dst:
-        seen = set()
-        for info in src.infolist():
-            data = new.get(info.filename)
-            if data is None:
-                data = src.read(info.filename)
-            else:
-                replaced += 1
-            seen.add(info.filename)
-            dst.writestr(info, data, compress_type=info.compress_type)
-        for name in sorted(set(new) - seen):
-            dst.writestr(name, new[name], compress_type=zipfile.ZIP_DEFLATED)
-            added += 1
-    tmp.replace(omni)
-    return replaced, added
+    counts = [0, 0]
+
+    def fill(tmp: Path) -> None:
+        with zipfile.ZipFile(original) as src, zipfile.ZipFile(tmp, "w") as dst:
+            seen = set()
+            for info in src.infolist():
+                data = new.get(info.filename)
+                if data is None:
+                    data = src.read(info.filename)
+                else:
+                    counts[0] += 1
+                seen.add(info.filename)
+                dst.writestr(info, data, compress_type=info.compress_type)
+            for name in sorted(set(new) - seen):
+                dst.writestr(name, new[name], compress_type=zipfile.ZIP_DEFLATED)
+                counts[1] += 1
+
+    into_place(omni, fill)
+    return counts[0], counts[1]
 
 
 def sync_icons(icon_dir: Path, icons: dict[str, bytes]) -> int:

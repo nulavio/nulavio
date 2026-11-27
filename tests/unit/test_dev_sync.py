@@ -181,5 +181,40 @@ class DevSyncTest(unittest.TestCase):
         self.assertFalse((self.icons / "default128.png").exists())  # nothing --reset could not take back
 
 
+class IntoPlaceTest(unittest.TestCase):
+    """A file is replaced whole or not at all, through a temporary file nobody planted, which is
+    removed when the write fails; the file keeps its permissions."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+        self.target = self.dir / "default16.png"
+        self.target.write_bytes(b"the build's icon")
+        self.target.chmod(0o644)
+
+    def test_a_failed_write_leaves_the_file_and_no_temporary_file(self):
+        def fail(tmp: Path) -> None:
+            tmp.write_bytes(b"half")
+            raise OSError("disk full")
+
+        with self.assertRaises(OSError):
+            dev_sync.into_place(self.target, fail)
+        self.assertEqual(self.target.read_bytes(), b"the build's icon")
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["default16.png"])
+
+    def test_a_link_planted_at_the_old_temporary_name_is_not_written_through(self):
+        outside = self.dir / "outside"
+        outside.write_bytes(b"someone else's file")
+        (self.dir / "default16.png.tmp").symlink_to(outside)
+        dev_sync.write_into_place(self.target, b"new icon")
+        self.assertEqual(self.target.read_bytes(), b"new icon")
+        self.assertEqual(outside.read_bytes(), b"someone else's file")
+
+    def test_the_file_keeps_its_permissions(self):
+        dev_sync.write_into_place(self.target, b"new icon")
+        self.assertEqual(self.target.stat().st_mode & 0o777, 0o644)
+
+
 if __name__ == "__main__":
     unittest.main()
