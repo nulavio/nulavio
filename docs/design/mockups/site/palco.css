@@ -1,0 +1,223 @@
+/* Direction «Palco» (stage): the real window is the page's subject. A headline across the page,
+   the offer under it, and the capture standing on a darker floor; each feature is a stage with
+   the recorded scenes on it, chosen by tabs that need no script. Colours from the tokens only. */
+
+:root {
+  --page: 75rem;
+  --gutter: var(--nv-space-5);
+  --section: clamp(4rem, 2.5rem + 6vw, 7.5rem);
+  --hairline: 1px solid var(--nv-color-border-subtle);
+}
+@media (min-width: 48rem) { :root { --gutter: var(--nv-space-7); } }
+
+.wrap {
+  width: 100%;
+  max-width: calc(var(--page) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* -- header ---------------------------------------------------------------------------- */
+
+.top-inner { display: flex; align-items: center; gap: 0 var(--nv-space-6); min-height: 4.5rem; }
+.brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
+/* Under 20em, which only enlarged text reaches on a phone (an em in a media query follows the
+   browser's text size), the row wraps instead of running past the page; at 320 px and the
+   default size nothing changes. */
+@media (max-width: 19.9375em) {
+  .top-inner, .top-actions { flex-wrap: wrap; }
+  .brand { flex: none; }
+}
+.top-nav { display: none; margin-left: var(--nv-space-6); }
+.top-nav ul { display: flex; gap: var(--nv-space-6); }
+.top-nav a, .lang {
+  display: inline-flex; align-items: center; min-height: 2.75rem;
+  font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary);
+  transition: color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+}
+.top-nav a:hover, .lang:hover { color: var(--nv-color-text-primary); }
+.top-actions { display: flex; align-items: center; gap: 0 var(--nv-space-5); margin-left: auto; }
+@media (min-width: 48rem) { .top-nav { display: block; } }
+
+/* -- hero ------------------------------------------------------------------------------ */
+
+.hero { padding-top: clamp(2.5rem, 1rem + 5vw, 5rem); overflow-x: clip; }
+
+.kicker {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--nv-space-3);
+  margin-bottom: var(--nv-space-5);
+  font-size: 0.9375rem; color: var(--nv-color-text-secondary);
+}
+.kicker .trail { margin-right: var(--nv-space-2); }
+
+h1 {
+  font-size: clamp(2.625rem, 0.9rem + 7.4vw, 4.5rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+}
+h1 span { display: block; }
+h1 .mine { color: var(--nv-color-accent-default); }
+
+.hero-offer { display: grid; gap: var(--nv-space-7); margin-top: var(--nv-space-6); }
+.lead { font-size: 1.1875rem; line-height: 1.5; color: var(--nv-color-text-secondary); max-width: 38rem; }
+.lead strong { color: var(--nv-color-text-primary); }
+.join-row { display: grid; gap: var(--nv-space-3); }
+@media (min-width: 30rem) { .join-row { grid-template-columns: minmax(0, 1fr) auto; } }
+
+@media (min-width: 64rem) {
+  /* One line across the page: the claim reads like the band at the top of a window. */
+  h1 { font-size: clamp(3.5rem, 5.1vw, 4.625rem); }
+  h1 span { display: inline; }
+  .hero-offer { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--nv-space-9); align-items: end; margin-top: var(--nv-space-7); }
+  .lead { font-size: 1.3125rem; }
+}
+
+.stage { position: relative; isolation: isolate; margin-top: clamp(2.5rem, 1.5rem + 4vw, 4.5rem); padding-bottom: var(--nv-space-7); }
+/* The floor: a darker plate from the middle of the window down, continued by the numbers. */
+.stage::before {
+  content: ""; position: absolute; z-index: -1;
+  top: 46%; bottom: 0; left: -100vmax; right: -100vmax;
+  background: var(--nv-color-bg-sunken);
+}
+.stage .shot {
+  width: 100%;
+  border-radius: var(--nv-radius-md);
+  box-shadow: var(--nv-elevation-3);
+}
+.stage figcaption {
+  margin-top: var(--nv-space-5);
+  max-width: 44rem;
+  font-size: 0.875rem;
+  color: var(--nv-color-text-secondary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stage .shot { animation: rise var(--nv-motion-duration-slow) var(--nv-motion-easing-enter) both; }
+}
+@keyframes rise { from { opacity: 0; translate: 0 16px; } }
+
+/* -- numbers --------------------------------------------------------------------------- */
+
+.proof { background: var(--nv-color-bg-sunken); padding-block: var(--nv-space-6) var(--nv-space-9); }
+.proof dl { display: grid; gap: var(--nv-space-6) var(--nv-space-7); border-top: var(--hairline); padding-top: var(--nv-space-7); }
+.proof div { display: flex; flex-direction: column-reverse; justify-content: flex-end; gap: var(--nv-space-3); }
+.proof dd {
+  font-size: clamp(2.25rem, 1.8rem + 1.6vw, 3rem);
+  font-weight: 700; line-height: 1; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.proof dt { font-size: 0.9375rem; line-height: 1.45; color: var(--nv-color-text-secondary); max-width: 17rem; }
+@media (min-width: 40rem) { .proof dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 64rem) { .proof dl { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* -- feature: text and the stage -------------------------------------------------------- */
+
+.feature { display: grid; gap: var(--nv-space-8); padding-block: var(--section); }
+.feature-text { max-width: 36rem; }
+h2 {
+  font-size: clamp(1.875rem, 1.4rem + 2.1vw, 2.625rem);
+  font-weight: 700; line-height: 1.08; letter-spacing: -0.025em;
+}
+.feature-text > p { margin-top: var(--nv-space-6); color: var(--nv-color-text-secondary); }
+.points { margin-top: var(--nv-space-6); display: grid; gap: var(--nv-space-4); }
+.points li { position: relative; padding-left: var(--nv-space-6); }
+.points li::before {
+  content: ""; position: absolute; left: 0; top: 0.3em;
+  width: var(--nv-route-vertical-width); height: var(--nv-route-vertical-height);
+  border-radius: 2px; background: var(--nv-color-route-vertical);
+}
+.feature-text > .fine {
+  margin-top: var(--nv-space-7); padding-top: var(--nv-space-5);
+  border-top: var(--hairline);
+  font-size: 0.9375rem; color: var(--nv-color-text-secondary);
+}
+.fine strong { color: var(--nv-color-text-primary); }
+
+@media (min-width: 64rem) {
+  .feature { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--nv-space-8); align-items: start; }
+  .feature-text { padding-top: 4.875rem; }
+}
+@media (min-width: 80rem) {
+  .feature { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--nv-space-9); }
+}
+
+/* The player: two radio buttons choose which recorded scene is on the stage. */
+.player { display: grid; grid-template-columns: auto auto minmax(0, 1fr); column-gap: var(--nv-space-2); align-items: end; }
+.player-title {
+  grid-column: 1 / -1;
+  margin-bottom: var(--nv-space-3);
+  font-size: 0.875rem; font-weight: var(--nv-font-weight-medium);
+  color: var(--nv-color-text-secondary);
+}
+.tab {
+  display: inline-flex; align-items: center;
+  min-height: 2.75rem; padding-inline: var(--nv-space-5);
+  border: 1px solid transparent; border-bottom: 0;
+  border-radius: var(--nv-radius-md) var(--nv-radius-md) 0 0;
+  font-size: 0.9375rem; font-weight: var(--nv-font-weight-medium);
+  color: var(--nv-color-text-secondary);
+  cursor: pointer;
+  transition: color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard), background-color var(--nv-motion-duration-fast) var(--nv-motion-easing-standard);
+}
+.tab:hover { color: var(--nv-color-text-primary); }
+.pick:checked + .tab {
+  background: var(--nv-color-bg-sunken);
+  border-color: var(--nv-color-border-subtle);
+  color: var(--nv-color-text-primary);
+  box-shadow: inset 0 var(--nv-control-selected-insetWidth) 0 var(--nv-color-control-selected-edge);
+}
+@media (forced-colors: active) {
+  .pick:checked + .tab { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+}
+.pick:focus-visible + .tab {
+  outline: var(--nv-state-focusRingWidth) solid var(--nv-color-focus);
+  outline-offset: var(--nv-state-focusRingOffset);
+}
+.scene {
+  grid-column: 1 / -1;
+  padding: var(--nv-space-5);
+  border: var(--hairline);
+  border-radius: 0 var(--nv-radius-lg) var(--nv-radius-lg) var(--nv-radius-lg);
+  background: var(--nv-color-bg-sunken);
+}
+#pick-open:checked ~ .scene-route,
+#pick-route:checked ~ .scene-open { display: none; }
+.scene .shot { width: 100%; border-radius: var(--nv-radius-sm); }
+.scene figcaption { margin-top: var(--nv-space-5); display: grid; gap: var(--nv-space-4); }
+.scene figcaption > p { font-size: 1rem; }
+.whole summary { min-height: 2.75rem; padding-block: var(--nv-space-3); font-size: 0.9375rem; font-weight: var(--nv-font-weight-medium); }
+.whole .meta { margin-left: var(--nv-space-2); font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-secondary); }
+.whole[open] summary { margin-bottom: var(--nv-space-3); }
+.whole .scene-video { border: var(--hairline); border-radius: var(--nv-radius-sm); }
+.whole .transcript { margin-top: var(--nv-space-4); max-width: 44rem; }
+
+@media (max-width: 29.9375rem) {
+  .player { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tab { padding-inline: var(--nv-space-4); font-size: 0.875rem; line-height: 1.25; }
+  .scene { padding: var(--nv-space-4); border-radius: 0 0 var(--nv-radius-lg) var(--nv-radius-lg); }
+}
+
+/* -- waitlist: the brand's dark home in both schemes ------------------------------------ */
+
+.cta { background: var(--nv-color-bg-sunken); color: var(--nv-color-text-primary); padding-block: var(--section); }
+.cta-grid { display: grid; gap: var(--nv-space-8); }
+.cta-text h2 { margin-top: var(--nv-space-5); }
+.cta-text p { margin-top: var(--nv-space-5); max-width: 30rem; color: var(--nv-color-text-secondary); }
+/* One row only where the form itself has room for the closed list's longest choice,
+   «Outra distribuição Linux», whole: the form is narrower beside the text from 64rem. */
+.cta .join { container-type: inline-size; }
+.join-fields { display: grid; gap: var(--nv-space-5); }
+@container (min-width: 40rem) {
+  .join-fields { grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto; align-items: end; gap: var(--nv-space-4); }
+}
+@media (min-width: 64rem) {
+  .cta-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--nv-space-9); align-items: center; }
+}
+
+/* -- footer ---------------------------------------------------------------------------- */
+
+.foot { padding-block: var(--nv-space-8); border-top: var(--hairline); font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.foot-inner { display: grid; gap: var(--nv-space-6); }
+.foot-brand p { margin-top: var(--nv-space-3); }
+.foot-legal { display: grid; gap: var(--nv-space-3); max-width: 46rem; }
+@media (min-width: 64rem) { .foot-inner { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--nv-space-9); } }
