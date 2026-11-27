@@ -4393,6 +4393,359 @@ class WorkspaceTest(Home):
         target._remove_temporary()
         self.assertEqual((folder / "user.js").read_text(), 'user_pref("browser.startup.page", 3);\n')
 
+    # What the engine leaves in prefs.js after a session: it loads user.js as user values and saves them (#639).
+    ENGINE_PREFS = (
+        "// Mozilla User Preferences\n"
+        "\n"
+        'user_pref("browser.startup.page", 3);\n'
+        'user_pref("nulavio.ai.target", "profile");\n'
+        'user_pref("nulavio.ai.target.label", "Trabalho \\"casa\\" \\u00e7");\n'
+        'user_pref("nulavio.ai.workspace", "ag-1:4242");\n'
+        'user_pref("privacy.sanitize.pending", "[]");\n'
+        'user_pref("remote.prefs.recommended", false);\n'
+    )
+    KEPT_PREFS = (
+        '// Mozilla User Preferences\n\nuser_pref("browser.startup.page", 3);\nuser_pref("privacy.sanitize.pending", "[]");\n'
+    )
+
+    def test_a_session_leaves_none_of_its_prefs_in_prefs_js(self):
+        """#639: the four values the engine saved from the temporary lines go from prefs.js when the session ends, so
+        the Guard no longer finds remote.prefs.recommended and `nulavio run` starts the profile again."""
+        from nulavio_launcher import guard
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")  # the engine, on its way out
+        self.assertIn("remote.prefs.recommended", [f.pref for f in guard.audit(folder) if f.severity == "critical"])
+        target._remove_temporary()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        self.assertEqual((folder / "prefs.js").stat().st_mode & 0o777, 0o600)
+        self.assertFalse((folder / "user.js").exists())
+        self.assertEqual([f.pref for f in guard.audit(folder) if f.severity == "critical"], [])
+
+    def test_the_next_session_clears_what_a_killed_one_left(self):
+        """A bridge killed mid-session leaves the lines; the next session in that profile removes them, from user.js
+        and prefs.js, before it writes its own."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")._write_prefs()  # killed after this
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        target = ProfileTarget("ag-2", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        self.assertEqual((folder / "user.js").read_text().count("nulavio-ai-temporary"), 4)
+        self.assertIn(f'"ag-2:{os.getpid()}"', (folder / "user.js").read_text())
+
+    def test_prefs_js_is_left_alone_when_there_is_nothing_to_remove(self):
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._remove_temporary()
+        self.assertFalse((folder / "prefs.js").exists())  # none is made
+        (folder / "prefs.js").write_text(self.KEPT_PREFS, encoding="utf-8")
+        os.utime(folder / "prefs.js", (1, 1))
+        target._remove_temporary()
+        self.assertEqual((folder / "prefs.js").stat().st_mtime, 1)  # not rewritten
+
+    def test_a_prefs_js_link_is_not_followed(self):
+        """A prefs.js that is a link is neither read nor replaced, and the session still ends."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        elsewhere = self.home / "elsewhere.js"
+        elsewhere.write_text(self.ENGINE_PREFS, encoding="utf-8")
+        (folder / "prefs.js").symlink_to(elsewhere)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        target.stop()
+        self.assertTrue((folder / "prefs.js").is_symlink())
+        self.assertEqual(elsewhere.read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertFalse((folder / "user.js").exists())
+
+    def test_a_prefs_js_that_cannot_be_read_does_not_stop_the_session(self):
+        """Another user's prefs.js with mode 0600 cannot be opened at all (PermissionError, before the owner check):
+        it is left as it is, as one that is not the user's, and the agent's session still starts (review of #826)."""
+        from nulavio_launcher import paths
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        real_read = paths.read_private_file
+
+        def read(path):
+            if Path(path).name == "prefs.js":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_read(path)
+
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        with mock.patch.object(paths, "read_private_file", read):
+            target._write_prefs()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertEqual((folder / "user.js").read_text().count("nulavio-ai-temporary"), 4)
+
+    def test_a_launch_meanwhile_keeps_the_prefs_it_wrote_in_prefs_js(self):
+        """`nulavio run` appends seed and pending prefs to prefs.js; the Bridge's clean-up reads and replaces that file.
+        One waits for the other, so the launch's prefs are not lost to a copy read before them (review of #826)."""
+        from nulavio_launcher import paths, profile
+        from nulavio_launcher.ai import workspace
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        prof = profile.Profile(name="Trabalho", path=folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        me = threading.get_ident()
+        real_read = paths.read_private_file
+        launch: list[threading.Thread] = []
+
+        def read(path):
+            data = real_read(path)
+            if threading.get_ident() == me and Path(path).name == "prefs.js" and not launch:
+                # Between the Bridge's read and its replace, the launcher prepares the profile.
+                launch.append(threading.Thread(target=profile._append_prefs_js, args=(prof, [("nulavio.test.pending", 7)])))
+                launch[0].start()
+                launch[0].join(0.5)
+            return data
+
+        with mock.patch.object(paths, "read_private_file", read):
+            target._remove_temporary()
+        launch[0].join(10)
+        self.assertFalse(launch[0].is_alive())
+        text = (folder / "prefs.js").read_text(encoding="utf-8")
+        self.assertIn('user_pref("nulavio.test.pending", 7);', text)
+        for name in workspace.TEMPORARY_PREFS:
+            self.assertNotIn(f'"{name}"', text)
+
+    def protected(self, folder: Path):
+        """A profile with a Vault next to it (`<name>.vault/vault.json`): ProfileTarget then works under its state lock."""
+        from nulavio_launcher.vault.storage import Container
+
+        folder.with_name(folder.name + ".vault").mkdir()
+        box = Container(folder)
+        box.vault_path.write_text("{}", encoding="utf-8")
+        return box
+
+    def test_a_protected_profile_is_not_locked_before_its_prefs_are_gone(self):
+        """The auto-lock watcher sees the agent's engine exit and unmounts the volume under the profile's state lock.
+        stop() holds that lock from before the engine exits until the temporary prefs are out of prefs.js, so the
+        watcher locks the profile only after that (review of #826)."""
+        from nulavio_launcher.vault.storage import StorageError
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        box = self.protected(folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        watcher: list[str] = []
+
+        def engine_exits():
+            try:
+                with box._state_lock(wait=0):
+                    watcher.append("could lock")
+            except StorageError as exc:
+                watcher.append(exc.code)
+
+        with mock.patch.object(Workspace, "stop", side_effect=engine_exits):
+            target.stop()
+        self.assertEqual(watcher, ["busy"])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        with box._state_lock(wait=0):
+            pass  # released once the session has ended
+
+    def test_a_failed_start_stops_under_the_lock_it_already_holds(self):
+        """Workspace.start() calls stop() when the engine's endpoint never came, while start() holds the state lock:
+        stop() does not wait for that lock again. One that cannot be had never keeps the engine running."""
+        from nulavio_launcher.vault.storage import StorageError
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        box = self.protected(folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        began = time.monotonic()
+        with target._held():
+            target.stop()
+        self.assertLess(time.monotonic() - began, 5)
+        self.assertFalse((folder / "user.js").exists())
+        target._write_prefs()
+        stopped = []
+        held_elsewhere = mock.patch.object(type(box), "_state_lock", side_effect=StorageError("busy", "held"))
+        with mock.patch.object(Workspace, "stop", side_effect=lambda: stopped.append(1)), held_elsewhere:
+            target.stop()  # the lock is held elsewhere: the engine is stopped all the same
+        self.assertEqual(stopped, [1])
+
+    def test_a_vault_that_cannot_be_looked_at_still_stops_the_engine(self):
+        """A profile's Vault folder that became unreadable (Path.exists raises PermissionError on Python 3.11): stop()
+        stops the engine and clears the profile all the same (review 2 of #826)."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        real_exists = Path.exists
+
+        def exists(path, *args, **kwargs):
+            if path.name == "vault.json":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_exists(path, *args, **kwargs)
+
+        stopped = []
+        with (
+            mock.patch.object(Workspace, "stop", side_effect=lambda: stopped.append(1)),
+            mock.patch.object(Path, "exists", exists),
+        ):
+            target.stop()
+        self.assertEqual(stopped, [1])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+
+    def test_a_user_js_that_cannot_be_cleaned_still_lets_prefs_js_be(self):
+        """A user.js saved in another encoding during the session: stop() leaves it, still takes the saved values out of
+        prefs.js, and does not raise into the Bridge's shutdown of its other engines (review 2 of #826)."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "user.js").write_bytes((folder / "user.js").read_bytes() + b'user_pref("a.b", "\xe7");\n')
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        with mock.patch.object(Workspace, "stop"):
+            target.stop()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        self.assertIn(b"\xe7", (folder / "user.js").read_bytes())  # left as it is
+
+    def test_a_prefs_js_that_cannot_be_replaced_does_not_stop_the_session(self):
+        """Before the engine starts, a prefs.js that cannot be replaced (an immutable file) is left as it is, and the
+        session starts with its user.js lines, as before #826 (review 2 of #826)."""
+        from nulavio_launcher import paths
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        real_write = paths.write_private_file
+
+        def write(path, data):
+            if Path(path).name == "prefs.js":
+                raise PermissionError(1, "Operation not permitted", str(path))
+            return real_write(path, data)
+
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        with mock.patch.object(paths, "write_private_file", write):
+            target._write_prefs()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertEqual((folder / "user.js").read_text().count("nulavio-ai-temporary"), 4)
+
+    def test_a_launch_stuck_on_prefs_js_does_not_hold_up_the_end_of_the_session(self):
+        """`nulavio run` holding prefs_js_lock and never letting go: stop() waits a bounded time, leaves prefs.js for
+        the next agent session (R36) and lets the Bridge go on (review 2 of #826)."""
+        import fcntl
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # the stuck launcher
+        try:
+            with mock.patch.object(Workspace, "stop"), mock.patch.object(ProfileTarget, "PREFS_WAIT", 0.2):
+                stopping = threading.Thread(target=target.stop, daemon=True)
+                stopping.start()
+                stopping.join(5)
+                self.assertFalse(stopping.is_alive())
+        finally:
+            os.close(fd)
+        stopping.join(10)
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertFalse((folder / "user.js").exists())
+
+    def test_a_line_with_another_statement_is_left_in_prefs_js(self):
+        """Only a line that is one temporary pref and nothing else goes: one that also sets another pref stays whole
+        (review 2 of #826)."""
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        mixed = 'user_pref("remote.prefs.recommended", false); user_pref("browser.startup.page", 3);\n'
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS + mixed, encoding="utf-8")
+        ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")._remove_temporary()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS + mixed)
+
+    def test_a_launch_finds_the_profile_opened_while_it_waited_for_prefs_js(self):
+        """`nulavio run` waits for prefs_js_lock behind the Bridge's clean-up; a profile an engine opened meanwhile is
+        refused as in use, and its prefs.js is not replaced (review 2 of #826)."""
+        from nulavio_launcher import profile
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.KEPT_PREFS, encoding="utf-8")
+        prof = profile.Profile(name="work", path=folder)
+        with mock.patch.object(profile.Profile, "running_pid", return_value=4242), self.assertRaises(profile.ProfileInUse):
+            profile._append_prefs_js(prof, [("nulavio.test.pending", 7)])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+
+    def test_a_launch_behind_a_stuck_prefs_js_change_is_refused_as_busy(self):
+        """`nulavio run` waits a bounded time for prefs_js_lock, then stops with a retryable message and leaves
+        prefs.js (and the pending prefs, saved only after it) as they were (review 3 of #826)."""
+        import fcntl
+
+        from nulavio_launcher import profile
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.KEPT_PREFS, encoding="utf-8")
+        prof = profile.Profile(name="work", path=folder)
+        outcome = []
+
+        def launch():
+            try:
+                profile._append_prefs_js(prof, [("nulavio.test.pending", 7)])
+                outcome.append("appended")
+            except profile.ProfileError as exc:
+                outcome.append(str(exc))
+
+        fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # a suspended launcher or Bridge
+        try:
+            with mock.patch.object(profile, "PREFS_JS_WAIT", 0.2):
+                launching = threading.Thread(target=launch, daemon=True)
+                launching.start()
+                launching.join(5)
+                self.assertFalse(launching.is_alive(), "nulavio run waited without end")
+        finally:
+            os.close(fd)
+        launching.join(10)
+        self.assertEqual(len(outcome), 1)
+        self.assertIn("try again", outcome[0])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+
+    def test_a_linked_profile_folder_shares_the_prefs_js_lock(self):
+        """A profile given by a link to its folder takes the same lock as `nulavio run` on the folder itself, so the
+        clean-up never puts back a copy from before that launch's change (review 3 of #826)."""
+        import fcntl
+
+        real = self.home / "profiles" / "work"
+        real.mkdir(parents=True)
+        link = self.home / "work-link"
+        link.symlink_to(real)
+        (real / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        target = ProfileTarget("ag-1", "Trabalho", link, downloads_dir=self.home / "dl")
+        target.wrote_prefs = True
+        fd = os.open(real, os.O_RDONLY | os.O_DIRECTORY)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # `nulavio run` appending through the folder's own path
+        try:
+            with mock.patch.object(Workspace, "stop"), mock.patch.object(ProfileTarget, "PREFS_WAIT", 0.2):
+                target.stop()
+        finally:
+            os.close(fd)
+        self.assertEqual((real / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS, "replaced without the lock")
+
+    def test_a_target_whose_folder_has_no_name_still_stops(self):
+        """stop() looks for a Vault next to the profile's folder; a grant with no folder name ("/") makes that lookup
+        fail, and the engine is stopped and the Bridge goes on all the same (review 3 of #826)."""
+        target = ProfileTarget("ag-1", "Root", Path("/"), downloads_dir=self.home / "dl")
+        with mock.patch.object(Workspace, "stop") as stopped:
+            target.stop()
+        stopped.assert_called_once()
+
     def test_the_bridge_drives_only_the_nulavio_build(self):
         # The band and lock of an agent's window, the forms guard and Nulavio's pages refusing permission requests
         # live in the Nulavio build: another browser (the distribution's Firefox) is refused before the profile is
