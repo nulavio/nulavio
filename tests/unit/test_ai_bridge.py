@@ -5334,6 +5334,15 @@ class DisconnectTest(Home):
                 return {"content": [{"type": "text", "text": "done"}], "isError": False}
 
         bridge = Asking()
+        waiting = threading.Event()  # the approver waits for the answer: its thread polls with the request seen
+        real_sleep = time.sleep
+
+        def sleep(seconds):
+            if threading.current_thread().name == "mcp-tools" and any(registry.requests_dir().glob("*.seen")):
+                waiting.set()
+            real_sleep(seconds)
+
+        self.enterContext(mock.patch.object(registry.time, "sleep", sleep))
         server_in_r, server_in_w = os.pipe()
         out = io.BytesIO()
         server = mcp.Server(bridge, os.fdopen(server_in_r, "rb"), out)
@@ -5347,7 +5356,7 @@ class DisconnectTest(Home):
         self.take(taken.append).join(5)
         self.assertEqual(len(taken), 1, "no request was written")
         self.assertTrue(wait_for(lambda: bridge.started.is_set()))
-        time.sleep(0.2)  # the approver now waits for the answer
+        self.assertTrue(waiting.wait(5), "the approver never waited for the answer")
         started = time.monotonic()
         writer.close()  # the agent's client exits
         thread.join(10)
@@ -5380,15 +5389,21 @@ class DisconnectTest(Home):
         agent, _ = registry.add("b", "other", "restricted")
         cancel = threading.Event()
 
-        def answer(base: Path):
-            time.sleep(0.2)
-            cancel.set()  # the client went away, and the answer is on disk before the approver looks again
-            (base.with_suffix(".answer")).write_text("once")
+        def poll(_seconds):
+            """Between two looks of the approver: a Nulavio window takes the request; once the approver waits for the
+            answer, the person answers and the client goes away, both before it looks again."""
+            request = next(registry.requests_dir().glob("*.json"), None)
+            if request is None:
+                return
+            if not request.with_suffix(".seen").exists():
+                request.with_suffix(".seen").touch()
+            elif not cancel.is_set():
+                request.with_suffix(".answer").write_text("once")
+                cancel.set()
 
-        thread = self.take(answer)
         approver = registry.BrowserApprover(fallback=Approve("once"), notice=5, timeout=30, poll=0.5)
-        self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, cancel=cancel), "deny")
-        thread.join(5)
+        with mock.patch.object(registry.time, "sleep", poll):
+            self.assertEqual(approver.ask(registry.get(agent["id"]), "interact", None, cancel=cancel), "deny")
         self.assertEqual(list(registry.requests_dir().iterdir()), [])
 
     def test_an_answer_written_as_its_request_ends_is_not_left_behind(self):
