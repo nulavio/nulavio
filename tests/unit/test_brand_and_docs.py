@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import re
 import subprocess
 import struct
@@ -243,6 +244,24 @@ class DatedReviewTest(unittest.TestCase):
                 self.assertIn("stay as they were shown", said.getvalue())
             build_review.write_proposals()  # with the brand as it was, the missing file comes back
             self.assertEqual(files(proposals), as_reviewed)
+
+    def test_a_proposal_that_is_there_is_not_written_again(self):
+        import build_review
+
+        # A run with every file there and as drawn opened each one for writing and listed it as written.
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_review, "OUT", Path(tmp) / "review"):
+            proposals = Path(tmp) / "review" / "proposals"
+            first = build_review.write_proposals()
+            self.assertEqual(sorted(p.name for p in first), sorted(build_review.proposal_svgs()))
+            (proposals / "c-icon.svg").unlink()
+            for path in proposals.iterdir():
+                path.chmod(0o444)  # the record, read-only: a file opened for writing would fail here
+                os.utime(path, ns=(1, 1))
+            self.assertEqual(build_review.write_proposals(), [proposals / "c-icon.svg"])  # only the missing one
+            self.assertEqual(
+                [p.name for p in proposals.iterdir() if p.stat().st_mtime_ns != 1], ["c-icon.svg"]
+            )  # and no other was touched
+            self.assertEqual(build_review.write_proposals(), [])
 
     def test_every_mark_pair_meets_its_minimum(self):
         import build_review

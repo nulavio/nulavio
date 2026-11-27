@@ -237,7 +237,7 @@ def wrap(text: str, size: float, width: float, weight: int) -> list[str]:
         for word in re.findall(r"[^ \t]+", paragraph):
             if advance(word, size, weight) > width:
                 raise ValueError(f"{word!r} is wider than the card: break it or shorten it")
-            candidate = f"{line} {word}".strip()
+            candidate = f"{line} {word}" if line else word  # the word as written: strip() takes a no-break space
             if line and advance(candidate, size, weight) > width:
                 lines.append(line)
                 line = word
@@ -525,10 +525,11 @@ def write_post(post: object, out: Path, svg_only: bool = False) -> list[Path]:
     are moved in together at the end (publish). A text that does not fit one format, a rasteriser that
     fails or a move that cannot be made leaves `out` as it was, and absent when it was absent.
     ImageMagick is given absolute paths, so a name that starts with "-" is not read as an option; the
-    paths returned are under `out` as the caller wrote it."""
+    files go where the system finds `out`, links followed, and the paths returned are under `out` as
+    the caller wrote it."""
     post = validate(post)
     svgs = {f"{fmt}-{post['lang']}.svg": post_svg(fmt, post) for fmt in FORMATS}
-    target = Path(os.path.abspath(out))
+    target = Path(os.path.realpath(out))  # where the system finds `out`: ".." after a link is the link's target's parent
     missing = [path for path in (target, *target.parents) if not os.path.lexists(path)]  # deepest first
     anchor = target if not missing else missing[-1].parent
     with tempfile.TemporaryDirectory(dir=anchor, prefix=".build_social-") as staging:

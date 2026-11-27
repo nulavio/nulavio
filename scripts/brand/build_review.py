@@ -311,7 +311,8 @@ FROZEN = (
 
 
 def write_proposals() -> list[Path]:
-    """The proposal files, written where they are missing. A file that is there and that this checkout
+    """The proposal files, written where they are missing, and the ones written. A file that is there is
+    left untouched, whatever it is (a link included). A file that is there and that this checkout
     would draw differently is never replaced, and then nothing is written: A's geometry and the icon's
     scale are read from build_logo.py, which is the applied brand and can change, and the files are the
     dated record of what the review showed."""
@@ -327,7 +328,11 @@ def write_proposals() -> list[Path]:
     for name, text in drawn.items():
         path = OUT / "proposals" / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        try:
+            with open(path, "x", encoding="utf-8") as file:  # never over a file that is there
+                file.write(text)
+        except FileExistsError:
+            continue
         written.append(path)
     return written
 

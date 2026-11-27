@@ -254,6 +254,16 @@ class SocialArtTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "wider than the card"):  # joined words are one word
             build_social.post_svg("1x1", {"lang": "en", "title": "\u00a0".join(["Download"] * 4)})
 
+    def test_a_no_break_space_at_the_edge_of_a_line_is_kept(self):
+        # wrap() stripped each line as it began, and strip() takes a no-break space: an indent the author
+        # wrote on a second line, or one closing a line, was dropped from a text validate() had kept.
+        self.assertEqual(build_social.wrap("A\n\u00a0B", 88.0, 904.0, 700), ["A", "\u00a0B"])
+        self.assertEqual(build_social.wrap("A\u00a0\nB  C", 88.0, 904.0, 700), ["A\u00a0", "B C"])
+        post = build_social.validate({"lang": "en", "title": "A\n\u00a0B"})
+        self.assertEqual(post["title"], "A\n\u00a0B")
+        root = ET.fromstring(build_social.post_svg("1x1", post))
+        self.assertEqual([span.text for span in root.iter(f"{SVG_NS}tspan")], ["A", "\u00a0B"])
+
     def test_every_line_break_is_a_line_and_other_white_space_is_refused(self):
         for separator in ("\n", "\r\n", "\r", "\u2028", "\u2029"):
             with self.subTest(separator=separator):
@@ -380,6 +390,30 @@ class SocialArtTest(unittest.TestCase):
                 sorted(str(p) for p in written), sorted(f"-cards/{name}" for name in names)
             )  # as the caller wrote it
             self.assertEqual(sorted(p.name for p in (Path(tmp) / "-cards").iterdir()), names)
+
+    def test_a_post_goes_where_the_system_finds_the_directory(self):
+        # "link/../cards" is cards beside what the link points to. With ".." taken off the text first, the
+        # post went into cards under the working directory, over a post there, and the paths printed led nowhere.
+        names = sorted(f"{fmt}-en.svg" for fmt in build_social.FORMATS)
+        with tempfile.TemporaryDirectory() as tmp:
+            before = os.getcwd()
+            self.addCleanup(os.chdir, before)
+            os.chdir(tmp)
+            (Path("project") / "nested").mkdir(parents=True)
+            os.symlink(Path("project") / "nested", "link")
+            unrelated = self.old_post(Path("cards"), names)
+            written = build_social.write_post({"lang": "en", "title": "New"}, Path("link/../cards"), svg_only=True)
+            self.assertEqual(sorted(str(p) for p in written), [f"link/../cards/{name}" for name in names])
+            for path in written:
+                self.assertIn("New", path.read_text(encoding="utf-8"))  # the paths returned lead to the files
+            self.assertEqual(sorted(p.name for p in (Path("project") / "cards").iterdir()), names)
+            self.assertEqual({p.name: p.read_bytes() for p in Path("cards").iterdir()}, unrelated)
+            self.assertEqual(sorted(p.name for p in Path("project").iterdir()), ["cards", "nested"])
+            os.symlink("project/cards", "there")  # and a directory given by a link is that directory
+            build_social.write_post({"lang": "en", "title": "Newer"}, Path("there"), svg_only=True)
+            self.assertIn("Newer", (Path("project") / "cards" / "16x9-en.svg").read_text(encoding="utf-8"))
+            self.assertTrue(Path("there").is_symlink())
+            os.chdir(before)
 
     def old_post(self, out: Path, names: list[str]) -> dict[str, bytes]:
         out.mkdir()
