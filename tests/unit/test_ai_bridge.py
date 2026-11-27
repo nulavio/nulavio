@@ -4079,6 +4079,119 @@ class WorkspaceTest(Home):
         self.assertEqual(elsewhere.read_text(encoding="utf-8"), self.ENGINE_PREFS)
         self.assertFalse((folder / "user.js").exists())
 
+    def test_a_prefs_js_that_cannot_be_read_does_not_stop_the_session(self):
+        """Another user's prefs.js with mode 0600 cannot be opened at all (PermissionError, before the owner check):
+        it is left as it is, as one that is not the user's, and the agent's session still starts (review of #826)."""
+        from nulavio_launcher import paths
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        real_read = paths.read_private_file
+
+        def read(path):
+            if Path(path).name == "prefs.js":
+                raise PermissionError(13, "Permission denied", str(path))
+            return real_read(path)
+
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        with mock.patch.object(paths, "read_private_file", read):
+            target._write_prefs()
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS)
+        self.assertEqual((folder / "user.js").read_text().count("nulavio-ai-temporary"), 4)
+
+    def test_a_launch_meanwhile_keeps_the_prefs_it_wrote_in_prefs_js(self):
+        """`nulavio run` appends seed and pending prefs to prefs.js; the Bridge's clean-up reads and replaces that file.
+        One waits for the other, so the launch's prefs are not lost to a copy read before them (review of #826)."""
+        from nulavio_launcher import paths, profile
+        from nulavio_launcher.ai import workspace
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        prof = profile.Profile(name="Trabalho", path=folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        me = threading.get_ident()
+        real_read = paths.read_private_file
+        launch: list[threading.Thread] = []
+
+        def read(path):
+            data = real_read(path)
+            if threading.get_ident() == me and Path(path).name == "prefs.js" and not launch:
+                # Between the Bridge's read and its replace, the launcher prepares the profile.
+                launch.append(threading.Thread(target=profile._append_prefs_js, args=(prof, [("nulavio.test.pending", 7)])))
+                launch[0].start()
+                launch[0].join(0.5)
+            return data
+
+        with mock.patch.object(paths, "read_private_file", read):
+            target._remove_temporary()
+        launch[0].join(10)
+        self.assertFalse(launch[0].is_alive())
+        text = (folder / "prefs.js").read_text(encoding="utf-8")
+        self.assertIn('user_pref("nulavio.test.pending", 7);', text)
+        for name in workspace.TEMPORARY_PREFS:
+            self.assertNotIn(f'"{name}"', text)
+
+    def protected(self, folder: Path):
+        """A profile with a Vault next to it (`<name>.vault/vault.json`): ProfileTarget then works under its state lock."""
+        from nulavio_launcher.vault.storage import Container
+
+        folder.with_name(folder.name + ".vault").mkdir()
+        box = Container(folder)
+        box.vault_path.write_text("{}", encoding="utf-8")
+        return box
+
+    def test_a_protected_profile_is_not_locked_before_its_prefs_are_gone(self):
+        """The auto-lock watcher sees the agent's engine exit and unmounts the volume under the profile's state lock.
+        stop() holds that lock from before the engine exits until the temporary prefs are out of prefs.js, so the
+        watcher locks the profile only after that (review of #826)."""
+        from nulavio_launcher.vault.storage import StorageError
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        box = self.protected(folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        (folder / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        watcher: list[str] = []
+
+        def engine_exits():
+            try:
+                with box._state_lock(wait=0):
+                    watcher.append("could lock")
+            except StorageError as exc:
+                watcher.append(exc.code)
+
+        with mock.patch.object(Workspace, "stop", side_effect=engine_exits):
+            target.stop()
+        self.assertEqual(watcher, ["busy"])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+        with box._state_lock(wait=0):
+            pass  # released once the session has ended
+
+    def test_a_failed_start_stops_under_the_lock_it_already_holds(self):
+        """Workspace.start() calls stop() when the engine's endpoint never came, while start() holds the state lock:
+        stop() does not wait for that lock again. One that cannot be had never keeps the engine running."""
+        from nulavio_launcher.vault.storage import StorageError
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        box = self.protected(folder)
+        target = ProfileTarget("ag-1", "Trabalho", folder, downloads_dir=self.home / "dl")
+        target._write_prefs()
+        began = time.monotonic()
+        with target._held():
+            target.stop()
+        self.assertLess(time.monotonic() - began, 5)
+        self.assertFalse((folder / "user.js").exists())
+        target._write_prefs()
+        stopped = []
+        held_elsewhere = mock.patch.object(type(box), "_state_lock", side_effect=StorageError("busy", "held"))
+        with mock.patch.object(Workspace, "stop", side_effect=lambda: stopped.append(1)), held_elsewhere:
+            target.stop()  # the lock is held elsewhere: the engine is stopped all the same
+        self.assertEqual(stopped, [1])
+
     def test_the_bridge_drives_only_the_nulavio_build(self):
         # The band and lock of an agent's window, the forms guard and Nulavio's pages refusing permission requests
         # live in the Nulavio build: another browser (the distribution's Firefox) is refused before the profile is

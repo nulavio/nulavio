@@ -282,6 +282,7 @@ class ProfileTarget(Workspace):
         self.downloads_dir = downloads_dir
         self.uploads_dir = None
         self.wrote_prefs = False  # this target put its lines in the profile: stop() takes them out of prefs.js too
+        self.holding = False  # this target holds its protected profile's state lock (_held)
 
     def check(self) -> None:
         from ..profile import Profile
@@ -330,18 +331,23 @@ class ProfileTarget(Workspace):
             self._remove_saved()
 
     def _remove_saved(self) -> None:
-        """The lines of prefs.js that set one of TEMPORARY_PREFS; every other line stays as the engine wrote it."""
+        """The lines of prefs.js that set one of TEMPORARY_PREFS; every other line stays as the engine wrote it.
+
+        Under prefs_js_lock, which `nulavio run` holds while it appends to prefs.js: what it wrote meanwhile stays."""
         prefs_js = self.profile_dir / "prefs.js"
-        if profile.Profile(name=self.label, path=self.profile_dir).running_pid():
-            return  # opened again meanwhile: that engine owns prefs.js now, and the next agent session clears it
-        try:
-            data = paths.read_private_file(prefs_js)
-        except (FileNotFoundError, paths.UnsafePathError):
-            return  # none, or a link or a file not the user's: never followed or replaced (I9)
-        lines = data.splitlines(keepends=True)
-        kept = [line for line in lines if not _sets_temporary(line)]
-        if len(kept) != len(lines):
-            paths.write_private_file(prefs_js, b"".join(kept))
+        with profile.prefs_js_lock(self.profile_dir):
+            if profile.Profile(name=self.label, path=self.profile_dir).running_pid():
+                return  # opened again meanwhile: that engine owns prefs.js now, and the next agent session clears it
+            try:
+                data = paths.read_private_file(prefs_js)
+            except (FileNotFoundError, PermissionError, paths.UnsafePathError):
+                # None; or a link, or a file not the user's (one that cannot even be opened, too): never followed or
+                # replaced (I9), and the session goes on.
+                return
+            lines = data.splitlines(keepends=True)
+            kept = [line for line in lines if not _sets_temporary(line)]
+            if len(kept) != len(lines):
+                paths.write_private_file(prefs_js, b"".join(kept))
 
     def start(self, timeout: float = 60.0) -> Bidi:
         if self.bidi is not None:
@@ -351,31 +357,41 @@ class ProfileTarget(Workspace):
             return super().start(timeout)
 
     @contextlib.contextmanager
-    def _held(self):
+    def _held(self, *, stopping: bool = False):
         """A protected profile's state lock, from the check until its engine runs. The auto-lock watcher locks the
         profile under the same lock and looks for a running engine first (vault.profiles._unmount_unless_taken), so
         an engine started here is either seen there and followed, or starts after the profile was locked and is
-        refused by check()."""
+        refused by check().
+
+        `stopping`: stop() holds it from before the engine exits until the temporary prefs are out of the profile,
+        so the watcher, which sees the engine exit, locks the volume only after that (review of #826). A lock that
+        cannot be had does not keep the engine running there. Already held by this target (a start that failed
+        stops under it), it is not asked for again."""
         from ..vault.storage import Container, StorageError
 
         box = Container(self.profile_dir)
-        if not box.vault_path.exists():
+        if self.holding or not box.vault_path.exists():
             yield
             return
         with contextlib.ExitStack() as held:
             try:
                 held.enter_context(box._state_lock(wait=10.0))
             except StorageError:
-                raise TargetError("profile-busy", self.label) from None
+                if not stopping:
+                    raise TargetError("profile-busy", self.label) from None
+            else:
+                self.holding = True
+                held.callback(setattr, self, "holding", False)
             yield
 
     def stop(self) -> None:
-        super().stop()  # the engine has exited (or was never started): prefs.js is as it left it
-        try:
-            self._remove_temporary(saved=self.wrote_prefs)
-        except (OSError, paths.UnsafePathError):
-            pass  # the next agent session in this profile clears them (R36); the Bridge still closes its other engines
-        self.wrote_prefs = False
+        with self._held(stopping=True):
+            super().stop()  # the engine has exited (or was never started): prefs.js is as it left it
+            try:
+                self._remove_temporary(saved=self.wrote_prefs)
+            except (OSError, paths.UnsafePathError):
+                pass  # the next agent session in this profile clears them (R36); the Bridge still closes its other engines
+            self.wrote_prefs = False
 
 
 def _sets_temporary(line: bytes) -> bool:

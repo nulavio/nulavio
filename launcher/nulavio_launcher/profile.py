@@ -16,7 +16,9 @@ Preference strategy (see browser/config/prefs/baseline.js):
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
+import fcntl
 import hashlib
 import html
 import json
@@ -392,21 +394,44 @@ def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
     return [name for name, _ in to_write]
 
 
+@contextlib.contextmanager
+def prefs_js_lock(profile_dir: Path):
+    """Held while the launcher reads and then replaces a profile's prefs.js: `nulavio run` appending seed and pending
+    prefs here, and the AI Bridge taking its temporary prefs out (ai/workspace.py, ProfileTarget). Each then reads the
+    file as the other left it, and neither puts back a copy from before the other's change (review of #826).
+
+    An exclusive flock on the profile's folder, which adds no file to it. Where the folder cannot be opened or
+    locked, the change is made without it, as before."""
+    try:
+        fd = os.open(profile_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        yield
+        return
+    try:
+        with contextlib.suppress(OSError):  # a file system that does not lock
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # releases the lock
+
+
 def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]]) -> None:
     target = profile.path / "prefs.js"
-    try:
-        # Never through a symlink or from a FIFO: the browser writes this folder, and this runs outside its confinement.
-        existing = paths.read_private_file(target).decode("utf-8")
-    except FileNotFoundError:
-        existing = ""
-    except UnicodeDecodeError:
-        raise ProfileError(f"{target} is not valid UTF-8; the launcher does not append to it") from None
-    stamp = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
-    block = [f"// Nulavio launcher: applied {len(items)} pref(s) at {stamp}"]
-    block += [prefs.format_pref(name, value) for name, value in items]
-    if existing and not existing.endswith("\n"):
-        existing += "\n"
-    paths.write_private_file(target, existing + "\n".join(block) + "\n")
+    with prefs_js_lock(profile.path):
+        try:
+            # Never through a symlink or from a FIFO: the browser writes this folder, and this runs outside its
+            # confinement.
+            existing = paths.read_private_file(target).decode("utf-8")
+        except FileNotFoundError:
+            existing = ""
+        except UnicodeDecodeError:
+            raise ProfileError(f"{target} is not valid UTF-8; the launcher does not append to it") from None
+        stamp = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
+        block = [f"// Nulavio launcher: applied {len(items)} pref(s) at {stamp}"]
+        block += [prefs.format_pref(name, value) for name, value in items]
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        paths.write_private_file(target, existing + "\n".join(block) + "\n")
 
 
 PREVIEW_THEME_MARKER = "Nulavio Preview chrome theme (Track A, userChrome.css)"
