@@ -1,0 +1,98 @@
+# Tools and budget
+
+> **Draft, not approved (2026-11-27).** Nothing has been recorded, generated or published, and nothing has been bought or signed up for ([#176](https://github.com/nulavio/nulavio/issues/176)).
+
+The tools the trailer and the shorts could use, and three budget options. The maintainer approves each tool and each spend (rule 8). None of these tools is a dependency of the repository today. Adding one to the pipeline in [#173](https://github.com/nulavio/nulavio/issues/173) is a dependency change and follows [dependency updates](../security/dependency-updates.md).
+
+How to read the tables:
+
+- **Promotional use counts as commercial use.** The videos promote a free project, but a tool whose terms allow only non-commercial use is treated as not allowed (rule 5).
+- **Checked** means the terms were read on the tool's own page on 2026-11-27, at the link given. **Not verified** means they were not, and must be before approval. Terms change: they are read again on the day an asset is made, and that date goes in the manifest.
+- Prices are list prices in US dollars on 2026-11-27, per month, before taxes (in Brazil, IOF on a card in a foreign currency). Promotional prices are not used.
+
+## Recording and assembly
+
+| Tool | Use | Software licence | Output | Cost | Data and privacy | Checked |
+|---|---|---|---|---|---|---|
+| The project's harness (`tests/lib/harness`, Marionette, as `scripts/site/capture_site.py`) | Drives the real build through each scene | MPL-2.0 (this repository) | Ours | 0 | Local; throwaway HOME and profiles | n/a (in the repository) |
+| [FFmpeg](https://ffmpeg.org/legal.html) | Screen capture of the window, assembly, encodes, caption tracks | LGPL-2.1 or later; GPL when built with its GPL parts | Ours; codec patents depend on the codec (AV1 and VP9 are royalty-free) | 0 | Local | Licence checked; the capture route on Wayland is #173's to choose |
+| A desktop screen recorder (OBS Studio or similar) | Fallback capture if the pipeline cannot record a visible window | Not verified | Not verified | 0 | Local | Not verified |
+
+## AI voice (text to speech)
+
+Rule 3: no voice cloning, no voice imitating a real person. Every voice below comes from a dataset of recorded speakers or from a vendor's library. The provenance column says what is known about whose voice it is.
+
+| Tool | Languages | Software and model licence | Output | Voice provenance | Cost | Data and privacy | Checked |
+|---|---|---|---|---|---|---|---|
+| [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (open) | en (best graded voices: `af_heart` A, `af_bella` A−); pt-BR: `pf_dora`, `pm_alex`, `pm_santa` (ungraded) ([voices](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md)) | Apache-2.0 weights | No restriction stated; Apache-2.0 places none on output | **Unknown**: the model page does not say whose recordings trained the voices | 0; runs on CPU | Local: the script never leaves the computer | Checked 2026-11-27 |
+| [Piper](https://github.com/OHF-Voice/piper1-gpl) (open) | en_US: `joe`, `mike`, `kathleen` (CC0), `kristin`, `ljspeech`, `norman` (public domain) and more; pt_BR: `cadu`, `jeff`, `faber` (CC0) ([commercial use list](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/COMMERCIAL_USE.md)) | Code GPL-3.0 (piper1-gpl). The project grants no licence over voices: each voice's terms come from its training chain | Not stated for generated audio; the voices listed are those whose training chain is commercially permissive. Some need credit (for example `hifi_tts_92`) | Speakers of public datasets (rdh, Hi-Fi TTS, LJ Speech). The `faber` voice's [model card](https://huggingface.co/rhasspy/piper-voices/blob/main/pt/pt_BR/faber/medium/MODEL_CARD) names a CC0 dataset. Many voices were retrained in late 2026: only current copies are covered | 0; runs on CPU | Local | Checked 2026-11-27 |
+| [ElevenLabs](https://elevenlabs.io/pricing) (paid) | en, pt-BR and many more | Proprietary service | Free plan: no commercial use, and credit is required. Paid plans: commercial licence, kept after the plan ends, outside beta features ([help centre](https://elevenlabs.io/docs/help-center/legal/can-i-publish-the-content-i-generate-on-the-platform)) | Library voices only, never a cloned or "designed after" voice; each voice's sharer and terms go in the manifest | Starter US$6 (30,000 credits, about 30,000 characters); Creator US$22 (121,000 credits) | The script text goes to the vendor. Whether inputs train its models, and the opt-out, is not verified | Terms and prices checked 2026-11-27; data use not verified |
+
+Recommendation: try Kokoro and Piper first, on the trailer in both languages. Use a paid voice only if the maintainer finds the Portuguese one not good enough.
+
+## Music
+
+| Tool | Software and model licence | Output | Cost | Data and privacy | Checked |
+|---|---|---|---|---|---|
+| [Stable Audio Open 1.0](https://huggingface.co/stabilityai/stable-audio-open-1.0) (open weights) | [Stability AI Community License](https://stability.ai/license) | Commercial use allowed for individuals and organisations under US$1M annual revenue; "as between you and Stability, you own outputs". Up to 47 s a clip; better at sound effects and textures than music | 0; a GPU helps | Local. Whether the weights' download needs an account is not verified | Checked 2026-11-27 |
+| [Pixabay](https://pixabay.com/service/license-summary/) music (library, not AI) | n/a | Free, no credit required; selling it on its own, misleading use, and use as a trademark are prohibited. The summary says nothing about Content ID claims on platforms | 0 | Account to download | Summary checked 2026-11-27; full licence and Content ID not verified |
+| [Suno](https://suno.com/pricing) (paid) | Proprietary service | Free plan: Suno keeps ownership, non-commercial only, so **not usable** (rule 5). Pro and Premier: commercial use for songs made while subscribed ([help](https://help.suno.com/en/articles/2416769)); download limits per month were announced in 2026, not verified | Pro US$10 list (US$8 promotional); Premier US$30 list (US$24 promotional) | Prompts go to the vendor | Prices and ownership checked 2026-11-27; download limits not verified |
+
+YouTube asks for its synthetic-content label when generated music is the main focus of a video ([YouTube help](https://support.google.com/youtube/answer/14328491)). Here it is background, but the label is set anyway (rule 4).
+
+## Sound effects
+
+| Tool | Output | Cost | Checked |
+|---|---|---|---|
+| [Freesound](https://freesound.org/help/faq/) (library) | Only CC0 sounds; CC BY only with the credit in the manifest and the description; CC BY-NC never (no commercial use) | 0; account to download | Checked 2026-11-27 |
+| Stable Audio Open 1.0 | As in the music table; its strength is short effects | 0 | Checked 2026-11-27 |
+| ElevenLabs sound effects (paid) | Paid-plan terms apply, but the sound-effect terms were not read separately | In the plan's credits | Not verified |
+
+## Motion and composition
+
+| Tool | Licence | Output | Cost | Checked |
+|---|---|---|---|---|
+| [Motion Canvas](https://github.com/motion-canvas/motion-canvas) | MIT | Ours. How it exports video (image sequence or FFmpeg) is not verified | 0 | Licence checked 2026-11-27 |
+| [Remotion](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md) | Remotion License (source-available): free for individuals, for-profit organisations of up to 3 employees and non-profits; a company licence otherwise | Ours | 0 if eligible | Checked 2026-11-27. Whether Nulavio is eligible is the maintainer's to confirm |
+| FFmpeg | As above | Ours | 0 | As above |
+
+Recommendation: Motion Canvas, since its MIT licence needs no eligibility check. Remotion only if the maintainer confirms the project qualifies.
+
+## Captions and transcripts
+
+WebVTT captions and transcripts in both languages are generated from these scripts by the pipeline (#173), not by speech recognition, so they match the approved text. No tool is needed beyond the pipeline's own code.
+
+## AI disclosure
+
+Every video says it in three places (rule 4):
+
+1. **In the video:** the line on the end card ([message house](message-house.md#every-piece-carries)).
+2. **In the description:** the same line, plus the link to the claims.
+3. **The platform's label**, where one exists:
+   - YouTube: "Altered or synthetic content" set to yes on upload ([YouTube help](https://support.google.com/youtube/answer/14328491), checked 2026-11-27).
+   - TikTok, Instagram and Facebook: their AI-generated content labels. Not verified.
+   - Mastodon, Bluesky, LinkedIn: no label known. The line goes in the post text and the video's alt text.
+
+## Asset manifest (rule 5)
+
+Each generated or licensed asset gets one entry, beside the asset, like [`site/assets/shots/manifest.json`](../../site/assets/shots/manifest.json). The pipeline in #173 writes it. Fields proposed:
+
+- `file` and `sha256`;
+- `kind` (voice, music, sfx, motion, recording) and `ai_generated` (yes or no);
+- `tool`, `model` or version, `plan` (free, a paid plan's name), `date`;
+- `input`: the script line ID (for example `T2 VO en`), or the prompt;
+- `terms_url`, `terms_checked` (date), `commercial_use` (yes or no), `credit_required` (and its text);
+- `voice_provenance` for a voice;
+- for a recording: the build version and ID, the `dom_changes`, and the frame check.
+
+## Budget
+
+The voice-over is short. All of it, the trailer and the six shorts in both languages, is about 5,100 characters (counted on 2026-11-27). With four takes of each line, about 21,000 characters.
+
+| Option | What it buys | Cost | Quality risk |
+|---|---|---|---|
+| **Free** | Kokoro or Piper voice, Stable Audio Open or Pixabay music, Freesound CC0 effects, Motion Canvas, FFmpeg | US$0 in tools. The cost is the maintainer's computer time | The Portuguese voices are the weakest part: Kokoro's are ungraded, Piper's sound more synthetic |
+| **Low** | Free, plus ElevenLabs Starter for one month for the voice in both languages (21,000 characters fit its 30,000 credits) | US$6 once, plus taxes | Low: a natural voice. Music stays from the free route |
+| **Full** | Low, but ElevenLabs Creator for headroom, plus Suno Pro for one month for an original score | US$22 + US$10 = US$32 for one month, plus taxes. Each later re-render month (after 1.0, for example) is the same again | Low. Generated music needs listening for artefacts and resemblance to known songs |
+
+**Recommendation: Free first, then Low if needed.** Render a sample of the trailer in both languages with the free tools. If the maintainer finds the Portuguese voice not good enough, buy one month of ElevenLabs Starter (US$6). Music stays free unless the maintainer wants an original score. Any spend is the maintainer's, after this list is approved (rule 8).
