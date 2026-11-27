@@ -77,6 +77,27 @@ MONTHS = {
         "December",
     ],
 }
+# A sentence that denies a Nulavio server, or data sent to one (#872). The project runs servers (the
+# waitlist's worker, the package repository), so such a sentence says it of the browser, and of the
+# browser on its own: docs/security/new-profile-connections.md tests a new profile left alone.
+_SERVER = r"servers?(?![\w-])"
+_SERVIDOR = r"servidor(es)?(?![\w-])"
+NO_NULAVIO_SERVER = re.compile(
+    rf"(?i)\b(no (nulavio )?{_SERVER}|there (is|are) no (nulavio )?{_SERVER}|has no {_SERVER}"
+    rf"|sem {_SERVIDOR}|não (existe|há|tem) (nenhum )?{_SERVIDOR}|nenhum {_SERVIDOR})"
+)
+NO_DATA_TO_NULAVIO = re.compile(r"(?i)\b(no data to nulavio|dados a servidores do nulavio|no service that receives data)")
+THE_BROWSER = re.compile(r"(?i)\b(browser|navegador)")
+ON_ITS_OWN = re.compile(r"(?i)\b(on its own|by itself|sozinho)\b")
+
+
+def unqualified_server_claim(sentence: str) -> bool:
+    """True when the sentence denies a Nulavio server or data sent to one without saying "the browser, on its own"."""
+    if NO_NULAVIO_SERVER.search(sentence) and not THE_BROWSER.search(sentence):
+        return True
+    return bool(NO_NULAVIO_SERVER.search(sentence) or NO_DATA_TO_NULAVIO.search(sentence)) and not ON_ITS_OWN.search(sentence)
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -292,13 +313,7 @@ class SiteTest(unittest.TestCase):
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
         # The project runs servers (the waitlist's worker, the package repository): what is true is
         # that the browser, on its own, contacts none of them (docs/security/new-profile-connections.md).
-        # So a sentence that denies a Nulavio server says it of the browser (#872). Each block is
-        # checked apart, because text() joins neighbouring cells with no space between them.
-        no_server = re.compile(
-            r"(?i)\b(no (nulavio )?servers?\b|there is no (nulavio )?server|has no server"
-            r"|sem servidor|não (existe|há|tem) (nenhum )?servidor|nenhum servidor)"
-        )
-        browser = re.compile(r"(?i)\b(browser|navegador)")
+        # Each block is checked apart, because text() joins neighbouring cells with no space between them.
         blocks = {"p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "figcaption", "blockquote", "title"}
         unqualified = []
         for page in sorted(f for f in self.files if f.endswith(".html")):
@@ -307,9 +322,33 @@ class SiteTest(unittest.TestCase):
             texts += [n.attrs.get("content") or "" for n in tree.all("meta")]
             for text in texts:
                 for sentence in re.split(r"(?<=[.!?])\s+", " ".join(text.split())):
-                    if no_server.search(sentence) and not browser.search(sentence):
+                    if unqualified_server_claim(sentence):
                         unqualified.append(f"{page}: {sentence}")
         self.assertEqual(unqualified, [])
+
+    def test_the_server_claim_check_reads_each_sentence_as_meant(self):
+        refused = [
+            "No telemetry, no account, no server.",
+            "None. There is no Nulavio server",
+            "Sem telemetria, sem conta, sem servidor.",
+            "Nenhuma. Não existe servidor do Nulavio",
+            "So «Nulavio has no server» does not mean «the browser never connects to anything».",
+            "It blocks trackers from the first launch, sends no data to Nulavio servers, and states it in writing.",
+            "Bloqueia rastreadores desde a primeira abertura, não envia dados a servidores do Nulavio e diz isso.",
+            "The browser contacts no Nulavio server.",
+        ]
+        accepted = [
+            "No telemetry, no account, and on its own the browser contacts no Nulavio server.",
+            "Nenhuma. Sozinho, o navegador não acessa nenhum servidor do Nulavio",
+            "It blocks trackers from the first launch, sends no data to Nulavio servers on its own, and says so.",
+            "Bloqueia rastreadores desde a primeira abertura, sozinho não envia dados a servidores do Nulavio.",
+            "Nulavio has no server-side account.",
+            "O Nulavio não tem servidor-proxy próprio.",
+            "Agents use the browser through a Nulavio MCP server.",
+            "No telemetry, no account.",
+        ]
+        self.assertEqual([s for s in refused if not unqualified_server_claim(s)], [])
+        self.assertEqual([s for s in accepted if unqualified_server_claim(s)], [])
 
     # -- landing page structure (spec §7, §9) ---------------------------------------------
 
