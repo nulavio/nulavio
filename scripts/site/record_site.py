@@ -722,6 +722,21 @@ def prepare_profile(harness, path: Path, locale: str) -> None:
     add_prefs(harness, path, recording_prefs(locale))
 
 
+OPEN_PAGES = """
+  const old = [...gBrowser.tabs];
+  const tabs = args[0].map(u => gBrowser.addTrustedTab(u));
+  gBrowser.selectedTab = tabs[0];
+  for (const t of old) gBrowser.removeTab(t);
+  await Promise.all(tabs.map(t => new Promise(resolve => {
+    const check = () => (t.linkedBrowser.currentURI.spec.startsWith('http') && !t.hasAttribute('busy'))
+      ? resolve() : setTimeout(check, 100);
+    check();
+  })));
+  gBrowser.selectedBrowser.focus();
+  gURLBar.blur();
+"""
+
+
 def window_ready(m, pages: list[str], locale: str) -> None:
     """One window at the recording size, Lateral, no bars, showing `pages` (the first selected), its interface in
     `locale`: a build without that language would fall back to another, and the footage would be mislabelled."""
@@ -735,25 +750,20 @@ def window_ready(m, pages: list[str], locale: str) -> None:
         m.set_context("content")
     chrome_async(m, "return await L.apply(window, 'lateral');")
     m.chrome("SidebarController.hide?.(); gNotificationBox.removeAllNotifications?.(true);")
-    if pages:
-        chrome_async(
-            m,
-            """
-          const old = [...gBrowser.tabs];
-          const tabs = args[0].map(u => gBrowser.addTrustedTab(u));
-          gBrowser.selectedTab = tabs[0];
-          for (const t of old) gBrowser.removeTab(t);
-          await Promise.all(tabs.map(t => new Promise(resolve => {
-            const check = () => (t.linkedBrowser.currentURI.spec.startsWith('http') && !t.hasAttribute('busy'))
-              ? resolve() : setTimeout(check, 100);
-            check();
-          })));
-          gBrowser.selectedBrowser.focus();
-          gURLBar.blur();
-        """,
-            pages,
-        )
-    time.sleep(1.0)
+    # The bundled content blocker marks a tab that loaded before it was ready (a "!" on its button), as can happen
+    # when the script opens a page in the first seconds of a profile's first start. A window is not recorded like that:
+    # its pages are opened again until the mark stays away.
+    late = """return !!document.querySelector('.unified-extensions-item-action-button[badge="!"]');"""
+    for _attempt in range(10):
+        chrome_async(m, OPEN_PAGES, pages)
+        marked = False
+        for _poll in range(8):
+            time.sleep(0.25)
+            marked = marked or m.chrome(late)
+        if not marked:
+            break
+    else:
+        raise RuntimeError("the content blocker still marks the window's tab as loaded before it was ready")
     follow_selected_tab(m)
 
 
