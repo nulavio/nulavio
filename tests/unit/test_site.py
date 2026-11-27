@@ -77,6 +77,42 @@ MONTHS = {
         "December",
     ],
 }
+# A sentence that denies a Nulavio server, or data sent to one (#872). The project runs servers (the
+# waitlist's worker, the package repository), so such a sentence says it of the browser, and of the
+# browser on its own: docs/security/new-profile-connections.md tests a new profile left alone.
+_SERVER = r"servers?(?![\w-])"
+_SERVIDOR = r"servidor(es)?(?![\w-])"
+NO_NULAVIO_SERVER = re.compile(
+    rf"(?i)\b(no (nulavio )?{_SERVER}|there (is|are) no (nulavio )?{_SERVER}|has no {_SERVER}"
+    rf"|sem {_SERVIDOR}|não (existe|há|tem) (nenhum )?{_SERVIDOR}|nenhum {_SERVIDOR})"
+)
+NO_DATA_TO_NULAVIO = re.compile(
+    r"(?i)\b(no data to nulavio|não \w+ dados a servidores do nulavio|no service that receives data|nothing to us|nada para nós)"
+)
+THE_BROWSER = re.compile(r"(?i)\b(browser|navegador)")
+ON_ITS_OWN = re.compile(r"(?i)\b(on its own|by itself|sozinho)\b")
+
+
+def unqualified_server_claim(sentence: str) -> bool:
+    """True when the sentence denies a Nulavio server or data sent to one without saying "the browser, on its own"."""
+    if NO_NULAVIO_SERVER.search(sentence) and not THE_BROWSER.search(sentence):
+        return True
+    return bool(NO_NULAVIO_SERVER.search(sentence) or NO_DATA_TO_NULAVIO.search(sentence)) and not ON_ITS_OWN.search(sentence)
+
+
+# A figure whose label counts Nulavio servers and whose value is none: the label, read with its value,
+# makes the same claim, so it says "the browser, on its own" too.
+NULAVIO_SERVERS = re.compile(r"(?i)\b(nulavio servers?|servidor(es)? do nulavio)(?![\w-])")
+NONE = re.compile(r"(?i)^\s*(0|zero|none|nenhum|nenhuma)\s*$")
+
+
+def unqualified_server_figure(label: str, value: str) -> bool:
+    """True when a "Nulavio servers: none" figure does not say it of the browser on its own."""
+    if not (NULAVIO_SERVERS.search(label) and NONE.match(value)):
+        return False
+    return not (THE_BROWSER.search(label) and ON_ITS_OWN.search(label))
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -128,6 +164,26 @@ class Tree(HTMLParser):
 
     def all(self, tag=None):
         return [n for n in self.root.walk() if tag is None or n.tag == tag]
+
+
+# The blocks of prose the server-claim check reads, one by one: text() joins neighbouring cells with no
+# space between them, so a page's text is not read as one string.
+PROSE = {"p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "h5", "h6", "figcaption", "blockquote", "title"}
+
+
+def prose_blocks(tree: Tree) -> list[str]:
+    """The text of each block of prose on the page, and each meta element's content."""
+    return [n.text() for n in tree.all() if n.tag in PROSE] + [n.attrs.get("content") or "" for n in tree.all("meta")]
+
+
+def figures(tree: Tree) -> list[tuple[str, str]]:
+    """Each (dt, dd) pair of the page's definition lists: a term with the values that follow it, up to the next term."""
+    pairs = []
+    for term in tree.all("dt"):
+        siblings = [n for n in term.parent.children if isinstance(n, Node)]
+        after = itertools.takewhile(lambda n: n.tag != "dt", siblings[siblings.index(term) + 1 :])
+        pairs += [(term.text(), n.text()) for n in after if n.tag == "dd"]
+    return pairs
 
 
 def tokens(css: str) -> tuple[dict[str, str], dict[str, str]]:
@@ -290,6 +346,83 @@ class SiteTest(unittest.TestCase):
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
+        # The project runs servers (the waitlist's worker, the package repository): what is true is
+        # that the browser, on its own, contacts none of them (docs/security/new-profile-connections.md).
+        # Each block is checked apart, because text() joins neighbouring cells with no space between them.
+        unqualified = []
+        for page in sorted(f for f in self.files if f.endswith(".html")):
+            tree = self.tree(page)
+            for text in prose_blocks(tree):
+                for sentence in re.split(r"(?<=[.!?])\s+", " ".join(text.split())):
+                    if unqualified_server_claim(sentence):
+                        unqualified.append(f"{page}: {sentence}")
+            for label, value in figures(tree):
+                if unqualified_server_figure(label, value):
+                    unqualified.append(f"{page}: {label}: {value}")
+        self.assertEqual(unqualified, [])
+
+    def test_the_server_claim_check_reads_each_sentence_as_meant(self):
+        refused = [
+            "No telemetry, no account, no server.",
+            "None. There is no Nulavio server",
+            "Sem telemetria, sem conta, sem servidor.",
+            "Nenhuma. Não existe servidor do Nulavio",
+            "So «Nulavio has no server» does not mean «the browser never connects to anything».",
+            "It blocks trackers from the first launch, sends no data to Nulavio servers, and states it in writing.",
+            "Bloqueia rastreadores desde a primeira abertura, não envia dados a servidores do Nulavio e diz isso.",
+            "The browser contacts no Nulavio server.",
+            "It encrypts your profiles on disk and sends nothing to us.",
+            "Cifra seus perfis no disco e não manda nada para nós.",
+        ]
+        accepted = [
+            "No telemetry, no account, and on its own the browser contacts no Nulavio server.",
+            "Nenhuma. Sozinho, o navegador não acessa nenhum servidor do Nulavio",
+            "It blocks trackers from the first launch, sends no data to Nulavio servers on its own, and says so.",
+            "Bloqueia rastreadores desde a primeira abertura, sozinho não envia dados a servidores do Nulavio.",
+            "Nulavio has no server-side account.",
+            "O Nulavio não tem servidor-proxy próprio.",
+            "Agents use the browser through a Nulavio MCP server.",
+            "No telemetry, no account.",
+            "Ao enviar o formulário, o navegador envia dados a servidores do Nulavio.",
+        ]
+        self.assertEqual([s for s in refused if not unqualified_server_claim(s)], [])
+        self.assertEqual([s for s in accepted if unqualified_server_claim(s)], [])
+        refused_figures = [
+            ("Nulavio servers receiving data from your browser", "0"),
+            ("servidores do Nulavio recebendo dados do seu navegador", "0"),
+            ("Nulavio servers that receive browser data", "None"),
+            ("Servidores do Nulavio que recebem dados do navegador", "Nenhum"),
+        ]
+        accepted_figures = [
+            ("Nulavio servers your browser contacts on its own", "0"),
+            ("servidores do Nulavio que o seu navegador acessa sozinho", "0"),
+            ("Nulavio servers the browser contacts on its own", "None"),
+            ("Servidores do Nulavio que o navegador acessa sozinho", "Nenhum"),
+            ("defaults changed, each with its reason and its cost in writing", "0"),
+        ]
+        self.assertEqual([f for f in refused_figures if not unqualified_server_figure(*f)], [])
+        self.assertEqual([f for f in accepted_figures if unqualified_server_figure(*f)], [])
+
+    def test_the_server_claim_check_reads_every_heading_and_each_figure_with_its_own_value(self):
+        # A dl may wrap each dt/dd group in a div (the fact sheet) or not (the engineering pages' lists):
+        # either way a term is read with the values that follow it, up to the next term.
+        tree = Tree(
+            "<dl><dt>Nulavio servers</dt><dd>2</dd><dt>Accounts required</dt><dd>0</dd></dl>"
+            "<dl><div><dt>Engine</dt><dd>Gecko</dd></div><div><dt>Licence</dt><dd>MPL-2.0</dd><dd>public</dd></div></dl>"
+        )
+        self.assertEqual(
+            figures(tree),
+            [
+                ("Nulavio servers", "2"),
+                ("Accounts required", "0"),
+                ("Engine", "Gecko"),
+                ("Licence", "MPL-2.0"),
+                ("Licence", "public"),
+            ],
+        )
+        self.assertEqual([f for f in figures(tree) if unqualified_server_figure(*f)], [])
+        headings = Tree("".join(f"<h{level}>Heading {level}</h{level}>" for level in range(1, 7)))
+        self.assertEqual(prose_blocks(headings), [f"Heading {level}" for level in range(1, 7)])
 
     # -- landing page structure (spec §7, §9) ---------------------------------------------
 
