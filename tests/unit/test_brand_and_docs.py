@@ -125,6 +125,27 @@ class TokensTest(unittest.TestCase):
         for theme in ("light", "dark"):
             self.assertIn((f"color.{theme}.status.secure", f"color.{theme}.status.secureTint"), checked)
 
+    def test_the_status_illustrations_refuse_a_value_that_is_not_a_colour(self):
+        # The value goes into the SVG as it is: one the engine cannot read would leave the shield without
+        # its outline or its mark, and the generator would still succeed.
+        cases = (
+            (build_tokens.build_shield_ok, "secure"),
+            (build_tokens.build_shield_ok, "secureTint"),
+            (build_tokens.build_shield_alert, "warning"),
+            (build_tokens.build_shield_alert, "warningTint"),
+        )
+        for build, name in cases:
+            for theme in ("light", "dark"):
+                for value in ("#GGGGGG", "#ABC", "navy", 5, None, ""):
+                    data = json.loads(build_tokens.TOKENS.read_text())
+                    data["color"][theme]["status"][name]["$value"] = value
+                    refused = self.assertRaisesRegex(build_tokens.TokenError, rf"color\.{theme}\.status\.{name}")
+                    with self.subTest(build=build.__name__, theme=theme, name=name, value=value), refused:
+                        build(data)
+        data = json.loads(build_tokens.TOKENS.read_text())
+        data["color"]["light"]["status"]["secure"]["$value"] = "#123abc"
+        self.assertIn("stroke: #123ABC;", build_tokens.build_shield_ok(data))
+
     def test_known_contrast_values(self):
         self.assertAlmostEqual(contrast.ratio("#000000", "#FFFFFF"), 21.0, places=2)
         self.assertAlmostEqual(contrast.ratio("#FFFFFF", "#FFFFFF"), 1.0, places=2)

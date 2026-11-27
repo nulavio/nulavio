@@ -623,7 +623,16 @@ SHIELD_OUTLINE = "M50 10 L84 22 V50 C84 72 70 88 50 96 C30 88 16 72 16 50 V22 Z"
 
 
 def _status_colour(tokens: dict[str, dict], theme: str, name: str) -> str:
-    return resolve(tokens, f"color.{theme}.status.{name}").upper()
+    """A status colour as the illustrations write it. The value goes into the SVG as it is, so one
+    that is not a colour is refused here: the engine would drop it, and the shield would lose its
+    outline or its mark while the generator succeeded."""
+    path = f"color.{theme}.status.{name}"
+    value = resolve(tokens, path)
+    try:
+        rgba(value)
+    except ValueError as error:
+        raise TokenError(f"{path}: {error}") from error
+    return value.upper()
 
 
 def build_shield_ok(data: dict) -> str:
