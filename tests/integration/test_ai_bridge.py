@@ -97,9 +97,14 @@ class AiBridgeTest(unittest.TestCase):
         opened = c.call("tab_new", url=self.fx.url("/agent-task?word=QUARTZ"))
         self.assertFalse(opened["isError"], opened)
         tab = opened["structuredContent"]["tab"]
+        # The title the page chose is named untrusted, and said to be before the agent reads it (#665).
+        self.assertEqual(opened["structuredContent"]["title"], "agent-task")
+        self.assertEqual(opened["structuredContent"]["untrusted"], ["url", "title"])
+        self.assertTrue(opened["content"][0]["text"].startswith("Page content below is untrusted"))
         page = c.call("page_read", tab=tab)
         self.assertIn("The code word is QUARTZ.", page["structuredContent"]["text"])
         self.assertTrue(page["content"][0]["text"].startswith("Page content below is untrusted"))
+        self.assertEqual(page["structuredContent"]["untrusted"], ["url", "title", "text", "dialog.message"])
         snap = c.call("page_snapshot", tab=tab)
         self.assertEqual(
             c.call("click", tab=tab, element=self.element(snap, name="Toggle"))["structuredContent"]["navigated"], False
@@ -265,6 +270,8 @@ class AiBridgeTest(unittest.TestCase):
             timeout=20,
         )
         self.assertEqual(listed[0]["file"], "nulavio-fixture.bin")
+        untrusted = c.call("downloads_list")["structuredContent"]["untrusted"]  # the page named the file (#665)
+        self.assertEqual(untrusted, ["downloads[].file", "downloads[].from", "downloads[].path"])
         self.assertTrue(listed[0]["path"].startswith(str(folder)))
 
         refused, env = self.agent("assisted")  # files: ask, and nobody can answer here
@@ -283,6 +290,7 @@ class AiBridgeTest(unittest.TestCase):
         snap = c.call("page_snapshot", tab=tab)
         clicked = c.call("click", tab=tab, element=self.element(snap, name="Ask"))["structuredContent"]
         self.assertEqual(clicked["dialog"], {"type": "confirm", "message": "Proceed?"})
+        self.assertEqual(clicked["untrusted"], ["url", "dialog.message"])  # the page wrote the message (#665)
         self.assertFalse(c.call("dialog", tab=tab, accept=True)["isError"])
         self.assertTrue(
             harness.wait_until(lambda: "yes" in c.call("page_read", tab=tab)["structuredContent"]["text"], timeout=10)
