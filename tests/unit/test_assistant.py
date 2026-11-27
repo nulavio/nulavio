@@ -2116,6 +2116,47 @@ if (starts.length > before) {
 $("allow-profile").fire("click");
 await idle();
 selected = tab;
+
+// #760: a redraw of the items replaces their Remove buttons. The one with focus keeps it, as the same item's new
+// button; when that item is gone, focus goes to the item now in its place, then the one before it, then the offer
+// to include the page. A redraw takes no focus that was elsewhere.
+const removeOf = chipId => $("chips").children.find(li => li.getAttribute("data-chip-id") === chipId)?.children.at(-1);
+const selectionOf = (chipId, title) => ({ ...item(chipId, title), kind: "selection" });
+const focusRender = async () => {
+  $("allow-profile").fire("click");
+  await idle();
+};
+kept = [item("f1", "Foco 1"), selectionOf("f2", "Foco 2"), selectionOf("f3", "Foco 3")];
+await focusRender();
+out.focusShown = shown();
+let focusedButton = removeOf("f2");
+focusedButton.focus();
+activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 })); // the tab event's redraw (refreshPage)
+await idle();
+out.focusTabRedrawn = removeOf("f2") !== focusedButton; // the button was drawn again
+out.focusTabKept = document.activeElement === removeOf("f2");
+focusedButton = removeOf("f2");
+await focusRender(); // the ready render's redraws
+out.focusRenderRedrawn = removeOf("f2") !== focusedButton;
+out.focusRenderKept = document.activeElement === removeOf("f2");
+kept = [item("f1", "Foco 1"), selectionOf("f3", "Foco 3")]; // the focused item left the browser's list
+await focusRender();
+out.focusGoneNext = document.activeElement === removeOf("f3");
+kept = [item("f1", "Foco 1")];
+await focusRender();
+out.focusGoneLast = document.activeElement === removeOf("f1");
+kept = [];
+await focusRender();
+out.focusGoneAll = document.activeElement === $("include-page") && !$("include-page").hidden;
+kept = [item("f4", "Foco 4")];
+await focusRender();
+$("prompt").focus();
+activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 }));
+await idle();
+out.focusElsewhere = document.activeElement === $("prompt");
+kept = [];
+$("allow-profile").fire("click");
+await idle();
 console.log(JSON.stringify(out));
 """
 
@@ -2426,6 +2467,23 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["continueStarts"], 1)
         self.assertEqual(out["continueQuestion"], "Pergunta 32")
         self.assertEqual(out["continueChars"], 100 + len("Pergunta 32"))  # instructions and the question, no item
+
+    def test_a_redraw_keeps_focus_on_the_remove_button_of_the_same_item(self):
+        out = self._run()  # #760
+        self.assertEqual(out["focusShown"], ["f1", "f2", "f3"])
+        self.assertTrue(out["focusTabRedrawn"])  # a tab event drew the buttons again
+        self.assertTrue(out["focusTabKept"])
+        self.assertTrue(out["focusRenderRedrawn"])  # and so did a render
+        self.assertTrue(out["focusRenderKept"])
+
+    def test_a_redraw_without_the_focused_item_moves_focus_to_a_neighbour(self):
+        out = self._run()  # #760
+        self.assertTrue(out["focusGoneNext"])  # the item now in its place
+        self.assertTrue(out["focusGoneLast"])  # the one before it, when it was the last
+        self.assertTrue(out["focusGoneAll"])  # the offer to include the page, when none is left
+
+    def test_a_redraw_takes_no_focus_from_elsewhere(self):
+        self.assertTrue(self._run()["focusElsewhere"])
 
 
 if __name__ == "__main__":
