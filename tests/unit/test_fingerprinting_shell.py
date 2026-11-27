@@ -437,9 +437,14 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
         guard = (SHELL / "modules" / "NulavioGuard.sys.mjs").read_text(encoding="utf-8")
         check = guard[guard.index("  async #check() {") : guard.index("  /** The engine's notice, or a change")]
         # Nulavio's value at the last start comes from the record, never from the profile at this one.
-        self.assertIn("const fresh = Guard.withoutOwnValues(found, saved.owned, this.#owned);", check)
-        # The record then keeps only what was declared at this start: nothing is carried over from the last one.
-        self.assertEqual(check.count("owned: { ...this.#owned }"), 2)
+        self.assertIn("const fresh = Guard.withoutOwnValues(found, saved.owned, ownedNow);", check)
+        # The record then keeps only what was declared at this start, as it was when the prefs were read: nothing is
+        # carried over from the last one.
+        self.assertIn("const { snapshot: now, owned: ownedNow } = await this.#taken();", check)
+        self.assertEqual(check.count("expected, owned: ownedNow };"), 2)
+        self.assertNotIn("this.#owned", check)
+        taken = guard[guard.index("  async #taken() {") : guard.index("  // -- comparing")]
+        self.assertIn("const prefs = this.#prefs();\n    const owned = { ...this.#owned };\n", taken)
         self.assertNotIn("saved.owned,", check.replace("withoutOwnValues(found, saved.owned,", ""))
         self.assertIn("owned: Guard.ownedValues(data.owned)", guard)  # read from the profile: checked
         self.assertIn("{ schema: SCHEMA, updated: new Date().toISOString(), snapshot, pending, expected, owned }", guard)

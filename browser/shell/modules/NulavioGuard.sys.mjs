@@ -412,10 +412,23 @@ class Guard {
   }
 
   async snapshot() {
-    return {
-      build: Services.appinfo.appBuildID,
-      extensions: await this.#extensions(),
-      prefs: this.#prefs(),
+    return (await this.#taken()).snapshot;
+  }
+
+  /**
+   * A snapshot, and the values Nulavio held as its own (ownPrefValue) when it read the settings: both in one step, with
+   * no wait between them, so that each goes with the other (OpenCodeReview on #825). A change of either after that is
+   * the next look's.
+   */
+  async #taken() {
+    const build = Services.appinfo.appBuildID;
+    const extensions = await this.#extensions();
+    const prefs = this.#prefs();
+    const owned = { ...this.#owned };
+    const snapshot = {
+      build,
+      extensions,
+      prefs,
       roots: await this.#roots(),
       modules: await this.#modules(),
       hosts: await this.#hosts(),
@@ -423,6 +436,7 @@ class Guard {
       userJs: await this.#userJs(),
       search: await this.#search(),
     };
+    return { snapshot, owned };
   }
 
   // -- comparing -------------------------------------------------------------
@@ -612,11 +626,11 @@ class Guard {
       return { state: "skipped", reason: skipped, findings: [] };
     }
     this.#listen(); // changes made while the snapshot is taken are recorded right after it
-    const now = await this.snapshot();
+    const { snapshot: now, owned: ownedNow } = await this.#taken();
     const saved = await this.#load();
     const expected = await this.#heldUpdates(); // what the engine holds now, for the start after this one
     if (!saved) {
-      this.#state = { snapshot: now, pending: [], expected, owned: { ...this.#owned } };
+      this.#state = { snapshot: now, pending: [], expected, owned: ownedNow };
       await this.#save();
       this.#lookAgainIfAsked();
       return { state: "first", findings: [] };
@@ -634,11 +648,11 @@ class Guard {
       Guard.withoutHeldUpdates(Guard.compare(saved.snapshot, now), saved.expected, installed),
       this.#touched
     ).filter(f => f.kind !== "pref-changed" || !own(f.key));
-    const fresh = Guard.withoutOwnValues(found, saved.owned, this.#owned);
+    const fresh = Guard.withoutOwnValues(found, saved.owned, ownedNow);
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
-    this.#state = { snapshot: now, pending, expected, owned: { ...this.#owned } };
+    this.#state = { snapshot: now, pending, expected, owned: ownedNow };
     await this.#save();
     this.#lookAgainIfAsked();
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
@@ -686,9 +700,12 @@ class Guard {
     } else {
       this.#owned[key] = value;
     }
+    // The record takes it with the prefs, at the next look (#look); one asked for while the start-up check is at
+    // work comes when that check ends. Before the check begins, the check itself takes it.
     if (this.#state) {
-      this.#state.owned = { ...this.#owned }; // a change in the session, or after the start-up check: kept at the next look
       this.#scheduleRefresh();
+    } else if (this.#listening) {
+      this.#wanted = true;
     }
   }
 
@@ -835,7 +852,9 @@ class Guard {
         }
       }
     }
+    // The prefs, and what Nulavio holds as its own among them, in one step (as #taken).
     this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search };
+    this.#state.owned = { ...this.#owned };
     this.#state.expected = expected;
     await this.#save();
     if (grew) {
