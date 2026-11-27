@@ -450,6 +450,29 @@ const cases = {
     const otherAfter = await attempt(() => passwords.checkLogin(OTHER));
     return result(store, { confirmed, again, other, listed, answer, otherAfter, kept: JSON.parse(prefs.get(name)) });
   },
+  // Text entries edited by hand that are not exactly two sites: a third field, one site, an empty field. None of them
+  // confirms a pair (examp1e.example is still warned), Settings does not list them, and "Continue" on that pair writes
+  // back only the pairs.
+  dismissed_with_extra_fields: async () => {
+    const store = loginManager({ origins: ["https://paypal.example", "https://example.example"] });
+    const passwords = await module(store);
+    const name = "nulavio.passwords.lookalikeDismissed";
+    const bad = [
+      "examp1e.example example.example extra",
+      " examp1e.example example.example",
+      "examp1e.example  example.example",
+      "examp1e.example example.example ",
+      "examp1e.example",
+      "",
+    ];
+    prefs.set(name, JSON.stringify(["paypa1.example paypal.example", ...bad]));
+    const confirmed = await check(passwords);
+    const other = await passwords.checkLogin(OTHER);
+    const listed = passwords.listConfirmed();
+    const answer = await passwords.dismissFor(OTHER, { site: "examp1e.example", similar: "example.example" });
+    const otherAfter = await passwords.checkLogin(OTHER);
+    return result(store, { confirmed, other, listed, answer, otherAfter, kept: JSON.parse(prefs.get(name)) });
+  },
   // Continue on pair after pair in a long list: the module adds the new pair to the pairs it keeps instead of going
   // through the whole list again, so one more Continue and the next check cost the same with 20 pairs or with 100.
   dismiss_does_not_reread_the_list: async () => {

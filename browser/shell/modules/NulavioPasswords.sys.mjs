@@ -326,9 +326,10 @@ class Passwords {
   #dismissed(raw = this.#dismissedRaw()) {
     try {
       const list = JSON.parse(raw);
-      // Only the text entries dismiss() writes: anything else (the pref edited by hand) is not a pair, and is skipped
-      // rather than read, so the pairs around it still count.
-      return Array.isArray(list) ? list.filter(entry => typeof entry === "string") : [];
+      // Only entries of the form dismiss() writes, two sites with one space between them: anything else (the pref
+      // edited by hand: not text, one site, a third field, an empty field) is not a pair, confirms nothing and is
+      // skipped rather than read, so the pairs around it still count.
+      return Array.isArray(list) ? list.filter(isPairEntry) : [];
     } catch {
       return [];
     }
@@ -573,6 +574,15 @@ class Passwords {
     }
     return this.listConfirmed();
   }
+}
+
+/** Whether an entry of the stored list has the form pairEntry() gives: text with exactly two fields, neither empty. */
+function isPairEntry(entry) {
+  if (typeof entry !== "string") {
+    return false;
+  }
+  const fields = entry.split(" ");
+  return fields.length === 2 && fields.every(Boolean);
 }
 
 /** A stored pair: both sites in the engine's ASCII form, as checkLogin() compares them. */

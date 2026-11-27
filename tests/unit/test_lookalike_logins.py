@@ -177,6 +177,15 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["answer"], case["otherAfter"]), ({"dismissed": True}, {"suspicious": False}), case)
         self.assertEqual(case["kept"], ["paypa1.example paypal.example", "examp1e.example example.example"], case)
 
+    def test_an_entry_that_is_not_exactly_two_sites_confirms_nothing(self):
+        """A third field, one site or an empty field: the warning stays, Settings does not list it, Continue drops it."""
+        case = self.cases["dismissed_with_extra_fields"]
+        self.assertEqual(case["confirmed"], {"suspicious": False}, case)
+        self.assertEqual(case["other"], {"suspicious": True, "site": "examp1e.example", "similar": "example.example"})
+        self.assertEqual(case["listed"], [{"site": "paypa1.example", "similar": "paypal.example"}], case)
+        self.assertEqual((case["answer"], case["otherAfter"]), ({"dismissed": True}, {"suspicious": False}), case)
+        self.assertEqual(case["kept"], ["paypa1.example paypal.example", "examp1e.example example.example"], case)
+
     def test_continue_does_not_go_through_the_whole_list_again(self):
         case = self.cases["dismiss_does_not_reread_the_list"]
         self.assertEqual(case["at100"], case["at20"], case)
