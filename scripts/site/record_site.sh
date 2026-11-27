@@ -27,7 +27,7 @@ finish() {
         rm -rf "$work"
     else
         echo "record_site: failed (status $status); the captures are kept in $work/recordings" >&2
-        echo "record_site: compose them again with: python3 -I scripts/site/record_site.py compose $work/recordings" >&2
+        echo "record_site: compose them again with: python3 -I scripts/site/record_site.py compose $work/recordings --out $out" >&2
     fi
 }
 trap finish EXIT

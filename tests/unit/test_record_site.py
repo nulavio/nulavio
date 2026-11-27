@@ -353,6 +353,8 @@ class OutsideTheSuiteTest(unittest.TestCase):
             kept = list(cache.glob("nulavio-record.*"))
             self.assertEqual(len(kept), 1, done.stderr)
             self.assertIn(f"the captures are kept in {kept[0]}/recordings", done.stderr)
+            out = ROOT / "docs" / "design" / "recordings" / "2026-11"  # the default; a given one is printed the same way
+            self.assertIn(f"compose {kept[0]}/recordings --out {out}", done.stderr)
 
 
 if __name__ == "__main__":
