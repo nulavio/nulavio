@@ -38,7 +38,7 @@
 </header>
 <main id="main">
 <!-- Receipts (spec 4.1). Status: docs/product/release-criteria.md (walk-through of 2026-10-27: "the alpha is not released yet").
-     No server: launcher/nulavio_launcher/cli.py ("nothing is sent to Nulavio; there is no Nulavio server"); in browser/, nulavio.net
+     No data to Nulavio: docs/security/new-profile-connections.md, tests/integration/test_new_profile_connections.py (a new profile left alone contacts no host of the project); in browser/, nulavio.net
      only appears as an extension and contract id (shell@nulavio.net, @nulavio.net/routing-command-line-handler;1).
      Engine: browser/build/engine.json. Licence: LICENSE, LICENSES.md. Platform order: docs/product/execution-plan.md (Project goal). -->
 <section id="summary" aria-labelledby="summary-h">
@@ -347,7 +347,7 @@
 <section id="kept" aria-labelledby="kept-h">
 <h2 id="kept-h"><span class="num">3</span> What we keep on, and why</h2>
 <p class="opening">Some engine protections need the network. We keep them, because turning them off would leave you less protected.</p>
-<p class="prose">So «Nulavio has no server» does not mean «the browser never connects to anything».</p>
+<p class="prose">So «the browser sends no data to Nulavio servers» does not mean «the browser never connects to anything».</p>
 <div class="claim" id="s3-1">
 <div class="claim-text">
 <h3><span class="num">3.1</span> Sandbox and site isolation</h3>

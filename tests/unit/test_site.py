@@ -290,6 +290,26 @@ class SiteTest(unittest.TestCase):
         absolute = re.compile(r"(?i)\b(100\s?%|unhackable|imune|immune|totalmente seguro|completely secure|garantid|guarantee)")
         for page in PAGES:
             self.assertIsNone(absolute.search((self.out / page).read_text(encoding="utf-8")), page)
+        # The project runs servers (the waitlist's worker, the package repository): what is true is
+        # that the browser, on its own, contacts none of them (docs/security/new-profile-connections.md).
+        # So a sentence that denies a Nulavio server says it of the browser (#872). Each block is
+        # checked apart, because text() joins neighbouring cells with no space between them.
+        no_server = re.compile(
+            r"(?i)\b(no (nulavio )?servers?\b|there is no (nulavio )?server|has no server"
+            r"|sem servidor|não (existe|há|tem) (nenhum )?servidor|nenhum servidor)"
+        )
+        browser = re.compile(r"(?i)\b(browser|navegador)")
+        blocks = {"p", "li", "td", "th", "dt", "dd", "h1", "h2", "h3", "h4", "figcaption", "blockquote", "title"}
+        unqualified = []
+        for page in sorted(f for f in self.files if f.endswith(".html")):
+            tree = self.tree(page)
+            texts = [n.text() for n in tree.all() if n.tag in blocks]
+            texts += [n.attrs.get("content") or "" for n in tree.all("meta")]
+            for text in texts:
+                for sentence in re.split(r"(?<=[.!?])\s+", " ".join(text.split())):
+                    if no_server.search(sentence) and not browser.search(sentence):
+                        unqualified.append(f"{page}: {sentence}")
+        self.assertEqual(unqualified, [])
 
     # -- landing page structure (spec §7, §9) ---------------------------------------------
 
