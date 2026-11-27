@@ -722,19 +722,27 @@ def prepare_profile(harness, path: Path, locale: str) -> None:
     add_prefs(harness, path, recording_prefs(locale))
 
 
-OPEN_PAGES = """
-  const old = [...gBrowser.tabs];
-  const tabs = args[0].map(u => gBrowser.addTrustedTab(u));
-  gBrowser.selectedTab = tabs[0];
-  for (const t of old) gBrowser.removeTab(t);
+TABS_LOADED = """
   await Promise.all(tabs.map(t => new Promise(resolve => {
     const check = () => (t.linkedBrowser.currentURI.spec.startsWith('http') && !t.hasAttribute('busy'))
       ? resolve() : setTimeout(check, 100);
-    check();
+    setTimeout(check, 300);
   })));
-  gBrowser.selectedBrowser.focus();
-  gURLBar.blur();
 """
+OPEN_PAGES = (
+    "const old = [...gBrowser.tabs]; const tabs = args[0].map(u => gBrowser.addTrustedTab(u));"
+    "gBrowser.selectedTab = tabs[0]; for (const t of old) gBrowser.removeTab(t);"
+    + TABS_LOADED
+    + "gBrowser.selectedBrowser.focus(); gURLBar.blur();"
+)
+RELOAD_PAGES = "const tabs = [...gBrowser.tabs]; for (const t of tabs) gBrowser.reloadTab(t);" + TABS_LOADED
+# The bundled content blocker says on its button when a tab loaded before it was ready: its "-loading" icon, or a "!".
+# That can happen when the script opens a page in the first seconds of a profile's first start. Reloading the tabs is
+# what clears it.
+BLOCKER_LATE = (
+    "return [...document.querySelectorAll('.unified-extensions-item-action-button')].some(b =>"
+    " b.getAttribute('badge') === '!' || (b.getAttribute('style') ?? '').includes('-loading.'));"
+)
 
 
 def window_ready(m, pages: list[str], locale: str) -> None:
@@ -750,20 +758,17 @@ def window_ready(m, pages: list[str], locale: str) -> None:
         m.set_context("content")
     chrome_async(m, "return await L.apply(window, 'lateral');")
     m.chrome("SidebarController.hide?.(); gNotificationBox.removeAllNotifications?.(true);")
-    # The bundled content blocker marks a tab that loaded before it was ready (a "!" on its button), as can happen
-    # when the script opens a page in the first seconds of a profile's first start. A window is not recorded like that:
-    # its pages are opened again until the mark stays away.
-    late = """return !!document.querySelector('.unified-extensions-item-action-button[badge="!"]');"""
-    for _attempt in range(10):
-        chrome_async(m, OPEN_PAGES, pages)
-        marked = False
+    chrome_async(m, OPEN_PAGES, pages)
+    for _attempt in range(10):  # a window is not recorded while the content blocker says it was late: 2 s without it
+        late = False
         for _poll in range(8):
             time.sleep(0.25)
-            marked = marked or m.chrome(late)
-        if not marked:
+            late = late or m.chrome(BLOCKER_LATE)
+        if not late:
             break
+        chrome_async(m, RELOAD_PAGES)
     else:
-        raise RuntimeError("the content blocker still marks the window's tab as loaded before it was ready")
+        raise RuntimeError("the content blocker still marks the window's tabs as loaded before it was ready")
     follow_selected_tab(m)
 
 
