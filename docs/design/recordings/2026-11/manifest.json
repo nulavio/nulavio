@@ -1,0 +1,496 @@
+{
+  "recordings": {
+    "link-routed-en-US": {
+      "scene": "link-routed",
+      "locale": "en-US",
+      "duration_s": 9.196,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 30,
+      "loop_s": [
+        1.67,
+        6.67
+      ],
+      "cuts": [
+        {
+          "t": 3.896,
+          "to": "Work",
+          "real_seconds_cut": 1.0
+        }
+      ],
+      "transcript": "On screen: in the “Personal” profile, the address “http://localhost:36709/intranet” is pasted into the bar; it opens in the “Work” window, whose band says “Opened by your rule · Change”.",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "In the “Personal” profile, the work intranet's address is pasted into the bar."
+        },
+        {
+          "t": 2.87,
+          "text": "A rule sends that site to the “Work” profile."
+        },
+        {
+          "t": 3.896,
+          "text": "The link opens in the “Work” window, and the band says the rule did it."
+        }
+      ],
+      "notes": [
+        "the routing rule (localhost opens in the work profile) was added by the script before the scene",
+        "the work profile was started by the script before the scene"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "link-routed-en-US.webm",
+          "bytes": 74720,
+          "sha256": "bca8a09510bf284fa7a8b3cf5d0630ce49c5cf4df63befe54f0e9a382ddee666"
+        },
+        {
+          "file": "link-routed-en-US.mp4",
+          "bytes": 141097,
+          "sha256": "1374e10a2773c86ccd5fdeaab835dde3ecc0be3176e72e77893a35631198a8cb"
+        },
+        {
+          "file": "link-routed-en-US-loop.webp",
+          "bytes": 14948,
+          "sha256": "3ff59766913e1242df48e081ca33e88fd617428950151102a36def6b5e00f7eb"
+        },
+        {
+          "file": "link-routed-en-US-poster.webp",
+          "bytes": 14392,
+          "sha256": "00d73732109d98fa1e3bb45f8fb781f2a1b6b83375745f95e63a92c7c9eebdbc"
+        },
+        {
+          "file": "link-routed-en-US.vtt",
+          "bytes": 315,
+          "sha256": "3fa7599ad136db3bbc88077b75f8499cdbcfab0de4b28f756c9dd535885d84ab"
+        }
+      ]
+    },
+    "link-routed-pt-BR": {
+      "scene": "link-routed",
+      "locale": "pt-BR",
+      "duration_s": 9.207,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 29,
+      "loop_s": [
+        1.67,
+        6.67
+      ],
+      "cuts": [
+        {
+          "t": 3.907,
+          "to": "Trabalho",
+          "real_seconds_cut": 1.0
+        }
+      ],
+      "transcript": "Na tela: no perfil «Pessoal», o endereço «http://localhost:38665/intranet» é colado na barra; ele abre na janela do «Trabalho», cuja faixa diz «Aberto pela sua regra · Mudar».",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "No perfil «Pessoal», cola-se na barra o endereço da intranet do trabalho."
+        },
+        {
+          "t": 2.87,
+          "text": "Uma regra manda esse site para o perfil «Trabalho»."
+        },
+        {
+          "t": 3.907,
+          "text": "O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra."
+        }
+      ],
+      "notes": [
+        "the routing rule (localhost opens in the work profile) was added by the script before the scene",
+        "the work profile was started by the script before the scene"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "link-routed-pt-BR.webm",
+          "bytes": 79854,
+          "sha256": "688315f3ef048a6411e52e952a9fe750b0ab52650c967cfd40b32420630cc700"
+        },
+        {
+          "file": "link-routed-pt-BR.mp4",
+          "bytes": 136150,
+          "sha256": "597a57de074c6cd494689da5c27cd628dbe05db6f3512a122af3aace3ef7ce73"
+        },
+        {
+          "file": "link-routed-pt-BR-loop.webp",
+          "bytes": 15632,
+          "sha256": "c11d4e0905ded07e7a3da5023310a4ccdc7b81eceb2d76872446caab74dc9113"
+        },
+        {
+          "file": "link-routed-pt-BR-poster.webp",
+          "bytes": 15378,
+          "sha256": "0395059e98b734a6b1a121fe6524357087f8968dfbac5802509d627691b649dd"
+        },
+        {
+          "file": "link-routed-pt-BR.vtt",
+          "bytes": 311,
+          "sha256": "8a6c76673299ce58a7ed2628e0a4cb9c68e4513fc9c66cd52e99b7beac04d2b7"
+        }
+      ]
+    },
+    "profile-opens-en-US": {
+      "scene": "profile-opens",
+      "locale": "en-US",
+      "duration_s": 9.079,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 21,
+      "loop_s": [
+        1.4,
+        6.4
+      ],
+      "cuts": [
+        {
+          "t": 3.479,
+          "to": "Work",
+          "real_seconds_cut": 11.9
+        }
+      ],
+      "transcript": "On screen: Settings › Profiles, with “Personal” and “Work”; a click on Open for “Work”; the “Work” window opens, its band reading “Work · No password”.",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "In Settings › Profiles, each part of life has a profile of its own."
+        },
+        {
+          "t": 3.479,
+          "text": "Opening “Work” opens a window of its own, with its own colour and name."
+        },
+        {
+          "t": 5.879,
+          "text": "“Work” keeps its history, logins and cookies apart from “Personal”."
+        }
+      ],
+      "notes": [
+        "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "profile-opens-en-US.webm",
+          "bytes": 116649,
+          "sha256": "1cbc4bcba6a52f5e3dfc1192ae699ce1177838329e7dc6c20aab7d06e14d595a"
+        },
+        {
+          "file": "profile-opens-en-US.mp4",
+          "bytes": 189974,
+          "sha256": "1751b970ab7a5af3be12a4053b88e78fbf0c5326e5cfb77f71725f21f35f5fd0"
+        },
+        {
+          "file": "profile-opens-en-US-loop.webp",
+          "bytes": 32600,
+          "sha256": "77a6912ab653310f71e7a07818a8d5d059be9a62f1426d4f1983cf01da12e8ff"
+        },
+        {
+          "file": "profile-opens-en-US-poster.webp",
+          "bytes": 11436,
+          "sha256": "6376f341bb0f9c0ad88c88e5c2f4a14560dc295026a9526d7bdccb36fe745d5a"
+        },
+        {
+          "file": "profile-opens-en-US.vtt",
+          "bytes": 328,
+          "sha256": "87abaa747d36daf0677b74ffad97ab7c61cc0e29eee8583e697ca57785af7bb9"
+        }
+      ]
+    },
+    "profile-opens-pt-BR": {
+      "scene": "profile-opens",
+      "locale": "pt-BR",
+      "duration_s": 9.103,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 21,
+      "loop_s": [
+        1.4,
+        6.4
+      ],
+      "cuts": [
+        {
+          "t": 3.503,
+          "to": "Trabalho",
+          "real_seconds_cut": 12.1
+        }
+      ],
+      "transcript": "Na tela: Configurações › Perfis, com «Pessoal» e «Trabalho»; clique em Abrir no «Trabalho»; a janela do «Trabalho» abre, com a faixa «Trabalho · Sem senha».",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "Em Configurações › Perfis, cada parte da vida tem o seu perfil."
+        },
+        {
+          "t": 3.503,
+          "text": "Abrir «Trabalho» abre uma janela só dele, com a sua própria cor e o seu nome."
+        },
+        {
+          "t": 5.903,
+          "text": "Histórico, logins e cookies do «Trabalho» ficam separados dos do «Pessoal»."
+        }
+      ],
+      "notes": [
+        "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "profile-opens-pt-BR.webm",
+          "bytes": 119299,
+          "sha256": "9587b21d849aeab12beeaabdfc0ee4ed003b8b4e8ca9ac930424bce8be77ac45"
+        },
+        {
+          "file": "profile-opens-pt-BR.mp4",
+          "bytes": 195654,
+          "sha256": "7dea5d91fe9c3b32af793fa2193a7592964503966bc842e19d45bb30add5bc6c"
+        },
+        {
+          "file": "profile-opens-pt-BR-loop.webp",
+          "bytes": 33904,
+          "sha256": "55ed5f4e954186d7ce16ad337c13b2323ab73d7843af77834d6bd967488a80be"
+        },
+        {
+          "file": "profile-opens-pt-BR-poster.webp",
+          "bytes": 12332,
+          "sha256": "2c09cc2d51eba86bf1847650bc0f1d4d673f84afc194ff25c8b5091720e4e8bc"
+        },
+        {
+          "file": "profile-opens-pt-BR.vtt",
+          "bytes": 337,
+          "sha256": "c7c78cc94e5ba31da707f1682c8aa32bddfb199f931d7d954d3b4efa681356ad"
+        }
+      ]
+    },
+    "protected-unlocks-en-US": {
+      "scene": "protected-unlocks",
+      "locale": "en-US",
+      "duration_s": 12.206,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 56,
+      "loop_s": [
+        5.598,
+        10.598
+      ],
+      "cuts": [
+        {
+          "t": 8.606,
+          "to": "Banking",
+          "real_seconds_cut": 2.1
+        }
+      ],
+      "transcript": "On screen: Settings › Profiles, with “Banking” locked; a click on Unlock; the unlock page asks for the password, which is typed; it says “Banking is unlocked and opening. It locks again when you close its last window.”; the “Banking” window opens, its band reading “Banking · Protected”.",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "The “Banking” profile is protected: its data is encrypted on disk."
+        },
+        {
+          "t": 3.303,
+          "text": "To open it, the profile's password."
+        },
+        {
+          "t": 8.606,
+          "text": "Once unlocked, it opens in a window of its own."
+        }
+      ],
+      "notes": [
+        "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "protected-unlocks-en-US.webm",
+          "bytes": 231827,
+          "sha256": "c02eeef665eb046c6f221ffabeaf7be58c22d02648acdc5b330a7674f2d3127d"
+        },
+        {
+          "file": "protected-unlocks-en-US.mp4",
+          "bytes": 352435,
+          "sha256": "1cda40afd8226d66a9b02f49003001f953d344bbf77c601d058fdd85ec59ff67"
+        },
+        {
+          "file": "protected-unlocks-en-US-loop.webp",
+          "bytes": 28424,
+          "sha256": "bca34d8b30788e6c381fad4c16bb5e8be1ac3ccf6d628fc736d77b566cfcb2f0"
+        },
+        {
+          "file": "protected-unlocks-en-US-poster.webp",
+          "bytes": 13096,
+          "sha256": "55a7bd0946e2d7240d9a555e66af5b8b9b6d923d987d547b0f6e39578c162343"
+        },
+        {
+          "file": "protected-unlocks-en-US.vtt",
+          "bytes": 261,
+          "sha256": "c33be8c4b9770ca0e8f120d43524efaf23e9b7612cc962673cbe63a32247bbe3"
+        }
+      ]
+    },
+    "protected-unlocks-pt-BR": {
+      "scene": "protected-unlocks",
+      "locale": "pt-BR",
+      "duration_s": 12.286,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 49,
+      "loop_s": [
+        5.595,
+        10.595
+      ],
+      "cuts": [
+        {
+          "t": 8.686,
+          "to": "Bancos",
+          "real_seconds_cut": 11.1
+        }
+      ],
+      "transcript": "Na tela: Configurações › Perfis, com «Bancos» bloqueado; clique em Desbloquear; a página de desbloqueio pede a senha, que é digitada; ela diz «Bancos está desbloqueado e abrindo. Ele volta a bloquear quando você fechar a última janela dele.»; a janela do «Bancos» abre, com a faixa «Bancos · Protegido».",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "O perfil «Bancos» é protegido: os seus dados ficam cifrados no disco."
+        },
+        {
+          "t": 3.3,
+          "text": "Para abri-lo, a senha do perfil."
+        },
+        {
+          "t": 8.686,
+          "text": "Desbloqueado, ele abre na sua própria janela."
+        }
+      ],
+      "notes": [
+        "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
+      ],
+      "buildid": "20261119020726",
+      "firefox": "160.0.1",
+      "files": [
+        {
+          "file": "protected-unlocks-pt-BR.webm",
+          "bytes": 244957,
+          "sha256": "0d226d09d008a03bac971ce9c695fce0dfa64735fc4ab7115e8e14fc211b2722"
+        },
+        {
+          "file": "protected-unlocks-pt-BR.mp4",
+          "bytes": 394089,
+          "sha256": "5e66fc0c76fd08ef9d4694d4d9504a959469f4aa853c59f48d04cb152806edc5"
+        },
+        {
+          "file": "protected-unlocks-pt-BR-loop.webp",
+          "bytes": 30044,
+          "sha256": "186b269f4756e913547d822b7e50fd764db2ddc9b35e3c2ad8d57dba9e2f8631"
+        },
+        {
+          "file": "protected-unlocks-pt-BR-poster.webp",
+          "bytes": 12012,
+          "sha256": "97d8730d2df0445275b8a64e5c71d05823358238af41db619fe1fe0f528d6a25"
+        },
+        {
+          "file": "protected-unlocks-pt-BR.vtt",
+          "bytes": 259,
+          "sha256": "f7491f0ea570d0394c78f165dfd1402b25a7c2b77396430427e1b5ece199e4a3"
+        }
+      ]
+    }
+  },
+  "schema": 1,
+  "script": "scripts/site/record_site.py",
+  "harness": "tests/lib/harness.GeckoProfileSession (throwaway HOME, headless), in ci/containers/fedora-release-itest",
+  "date": "2026-11-27T04:24:34Z",
+  "commit": "cd2d96e",
+  "worktree_clean": true,
+  "dom_changes": [
+    "removed the remotecontrol attribute from each browser window's root element (automation cue)"
+  ],
+  "edits": [
+    "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
+    "typing shown at a fixed pace of one frame per key, each key really typed into the field",
+    "while a new instance starts, nothing is recorded: the video cuts to its window once it is up",
+    "the last frame is held before the loop starts again"
+  ],
+  "encoders": {
+    "webm": "libvpx-vp9 crf 36",
+    "mp4": "libopenh264 700k",
+    "loop": "Pillow WebP q60, 10 fps, at most 5 s, played once",
+    "audio": "none"
+  },
+  "budget_bytes_per_file": 2000000
+}

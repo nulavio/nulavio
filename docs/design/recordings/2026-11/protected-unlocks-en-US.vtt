@@ -1,0 +1,13 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:03.303
+The “Banking” profile is protected: its data is encrypted on disk.
+
+2
+00:00:03.303 --> 00:00:08.606
+To open it, the profile's password.
+
+3
+00:00:08.606 --> 00:00:12.206
+Once unlocked, it opens in a window of its own.
