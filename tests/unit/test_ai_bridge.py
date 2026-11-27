@@ -4805,28 +4805,36 @@ class AutonomyControlsTest(Home):
 
     def test_a_request_cancelled_while_the_registry_is_read_is_never_shown(self):
         """OpenCodeReview on #812: a cancel that comes while the approver reads the registry, after it looked at the
-        cancel, still writes no request file for the person to see."""
+        cancel, still writes no request file for the person to see (not even one removed right after: CodeRabbit on
+        #812)."""
         agent, _ = registry.add("o", "other", "restricted")
         cancel = threading.Event()
-        real_load = registry.load
+        real_load, real_write = registry.load, registry.paths.write_private_file
+        written: list[str] = []
 
         def load(*args, **kwargs):
             cancel.set()
             return real_load(*args, **kwargs)
 
+        def write(path, *args, **kwargs):
+            if Path(path).parent == registry.requests_dir():
+                written.append(str(path))
+            return real_write(path, *args, **kwargs)
+
         shown: list[dict] = []
         approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05,
                                             on_request=shown.append)  # fmt: skip
         calling = registry.get(agent["id"])
-        with mock.patch.object(registry, "load", load):
+        with mock.patch.object(registry, "load", load), mock.patch.object(registry.paths, "write_private_file", write):
             self.assertEqual(approver.ask(calling, "interact", None, cancel=cancel), "deny")
-        self.assertEqual(shown, [])
+        self.assertEqual((written, shown), ([], []))
         self.assertEqual(list(registry.requests_dir().iterdir()), [])
 
     def test_a_request_called_off_while_it_is_written_or_the_registry_is_read_is_never_shown(self):
         """OpenCodeReview on #812 (round 2): the emergency stop turned on while the approver reads the registry, after it
         looked at the stop, or a cancel or the stop while it writes the request: no approval event is sent, the
-        request file is removed, and the request is denied."""
+        request file is removed (or, for the stop during the read, never written: CodeRabbit on #812), and the request
+        is denied."""
         self.addCleanup(registry.set_stopped, False)
         cancel = threading.Event()
         real_load, real_write = registry.load, registry.paths.write_private_file
@@ -4845,10 +4853,14 @@ class AutonomyControlsTest(Home):
                         act()
                     return real_load(*args, **kwargs)
 
-                def write(path, *args, when=when, act=act, **kwargs):
+                written: list[str] = []
+
+                def write(path, *args, when=when, act=act, written=written, **kwargs):
                     real_write(path, *args, **kwargs)
-                    if when == "write" and Path(path).parent == registry.requests_dir():
-                        act()  # while the request was written: it is there now
+                    if Path(path).parent == registry.requests_dir():
+                        written.append(str(path))
+                        if when == "write":
+                            act()  # while the request was written: it is there now
 
                 shown: list[dict] = []
                 approver = registry.BrowserApprover(fallback=Approve("once"), notice=3, timeout=30, poll=0.05,
@@ -4856,6 +4868,7 @@ class AutonomyControlsTest(Home):
                 with mock.patch.object(registry, "load", load), mock.patch.object(registry.paths, "write_private_file", write):
                     self.assertEqual(approver.ask(calling, "interact", None, cancel=cancel), "deny")
                 self.assertEqual(shown, [])
+                self.assertEqual(len(written), 0 if when == "read" else 1)  # a stop during the read writes nothing
                 self.assertEqual(list(registry.requests_dir().iterdir()), [])
 
     def test_a_session_marker_says_who_is_connected_only_while_it_runs(self):
