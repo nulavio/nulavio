@@ -123,6 +123,27 @@ NOTES = {
               "numbers": "numbers and excerpts", "shots": "captures", "and": " and ", "then": " and commit "},
 }  # fmt: skip
 REF = re.compile(r'(<code class="ref"[^>]*>)([^<]*)(</code>)')
+# The link preview (#199). The landing and the fingerprinting comparison write their own; every other
+# page that a search engine may list takes the site's picture in its language, with the page's own
+# title, description and address (link_preview). The pictures come from scripts/site/og-template.html
+# and the alternative text is what each one shows; a page behind noindex (the waitlist's link page,
+# the 404) gets none, because its address is not one to share.
+LINK_PREVIEW = {
+    "pt-BR": {
+        "image": "assets/og-pt.png",
+        "locale": "pt_BR",
+        "other": "en_US",
+        "alt": "Nulavio. A web é sua. Seus dados também. O navegador para Linux que já vem protegido. nulavio.net",
+    },
+    "en": {
+        "image": "assets/og-en.png",
+        "locale": "en_US",
+        "other": "pt_BR",
+        "alt": "Nulavio. Your web. Your rules. The Linux browser that is protected from the start. nulavio.net/en",
+    },
+}
+LINK_PREVIEW_SIZE = (1200, 630)
+ORIGIN = "https://nulavio.net/"
 
 
 class BuildError(RuntimeError):
@@ -410,6 +431,60 @@ def keep_addresses(text: str, page: str) -> str:
     return text.replace("<body>", f"<body>\n{EMAIL_OFF[0]}").replace("</body>", f"{EMAIL_OFF[1]}\n</body>")
 
 
+# A page that writes its own preview writes all of it, none blank; a partial one would hide the site's picture.
+CARD = (
+    "og:type", "og:site_name", "og:locale", "og:url", "og:title", "og:description", "og:image", "og:image:type",
+    "og:image:width", "og:image:height", "og:image:alt", "twitter:card", "twitter:image", "twitter:image:alt",
+)  # fmt: skip
+
+
+def link_preview(text: str, page: str) -> str:
+    """The page with the link-preview tags in its head, when it is to have them and has none. The head
+    is read as HTML (attributes in any order, comments ignored); a page behind noindex has no preview,
+    and a page that writes its own writes a whole one."""
+    discovery = Discovery(text)
+    shared = not discovery.noindex and bool(discovery.canonicals)
+    if discovery.card:
+        if not shared:
+            raise BuildError(f"{page}: a page behind noindex or without a canonical address has no link preview")
+        missing = [key for key in CARD if not discovery.card.get(key, "").strip()]
+        if missing:
+            raise BuildError(f"{page}: its own link preview lacks {', '.join(missing)}")
+        return text
+    if not shared:
+        return text
+    language, title, description = discovery.language, discovery.title.strip(), discovery.description.strip()
+    if not (language in LINK_PREVIEW and title and description and len(discovery.canonicals) == 1):
+        raise BuildError(f"{page}: a link preview needs a language of the site, a title, a description and one canonical address")
+    preview = LINK_PREVIEW[language]
+    image = ORIGIN + preview["image"]
+    # Another language only when a link names it at another address: a page's link to itself is no translation.
+    other = preview["other"].split("_")[0].lower()
+    translated = any(
+        a.get("hreflang", "").split("-")[0].lower() == other and a.get("href") != discovery.canonicals[0]
+        for a in discovery.alternates
+    )
+    alternate = f'<meta property="og:locale:alternate" content="{preview["other"]}">\n' if translated else ""
+    tags = (
+        '<meta property="og:type" content="website">\n'
+        '<meta property="og:site_name" content="Nulavio">\n'
+        f'<meta property="og:locale" content="{preview["locale"]}">\n'
+        f"{alternate}"
+        f'<meta property="og:url" content="{html.escape(discovery.canonicals[0])}">\n'
+        f'<meta property="og:title" content="{html.escape(" ".join(title.split()))}">\n'
+        f'<meta property="og:description" content="{html.escape(description)}">\n'
+        f'<meta property="og:image" content="{image}">\n'
+        '<meta property="og:image:type" content="image/png">\n'
+        f'<meta property="og:image:width" content="{LINK_PREVIEW_SIZE[0]}">\n'
+        f'<meta property="og:image:height" content="{LINK_PREVIEW_SIZE[1]}">\n'
+        f'<meta property="og:image:alt" content="{html.escape(preview["alt"])}">\n'
+        '<meta name="twitter:card" content="summary_large_image">\n'
+        f'<meta name="twitter:image" content="{image}">\n'
+        f'<meta name="twitter:image:alt" content="{html.escape(preview["alt"])}">\n'
+    )
+    return text.replace("</head>", tags + "</head>", 1)
+
+
 # -- build --------------------------------------------------------------------------------
 
 
@@ -421,16 +496,36 @@ class Discovery(HTMLParser):
         self.canonicals: list[str] = []
         self.alternates: list[dict[str, str]] = []
         self.noindex = False
+        # For the link preview: the page's language, title and description, and the preview tags it wrote.
+        self.language = self.title = self.description = ""
+        self.card: dict[str, str] = {}
+        self._in_title = False
         self.feed(text.partition("</head>")[0])
 
     def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
+        attrs = {key: value or "" for key, value in attrs}
+        self._in_title = tag == "title"
+        if tag == "html":
+            self.language = attrs.get("lang", "")
+        if tag == "meta":
+            key = attrs.get("property") or attrs.get("name", "")
+            if key.lower() == "description":
+                self.description = attrs.get("content", "")
+            if key.lower().startswith(("og:", "twitter:")):
+                self.card[key.lower()] = attrs.get("content", "")
         if tag == "meta" and attrs.get("name", "").lower() == "robots":
             self.noindex |= bool({"noindex", "none"} & set(re.split(r"[\s,]+", attrs.get("content", "").lower())))
         if tag == "link" and attrs.get("rel") == "canonical":
             self.canonicals.append(attrs["href"])
         if tag == "link" and attrs.get("rel") == "alternate" and "hreflang" in attrs:
             self.alternates.append(attrs)
+
+    def handle_endtag(self, tag):
+        self._in_title &= tag != "title"
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title += data
 
 
 def write_sitemap(out: Path, pages: dict) -> None:
@@ -540,7 +635,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
             if "{{" in text:
                 left = sorted(set(re.findall(r"\{\{[^}]*\}\}", text)))
                 raise BuildError(f"{page}: placeholders left: {left}")
-            path.write_text(text, encoding="utf-8")
+            path.write_text(link_preview(text, page), encoding="utf-8")
         # The fingerprinting probes side by side (#437), from tests/fixtures/privacytests/.
         try:
             comparison = privacytests_pages.pages(src, {"pt-BR": values["date_pt"], "en-US": values["date_en"]})
@@ -550,7 +645,7 @@ def build(out: Path, *, release: bool = False, commit: str = "HEAD", evidence: s
         for page, text in generated.items():
             locale = "pt-BR" if page.startswith((whats_new_pages.BASE["pt-BR"], privacytests_pages.BASE["pt-BR"])) else "en-US"
             (out / page).parent.mkdir(parents=True, exist_ok=True)
-            (out / page).write_text(stamp_page(text, values, manifest, locale, page), encoding="utf-8")
+            (out / page).write_text(link_preview(stamp_page(text, values, manifest, locale, page), page), encoding="utf-8")
             pages[page] = locale
         write_sitemap(out, pages)
     return sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
