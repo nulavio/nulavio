@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""The brand review of 2026-11 (#175): proposals and the sheets that show them in context.
+"""The brand review of 2026-11 (#175): proposals and the sheets that showed them in context.
 
-Decided on 2026-11-27: proposal A, applied by build_logo.py and build_icons.py. This script is
-the dated record of the review: it only reads the approved marks. Its "today" sheets were rendered on
-2026-11-20 from the brand of that day; rendering them again now would show the applied brand. It writes
-under docs/brand/assets/review/2026-11/:
+Decided on 2026-11-27: proposal A, applied by build_logo.py and build_icons.py. This script is the dated
+record of the review. Under docs/brand/assets/review/2026-11/ it made:
 
   proposals/*.svg   the proposed marks, from the same geometry as build_logo.py (deterministic;
-                    tests/unit/test_brand_review.py compares them with the committed files)
-  *.webp            contact sheets (lossless): today's brand and each proposal in the places people
-                    meet them. Except for capture-crops.webp they are compositions made from the
-                    assets, not screenshots of GitHub, a desktop, a store or a social network.
+                    tests/unit/test_brand_and_docs.py compares them with the committed files)
+  *.webp            contact sheets (lossless): the brand of 2026-11-20 ("today") and each proposal in
+                    the places people meet them. Except for capture-crops.webp they are compositions
+                    made from the assets, not screenshots of GitHub, a desktop, a store or a social network.
 
-Run:
+Only the proposals are still written here:
+
   python3 -I scripts/brand/build_review.py            the proposal SVGs
-  python3 -I scripts/brand/build_review.py --report   the measured tables, sizes and ratios of docs/brand/review-2026-11.md
-  python3 -I scripts/brand/build_review.py --render   the sheets too (needs ImageMagick 7 with librsvg,
-                                                      a font for the labels, and git for the captures)
+
+The sheets (--render) and the measured tables of docs/brand/review-2026-11.md (--report) read the
+approved marks, the tokens and the Settings shield as they are in the checkout. Those are now the applied
+brand, so made here they would no longer be the review: both options refuse. The code below is how
+they were made; it gives the committed sheets and tables on a checkout of 532ef2d0, the last of main
+with the brand of that day (needs ImageMagick 7 with librsvg, a font for the labels, and git for the
+captures).
 """
 
 from __future__ import annotations
@@ -759,23 +762,21 @@ def render() -> list[Path]:
     return written
 
 
+HISTORICAL = (
+    "the sheets and the tables are the record of 2026-11-20, made from the brand of that day; this checkout "
+    "holds the applied brand, so they are not made again here. To reproduce them, run this script on a "
+    "checkout of 532ef2d0"
+)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--report", action="store_true", help="print the measured tables in Markdown")
-    parser.add_argument("--render", action="store_true", help="also write the sheets (ImageMagick)")
+    parser.add_argument("--report", action="store_true", help="refused here: the measured tables, on a checkout of 532ef2d0")
+    parser.add_argument("--render", action="store_true", help="refused here: the sheets, on a checkout of 532ef2d0")
     args = parser.parse_args()
-    if args.report:
-        accents, checked = accent_report(json.loads(contrast.TOKENS.read_text(encoding="utf-8")))
-        trail = [f"- {where}: {sizes}" for where, sizes in trail_report()]
-        tile = [f"- {what} `{bg}`: {navy:.2f}:1, {corner:.2f}:1" for what, bg, navy, corner in tile_report()]
-        print("\n".join([*mark_report(), "", *accents, "", f"Checked for each accent: {checked}."]))
-        print("\n".join(["", "The trail's three points, across:", *trail]))
-        print("\n".join(["", "The icon tile against dark surfaces (its navy, its lightest corner):", *tile]))
-        return 0
-    written = write_proposals()
-    if args.render:
-        written += render()
-    for path in written:
+    if args.report or args.render:
+        parser.error(HISTORICAL)
+    for path in write_proposals():
         print(path.relative_to(ROOT))
     return 0
 

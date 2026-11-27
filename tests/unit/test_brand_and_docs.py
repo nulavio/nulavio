@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import subprocess
@@ -149,6 +151,39 @@ class TokensTest(unittest.TestCase):
     def test_known_contrast_values(self):
         self.assertAlmostEqual(contrast.ratio("#000000", "#FFFFFF"), 21.0, places=2)
         self.assertAlmostEqual(contrast.ratio("#FFFFFF", "#FFFFFF"), 1.0, places=2)
+
+
+class DatedReviewTest(unittest.TestCase):
+    """docs/brand/review-2026-11.md is the record of 2026-11-20. Its sheets and tables were made from that
+    day's brand; scripts/brand/build_review.py now reads the applied one."""
+
+    def test_the_sheets_and_tables_are_not_made_again_from_the_applied_brand(self):
+        import build_review
+
+        for flag in ("--render", "--report"):
+            # The functions that write and print are replaced: a missing refusal fails here instead of
+            # rendering over the committed sheets.
+            with self.subTest(flag=flag), contextlib.ExitStack() as stack:
+                names = ("render", "write_proposals", "mark_report")
+                replaced = [stack.enter_context(mock.patch.object(build_review, name)) for name in names]
+                stack.enter_context(mock.patch.object(sys, "argv", ["build_review.py", flag]))
+                said = stack.enter_context(contextlib.redirect_stderr(io.StringIO()))
+                with self.assertRaises(SystemExit) as stopped:
+                    build_review.main()
+                self.assertEqual(stopped.exception.code, 2)
+                self.assertIn("532ef2d0", said.getvalue())  # where they can still be made
+                for function in replaced:
+                    function.assert_not_called()
+
+    def test_the_proposals_stay_as_drawn(self):
+        import build_review
+
+        committed = sorted(p.name for p in (build_review.OUT / "proposals").glob("*.svg"))
+        generated = build_review.proposal_svgs()
+        self.assertEqual(committed, sorted(generated))
+        for name, text in generated.items():
+            with self.subTest(svg=name):
+                self.assertEqual((build_review.OUT / "proposals" / name).read_text(encoding="utf-8"), text)
 
 
 class AssetsTest(unittest.TestCase):
