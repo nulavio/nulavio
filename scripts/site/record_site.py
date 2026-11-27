@@ -258,6 +258,7 @@ TEXT = {
             "/viagem": ("Roteiro de viagem", "Três dias na serra: trilha no sábado, feira no domingo."),
             "/intranet": ("Intranet da equipe", "Pauta da reunião de segunda e as entregas do mês."),
             "/chamados": ("Chamados abertos", "Quatro pedidos de suporte aguardam resposta."),
+            "/extrato": ("Extrato do mês", "Contas da casa, a escola e a reserva para a viagem."),
         },
         "cap": {
             "profile-opens": [
@@ -266,7 +267,7 @@ TEXT = {
                 "Histórico, logins e cookies do «{work}» ficam separados dos do «{first}».",
             ],
             "link-routed": [
-                "No perfil «{first}», digita-se o endereço da intranet do trabalho.",
+                "No perfil «{first}», cola-se na barra o endereço da intranet do trabalho.",
                 "Uma regra manda esse site para o perfil «{work}».",
                 "O link abre na janela do «{work}», e a faixa diz que foi a sua regra.",
             ],
@@ -287,6 +288,7 @@ TEXT = {
             "/trip": ("Trip plan", "Three days in the hills: a hike on Saturday, the market on Sunday."),
             "/intranet": ("Team intranet", "Monday's meeting agenda and this month's deliveries."),
             "/tickets": ("Open tickets", "Four support requests are waiting for an answer."),
+            "/statement": ("This month's statement", "Household bills, school fees and the savings for the trip."),
         },
         "cap": {
             "profile-opens": [
@@ -295,7 +297,7 @@ TEXT = {
                 "“{work}” keeps its history, logins and cookies apart from “{first}”.",
             ],
             "link-routed": [
-                "In the “{first}” profile, the work intranet's address is typed.",
+                "In the “{first}” profile, the work intranet's address is pasted into the bar.",
                 "A rule sends that site to the “{work}” profile.",
                 "The link opens in the “{work}” window, and the band says the rule did it.",
             ],
@@ -309,6 +311,10 @@ TEXT = {
 }
 PERSONAL_PAGES = {"pt-BR": ["/receitas", "/viagem"], "en-US": ["/recipes", "/trip"]}
 WORK_PAGES = {"pt-BR": ["/chamados"], "en-US": ["/tickets"]}
+BANK_PAGES = {"pt-BR": ["/extrato"], "en-US": ["/statement"]}
+# A new window's own first page (the new tab) names the profile's search engine with no alternatives beside it; the
+# scenes never show a third-party service that way (#173), so a window that opens gets a fixture page first.
+NEW_WINDOW_NOTE = "the new window's tab was opened by the script before its first frame (its new tab page names a search engine)"
 PASSWORD = "artificial pass 173"  # noqa: S105 -- a throwaway volume in a throwaway home
 SHELL = "resource://builtin-addons/nulavio-shell/modules"
 PRELUDE = (
@@ -488,22 +494,24 @@ def content_point(m, element_js: str) -> tuple[float, float]:
     return ((outer[0] + inner[0]) * outer[2], (outer[1] + inner[1]) * outer[2])
 
 
-def type_into_urlbar(rec: Recorder, m, text: str) -> None:
-    """Trusted keys into the address bar (nsITextInputProcessor, as Firefox's own tests type), a frame per key."""
-    m.chrome("gURLBar.focus(); gURLBar.select();")
-    key = (
+def paste_into_urlbar(m, text: str) -> None:
+    """The address put on the clipboard and pasted into the address bar, then Enter as a trusted key. Typing it key by
+    key would show the search row of the profile's engine for the first keys (a third-party service, alone)."""
+    m.chrome(
+        "Cc['@mozilla.org/widget/clipboardhelper;1'].getService(Ci.nsIClipboardHelper).copyString(arguments[0]);"
+        "gURLBar.focus(); gURLBar.select(); goDoCommand('cmd_paste');",
+        [text],
+    )
+    if m.chrome("return gURLBar.value;") not in (text, text.removeprefix("http://")):
+        raise RuntimeError("the address was not pasted")
+
+
+def press_enter_in_urlbar(m) -> None:
+    m.chrome(
         "const tip = Cc['@mozilla.org/text-input-processor;1'].createInstance(Ci.nsITextInputProcessor);"
         "if (!tip.beginInputTransactionForTests(window)) throw new Error('no input transaction');"
-        "const ch = arguments[0];"
-        "const e = ch === '\\n' ? new KeyboardEvent('', {key: 'Enter', code: 'Enter', keyCode: 13})"
-        " : new KeyboardEvent('', {key: ch});"
-        "tip.keydown(e); tip.keyup(e);"
+        "const e = new KeyboardEvent('', {key: 'Enter', code: 'Enter', keyCode: 13}); tip.keydown(e); tip.keyup(e);"
     )
-    for ch in text:
-        m.chrome(key, [ch])
-        rec.shot(m)
-        rec.hold(TYPE_STEP)
-    m.chrome(key, ["\n"])
 
 
 def type_into_field(rec: Recorder, m, element: str, text: str) -> None:
@@ -636,7 +644,8 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["work"] in " ".join(band(child)), 30, "the work profile's band")
-        window_ready(child, [])  # what the new window shows by itself
+        window_ready(child, [fx.url(p) for p in WORK_PAGES[locale]])
+        rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["work"], time.monotonic() - started)
         rec.caption(cap[1])
         rec.shot(child, poster=True)
@@ -674,7 +683,10 @@ class Scenes:
         rec.click()
         rec.shot(m)
         rec.highlight()
-        type_into_urlbar(rec, m, target)
+        paste_into_urlbar(m, target)
+        rec.shot(m)
+        rec.hold(1.2)
+        press_enter_in_urlbar(m)
         rec.caption(cap[1])
         started = time.monotonic()
         rec.watch(m, 1.0)
@@ -703,9 +715,9 @@ class Scenes:
         rec.notes.append("the routing rule (localhost opens in the work profile) was added by the script before the scene")
         rec.notes.append("the work profile was started by the script before the scene")
         if locale == "pt-BR":
-            return (f"Na tela: no perfil «{t['first']}», o endereço «{target}» é digitado; ele abre na janela do"
+            return (f"Na tela: no perfil «{t['first']}», o endereço «{target}» é colado na barra; ele abre na janela do"
                     f" «{t['work']}», cuja faixa diz «{said}».")  # fmt: skip
-        return (f"On screen: in the “{t['first']}” profile, the address “{target}” is typed; it opens in the"
+        return (f"On screen: in the “{t['first']}” profile, the address “{target}” is pasted into the bar; it opens in the"
                 f" “{t['work']}” window, whose band says “{said}”.")  # fmt: skip
 
     def protected_unlocks(self, rec: Recorder, s, fx: Fixtures, locale: str, others: list) -> str:
@@ -775,7 +787,8 @@ class Scenes:
         child = self.connect(s, path)
         others.append(child)
         wait(lambda: t["bank"] in " ".join(band(child)), 30, "the protected profile's band")
-        window_ready(child, [])
+        window_ready(child, [fx.url(p) for p in BANK_PAGES[locale]])
+        rec.notes.append(NEW_WINDOW_NOTE)
         rec.cut(t["bank"], time.monotonic() - started)
         rec.caption(cap[2])
         rec.shot(child, poster=True)
