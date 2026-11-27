@@ -2113,10 +2113,6 @@ out.pauseEndPrompt = $("prompt").value;
 if (starts.length > before) {
   await finish();
 }
-$("allow-profile").fire("click");
-await idle();
-selected = tab;
-
 // #760: a redraw of the items replaces their Remove buttons. The one with focus keeps it, as the same item's new
 // button; when that item is gone, focus goes to the item now in its place, then the one before it, then the offer
 // to include the page. A redraw takes no focus that was elsewhere.
@@ -2126,6 +2122,7 @@ const focusRender = async () => {
   $("allow-profile").fire("click");
   await idle();
 };
+selected = tab;
 kept = [item("f1", "Foco 1"), selectionOf("f2", "Foco 2"), selectionOf("f3", "Foco 3")];
 await focusRender();
 out.focusShown = shown();
@@ -2157,6 +2154,7 @@ out.focusElsewhere = document.activeElement === $("prompt");
 kept = [];
 $("allow-profile").fire("click");
 await idle();
+selected = tab;
 console.log(JSON.stringify(out));
 """
 
