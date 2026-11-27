@@ -13,6 +13,8 @@ import settings_page
 from test_profiles import chrome_async
 
 LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
+# Hide every panel that is opening or open, as Escape closes it.
+CLOSE_PANELS = "for (const p of document.querySelectorAll('panel')) if (['showing', 'open'].includes(p.state)) p.hidePopup?.();"
 KEYSET = "[...document.querySelectorAll('#ext-keyset-id-shell_nulavio_net key')]"
 NAMES = {"accel": "control", "control": "control", "shift": "shift", "alt": "alt", "meta": "meta"}
 
@@ -388,10 +390,16 @@ class ShortcutsTest(unittest.TestCase):
             self.m.chrome(pick, ["nulavio-profiles"])
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(popup), 10))
         # Closed as Escape closes it: the keyboard goes back to the page (headless keeps it in the closed panel).
-        self.m.chrome(
-            "for (const p of document.querySelectorAll('panel[panelopen], panel[open]')) p.hidePopup?.();"
-            "gBrowser.selectedBrowser.focus();"
+        # The menu's page loads first in a panel that is never shown, and its panel opens once it has loaded: close it
+        # only when it is open, and wait until it is shut, or it opens late and takes the keyboard from the next test.
+        shown = (
+            "return [...document.querySelectorAll('panel')].some(p => ['showing', 'open'].includes(p.state)"
+            "  && [...p.querySelectorAll('browser')].some(b => (b.currentURI?.spec || '').endsWith('/profiles/popup.html')));"
         )
+        harness.wait_until(lambda: self.m.chrome(shown), 10)
+        self.m.chrome(CLOSE_PANELS)
+        self.assertTrue(harness.wait_until(lambda: not self.m.chrome(shown), 10))
+        self.m.chrome("gBrowser.selectedBrowser.focus();")
         # Nothing selected: the link is not copied, and the window says why (as Ctrl+Alt+C does).
         self.m.chrome(pick, ["nulavio-highlight"])
         why = "Selecione um texto na página antes de copiar um link para ele."
@@ -402,6 +410,10 @@ class ShortcutsTest(unittest.TestCase):
         """#321: Ctrl+Alt+P puts the address bar of its window in the engine's actions mode, focused, with Nulavio's
         actions listed; nothing runs until one is picked."""
         before = self.m.chrome(f"return {LAYOUT}.immersive().on;")
+        # From the page, with no panel left open by an earlier test to take the keyboard back.
+        self.m.chrome(CLOSE_PANELS + "gBrowser.selectedBrowser.focus();")
+        outside = "return !document.activeElement?.closest('panel');"
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(outside), 10))
         self.m.chrome(f"{key_of('alt,control+P')}.doCommand();")
         mode = "return {source: gURLBar.searchMode?.source ?? null, focused: gURLBar.focused};"
         actions_source = self.m.chrome(
