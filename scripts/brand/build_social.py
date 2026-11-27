@@ -18,8 +18,11 @@ The texts are input: the templates' sample texts are SAMPLES below; a new post i
   python3 -I scripts/brand/build_social.py post --text post.json --out <dir>
 
 where post.json holds {"lang": "en", "kicker": "...", "title": "...", "body": "...", "footer": "..."}
-(title and body may contain line breaks; long lines wrap). It writes the four formats into <dir>, or
-nothing: a text that does not fit one of them, or a rasteriser that fails, leaves <dir> as it was.
+(title and body may contain line breaks; long lines wrap at spaces, never at a no-break space). It
+writes the four formats into <dir>, or nothing: a text that does not fit one of them, a rasteriser that
+fails, a directory where a file is to go, or a file that cannot be moved in, leaves <dir> as it was (and
+absent, when it was). Two runs into one directory at once are not mixed: the second is refused. Only a
+run that is killed while it moves its files in can leave some of them.
 
 Text is set in Noto Sans (SIL OFL; installed on most Linux desktops and in the Fedora build image),
 the brand's documented fallback while Inter is not bundled. The SVG files are deterministic
@@ -35,6 +38,8 @@ Uploading the avatar and the header to the profiles, and posting, stay with the 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import html
 import json
 import os
@@ -111,9 +116,12 @@ TAGLINE = {"en": "The Linux browser that is protected from the start.", "pt-BR":
 # wrapped and refused by, so the SVG files need no font to be generated. Kerning is left out: it mostly
 # tightens, so a line is drawn a little shorter than it is measured. Text is limited to these characters,
 # Basic Latin, Latin-1 and the punctuation below, because the width of any other is not known here and
-# a host without the glyph would draw it in another font.
+# a host without the glyph would draw it in another font. The first of Latin-1 is the no-break space
+# (U+00A0, 260 in the three files, as the space): it is drawn, and a line never breaks at it.
+NBSP = "\u00a0"
 MEASURED = (
     "".join(chr(c) for c in range(0x20, 0x7F))
+    + NBSP
     + "¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
     + "–—‘’‚“”„†•…‹›€™−"
 )
@@ -122,7 +130,7 @@ ADVANCES = {
 260 269 408 646 572 831 732 225 300 300 551 572 268 322 268 372 572 572 572 572 572 572 572 572 572 572 268 268 572
 572 572 434 899 639 650 632 730 556 519 728 741 339 273 619 524 907 760 781 605 781 622 549 556 731 600 930 586 566
 572 329 372 329 572 444 281 561 615 480 615 564 344 615 618 258 258 534 258 935 618 605 615 615 413 479 361 618 508
-786 529 510 470 380 551 380 572 269 572 572 572 572 551 513 580 832 357 509 572 832 500 428 572 350 350 281 623 655
+786 529 510 470 380 551 380 572 260 269 572 572 572 572 551 513 580 832 357 509 572 832 500 428 572 350 350 281 623 655
 268 225 350 376 509 745 771 781 434 639 639 639 639 639 639 881 632 556 556 556 556 339 339 339 339 730 760 781 781
 781 781 781 572 781 731 731 731 731 566 605 631 561 561 561 561 561 561 864 480 564 564 564 564 258 258 258 258 605
 618 605 605 605 605 605 572 605 618 618 618 618 510 615 510 500 1000 175 175 250 359 359 416 512 376 791 310 310 572
@@ -132,7 +140,7 @@ ADVANCES = {
 260 282 479 646 572 902 750 266 339 339 542 572 285 320 281 415 572 572 572 572 572 572 572 572 572 572 281 285 572
 572 572 477 898 692 665 642 732 560 549 724 765 389 331 664 559 943 813 791 621 791 656 551 577 756 650 967 670 626
 579 331 415 331 572 411 365 599 632 516 632 597 387 632 650 299 298 620 298 975 650 625 632 632 447 502 434 650 571
-856 578 571 493 394 551 394 572 286 572 572 568 572 551 486 593 832 381 614 572 832 500 424 572 379 380 365 653 648
+856 578 571 493 394 551 394 572 260 286 572 572 568 572 551 486 593 832 381 614 572 832 500 424 572 379 380 365 653 648
 281 263 380 386 614 830 874 845 477 692 692 692 692 692 692 952 642 560 560 560 560 389 389 389 389 732 805 791 791
 791 791 791 572 791 756 756 756 756 626 628 704 599 599 599 599 599 599 917 516 597 597 597 597 299 299 299 299 627
 650 625 625 625 625 625 572 619 650 650 650 650 571 632 571 500 1000 217 217 286 445 445 513 513 376 855 365 365 572
@@ -143,9 +151,23 @@ _ADVANCE = {weight: dict(zip(MEASURED, (int(v) for v in row.split()), strict=Tru
 # Semibold (the footer) is bounded by the wider of the two, checked against NotoSans-SemiBold.ttf for every character.
 _ADVANCE[600] = {c: max(_ADVANCE[400][c], _ADVANCE[700][c]) for c in MEASURED}
 
-# A language tag as BCP 47 writes the common ones (en, pt-BR, es-419, zh-Hant-TW). It becomes part of a
-# file name and an attribute, so nothing else is taken.
-LANG = re.compile(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*")
+# A language tag as BCP 47 builds the common ones: a language, then at most one script, at most one
+# region, then variants, in that order (en, pt-BR, es-419, zh-Hant-TW, de-CH-1901). Extensions, private
+# use and the grandfathered tags are not taken, and whether a subtag is registered is not checked. The
+# tag becomes part of a file name and the xml:lang attribute, so nothing else passes.
+LANG = re.compile(r"[A-Za-z]{2,3}(?:-[A-Za-z]{4})?(?:-(?:[A-Za-z]{2}|[0-9]{3}))?((?:-(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*)")
+
+# White space in a text. A line break is LF, and CR LF, CR and Unicode's line and paragraph separators
+# are read as one. A line wraps at a space or a tab only. Every other white space is refused with the
+# characters that are not measured, the no-break space excepted, which is measured.
+LINE_BREAK = re.compile("\r\n|[\r\u2028\u2029]")
+BREAKS = " \t\n"
+
+
+def language_tag(tag: str) -> bool:
+    match = LANG.fullmatch(tag)
+    variants = match.group(1).lower().split("-")[1:] if match else []
+    return bool(match) and len(variants) == len(set(variants))  # BCP 47: a variant is not repeated
 
 
 def advance(line: str, size: float, weight: int) -> float:
@@ -202,11 +224,12 @@ def trail(x: float, y: float, size: float) -> str:
 
 
 def wrap(text: str, size: float, width: float, weight: int) -> list[str]:
-    """`text` in lines no wider than `width`, broken at spaces. A word wider than the line is refused."""
+    """`text` in lines no wider than `width`, broken at spaces and tabs: a no-break space stays inside
+    its word. A word wider than the line is refused."""
     lines: list[str] = []
     for paragraph in text.split("\n"):
         line = ""
-        for word in paragraph.split():
+        for word in re.findall(r"[^ \t]+", paragraph):
             if advance(word, size, weight) > width:
                 raise ValueError(f"{word!r} is wider than the card: break it or shorten it")
             candidate = f"{line} {word}".strip()
@@ -221,7 +244,8 @@ def wrap(text: str, size: float, width: float, weight: int) -> list[str]:
 
 def text(lines: list[str], x: float, y: float, size: float, leading: float, fill: str, weight: int) -> str:
     spans = "".join(
-        f'<tspan x="{bl.n(x)}" y="{bl.n(y + i * size * leading)}">{html.escape(line)}</tspan>' for i, line in enumerate(lines)
+        f'<tspan x="{bl.n(x)}" y="{bl.n(y + i * size * leading)}">{html.escape(line).replace(NBSP, "&#160;")}</tspan>'
+        for i, line in enumerate(lines)
     )
     return f'<text font-family="{FONT}" font-size="{bl.n(size)}" font-weight="{weight}" fill="{fill}">{spans}</text>'
 
@@ -236,22 +260,27 @@ def validate(post: object) -> dict:
         raise ValueError(f"a post has the keys {sorted(keys)}; lang and title are required")
     if not all(isinstance(v, str) for v in post.values()):
         raise ValueError("every value of a post is a string")
-    if not LANG.fullmatch(post["lang"]):
+    if not language_tag(post["lang"]):
         raise ValueError(f"lang is a language tag such as en or pt-BR, not {post['lang']!r}")
-    if not post["title"].strip():
-        raise ValueError("the title is empty")
-    for key in sorted((keys - {"lang"}) & set(post)):
-        # Line breaks and other white space separate words and are never drawn; every other character
-        # must be one whose width is known. That also keeps out what XML cannot hold (NUL, surrogates).
+    texts = {key: LINE_BREAK.sub("\n", post[key]) for key in keys - {"lang"} if key in post}
+    for key in sorted(texts):
+        # Line breaks, spaces and tabs separate words and are never drawn; every other character must be
+        # one whose width is known. That also keeps out what XML cannot hold (NUL, surrogates).
         # The kicker is drawn in capitals, and a capital can be outside the set when its letter is inside (ÿ, µ).
-        drawn = post[key].upper() if key == "kicker" else post[key]
-        unknown = sorted({c for c in drawn if not c.isspace() and c not in MEASURED})
+        drawn = texts[key].upper() if key == "kicker" else texts[key]
+        unknown = sorted({c for c in drawn if c not in BREAKS and c not in MEASURED})
         if unknown:
             listed = ", ".join(f"U+{ord(c):04X}" for c in unknown)
             raise ValueError(f"the {key} has characters this script cannot measure ({listed}): see MEASURED")
-    out = {"kicker": "", "body": "", "footer": "", **post}
-    # The kicker and the footer are one line each.
-    return {**out, "kicker": " ".join(out["kicker"].split()), "footer": " ".join(out["footer"].split())}
+    out = {"kicker": "", "body": "", "footer": "", **post, **texts}
+    # The title and the body keep the line breaks inside them; white space around them is not a line, so
+    # a body of spaces is no body. The kicker and the footer are one line each, which never wraps: a
+    # no-break space in them is a space.
+    out |= {key: out[key].strip() for key in ("title", "body")}
+    out |= {key: " ".join(out[key].split()) for key in ("kicker", "footer")}
+    if not out["title"]:
+        raise ValueError("the title is empty")
+    return out
 
 
 def post_svg(fmt: str, post: dict) -> str:
@@ -445,28 +474,85 @@ def write_all(svg_only: bool = False) -> list[Path]:
     return written
 
 
+class Busy(ValueError):
+    """Another run holds the directory."""
+
+
+def publish(staged: list[Path], target: Path, aside: Path) -> None:
+    """Move the staged files into `target` as one set. The directory is locked for the move, so that
+    two runs are never mixed; nothing is moved when a directory stands where a file is to go; and a
+    move that fails puts back what the moves before it replaced. `aside`, on the same file system,
+    holds the replaced files until then."""
+    directory = os.open(target, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        try:
+            fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Busy(f"another run is writing into {target}: nothing was written") from None
+        blocked = sorted(path.name for path in staged if (target / path.name).is_dir() and not (target / path.name).is_symlink())
+        if blocked:
+            raise ValueError(f"{', '.join(blocked)} in {target}: a directory is where a file is to go; nothing was written")
+        moved: list[tuple[Path, Path | None]] = []
+        try:
+            for path in staged:
+                destination = target / path.name
+                old = aside / path.name if os.path.lexists(destination) else None
+                if old:
+                    os.replace(destination, old)
+                moved.append((destination, old))
+                os.replace(path, destination)
+        except OSError:
+            for destination, old in reversed(moved):
+                if old:
+                    os.replace(old, destination)
+                else:
+                    with contextlib.suppress(FileNotFoundError):
+                        os.unlink(destination)
+            raise
+    finally:
+        os.close(directory)
+
+
 def write_post(post: object, out: Path, svg_only: bool = False) -> list[Path]:
-    """One post in every format, into `out`. Every format is drawn before a file is written, and the
-    files are made in a directory beside their destination (the same file system, so that each move
-    is a rename) and moved in at the end: a text that does not fit one format, or a rasteriser that
-    fails, leaves `out` as it was."""
+    """One post in every format, into `out`. Every format is drawn before a file is written. The
+    files are made in a directory inside the nearest directory that exists (`out`, or the one it will
+    be created in: the same file system, so that each move is a rename), and `out` is created and they
+    are moved in together at the end (publish). A text that does not fit one format, a rasteriser that
+    fails or a move that cannot be made leaves `out` as it was, and absent when it was absent.
+    ImageMagick is given absolute paths, so a name that starts with "-" is not read as an option; the
+    paths returned are under `out` as the caller wrote it."""
     post = validate(post)
     svgs = {f"{fmt}-{post['lang']}.svg": post_svg(fmt, post) for fmt in FORMATS}
-    out.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=out, prefix=".build_social-") as staging:
+    target = Path(os.path.abspath(out))
+    missing = [path for path in (target, *target.parents) if not os.path.lexists(path)]  # deepest first
+    anchor = target if not missing else missing[-1].parent
+    with tempfile.TemporaryDirectory(dir=anchor, prefix=".build_social-") as staging:
+        new, aside = Path(staging) / "new", Path(staging) / "old"
+        new.mkdir()
+        aside.mkdir()
         staged = []
         for file_name, text_ in svgs.items():
-            path = Path(staging) / file_name
+            path = new / file_name
             path.write_text(text_, encoding="utf-8")
             staged.append(path)
             if not svg_only:
                 rasterise(path, path.with_suffix(".png"))
                 staged.append(path.with_suffix(".png"))
-        written = []
-        for path in staged:
-            os.replace(path, out / path.name)
-            written.append(out / path.name)
-    return written
+        created = []
+        try:
+            for path in reversed(missing):
+                with contextlib.suppress(FileExistsError):  # made meanwhile by another run: not this run's to remove
+                    path.mkdir()
+                    created.append(path)
+            publish(staged, target, aside)
+        except Busy:
+            raise  # the directory is the other run's now
+        except BaseException:
+            for path in reversed(created):  # deepest first, and only while it is empty
+                with contextlib.suppress(OSError):
+                    path.rmdir()
+            raise
+    return [out / path.name for path in staged]
 
 
 def main() -> int:

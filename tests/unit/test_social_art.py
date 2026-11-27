@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -224,11 +226,60 @@ class SocialArtTest(unittest.TestCase):
         for what, post in refused.items():
             with self.subTest(post=what), self.assertRaises(ValueError):
                 build_social.validate(post)
-        for lang in ("en", "pt-BR", "es-419", "zh-Hant-TW"):
+        for lang in ("en", "pt-BR", "es-419", "zh-Hant-TW", "zh-Hant", "de-CH-1901", "de-1996", "sl-rozaj-biske", "fil"):
             self.assertEqual(build_social.validate({**good, "lang": lang})["lang"], lang)
+        # Not a tag BCP 47 can build: two regions, two scripts, a region before a script, a repeated
+        # variant, an empty subtag, and the forms this script does not take (extension, private use,
+        # grandfathered). Each would have reached xml:lang.
+        malformed = ("en-US-GB", "en-Latn-Cyrl", "en-US-Latn", "de-1901-1901", "de-CH-1901-1901", "pt-BR-", "en--US")
+        for lang in (*malformed, "en-US-u-ca-gregory", "en-x-priv", "i-klingon", "e", "abcd", "en_US", "\u00ebn", "en-U\uff33"):
+            with self.subTest(lang=lang), self.assertRaisesRegex(ValueError, "language tag"):
+                build_social.validate({**good, "lang": lang})
         spaced = {**good, "kicker": " Notas \t da  versão\n", "body": "ÿ “aspas” — €", "footer": " nulavio.net "}
         kept = build_social.validate(spaced)
         self.assertEqual((kept["kicker"], kept["footer"]), ("Notas da versão", "nulavio.net"))  # one line each
+
+    def test_a_line_never_breaks_at_a_no_break_space(self):
+        # 1:1 at 88 px bold has 904 px: "Download up to 10 GB" breaks before "GB" when the last space is an
+        # ordinary one. The no-break space is the author's word that the number and its unit stay together.
+        self.assertEqual(build_social.wrap("Download up to 10 GB", 88.0, 904.0, 700), ["Download up to 10", "GB"])
+        self.assertEqual(build_social.wrap("Download up to 10\u00a0GB", 88.0, 904.0, 700), ["Download up to", "10\u00a0GB"])
+        self.assertEqual(build_social.advance("10\u00a0GB", 88.0, 700), build_social.advance("10 GB", 88.0, 700))
+        post = {"lang": "en", "title": "Download up to 10\u00a0GB", "body": "Up to 10\u00a0GB \u00a0a day."}
+        text = build_social.post_svg("1x1", post)
+        lines = [span.text for span in ET.fromstring(text).iter(f"{SVG_NS}tspan")]
+        self.assertEqual(lines, ["Up to 10\u00a0GB \u00a0a day.", "Download up to", "10\u00a0GB"])
+        self.assertIn(">10&#160;GB</tspan>", text)  # written as a reference, so that it shows in the file
+        self.assertNotIn("\u00a0", text)
+        with self.assertRaisesRegex(ValueError, "wider than the card"):  # joined words are one word
+            build_social.post_svg("1x1", {"lang": "en", "title": "\u00a0".join(["Download"] * 4)})
+
+    def test_every_line_break_is_a_line_and_other_white_space_is_refused(self):
+        for separator in ("\n", "\r\n", "\r", "\u2028", "\u2029"):
+            with self.subTest(separator=separator):
+                post = build_social.validate({"lang": "en", "title": f"a{separator}b", "body": f"c{separator}d"})
+                self.assertEqual((post["title"], post["body"]), ("a\nb", "c\nd"))
+                root = ET.fromstring(build_social.post_svg("16x9", {"lang": "en", "title": f"a{separator}b"}))
+                self.assertEqual([span.text for span in root.iter(f"{SVG_NS}tspan")], ["a", "b"])
+        # White space that is neither a space, a tab nor one of those line breaks would be drawn as a space
+        # where its author meant something else (or nothing XML can hold): refused, as the unmeasured are.
+        for other in ("\x0b", "\x0c", "\x1c", "\x1f", "\x85", "\u2003", "\u202f", "\u3000", "\ufeff"):
+            for key in ("kicker", "title", "body", "footer"):
+                with self.subTest(other=other, key=key), self.assertRaisesRegex(ValueError, f"U\\+{ord(other):04X}"):
+                    build_social.validate({"lang": "en", "title": "x", key: f"a{other}b"})
+        self.assertEqual(build_social.wrap("a\tb  c", 88.0, 904.0, 700), ["a b c"])
+
+    def test_white_space_around_a_text_is_not_a_line(self):
+        # Six title lines and a footer fit 16:9 without a body. A body of three spaces was a line of
+        # nothing that took 86.4 px and pushed the title into the lockup.
+        six = {"lang": "en", "title": "a\nb\nc\nd\ne\nf", "footer": "nulavio.net"}
+        plain = build_social.post_svg("16x9", six)
+        for body in ("", "   ", " \n\t\n ", "\u00a0", "\r\n"):
+            with self.subTest(body=body):
+                self.assertEqual(build_social.post_svg("16x9", {**six, "body": body}), plain)
+        self.assertEqual(build_social.post_svg("16x9", {**six, "title": "\n" + six["title"] + " \n"}), plain)
+        kept = build_social.validate({"lang": "en", "title": "a\n\nb", "body": "\nc\n\nd\n"})
+        self.assertEqual((kept["title"], kept["body"]), ("a\n\nb", "c\n\nd"))  # the breaks inside stay
 
     def run_post(self, post: object, out: Path, *, raw: str | None = None) -> subprocess.CompletedProcess:
         source = out.parent / "post.json"
@@ -286,6 +337,115 @@ class SocialArtTest(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in out.iterdir()), names)
             self.assertEqual(sorted(p.name for p in written), names)
             self.assertIn("New", (out / "16x9-en.svg").read_text(encoding="utf-8"))
+
+    def test_a_failed_rasteriser_leaves_no_new_directory(self):
+        def fails(source: Path, png: Path) -> None:
+            raise subprocess.CalledProcessError(1, "magick")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for out in (Path(tmp) / "new", Path(tmp) / "a" / "b" / "c"):
+                with self.subTest(out=out), mock.patch.object(build_social, "rasterise", fails):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        build_social.write_post({"lang": "en", "title": "New"}, out)
+                    self.assertEqual(list(Path(tmp).iterdir()), [])
+            # The same when the files are made and cannot be moved in.
+            out = Path(tmp) / "a" / "b"
+            with mock.patch.object(build_social, "publish", side_effect=OSError("no room")), self.assertRaises(OSError):
+                build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            written = build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+            self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(p.name for p in written))
+            self.assertEqual([p.name for p in Path(tmp).rglob(".build_social-*")], [])
+
+    def test_imagemagick_is_given_absolute_paths(self):
+        # A relative --out that starts with "-" gave ImageMagick a file name it read as an option.
+        seen = []
+
+        def records(source: Path, png: Path) -> None:
+            seen.extend((source, png))
+            png.write_bytes(b"png")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            before = os.getcwd()
+            self.addCleanup(os.chdir, before)
+            os.chdir(tmp)
+            with mock.patch.object(build_social, "rasterise", records):
+                written = build_social.write_post({"lang": "en", "title": "New"}, Path("-cards"))
+            os.chdir(before)
+            self.assertEqual(len(seen), 8)
+            for path in seen:
+                self.assertTrue(path.is_absolute(), path)
+            names = sorted(f"{f}-en.{ext}" for f in build_social.FORMATS for ext in ("svg", "png"))
+            self.assertEqual(
+                sorted(str(p) for p in written), sorted(f"-cards/{name}" for name in names)
+            )  # as the caller wrote it
+            self.assertEqual(sorted(p.name for p in (Path(tmp) / "-cards").iterdir()), names)
+
+    def old_post(self, out: Path, names: list[str]) -> dict[str, bytes]:
+        out.mkdir()
+        for name in names:
+            (out / name).write_text(f"old {name}", encoding="utf-8")
+        return {p.name: p.read_bytes() for p in out.iterdir()}
+
+    def test_a_directory_in_the_way_is_refused_before_anything_moves(self):
+        names = [f"{fmt}-en.svg" for fmt in build_social.FORMATS]
+        for in_the_way in ("16x9-en.svg", "1x1-en.svg", "9x16-en.svg"):
+            with self.subTest(directory=in_the_way), tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out"
+                before = self.old_post(out, [name for name in names if name != in_the_way])
+                (out / in_the_way).mkdir()
+                (out / in_the_way / "kept.txt").write_text("kept", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, f"{in_the_way} in .*a directory"):
+                    build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+                self.assertEqual({p.name: p.read_bytes() for p in out.iterdir() if p.is_file()}, before)
+                self.assertEqual([p.name for p in (out / in_the_way).iterdir()], ["kept.txt"])
+                self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["out"])
+                done = self.run_post({"lang": "en", "title": "New"}, out)  # and the command says so, without a trace
+                self.assertEqual(done.returncode, 1)
+                self.assertNotIn("Traceback", done.stderr)
+                self.assertIn(in_the_way, done.stderr)
+
+    def test_a_move_that_fails_puts_back_what_was_replaced(self):
+        names = [f"{fmt}-en.svg" for fmt in build_social.FORMATS]
+        replace = os.replace
+        # Each file there before takes two moves (the old one aside, the new one in); a file that is new takes one.
+        for there_before, failing in ((names, 2), (names, 5), (names, 8), (names[:2], 4), (names[:2], 6), ([], 1), ([], 3)):
+            calls = []
+
+            def fails_once(source, destination, failing=failing, calls=calls):
+                calls.append(destination)
+                if len(calls) == failing:
+                    raise OSError("the move failed")
+                replace(source, destination)
+
+            with self.subTest(there_before=len(there_before), failing=failing), tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out"
+                before = self.old_post(out, there_before)
+                with (
+                    mock.patch.object(build_social.os, "replace", fails_once),
+                    self.assertRaisesRegex(OSError, "the move failed"),
+                ):
+                    build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+                self.assertGreaterEqual(len(calls), failing)
+                self.assertEqual({p.name: p.read_bytes() for p in out.iterdir()}, before)
+                self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["out"])
+
+    def test_two_runs_into_one_directory_are_not_mixed(self):
+        names = [f"{fmt}-en.svg" for fmt in build_social.FORMATS]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            before = self.old_post(out, names)
+            other_run = os.open(out, os.O_RDONLY)  # what publish holds while it moves its files in
+            try:
+                fcntl.flock(other_run, fcntl.LOCK_EX)
+                with self.assertRaisesRegex(ValueError, "another run is writing"):
+                    build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+                self.assertEqual({p.name: p.read_bytes() for p in out.iterdir()}, before)
+            finally:
+                os.close(other_run)
+            build_social.write_post({"lang": "en", "title": "New"}, out, svg_only=True)
+            self.assertIn("New", (out / "16x9-en.svg").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(names))  # no lock file, nothing left behind
 
     def test_writing_touches_only_the_social_directory(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_social, "OUT", Path(tmp) / "social"):
