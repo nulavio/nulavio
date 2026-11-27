@@ -504,6 +504,14 @@ class SiteTest(unittest.TestCase):
             with self.subTest(language=language):
                 self.assertEqual(len(shown), 4)
                 self.assertEqual(build_site.LINK_PREVIEW[language]["alt"], "Nulavio. " + " ".join(shown))
+                # The picture stands for every page without one of its own (download, release notes,
+                # engineering): its foot is the address alone, and it invites to nothing.
+                self.assertRegex(shown[3], r"^nulavio\.net(/en)?$")
+                self.assertNotRegex(" ".join(shown).lower(), r"waitlist|lista de espera")
+        # The sizes the template's comment and the brand guidelines give for the texts.
+        sizes = sorted(int(v) for v in re.findall(r"font-size: (\d+)px", template))
+        self.assertEqual(sizes, [34, 36, 104])
+        self.assertRegex(template, r'font-family: "Noto Sans", Inter,', "the face the committed pictures are set in first")
         tokens = json.dumps(json.loads((ROOT / "docs/brand/tokens.json").read_text(encoding="utf-8"))).upper()
         colours = set(re.findall(r"#[0-9A-Fa-f]{6}\b", template))
         self.assertGreaterEqual(len(colours), 4)

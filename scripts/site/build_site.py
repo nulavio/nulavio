@@ -133,15 +133,13 @@ LINK_PREVIEW = {
         "image": "assets/og-pt.png",
         "locale": "pt_BR",
         "other": "en_US",
-        "alt": "Nulavio. A web é sua. Seus dados também. O navegador para Linux que já vem protegido. "
-        "Lista de espera aberta · nulavio.net",
+        "alt": "Nulavio. A web é sua. Seus dados também. O navegador para Linux que já vem protegido. nulavio.net",
     },
     "en": {
         "image": "assets/og-en.png",
         "locale": "en_US",
         "other": "pt_BR",
-        "alt": "Nulavio. Your web. Your rules. The Linux browser that is protected from the start. "
-        "Waitlist open · nulavio.net/en",
+        "alt": "Nulavio. Your web. Your rules. The Linux browser that is protected from the start. nulavio.net/en",
     },
 }
 LINK_PREVIEW_SIZE = (1200, 630)

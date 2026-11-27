@@ -5,11 +5,10 @@
 <defs><radialGradient id="glow" cx="1126" cy="640" r="960" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0E3B33"/><stop offset="0.7" stop-color="#0E3B33" stop-opacity="0"/></radialGradient></defs>
 <rect width="1280" height="640" fill="#0F1C2A"/>
 <rect width="1280" height="640" fill="url(#glow)"/>
-<g aria-hidden="true"><path d="M1096 -96 V250" stroke-width="96" fill="none" stroke="#1E4252" stroke-linecap="round"/><g fill="#1E4252"><circle cx="1096" cy="362.32" r="40.32"/><circle cx="1096" cy="454.48" r="27.84"/><circle cx="1096" cy="521.68" r="17.28"/></g></g>
-<g transform="translate(96 165.55) scale(2.53) translate(4.5 -4)"><path d="M0 32 V12 L38 60 V12" stroke="#6FE0C5" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<g transform="translate(96 144.2) scale(2.92) translate(4.5 -4)"><path d="M0 32 V12 L38 60 V12" stroke="#6FE0C5" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
 <g fill="#6FE0C5"><circle cx="0" cy="45.5" r="3.5"/><circle cx="0" cy="56" r="2.42"/><circle cx="0" cy="63.6" r="1.5"/></g>
 <g transform="translate(14 0)"><path d="M41.0 27.5 V48.0 A12.0 12.0 0 0 0 65.0 48.0 M65.0 27.5 V60.0 M82.0 12.0 V60.0 M97.0 43.75 A16.25 16.25 0 1 0 129.5 43.75 A16.25 16.25 0 1 0 97.0 43.75 Z M129.5 27.5 V60.0 M142.5 27.5 L156.0 60.0 L169.5 27.5 M182.5 27.5 V60.0 M197.5 43.75 A16.25 16.25 0 1 0 230.0 43.75 A16.25 16.25 0 1 0 197.5 43.75 Z" stroke="#F1F7F5" fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g fill="#6FE0C5"><circle cx="182.5" cy="13.6" r="4.2"/></g></g></g>
-<text font-family="Noto Sans, sans-serif" font-size="50" font-weight="400" fill="#BFD0D6"><tspan x="96" y="402.45">An open-source browser for Linux.</tspan></text>
-<circle cx="100.12" cy="527.5" r="4.12" fill="#6FE0C5" fill-opacity="0.4"/><circle cx="119.51" cy="527.5" r="6.19" fill="#6FE0C5" fill-opacity="0.7"/><circle cx="143.03" cy="527.5" r="8.25" fill="#6FE0C5" fill-opacity="1.0"/>
-<text font-family="Noto Sans, sans-serif" font-size="30" font-weight="600" fill="#F1F7F5"><tspan x="168" y="538">nulavio.net</tspan></text>
+<text font-family="Noto Sans, sans-serif" font-size="52" font-weight="400" fill="#BFD0D6"><tspan x="96" y="409.4">An open-source browser for Linux.</tspan></text>
+<circle cx="100.95" cy="524.2" r="4.95" fill="#6FE0C5" fill-opacity="0.4"/><circle cx="124.22" cy="524.2" r="7.43" fill="#6FE0C5" fill-opacity="0.7"/><circle cx="152.43" cy="524.2" r="9.9" fill="#6FE0C5" fill-opacity="1.0"/>
+<text font-family="Noto Sans, sans-serif" font-size="36" font-weight="600" fill="#F1F7F5"><tspan x="182.4" y="536.8">nulavio.net</tspan></text>
 </svg>

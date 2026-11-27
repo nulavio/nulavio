@@ -62,8 +62,10 @@ class SocialArtTest(unittest.TestCase):
                 self.assertEqual(png_size(build_social.OUT / f"{stem}.png"), size, "run scripts/brand/build_social.py")
         # Two 750 px panels (black, white) over the 1500 x 500 header: the avatar samples at their real 400 and 48 px.
         self.assertEqual(png_size(build_social.OUT / "crop-check.png"), (1500, 460 + build_social.HEADER_SIZE[1]))
-        # Three columns of 620 px; a row at 600 px wide, a row of small ones with their squares, a row of centre crops.
-        self.assertEqual(png_size(build_social.OUT / "link-previews.png"), (1860, 357 + 178 + 357))
+        # Three columns of 620 px, a row of labels over each row of pictures: 600 px wide, the small ones
+        # with their squares, the 16:9 centre crops, and the GitHub image's 1.91:1 crop.
+        label = build_social.SHEET_LABEL
+        self.assertEqual(png_size(build_social.OUT / "link-previews.png"), (1860, 4 * label + 357 + 178 + 357 + 357))
 
     def test_the_github_preview_is_what_github_asks_for(self):
         """#199, and GitHub's page on the social preview: 1280 x 640, a PNG under 1 MB, a solid background."""
@@ -109,17 +111,47 @@ class SocialArtTest(unittest.TestCase):
                 self.assertLessEqual(sx + build_social.advance(span.text, size, weight), width - margin)
                 self.assertGreater(sy - size, y, "below the name's top")
                 self.assertLessEqual(sy, height - margin)
-        # The mark's detail is decoration: hidden from assistive technology, and clear of the text's column.
-        detail = next(g for g in root.iter(f"{SVG_NS}g") if g.get("aria-hidden") == "true")
-        left = min(float(c.get("cx")) - float(c.get("r")) for c in detail.iter(f"{SVG_NS}circle"))
-        stroke = detail.find(f"{SVG_NS}path")
-        left = min(left, float(stroke.get("d").split()[0][1:]) - float(stroke.get("stroke-width")) / 2)
-        widest = max(
-            float(s.get("x")) + build_social.advance(s.text, float(e.get("font-size")), int(e.get("font-weight")))
-            for e in root.iter(f"{SVG_NS}text")
-            for s in e.iter(f"{SVG_NS}tspan")
-        )
-        self.assertGreater(left, max(widest, x + view[2] * scale) + 48)
+        # Nothing is drawn beside the name: a detail of the mark there was read as a character after it
+        # ("Nulavio !"). Outside the lockup, the only shapes are the three points before the address.
+        inside = {id(e) for e in group.iter()}
+        loose = [e for e in root.iter() if id(e) not in inside and e.tag in (f"{SVG_NS}path", f"{SVG_NS}circle")]
+        footer = next(s for s in root.iter(f"{SVG_NS}tspan") if s.text == build_social.GITHUB_FOOTER)
+        self.assertEqual([e.tag for e in loose], [f"{SVG_NS}circle"] * 3)
+        for point in loose:
+            self.assertLess(float(point.get("cx")) + float(point.get("r")), float(footer.get("x")))
+        self.assertIsNone(next((e for e in root.iter() if e.get("aria-hidden")), None))
+
+    def test_the_github_preview_is_still_read_when_small(self):
+        """Shown 300 px wide, the card is at 0.23 of its size: the name is then 170 px wide and the
+        smallest text over 8 px. The guidelines say so; this holds the numbers they give."""
+        root = ET.fromstring(build_social.github_svg())
+        self.assertGreaterEqual(min(float(e.get("font-size")) for e in root.iter(f"{SVG_NS}text")), 36)
+        group = next(g for g in root.iter(f"{SVG_NS}g") if g.get("transform", "").startswith("translate("))
+        scale = float(group.get("transform").split("scale(")[1].split(")")[0])
+        view = [float(v) for v in build_logo.initial_lockup_parts(build_logo.MINT, build_logo.CLOUD)[0].split()]
+        self.assertGreaterEqual(view[2] * scale, 720)
+
+    def test_the_github_card_is_dithered_over_the_background_this_script_draws(self):
+        """rasterise_card draws the glow itself, at 16 bits with a seeded grain, and the rest of the
+        SVG over it: so the SVG holds that background once, and a file that does not is refused."""
+        width, height = build_social.GITHUB_SIZE
+        self.assertEqual(build_social.github_svg().count(build_social.background(width, height)), 1)
+        self.assertEqual(build_social.glow(width, height), (1126, 640, 960))
+        with tempfile.TemporaryDirectory() as tmp:
+            other = Path(tmp) / "other.svg"
+            other.write_text(build_social.avatar_svg(), encoding="utf-8")
+            with mock.patch.object(build_social.subprocess, "run") as run, self.assertRaisesRegex(ValueError, "background"):
+                build_social.rasterise_card(other, Path(tmp) / "other.png")
+            run.assert_not_called()
+            card = Path(tmp) / "card.svg"
+            card.write_text(build_social.github_svg(), encoding="utf-8")
+            with mock.patch.object(build_social.subprocess, "run") as run:
+                build_social.rasterise_card(card, Path(tmp) / "card.png")
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "magick")
+        self.assertIn("-seed", command, "seeded: two runs write the same file")
+        self.assertIn(f"radial-gradient:{build_social.GLOW}-{build_social.CANVAS}", command)
+        self.assertIn("png:color-type=2", command)
 
     def test_a_line_too_wide_for_the_github_preview_is_refused(self):
         with (
