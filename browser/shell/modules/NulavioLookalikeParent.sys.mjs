@@ -99,8 +99,10 @@ export class NulavioLookalikeParent extends JSWindowActorParent {
     }
     let found = null;
     let locked = false;
+    // A pair confirmed in a private window counts only in private windows (NulavioPasswords).
+    const inPrivate = Boolean(top.usePrivateBrowsing);
     for (const site of sites) {
-      const verdict = await lazy.NulavioPasswords.checkLogin(site.address.spec);
+      const verdict = await lazy.NulavioPasswords.checkLogin(site.address.spec, { inPrivate });
       if (verdict.suspicious) {
         found = site;
         break;

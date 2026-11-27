@@ -24,6 +24,14 @@ class BidiError(RuntimeError):
         self.error = error
 
 
+class PageError(BidiError):
+    """An exception a script threw in the page: `text` is the page's own (untrusted, AI-T1), not the engine's."""
+
+    def __init__(self, text: str):
+        super().__init__("javascript error", text)
+        self.text = text
+
+
 class Cancelled(BidiError):
     def __init__(self):
         super().__init__("cancelled")
@@ -180,5 +188,5 @@ def deserialize(value: dict):
 def script_result(result: dict) -> object:
     if result.get("type") == "exception":
         details = result.get("exceptionDetails", {})
-        raise BidiError("javascript error", str(details.get("text", ""))[:300])
+        raise PageError(str(details.get("text", ""))[:300])
     return deserialize(result.get("result", {}))
