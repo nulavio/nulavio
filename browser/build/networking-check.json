@@ -1,14 +1,14 @@
 {
   "comment": "The Firefox release whose Rust code passed the engine's networking check (check_networking: the Rust library imports no recv, send, gethostby*, getserv* or getproto* function). Written by scripts/build/networking_check.py from a reading of libgkrust.a in a build with the mozconfig.no-lto variant; scripts/release/rehearse_release.sh --precheck runs it. A unit test requires this record to name the release engine.json pins, and release_manifest.py refuses to publish any other. It is a statement by whoever ran the script, reviewed in the pull request that lands it: CI checks that it names the pinned release, not that the build happened. Only the maintainer may pin a release without the check: \"result\": \"accepted\" with \"accepted_in\" naming the issue or pull request where he said so, and \"built_with\" as `networking_check.py <version> --inputs` prints it.",
-  "firefox": "160.0.1",
-  "source_sha256": "7b9d95ddf24f7bbf5d0d05698bc02a66dac1eca438f80e093c5c76af7648b06d",
-  "result": "accepted",
-  "accepted_in": "#593",
-  "checked": "2026-11-23",
-  "how": "Not read: the maintainer accepted this patch stack without a new reading (#593, 2026-11-23), as the release process allows. The stack is the one whose Rust library passed networking_check.py on 2026-11-18 (libgkrust.a sha256 4b92a365b3679664e1775fcf7061ce67f9744d00aac28b1488b99523c8418ff4, patches 0001 to 0012), plus patch 0013 (#527, accepted in #562: chrome JavaScript only), patch 0014 (#570, accepted in #584: C++ in netwerk/ only), patch 0015 (#561, accepted in #589: C++ in netwerk/protocol/http and that directory's moz.build, which builds its new file and adds jsoncpp's include path) and patch 0016 (#406), which changes only C++ in dom/media/webaudio and toolkit/components/resistfingerprinting, with patch 0012's description edited: no Rust, no build file (test_track_b's Rust guard). The mozconfig and the variant are unchanged.",
+  "firefox": "161.0",
+  "source_sha256": "c649de11e4dc6266bc905ce4b33eb8672a1947c2e210ec53dce285cb86296a5a",
+  "result": "passed",
+  "checked": "2026-11-27",
+  "how": "scripts/build/networking_check.py read libgkrust.a of a build with Rust's own link-time optimisation and no cross-language LTO or sanitiser: 270384 symbols, 6943 undefined names; by the engine's rule it imports none of the engine's 21 networking functions.",
+  "library_sha256": "c7079e121ff8cafbd0555d5c80ed3d6c3892844f4299492d9248b934f970ed68",
   "built_with": {
     "mozconfig_sha256": "2e45964e937939f184ab80d921ffd36b857432838fb2b8e667999d5bc0287fdb",
     "variant_sha256": "913ccfc5fe248ffbaa52157c6c41f4d4aa56e32b22a4d2a4390c76d225762390",
-    "patch_stack_sha256": "d4b4d181e3d46ad76b43514ad0baa74cd744e247f6a4090f4f1764f92dbd89ec"
+    "patch_stack_sha256": "5e71779c0d150fc7f25af3d0eef9280e4ad8c8eaa05b26786bc8602ac4cb4e8f"
   }
 }

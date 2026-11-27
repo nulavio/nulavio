@@ -20,8 +20,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "release"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import openpgp_sign as ops  # noqa: E402
+from child_env import child_env  # noqa: E402
 
 SCRIPT = ROOT / "scripts" / "release" / "openpgp_sign.py"
 
@@ -240,10 +242,10 @@ class OpenPgpSignTest(unittest.TestCase):
         key_file.write_text(json.dumps(kms_key))
         log = self.tmp / "aws.log"
         log.write_text("")
-        env = {
+        env = child_env({
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "FAKE_KMS_KEY": str(key_file), "FAKE_KMS_LOG": str(log),
-        }  # fmt: skip
+        })  # fmt: skip
         return subprocess.run(
             [sys.executable, "-I", str(SCRIPT), "--public-key", str(self.tmp / "key.asc"), "--kms-key-id", "alias/test", *args],
             capture_output=True, text=True, env=env, check=False,
