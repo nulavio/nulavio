@@ -2,8 +2,9 @@
    when the user included that page in this message. Consent is per message and bound to one tab
    (AI-02): "Incluir" reads that tab's text at once and keeps it in the browser (UX5-B, Q4), the item
    shows the tab, its size and whether it was cut, and it leaves the message after every Send, or when
-   that tab goes elsewhere or another tab is selected. The line above Send says where the message goes
-   and its whole size; the tools refuse it if either changed. Off in private windows (D-UX6) and while
+   that tab goes elsewhere or another tab is selected (a Send waits for the panel's check of it, #816).
+   The line above Send says where the message goes and its whole size; the tools refuse it if either
+   changed. Off in private windows (D-UX6) and while
    the emergency stop is on or the assistant's agent is paused or revoked (D-UX5). Tasks run in the
    assistant's Área de IA under the permissions the user gave it. Answers are shown as plain text. */
 
@@ -35,6 +36,9 @@ let revision = 0;
 let sends = 0; // messages started from this panel: a refusal that arrives after one is not about the next
 let restoring = Promise.resolve(); // the panel reading and checking the items it opens with (#758)
 let drawn = false; // a ready render read the conversation and the items since the panel was last in another state
+let tabCheck = null; // the last check of the selected tab (refreshPage) that has not bound the items yet (#816)
+let waiting = null; // a Send that waits for that check (#816): `cancel()` ends the wait, and nothing goes
+let drops = 0; // items that left the message with a notice (drop): a Send keeps the notice of one its wait dropped
 
 const $ = id => document.getElementById(id);
 /** The one way `chips` changes: the revision moves with it. */
@@ -104,9 +108,9 @@ function mode() {
 
 const pageChip = () => chips.find(c => c.kind === "page") ?? null;
 
-/** The whole request as the tools will count it: Nulavio's instructions, each item, the question. */
-function requestChars() {
-  const question = codePoints($("prompt").value.trim());
+/** The whole request as the tools will count it: Nulavio's instructions, each item, the question (the one Send took). */
+function requestChars(text = $("prompt").value.trim()) {
+  const question = codePoints(text);
   const items = chips.reduce((sum, c) => sum + c.blockChars, 0);
   return (state?.systemChars ?? 0) + (thread?.historyChars ?? 0) + items + (chips.length ? codePoints(QUESTION_PREFIX) : 0) + question;
 }
@@ -141,8 +145,8 @@ function showSendLine() {
     $("thread-moved-text").textContent = t("assistantThreadMoved", [thread.recipient, state.recipient]);
     $("moved-carry").textContent = t("assistantCarryThread", [state.recipient]);
   }
-  if (!run) {
-    $("send").disabled = tooLarge || moved;
+  if (!run && !waiting) {
+    $("send").disabled = tooLarge || moved; // a Send that waits for a tab check keeps it off (#816)
   }
 }
 
@@ -289,6 +293,7 @@ function showContext() {
 
 /** An item leaves the message, here and in the browser, and the panel says why (`key` names it). */
 function drop(chip, key) {
+  ++drops;
   setChips(chips.filter(c => c !== chip));
   ai.assistantRemove(chip.chipId).catch(() => {});
   const text = t(key, [chip.title]);
@@ -356,15 +361,39 @@ function bindToPage(page, changedTab = null) {
   current = page;
 }
 
-/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. */
-async function refreshPage(changedTab = null) {
+/** Re-read this window's selected tab. `changedTab`: the tab an update or removal was about. Until it comes back it is
+    `tabCheck`, which a Send waits for (#816); one that another change made void (an item removed) stays there for that
+    Send. */
+function refreshPage(changedTab = null) {
   const version = newContext();
-  const page = await ai.assistantPage().catch(() => null);
-  if (version !== contextVersion) {
-    return;
+  const check = ai
+    .assistantPage()
+    .catch(() => null)
+    .then(page => {
+      if (version !== contextVersion) {
+        return; // a newer check is `tabCheck` now, or a Send checks again
+      }
+      if (tabCheck === check) {
+        tabCheck = null;
+      }
+      bindToPage(page, changedTab);
+      showContext();
+    });
+  tabCheck = check;
+  return check;
+}
+
+/** Send waits for the panel's check of the selected tab on its way, and for a newer one started meanwhile, so it takes
+    only the items still bound to the tab selected then (#816). A check that another change made void (an item removed)
+    is made again. It ends when the wait is cancelled. */
+async function tabChecked() {
+  while (tabCheck && waiting && document.body.dataset.state === "ready") {
+    const check = tabCheck;
+    await check.catch(() => {});
+    if (tabCheck === check && waiting) {
+      refreshPage(); // void: nothing newer came, so the tab is read again
+    }
   }
-  bindToPage(page, changedTab);
-  showContext();
 }
 
 /** The items the browser keeps for this window's next message, checked against the tab selected now before they are
@@ -461,8 +490,10 @@ async function render() {
     await takeOffer();
     await adoptTask();
   } else {
+    cancelWait(); // a Send that waits sends nothing from another state, even once the composer shows again (#816)
     newContext();
     setChips([]);
+    tabCheck = null; // no items to check: when the composer shows again, its own reads check them
     drawn = false;
     // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
     // carry, no offer of a page, no hint, no size.
@@ -517,6 +548,7 @@ async function adoptTask() {
     return;
   }
   const stopping = going.state === "cancelling";
+  cancelWait(); // the composer is the Task's now: a Send that waits sends nothing, even after the Task ends (#816)
   run = { runId: going.runId, kind: "task", text: "", stopping, steps: [...going.steps] };
   setRunning(true);
   $("send").disabled = stopping; // a stop already asked for: it ends by itself
@@ -732,8 +764,9 @@ async function takeOffer() {
   }
   if (delivery.draft) {
     // From "@ia" in the address bar: written here, sent only by Send; during a run it waits for its end.
-    // Decided before the list is read: a later read must not write it over a question typed since.
-    if (run) {
+    // Decided before the list is read: a later read must not write it over a question typed since. A Send that waits
+    // for a tab check (#816) counts as a run: the question it took stays until it goes.
+    if (run || waiting) {
       laterDraft = delivery.draft;
     } else {
       $("prompt").value = delivery.draft;
@@ -761,6 +794,7 @@ function onRunEvent(event) {
     // The shortcut and "@ia" change no item (`items` false): a list read on its way is drawn as it is.
     if (event.items !== false) {
       ++revision;
+      cancelWait(); // a Send that waits did not see this item: it may not take the browser's items with it (#816)
     }
     takeOffer();
     return;
@@ -829,7 +863,7 @@ function onRunEvent(event) {
 let laterDraft = null; // "@ia" text that came during a run: written in once it ends
 
 function applyLaterDraft() {
-  if (laterDraft && !run) {
+  if (laterDraft && !run && !waiting) {
     $("prompt").value = laterDraft;
     laterDraft = null;
     showSendLine();
@@ -898,18 +932,80 @@ async function finishRun(result) {
   }
 }
 
+/** While a Send waits for the tab check, nothing else changes the message it was pressed for (#816): Send, the question
+    and the controls that write it or add an item are off. A run adopted meanwhile (a Task going on) keeps what
+    setRunning set. */
+function holdComposer(on) {
+  $("continue").disabled = on;
+  $("retry").disabled = on;
+  if (run) {
+    return;
+  }
+  $("include-page").disabled = on;
+  $("summarize").disabled = on;
+  $("prompt").readOnly = on;
+  if (on) {
+    $("send").disabled = true;
+  } else {
+    showSendLine(); // the size of what is left
+  }
+}
+
+/** A Send that waits for the tab check sends nothing: the person changed the mode or the conversation meanwhile. */
+function cancelWait() {
+  waiting?.cancel();
+}
+
 async function send(question, { retry = false } = {}) {
+  if (waiting) {
+    return; // a Send that waits for the tab check below: one is enough
+  }
   const task = mode() === "task";
-  // What the line above Send says now is what the tools check: where it goes, and its size.
+  // What the line above Send says now is what the tools check: where it goes, and its size. Taken at the press, so a
+  // Send that waits below still goes as an Ask, and to the recipient shown, or is refused (#816).
   const expected = { recipient: state.recipient, model: state.provider.model };
+  let dropNotice = false;
+  if (tabCheck && !task && !retry) {
+    // Another tab was selected, or an included one changed, and the panel's check of the selected tab is on its way:
+    // Send waits for it, so an item that tab does not hold leaves first and never goes (#816, AI-02). What it was
+    // pressed for is the items shown then: one drawn meanwhile (an entry point's selection) is not among them.
+    const pressed = new Set(chips.map(c => c.chipId));
+    const dropsBefore = drops;
+    let cancelled = false;
+    const wait = new Promise(resolve => {
+      waiting = {
+        cancel() {
+          cancelled = true;
+          resolve();
+        },
+      };
+    });
+    holdComposer(true);
+    try {
+      await Promise.race([wait, tabChecked().catch(() => {})]);
+    } finally {
+      waiting = null;
+      holdComposer(false);
+    }
+    if (cancelled || run || document.body.dataset.state !== "ready" || mode() === "task" || chips.some(c => !pressed.has(c.chipId))) {
+      // The person changed the mode or the conversation, an item came, or the panel went to another state (a pause)
+      // or adopted a Task meanwhile: nothing goes. The question stays in the composer, and a new item stays shown for
+      // another press, unless an "@ia" draft came meanwhile: that is written in, as after a refused start.
+      applyLaterDraft();
+      return;
+    }
+    dropNotice = drops !== dropsBefore; // the check this Send waited for dropped an item: its notice stays with it
+  }
   const items = task || retry ? [] : chips.map(c => c.chipId);
-  const chars = retry ? Number($("retry").dataset.chars) : requestChars();
+  const chars = retry ? Number($("retry").dataset.chars) : requestChars(question);
   newContext();
   ++sends;
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
   // The browser drops its copy too, whatever the start (#678).
   setChips([]);
-  $("drift").hidden = true;
+  if (!dropNotice) {
+    $("drift").hidden = true;
+  }
   showContext();
   $("answer-section").hidden = true;
   $("activity-actions").hidden = true;
@@ -926,7 +1022,8 @@ async function send(question, { retry = false } = {}) {
   setRunning(true);
   renderThread(); // the turn that was below joins the list above
   // One polite announcement now, one when it ends (AI-12); no check mark until then.
-  announce(t(task ? "assistantWorking" : "assistantAsking", [state.recipient]), "progress");
+  const asking = t(task ? "assistantWorking" : "assistantAsking", [expected.recipient]); // where it goes, as at the press
+  announce(dropNotice ? `${$("drift-text").textContent} ${asking}` : asking, "progress");
   try {
     const { runId } = task
       ? await ai.assistantStart("task", { task: question, expected })
@@ -969,7 +1066,7 @@ $("ask").addEventListener("submit", event => {
     return;
   }
   const question = $("prompt").value.trim();
-  if (question && !busy) {
+  if (question && !busy && !waiting) {
     send(question);
   }
 });
@@ -991,12 +1088,13 @@ $("prompt").addEventListener("keydown", event => {
 });
 $("ask").addEventListener("change", event => {
   if (event.target.name === "mode") {
+    cancelWait(); // a Send that waits was pressed for the mode before: nothing goes (#816)
     newContext();
     syncMode();
   }
 });
 $("include-page").addEventListener("click", async () => {
-  if (busy) {
+  if (busy || waiting) {
     return;
   }
   await includeCurrent();
@@ -1004,7 +1102,7 @@ $("include-page").addEventListener("click", async () => {
 });
 // "Resumir" includes this page and writes the request; Send stays the person's (Q5).
 $("summarize").addEventListener("click", async () => {
-  if (busy) {
+  if (busy || waiting) {
     return;
   }
   if (await includeCurrent()) {
@@ -1017,12 +1115,14 @@ $("approval-deny").addEventListener("click", () => answerApproval("deny"));
 $("approval-once").addEventListener("click", () => answerApproval("once"));
 $("approval-session").addEventListener("click", () => answerApproval("session"));
 $("retry").addEventListener("click", () => {
-  if (!run) {
+  if (!run && !waiting) {
     send("", { retry: true });
   }
 });
 $("copy-answer").addEventListener("click", () => copy(shownAnswer)); // the answer as written, Markdown included
+// A Send that waits for the tab check was written for the conversation as it was: a change to it ends the wait (#816).
 const newThread = async () => {
+  cancelWait();
   await ai.assistantThreadClear().catch(() => {});
   $("answer-section").hidden = true;
   await refreshThread();
@@ -1033,6 +1133,7 @@ $("new-thread").addEventListener("click", newThread);
 $("moved-new").addEventListener("click", newThread);
 $("large-new").addEventListener("click", newThread);
 const leavePage = async () => {
+  cancelWait();
   await ai.assistantThreadLeavePage().catch(() => {});
   await refreshThread();
   announce(t("assistantPageLeftOut"));
@@ -1040,6 +1141,7 @@ const leavePage = async () => {
 $("leave-page").addEventListener("click", leavePage);
 $("large-leave").addEventListener("click", leavePage);
 $("moved-carry").addEventListener("click", async () => {
+  cancelWait();
   await ai.assistantThreadCarry(state.recipient).catch(() => {});
   await refreshThread();
   announce(t("assistantThreadCarried", [state.recipient]));
@@ -1127,6 +1229,9 @@ localize();
 $("truncated").prepend(icon("warning", "callout__icon"));
 // "Continuar" after a cut answer is an ordinary next turn: written for the person, the size shown, Send theirs (Q14).
 $("continue").addEventListener("click", () => {
+  if (waiting) {
+    return; // a Send that waits for a tab check holds the question it took (#816)
+  }
   $("prompt").value = t("assistantContinuePrompt");
   showSendLine();
   $("send").focus();
