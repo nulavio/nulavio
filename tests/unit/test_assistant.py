@@ -1179,6 +1179,7 @@ const noEvent = { addListener() {} };
 const activated = []; // the panel's tabs.onActivated listener: another tab selected in this window
 let recipient = "Provedor"; // where the assistant sends now (assistantState)
 let blocked = null; // why the assistant is stopped, if it is (assistantState)
+let runs = []; // the runs going on in the browser (assistantRuns): a Task this panel takes on
 globalThis.browser = {
   nulavioAI: {
     assistantState: async () => ({ privateWindow: false, configured: true, profileAllowed: true, blocked,
@@ -1199,7 +1200,8 @@ globalThis.browser = {
       offer = null;
       return holdOffer ? new Promise(resolve => offerHeld.push(() => resolve(delivery))) : Promise.resolve(delivery);
     },
-    assistantRuns: async () => [],
+    assistantRuns: async () => runs,
+    assistantThreadClear: async () => {},
     assistantStart(kind, details) {
       starts.push({ kind, chips: details.chips ?? null });
       started.push(details);
@@ -1830,9 +1832,9 @@ pageHeld.splice(0).forEach(answer => answer());
 await idle();
 out.tripSent = starts.at(-1).chips;
 await finish();
-// A mode change while Send waits makes that check void: Send reads the selected tab again before it takes the items.
+// An item removed while Send waits makes that check void: Send reads the selected tab again before it takes the items.
 selected = tab;
-kept = [item("c33", "Trigésima terceira")];
+kept = [item("c33", "Trigésima terceira"), { ...item("c33s", "Trecho"), kind: "selection" }];
 $("allow-profile").fire("click");
 await idle();
 holdPage = true;
@@ -1841,7 +1843,7 @@ activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
 await idle();
 before = starts.length;
 await send("Pergunta 28");
-$("ask").fire("change", { target: { name: "mode" } });
+$("chips").children[1].children[1].fire("click"); // the selection's remove control
 await idle();
 holdPage = false;
 pageHeld.splice(0).forEach(answer => answer());
@@ -1919,11 +1921,11 @@ out.recipientStarts = starts.length - before;
 out.recipientExpected = started.at(-1)?.expected?.recipient;
 await finish();
 recipient = recipientBefore;
-// "Continuar" pressed while Send waits leaves the question Send took, and a redraw meanwhile (a mode change) keeps Send
-// off; the size that goes is the question's.
+// "Continuar" pressed while Send waits leaves the question Send took, and a redraw meanwhile (a render) keeps Send off;
+// the size that goes is the question's.
 await waitForCheck("c37", "Pergunta 32");
 $("continue").fire("click");
-$("ask").fire("change", { target: { name: "mode" } });
+$("allow-profile").fire("click");
 await idle();
 out.continuePrompt = $("prompt").value;
 out.continueSendOff = $("send").disabled;
@@ -1932,6 +1934,75 @@ out.continueStarts = starts.length - before;
 out.continueQuestion = started.at(-1)?.question;
 out.continueChars = started.at(-1)?.expected?.chars;
 await finish();
+$("allow-profile").fire("click");
+await idle();
+
+// OpenCodeReview on #852, round 2. Task chosen and then Ask again while Send waits: that Send was cancelled when Task
+// was chosen, and Send is the Task's at once, not after the check.
+const controls = () => ["continue", "retry", "include-page", "summarize"].filter(id => $(id).disabled);
+await waitForCheck("c38", "Pergunta 33");
+out.backHeldOff = controls(); // nothing else changes the message while Send waits
+$("ask").elements.mode.value = "task";
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+out.backTaskSendOn = !$("send").disabled;
+out.backTaskOff = controls();
+$("ask").elements.mode.value = "ask";
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+await endWait();
+out.backStarts = starts.length - before;
+out.backPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+// A new conversation started while Send waits: the question was written for the one before, so nothing goes.
+await waitForCheck("c39", "Pergunta 34");
+$("new-thread").fire("click");
+await idle();
+await endWait();
+out.threadStarts = starts.length - before;
+out.threadPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+// An entry point's selection drawn while Send waits (its read comes back before the tab check): it was not shown at the
+// press, so nothing goes, and it stays shown for another Send.
+await waitForCheck("c40", "Pergunta 35");
+kept = [...kept, { ...item("s40", "Trecho", otherTab), kind: "selection" }];
+offer = { chipId: "s40" };
+await emit({ type: "offer" });
+holdPage = false;
+const [tabReply, ...laterReplies] = pageHeld.splice(0);
+laterReplies.forEach(answer => answer());
+await idle();
+tabReply();
+await idle();
+out.offerWaitStarts = starts.length - before;
+out.offerWaitShown = shown();
+out.offerWaitPrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+// The check Send waited for dropped the item: its notice stays shown with that Send, and is said with it.
+await waitForCheck("c41", "Pergunta 36");
+await endWait();
+out.driftStarts = starts.length - before;
+out.driftShown = !$("drift").hidden;
+out.driftAnnounced = announced.at(-1)?.[1] ?? "";
+await finish();
+// The panel takes on a Task going on while Send waits: the composer stays the Task's, read-only, with "Parar".
+await waitForCheck("c42", "Pergunta 37");
+runs = [{ runId: "task-1", kind: "task", state: "running", steps: [] }];
+await emit({ type: "approval", place: "panel", id: "r1" });
+await endWait();
+out.adoptStarts = starts.length - before;
+out.adoptReadOnly = $("prompt").readOnly;
+out.adoptSend = $("send").textContent;
+runs = [];
+await emit({ type: "done", runId: "task-1", answer: "Ok.", chars: 1, recipient: "Provedor" });
+out.adoptAfterOff = controls();
+out.adoptAfterReadOnly = $("prompt").readOnly;
 $("allow-profile").fire("click");
 await idle();
 selected = tab;
@@ -2186,6 +2257,40 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()
         self.assertEqual(out["recipientStarts"], 1)
         self.assertEqual(out["recipientExpected"], "Antes")  # the tools refuse it: the recipient changed
+
+    def test_a_send_that_waits_is_cancelled_by_task_even_when_ask_is_chosen_again(self):
+        out = self._run()  # OpenCodeReview on #852, round 2
+        self.assertEqual(out["backHeldOff"], ["continue", "retry", "include-page", "summarize"])
+        self.assertTrue(out["backTaskSendOn"])  # the Task's Send, at once
+        self.assertEqual(out["backTaskOff"], [])
+        self.assertEqual(out["backStarts"], 0)
+        self.assertEqual(out["backPrompt"], "Pergunta 33")
+
+    def test_a_send_that_waits_sends_nothing_into_a_new_conversation(self):
+        out = self._run()
+        self.assertEqual(out["threadStarts"], 0)
+        self.assertEqual(out["threadPrompt"], "Pergunta 34")
+
+    def test_a_send_that_waits_does_not_take_a_selection_drawn_meanwhile(self):
+        out = self._run()
+        self.assertEqual(out["offerWaitStarts"], 0)
+        self.assertEqual(out["offerWaitShown"], ["s40"])  # shown for another press; the item of the tab left went
+        self.assertEqual(out["offerWaitPrompt"], "Pergunta 35")
+
+    def test_a_send_that_waits_keeps_the_notice_of_the_item_its_check_dropped(self):
+        out = self._run()
+        self.assertEqual(out["driftStarts"], 1)
+        self.assertTrue(out["driftShown"])
+        self.assertTrue(out["driftAnnounced"].startswith("assistantDriftTab|Na espera "), out["driftAnnounced"])
+        self.assertIn("assistantAsking|", out["driftAnnounced"])
+
+    def test_a_send_that_waits_leaves_the_composer_to_a_task_taken_on_meanwhile(self):
+        out = self._run()
+        self.assertEqual(out["adoptStarts"], 0)
+        self.assertTrue(out["adoptReadOnly"])
+        self.assertEqual(out["adoptSend"], "assistantStop")
+        self.assertEqual(out["adoptAfterOff"], [])
+        self.assertFalse(out["adoptAfterReadOnly"])
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()
