@@ -252,6 +252,32 @@ const cases = {
     store.onRead = null;
     return result(store, { answer, confirmed: passwords.listConfirmed(), after: await check(passwords) });
   },
+  // The saved logins change (the login is removed) `hops` microtasks after a Continue starts, from a list read before:
+  // for each `hops`, whether Continue answered dismissed and whether the pair was already saved when they changed. It
+  // may remember the pair only if it saved it before the change.
+  dismiss_while_the_logins_change: async () => {
+    const runs = [];
+    for (let hops = 0; hops < 8; hops++) {
+      const store = loginManager();
+      const passwords = await module(store);
+      await check(passwords); // the saved logins are read and kept
+      let savedBeforeChange = null;
+      let wait = Promise.resolve();
+      for (let i = 0; i < hops; i++) {
+        wait = wait.then(() => {});
+      }
+      const pending = passwords.dismissFor(LOOKALIKE, SHOWN);
+      wait.then(() => {
+        savedBeforeChange = prefs.size > 0;
+        store.origins = [];
+        changed();
+      });
+      const answer = await pending;
+      await flush();
+      runs.push({ dismissed: answer.dismissed, savedBeforeChange, confirmed: passwords.listConfirmed().length });
+    }
+    return { runs };
+  },
   // While the saved logins are read for a Continue that goes back, the tab moves to another entry of its history (a
   // fragment) and the saved logins change so the address imitates another site: the tab has left the warning, which
   // says so first (no way back), not that the pair changed.

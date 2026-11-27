@@ -93,6 +93,14 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["answer"], case["confirmed"]), ({"dismissed": False}, []), case)
         self.assertEqual(case["after"], {"suspicious": False}, case)  # the saved logins give no pair now
 
+    def test_continue_remembers_the_pair_only_if_saved_before_the_logins_changed(self):
+        runs = self.cases["dismiss_while_the_logins_change"]["runs"]
+        for hops, run in enumerate(runs):
+            # The change lands at every step of the Continue in turn: a pair remembered was saved before it.
+            self.assertEqual(run["dismissed"], run["savedBeforeChange"], (hops, run))
+            self.assertEqual(run["confirmed"], int(run["dismissed"]), (hops, run))
+        self.assertEqual({run["dismissed"] for run in runs}, {True, False}, runs)  # both sides of the save are reached
+
     def test_continue_back_says_no_way_back_first_when_the_tab_left_and_the_pair_changed(self):
         case = self.cases["dismiss_back_left_and_pair_changed"]
         self.assertEqual((case["answer"], case["remembered"]), ({"threw": "no-way-back"}, 0), case)

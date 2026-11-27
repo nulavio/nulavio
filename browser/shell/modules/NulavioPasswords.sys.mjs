@@ -316,8 +316,9 @@ class Passwords {
   }
 
   /**
-   * The site of `url` and the saved site it imitates, confirmed or not; otherwise null. `current` says the
-   * saved logins did not change after they were read (a burst of changes answers with an outdated read).
+   * The site of `url` and the saved site it imitates, confirmed or not; otherwise null. `saved` is the list of saved
+   * sites it was found in: it is the module's kept list only while the saved logins have not changed since that read
+   * (a burst of changes answers with an outdated read, not kept).
    * `{ locked: true }` when the saved logins cannot be read without asking for the Primary Password.
    */
   async #pairFor(url) {
@@ -335,7 +336,7 @@ class Passwords {
       return { locked: true };
     }
     const similar = lookalikeOf(parsed.hostname, saved);
-    return similar ? { site: siteOf(parsed.hostname), similar, current: saved === this.#savedSites } : null;
+    return similar ? { site: siteOf(parsed.hostname), similar, saved } : null;
   }
 
   /** Whether the pair of `site` and `similar` was confirmed. */
@@ -429,8 +430,10 @@ class Passwords {
     if (back && !this.canGoBack(browser)) {
       fail("no-way-back"); // the tab left the warning while the saved logins were read
     }
-    // Only from a read of the saved logins as they are now.
-    if (!found || found.locked || !found.current || pairEntry(found.site, found.similar) !== pairEntry(site, similar)) {
+    // Only from a read of the saved logins as they are now, checked in the same turn as the save: a change notified
+    // while this call waited for the read clears the kept list.
+    const shown = pairEntry(site, similar);
+    if (!found || found.locked || found.saved !== this.#savedSites || pairEntry(found.site, found.similar) !== shown) {
       return { dismissed: false };
     }
     // A pair already confirmed (in another tab with the same warning) is still the pair shown: kept as it is, in its
