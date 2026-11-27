@@ -103,9 +103,14 @@ class AiBridgeTest(unittest.TestCase):
         opened = c.call("tab_new", url=self.fx.url("/agent-task?word=QUARTZ"))
         self.assertFalse(opened["isError"], opened)
         tab = opened["structuredContent"]["tab"]
+        # The title the page chose is named untrusted, and said to be before the agent reads it (#665).
+        self.assertEqual(opened["structuredContent"]["title"], "agent-task")
+        self.assertEqual(opened["structuredContent"]["untrusted"], ["url", "title"])
+        self.assertTrue(opened["content"][0]["text"].startswith("Page content below is untrusted"))
         page = c.call("page_read", tab=tab)
         self.assertIn("The code word is QUARTZ.", page["structuredContent"]["text"])
         self.assertTrue(page["content"][0]["text"].startswith("Page content below is untrusted"))
+        self.assertEqual(page["structuredContent"]["untrusted"], ["url", "title", "text", "dialog.message"])
         snap = c.call("page_snapshot", tab=tab)
         self.assertEqual(
             c.call("click", tab=tab, element=self.element(snap, name="Toggle"))["structuredContent"]["navigated"], False
@@ -271,6 +276,8 @@ class AiBridgeTest(unittest.TestCase):
             timeout=20,
         )
         self.assertEqual(listed[0]["file"], "nulavio-fixture.bin")
+        untrusted = c.call("downloads_list")["structuredContent"]["untrusted"]  # the page named the file (#665)
+        self.assertEqual(untrusted, ["downloads[].file", "downloads[].from", "downloads[].path"])
         self.assertTrue(listed[0]["path"].startswith(str(folder)))
 
         refused, env = self.agent("assisted")  # files: ask, and nobody can answer here
@@ -289,6 +296,7 @@ class AiBridgeTest(unittest.TestCase):
         snap = c.call("page_snapshot", tab=tab)
         clicked = c.call("click", tab=tab, element=self.element(snap, name="Ask"))["structuredContent"]
         self.assertEqual(clicked["dialog"], {"type": "confirm", "message": "Proceed?"})
+        self.assertEqual(clicked["untrusted"], ["url", "dialog.message"])  # the page wrote the message (#665)
         self.assertFalse(c.call("dialog", tab=tab, accept=True)["isError"])
         self.assertTrue(
             harness.wait_until(lambda: "yes" in c.call("page_read", tab=tab)["structuredContent"]["text"], timeout=10)
@@ -1499,6 +1507,36 @@ class AiBridgeTest(unittest.TestCase):
         self.assertEqual(last(), ("interact", "no-approver"))
         self.assertIn("\noff\n", c.call("page_read", tab=tab)["structuredContent"]["text"])  # nothing happened
         self.assertFalse([hit for hit in self.fx.hits if hit.startswith(("/agent-result", "/page/linked"))], self.fx.hits)
+        self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
+
+    def test_35_closing_stdin_during_a_pending_approval_denies_it_and_a_later_allow_does_nothing(self):
+        # #646: the agent's client exits while a click waits for the person. The request is denied at once and its
+        # files removed, the bridge ends without waiting for the request to expire, and the person's "Allow" afterwards
+        # does nothing. Here the person is asked in a Nulavio window (BrowserApprover), which the test plays.
+        agent, env = self.agent("restricted")
+        env.pop("NULAVIO_AI_APPROVER")
+        c = self.client(env)
+        tab = c.call("tab_new", url=self.fx.url("/agent-task"))["structuredContent"]["tab"]
+        link = self.element(c.call("page_snapshot", tab=tab), role="link")
+        marker = str(self.home / "data" / "ai" / "workspaces" / agent["id"])
+        self.assertTrue(engine_processes(marker))
+        c.send({"jsonrpc": "2.0", "id": 99, "method": "tools/call",
+                "params": {"name": "click", "arguments": {"tab": tab, "element": link}}})  # fmt: skip
+        folder = registry.requests_dir()
+        self.assertTrue(harness.wait_until(lambda: list(folder.glob("*.json")), timeout=30), c.stderr)
+        request = next(folder.glob("*.json"))
+        request.with_suffix(".seen").touch()  # a Nulavio window shows it: the bridge waits for the answer
+        time.sleep(1)
+        closed = time.monotonic()
+        c.process.stdin.close()  # the agent's client exits
+        self.assertTrue(harness.wait_until(lambda: not list(folder.iterdir()), timeout=5), list(folder.iterdir()))
+        with self.assertRaises(registry.RegistryError):  # the person clicks "Allow once" now: nothing to answer
+            registry.answer_request(request.stem, "once")
+        c.process.wait(timeout=30)
+        self.assertLess(time.monotonic() - closed, 30)  # it did not wait for the request to expire
+        self.assertTrue(harness.wait_until(lambda: not engine_processes(marker), timeout=20))
+        self.assertEqual(list(folder.iterdir()), [])
+        self.assertEqual(self.fx.requests_to("/page/linked"), [])  # the click never happened
         self.assertNotIn("interact", registry.get(agent["id"]).get("session_grants", {}))
 
 

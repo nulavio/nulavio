@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""The brand review of 2026-11 (#175): proposals and the sheets that show them in context.
+"""The brand review of 2026-11 (#175): proposals and the sheets that showed them in context.
 
-Nothing here changes the brand. The approved marks stay in docs/brand/assets/logo and
-.../icons, written by build_logo.py and build_icons.py; this script only reads them. It writes
-under docs/brand/assets/review/2026-11/:
+Decided on 2026-11-27: proposal A, applied by build_logo.py and build_icons.py. This script is the dated
+record of the review. Under docs/brand/assets/review/2026-11/ it made:
 
   proposals/*.svg   the proposed marks, from the same geometry as build_logo.py (deterministic;
-                    tests/unit/test_brand_review.py compares them with the committed files)
-  *.webp            contact sheets (lossless): today's brand and each proposal in the places people
-                    meet them. Except for capture-crops.webp they are compositions made from the
-                    assets, not screenshots of GitHub, a desktop, a store or a social network.
+                    tests/unit/test_brand_and_docs.py compares them with the committed files)
+  *.webp            contact sheets (lossless): the brand of 2026-11-20 ("today") and each proposal in
+                    the places people meet them. Except for capture-crops.webp they are compositions
+                    made from the assets, not screenshots of GitHub, a desktop, a store or a social network.
 
-Run:
+Only the proposals are still written here, and only where a file is missing:
+
   python3 -I scripts/brand/build_review.py            the proposal SVGs
-  python3 -I scripts/brand/build_review.py --report   the measured tables, sizes and ratios of docs/brand/review-2026-11.md
-  python3 -I scripts/brand/build_review.py --render   the sheets too (needs ImageMagick 7 with librsvg,
-                                                      a font for the labels, and git for the captures)
+
+A's geometry and the icon's scale are now build_logo.py's, the applied brand. If that changes, the files
+stay as the review showed them: this script refuses to replace one it would draw differently.
+
+The sheets (--render) and the measured tables of docs/brand/review-2026-11.md (--report) read the
+approved marks, the tokens and the Settings shield as they are in the checkout. Those are now the applied
+brand, so made here they would no longer be the review: both options refuse. The code below is how
+they were made. It runs on a checkout from before the choice was applied, such as main at 532ef2d0
+(--report gives the review's tables there; --render needs ImageMagick 7 with librsvg, a font for the
+labels, and git for the captures).
 """
 
 from __future__ import annotations
@@ -53,73 +60,28 @@ def svg(view_box: str, body: str, *, title: str, width: str | None = None, heigh
     )
 
 
-def n(value: float) -> str:
-    """A coordinate with at most two decimals and no trailing zeros."""
-    return f"{value:.2f}".rstrip("0").rstrip(".")
+n = bl.n
 
 
 # --- Proposal A: the route is the wordmark's initial -------------------------------------------
-# The symbol, at the wordmark's stroke and between its ascender and its baseline, takes the place
-# of the first letter: "N" + "ulavio" is the name as it is written in running text.
-A_WIDTH = 38.0  # between the two stems' centrelines (the symbol's 36:44, at 48 units of height)
-A_STEM_END = 32.0  # the first stem is solid from the top down to here, then dissolves
-A_GAP = 17.0  # to the next letter, the wordmark's own n-to-u spacing
-
-
-def _wordmark_without_initial() -> tuple[str, list[tuple[float, float, float]], float]:
-    """The wordmark's path, dots and advance without its first letter: "ulavio", still where the
-    wordmark draws it (the u starts at x = 41)."""
-    path, dots, advance = bl.wordmark_paths()
-    x, top, base, r = 0.0, bl.X_TOP, bl.BASE, bl.ARCH_R
-    first = f"M{x} {base} V{top} M{x} {top + r} A{r} {r} 0 0 1 {x + 2 * r} {top + r} V{base} "
-    if not path.startswith(first):
-        raise ValueError("build_logo.wordmark_paths() no longer starts with the n this script removes")
-    return path[len(first) :], dots, advance
-
-
-def initial_dots() -> list[tuple[float, float, float]]:
-    """The symbol's three points under the initial's first stem: at the same places along the
-    stem as in the symbol, and the first as wide as the wordmark's stroke so that they survive
-    the sizes a wordmark is shown at (the symbol's own first point is 84 % of its stroke)."""
-    top, height = bl.ASC, bl.BASE - bl.ASC
-    out = []
-    for _cx, cy, r in bl.DOTS:
-        fraction = (cy - 26.0) / 44.0  # the symbol's route runs from y = 26 to y = 70
-        out.append((0.0, round(top + fraction * height, 1), round(r / bl.DOTS[0][2] * bl.W_STROKE / 2, 2)))
-    return out
+# Chosen by the maintainer on 2026-11-27 and applied: the geometry now lives in build_logo.py, which
+# writes the approved lockups; the proposal files here are the same drawing under the review's header.
+A_WIDTH, A_STEM_END, A_GAP = bl.A_WIDTH, bl.A_STEM_END, bl.A_GAP
+initial_dots = bl.initial_dots
 
 
 def initial_lockup(mark_color: str, text_color: str) -> tuple[str, float, float]:
     """(svg, viewBox width, viewBox height) of "N" + "ulavio"."""
-    rest, dots, advance = _wordmark_without_initial()
-    shift = A_WIDTH + A_GAP - (2 * bl.ARCH_R + 17)  # "u" starts where the removed n's advance ended
-    route = f"M0 {n(A_STEM_END)} V{n(bl.ASC)} L{n(A_WIDTH)} {n(bl.BASE)} V{n(bl.ASC)}"
-    pad = bl.W_STROKE / 2 + 1
-    width, height = advance + shift + 2 * pad, 64.0
-    stroke = f'fill="none" stroke-width="{n(bl.W_STROKE)}" stroke-linecap="round" stroke-linejoin="round"'
-    circles = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in initial_dots())
-    tail = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in dots)
-    body = (
-        f'<path d="{route}" stroke="{mark_color}" {stroke}/>\n'
-        f'<g fill="{mark_color}">{circles}</g>\n'
-        f'<g transform="translate({n(shift)} 0)">'
-        f'<path d="{rest}" stroke="{text_color}" {stroke}/>'
-        f'<g fill="{mark_color}">{tail}</g></g>'
-    )
-    return svg(f"{n(-pad)} 4 {n(width)} {n(height)}", body, title="Nulavio"), width, height
+    view_box, body = bl.initial_lockup_parts(mark_color, text_color)
+    width, height = (float(v) for v in view_box.split()[2:])
+    return svg(view_box, body, title="Nulavio"), width, height
 
 
 # --- The app icon of proposals A and B: the same route, larger in its tile ----------------------
-# Today's scalable icon draws the mark 46 units wide in a 96-unit tile (48 %); the hand-tuned 16 px
-# master already draws it 8 px wide (50 %) and 10 px tall (62 %). The proposal scales the route
-# about the tile's centre so the large sizes match the masters. The masters themselves stay.
-ROUTE_SCALE = 1.15
-ROUTE_CENTRE = (48.0, 48.05)  # centre of the route's box (x 25..71, y 21..75.1)
-
-
-def scaled(body: str, scale: float, centre: tuple[float, float], to: tuple[float, float] = (48.0, 48.0)) -> str:
-    transform = f"translate({n(to[0])} {n(to[1])}) scale({n(scale)}) translate({n(-centre[0])} {n(-centre[1])})"
-    return f'<g transform="{transform}">\n{body}\n</g>'
+# Applied with A: build_logo.icon_tile() draws it.
+ROUTE_SCALE = bl.ICON_SCALE
+ROUTE_CENTRE = bl.ROUTE_CENTRE
+scaled = bl.scaled
 
 
 def route_tile() -> str:
@@ -340,12 +302,37 @@ def tile_report() -> list[tuple[str, str, float, float]]:
     return [(what, bg, contrast.ratio(NAVY, bg), contrast.ratio(bl.SLATE, bg)) for what, bg in surfaces]
 
 
+FROZEN = (
+    "the proposals are the record of the review of 2026-11-20 and stay as they were shown, and this checkout "
+    "no longer draws {names} that way: the applied brand in build_logo.py has changed since. Nothing was "
+    "written. If that change is meant, give this script the value it drew the proposals with on 2026-11-27 "
+    "instead of the applied one; do not replace the files"
+)
+
+
 def write_proposals() -> list[Path]:
+    """The proposal files, written where they are missing, and the ones written. A file that is there is
+    left untouched, whatever it is (a link included). A file that is there and that this checkout
+    would draw differently is never replaced, and then nothing is written: A's geometry and the icon's
+    scale are read from build_logo.py, which is the applied brand and can change, and the files are the
+    dated record of what the review showed."""
+    drawn = proposal_svgs()
+    changed = sorted(
+        name
+        for name, text in drawn.items()
+        if (OUT / "proposals" / name).exists() and (OUT / "proposals" / name).read_text(encoding="utf-8") != text
+    )
+    if changed:
+        raise ValueError(FROZEN.format(names=", ".join(changed)))
     written = []
-    for name, text in proposal_svgs().items():
+    for name, text in drawn.items():
         path = OUT / "proposals" / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        try:
+            with open(path, "x", encoding="utf-8") as file:  # never over a file that is there
+                file.write(text)
+        except FileExistsError:
+            continue
         written.append(path)
     return written
 
@@ -803,22 +790,25 @@ def render() -> list[Path]:
     return written
 
 
+HISTORICAL = (
+    "the sheets and the tables are the record of 2026-11-20, made from the brand of that day; this checkout "
+    "holds the applied brand, so they are not made again here. To reproduce them, run this script on a "
+    "checkout of 532ef2d0"
+)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--report", action="store_true", help="print the measured tables in Markdown")
-    parser.add_argument("--render", action="store_true", help="also write the sheets (ImageMagick)")
+    parser.add_argument("--report", action="store_true", help="refused here: the measured tables, on a checkout of 532ef2d0")
+    parser.add_argument("--render", action="store_true", help="refused here: the sheets, on a checkout of 532ef2d0")
     args = parser.parse_args()
-    if args.report:
-        accents, checked = accent_report(json.loads(contrast.TOKENS.read_text(encoding="utf-8")))
-        trail = [f"- {where}: {sizes}" for where, sizes in trail_report()]
-        tile = [f"- {what} `{bg}`: {navy:.2f}:1, {corner:.2f}:1" for what, bg, navy, corner in tile_report()]
-        print("\n".join([*mark_report(), "", *accents, "", f"Checked for each accent: {checked}."]))
-        print("\n".join(["", "The trail's three points, across:", *trail]))
-        print("\n".join(["", "The icon tile against dark surfaces (its navy, its lightest corner):", *tile]))
-        return 0
-    written = write_proposals()
-    if args.render:
-        written += render()
+    if args.report or args.render:
+        parser.error(HISTORICAL)
+    try:
+        written = write_proposals()
+    except ValueError as error:
+        print(f"build_review.py: {error}", file=sys.stderr)
+        return 1
     for path in written:
         print(path.relative_to(ROOT))
     return 0

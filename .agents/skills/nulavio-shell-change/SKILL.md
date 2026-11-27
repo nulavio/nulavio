@@ -62,9 +62,14 @@ feature in the Gecko version Nulavio ships, not in Chrome or Baseline tables.
 
 - Iterate without an engine build:
   `python3 -I scripts/build/dev_sync.py --install <copy of a packaged build>`
-  copies the Shell, branding theme, branding prefs and modules into that copy's
-  `omni.ja` (`--reset` restores it). Use a copy you own, never another session's
-  build tree, and fresh test profiles, never a real one.
+  copies the Shell, the branding, the branding prefs and the modules into that
+  copy's `omni.ja`, and with ImageMagick on the host also the five window icons
+  beside it. Its last line says how the branding went: rendered, text only (no
+  `magick`: the PNG files and the window icons stay the build's own) or left
+  alone (`--no-branding`). `--reset` restores `omni.ja` and the window icons from
+  their `.orig` copies; the distribution files and the tools are not put back.
+  Use a copy you own, never another session's build tree, and fresh test
+  profiles, never a real one.
 - Before/after evidence for visual changes:
   `NULAVIO_ENGINE=<build>/nulavio/nulavio python3 -I scripts/research/shell_screenshots.py --out <dir> --label after`.
 - Then the tests of the pages you touched (`tests/integration/test_*_ui.py`,

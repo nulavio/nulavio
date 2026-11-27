@@ -43,13 +43,22 @@ this.nulavioPasswords = class extends ExtensionAPI {
         throw new ExtensionUtils.ExtensionError("unexpected");
       }
     };
+    // Whether the calling page is in a private window, as the engine says (its browsing context, or the context's
+    // own flag): either one is enough, so a private window's choice is never written to the profile.
+    const inPrivate = () => Boolean(context.browsingContext?.usePrivateBrowsing || context.incognito);
     return {
       nulavioPasswords: {
         state: call(() => passwords.state()),
         choose: call(key => passwords.choose(key)),
-        check: call(url => passwords.checkLogin(url)),
+        check: call(url => passwords.checkLogin(url, { inPrivate: inPrivate() })),
         dismiss: call((url, site, similar, back) =>
-          passwords.dismissFor(url, { site, similar, back: Boolean(back), browser: context.xulBrowser })
+          passwords.dismissFor(url, {
+            site,
+            similar,
+            back: Boolean(back),
+            browser: context.xulBrowser,
+            inPrivate: inPrivate(),
+          })
         ),
         canGoBack: call(() => passwords.canGoBack(context.xulBrowser)),
       },

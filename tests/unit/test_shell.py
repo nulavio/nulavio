@@ -343,6 +343,143 @@ class VaultMethodsPageErrorsTest(unittest.TestCase):
         self.assertNotIn("refresh", locale("en")["methodsMethodGone"]["message"].lower())
 
 
+class DnsExclusionsTest(unittest.TestCase):
+    """#626: under "Encrypted DNS only" the engine still asks the computer's resolver for the names excluded from
+    encrypted lookups (TRRService::IsExcludedFromTRR, even in MODE_TRRONLY): localhost and .local by default, the
+    names the person or a policy excluded, names in the hosts file, and the resolver's own name. The option said
+    "never"; it now names the exceptions, Settings lists the excluded names, and R40 records them all."""
+
+    PANES = SHELL / "settings" / "native" / "panes.mjs"
+    PRIVACY = SHELL / "modules" / "NulavioPrivacy.sys.mjs"
+    EXCLUSION_PREFS = ("network.trr.excluded-domains", "network.trr.builtin-excluded-domains")
+
+    def test_the_encrypted_only_note_names_the_exceptions_in_both_languages(self):
+        words = {
+            "en": ("never", "localhost", ".local", "administrator"),
+            "pt_BR": ("nunca", "localhost", ".local", "administrador"),
+        }
+        for name, (never, *named) in words.items():
+            with self.subTest(locale=name):
+                note = locale(name)["dnsStrictNote"]["message"]
+                self.assertNotIn(never, note.lower(), "the computer's resolver still answers some names")
+                for word in named:
+                    self.assertIn(word, note)
+                # What fails closed is still said: sites do not load while the resolver cannot be reached.
+                self.assertIn("login" if name == "pt_BR" else "sign-in", note)
+
+    def test_the_excluded_names_line_exists_in_both_languages_with_its_placeholders(self):
+        for name in ("en", "pt_BR"):
+            with self.subTest(locale=name):
+                messages = locale(name)
+                self.assertEqual(set(messages["dnsExcluded"]["placeholders"]), {"names"})
+                self.assertEqual(set(messages["dnsExcludedMore"]["placeholders"]), {"names", "count"})
+                for key in ("dnsExcluded", "dnsExcludedMore"):
+                    self.assertIn("$NAMES$", messages[key]["message"])
+                self.assertIn("$COUNT$", messages["dnsExcludedMore"]["message"])
+
+    def test_the_module_reads_both_exclusion_lists_and_returns_them(self):
+        text = self.PRIVACY.read_text(encoding="utf-8")
+        listed = re.search(r"const DNS_EXCLUSION_PREFS = Object\.freeze\(\[([^\]]*)\]\)", text)
+        self.assertIsNotNone(listed)
+        self.assertEqual(tuple(re.findall(r'"([^"]+)"', listed.group(1))), self.EXCLUSION_PREFS)
+        self.assertIn('new Set(["localhost", "local"])', text)  # the two the option's note names
+        self.assertRegex(text, r"return \{[^}]*\bexcluded,")
+
+    def test_the_settings_pane_shows_the_names_and_follows_the_mode_in_effect(self):
+        text = self.PANES.read_text(encoding="utf-8")
+        self.assertIn('msg("dnsExcluded", shown)', text)
+        self.assertIn('msg("dnsExcludedMore", shown,', text)
+        self.assertIn('description: [dnsSays(), dnsExcludedSays()].filter(Boolean).join(" ")', text)
+        observed = re.search(r"for \(const pref of \[([^\]]*)\]\) \{\s*Services\.prefs\.addObserver\(pref, dns\.refresh\)", text)
+        self.assertIsNotNone(observed)
+        for pref in ("network.trr.mode", "network.trr.uri", *self.EXCLUSION_PREFS):
+            self.assertIn(f'"{pref}"', observed.group(1))
+        # The engine's own DNS setting re-reads on these two; a mode the roll-out changes changes no pref here.
+        topics = re.search(r'for \(const topic of \[([^\]]*)\]\) \{\s*Services\.obs\.addObserver\(dns\.refresh, topic\);'
+                           r'\s*stops\.push\(\(\) => Services\.obs\.removeObserver\(dns\.refresh, topic\)\);', text)  # fmt: skip
+        self.assertIsNotNone(topics)
+        self.assertEqual(re.findall(r'"([^"]+)"', topics.group(1)), ["network:trr-mode-changed", "network:trr-confirmation"])
+
+    def test_r40_lists_every_exception(self):
+        row = next(line for line in (ROOT / "docs" / "security" / "residual-risks.md").read_text(encoding="utf-8").splitlines()
+                   if line.startswith("| R40 |"))  # fmt: skip
+        for named in (
+            *self.EXCLUSION_PREFS,
+            "`.local`",
+            "hosts file",
+            "resolver's own host name",
+            "network.trr.bootstrapAddr",
+            "#626",
+        ):
+            self.assertIn(named, row)
+
+
+# Runs NulavioPrivacy.dns() against stand-ins for the engine's prefs and DNS service, for each pair of
+# (network.trr.excluded-domains, network.trr.builtin-excluded-domains), and prints its `excluded` for each.
+DNS_EXCLUSIONS = """
+const { pathToFileURL } = await import("node:url");
+const prefs = new Map();
+globalThis.ChromeUtils = { defineESModuleGetters: () => {}, generateQI: () => () => {} };
+const DNS = { MODE_TRROFF: 5, MODE_TRRFIRST: 2, MODE_TRRONLY: 3 };
+globalThis.Ci = new Proxy({}, { get: (_, name) => (name === "nsIDNSService" ? DNS : {}) });
+const read = (name, fallback) => (prefs.has(name) ? prefs.get(name) : fallback);
+globalThis.Services = {
+  prefs: { getIntPref: read, getBoolPref: read, getStringPref: read, prefIsLocked: () => false },
+  dns: { currentTrrMode: DNS.MODE_TRRONLY, currentTrrURI: "https://dns.quad9.net/dns-query" },
+};
+prefs.set("network.trr.mode", DNS.MODE_TRRONLY);
+const { NulavioPrivacy } = await import(pathToFileURL(process.argv[1]).href);
+console.log(JSON.stringify(JSON.parse(process.argv[2]).map(([user, builtin]) => {
+  prefs.set("network.trr.excluded-domains", user);
+  prefs.set("network.trr.builtin-excluded-domains", builtin);
+  return NulavioPrivacy.dns().excluded;
+})));
+"""
+
+
+DNS_TEN = tuple(f"n{i}.nulavio-dns.example" for i in range(10))
+DNS_CASES = {
+    "spaces": (" ".join(DNS_TEN), ""),
+    "mixed": ("a.example b.example\tc.example,d.example , e.example\r\nf.example,,g.example, ", ""),
+    "named": ("localhost local", "localhost,local"),
+    "both": ("a.example,shared.example", "shared.example b.example"),
+    "case": ("INTRANET.example,Ok.example,ok.example,ok.example", ""),
+    "ascii": ("b\u00fccher.example\u00a0,xn--bcher-kva.example,\fform.example", ""),
+    "empty": ("", ""),
+}
+
+
+@requires_node
+class DnsExclusionTokensTest(unittest.TestCase):
+    """#626 (CodeRabbit on #849): Settings lists the excluded names the engine reads and can match. TRRService::ReadPrefs
+    splits each list on commas and on runs of space, tab, CR and LF (nsCCharSeparatedTokenizerTemplate with
+    NS_IsAsciiWhitespace and SeparatorOptional) and keeps each name as written; it looks names up in their lowercase
+    ASCII form (nsDNSService::PreprocessHostname), so a name with a capital or a non-ASCII letter is never matched."""
+
+    @classmethod
+    def setUpClass(cls):
+        module = str(DnsExclusionsTest.PRIVACY)
+        done = subprocess.run(["node", "--input-type=module", "-e", DNS_EXCLUSIONS, module, json.dumps(list(DNS_CASES.values()))],
+                              capture_output=True, text=True, timeout=60, check=True)  # fmt: skip
+        cls.out = dict(zip(DNS_CASES, json.loads(done.stdout), strict=True))
+
+    def test_space_separated_names_are_one_each_so_the_eight_shown_limit_applies(self):
+        self.assertEqual(self.out["spaces"], list(DNS_TEN))  # ten names: Settings shows eight "and 2 more"
+
+    def test_commas_and_runs_of_whitespace_both_end_a_name(self):
+        self.assertEqual(self.out["mixed"], [f"{c}.example" for c in "abcdefg"])
+
+    def test_the_two_names_the_note_names_and_duplicates_are_left_out(self):
+        self.assertEqual(self.out["named"], [])
+        self.assertEqual(self.out["both"], ["a.example", "shared.example", "b.example"])
+
+    def test_a_name_the_engine_never_matches_is_not_listed(self):
+        self.assertEqual(self.out["case"], ["ok.example"])  # as written, not lowercased into one the engine matches
+        # Only space, tab, CR and LF are whitespace to the engine: a no-break space or a form feed stays in the name.
+        self.assertEqual(self.out["ascii"], ["xn--bcher-kva.example"])
+        self.assertEqual(self.out["empty"], [])
+
+
 class FailureAnnouncementsTest(unittest.TestCase):
     """#546: a temporary window that cannot be launched after its profile was made, and a link that cannot be written to
     the clipboard, are announced as what they are, by the module itself so every entry point says the same."""
@@ -632,6 +769,27 @@ class RoutingTest(unittest.TestCase):
         self.assertIn('params.set("h", lazy.NulavioRouting.hold("vault/unlock.html"', opener)
         self.assertNotIn('params.set("u"', opener)
         self.assertNotIn('params.set("src"', opener)  # the source is in the held link; the page reads no `src`
+
+    def test_held_and_asked_links_open_in_a_normal_window(self):
+        """#670: the pages for a held link (ask, blocked, unlock) and a held link that stays open as the engine opens a
+        link from another app: in a normal window of the profile, a new one when only private windows are open; never
+        in whichever window was used last, which may be private. Behaviour: test_held_links 08, 09 and 10."""
+        routing = module_text("NulavioRouting.sys.mjs")
+        page = routing[routing.index("async #openPage(") :]
+        page = page[: page.index("\n  }\n")]
+        self.assertTrue(page.split("\n", 2)[1].strip().startswith("const win = await this.#browserWindow();"), page)
+        # No wait between keeping the link and opening its page: a slow first window must not take a slot of the
+        # 64 kept links (evicting one a page already shows) before there is a page to show it.
+        after_hold = page[page.index("const id = this.hold(page, params);") :]
+        self.assertNotIn("await", after_hold)
+        self.assertIn("this.#openFrom(win, `${policy.getURL(page)}?${query}`);", after_hold)
+        self.assertEqual(len(re.findall(r"openTrustedLinkIn\(", routing)), 1, "every open goes through #openFrom")
+        opener = routing[routing.index("\n  #openFrom(win, url) {") :]
+        opener = opener[: opener.index("\n  }\n")]
+        self.assertIn("const forceNonPrivate = !lazy.PrivateBrowsingUtils.permanentPrivateBrowsing;", opener)
+        self.assertIn('win.openTrustedLinkIn(url, "tab", { forceNonPrivate })', opener)
+        self.assertIn("this.#openFrom(await this.#browserWindow(), url);", routing)
+        self.assertIn("await this.#openInNormalWindow(url); // held at start-up", routing)
 
     def test_rules_are_never_inferred(self):
         # Only the settings page, the toolbar selector and the ask page create or change rules.
@@ -1265,6 +1423,12 @@ class PasswordsTest(unittest.TestCase):
         self.assertEqual(page.count("history.back()"), 1)
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
+        # What "continue" keeps (in the profile, or in a private window in memory only) is written once the module
+        # answers, never before: the reason is hidden, with no text of its own, while the page waits (#652).
+        html = (SHELL / "passwords" / "lookalike.html").read_text(encoding="utf-8")
+        self.assertIn('<li id="why-continue" hidden></li>', html)
+        shown = page.index('why.textContent = t(inPrivate ? "lookalikeWhy3Private" : "lookalikeWhy3");')
+        self.assertGreater(page.index("why.hidden = false;"), shown)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
         self.assertEqual(params["dismiss"], ["url", "site", "similar", "back"])

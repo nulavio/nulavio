@@ -295,6 +295,99 @@ const cases = {
     const answer = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser }).catch(e => ({ threw: e.code }));
     return result(store, { answer, remembered: passwords.listConfirmed().length });
   },
+  // #652: "Continue" in a private window. Nothing is written to the profile (prefs.js) or listed in Settings; the pair
+  // is not warned again in private windows only, until the engine says the last private window closed.
+  dismiss_in_private: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const inPrivate = () => passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    const shown = await inPrivate();
+    const answer = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    const saved = { prefs: [...prefs.keys()], confirmed: passwords.listConfirmed() };
+    const after = { private: await inPrivate(), normal: await check(passwords) };
+    const again = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true }); // the same warning in another tab
+    for (const fn of observers.get("last-pb-context-exited") ?? []) {
+      fn();
+    }
+    const closed = await inPrivate();
+    return result(store, { shown, answer, again, saved, after, closed, prefs: [...prefs.keys()] });
+  },
+  // In a private window, "Continue" that goes back keeps the binding of the warning to its tab, and keeps nothing in
+  // the profile.
+  dismiss_in_private_back: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const unbound = await passwords
+      .dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser: tab(1, WARNING), inPrivate: true })
+      .catch(e => ({ threw: e.code }));
+    const unboundAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    const browser = tab(3, WARNING);
+    passwords.bindWarning(browser, { index: 3, url: WARNING });
+    const bound = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, back: true, browser, inPrivate: true });
+    const after = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    return result(store, { unbound, unboundAfter, bound, after, prefs: [...prefs.keys()], confirmed: passwords.listConfirmed() });
+  },
+  // In a private window, the pair shown is still checked: another pair, or none left, keeps nothing.
+  dismiss_in_private_other_pair: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const other = await passwords.dismissFor(LOOKALIKE, { site: SHOWN.site, similar: "example.example", inPrivate: true });
+    store.origins = [];
+    changed();
+    const none = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    store.origins = ["https://paypal.example"];
+    changed();
+    const after = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    return result(store, { other, none, after, prefs: [...prefs.keys()] });
+  },
+  // The last private window closes while a private "Continue" reads the saved logins: nothing is kept, so the next
+  // private window is warned again. First with nothing kept before, then after a pair was kept and the logins changed.
+  dismiss_in_private_ended_during_read: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const ended = () => {
+      for (const fn of observers.get("last-pb-context-exited") ?? []) {
+        fn();
+      }
+    };
+    store.onRead = ended;
+    const first = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    store.onRead = null;
+    const firstAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    const kept = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    changed();
+    store.onRead = ended;
+    const second = await passwords.dismissFor(LOOKALIKE, { ...SHOWN, inPrivate: true });
+    store.onRead = null;
+    const secondAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    return result(store, { first, firstAfter, kept, second, secondAfter, prefs: [...prefs.keys()] });
+  },
+  // Many pairs confirmed in one private session (more than the profile's 200): none is dropped before the last private
+  // window closes, as the page says, so the first one is still not warned.
+  dismiss_in_private_many: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const dismissed = [];
+    for (let n = 0; n <= 200; n++) {
+      const answer = await passwords.dismissFor(`https://paypal-login.p${n}.example/`, {
+        site: `p${n}.example`,
+        similar: "paypal.example",
+        inPrivate: true,
+      });
+      dismissed.push(answer.dismissed);
+    }
+    const first = await passwords.checkLogin("https://paypal-login.p0.example/", { inPrivate: true });
+    const last = await passwords.checkLogin("https://paypal-login.p200.example/", { inPrivate: true });
+    return result(store, { kept: dismissed.filter(Boolean).length, first, last, prefs: [...prefs.keys()] });
+  },
+  // A pair confirmed in a normal window (kept in the profile) is not warned in a private window either.
+  dismiss_in_normal_counts_in_private: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const answer = await passwords.dismissFor(LOOKALIKE, SHOWN);
+    const inPrivate = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
+    return result(store, { answer, inPrivate, confirmed: passwords.listConfirmed() });
+  },
   // Two checks at once (two frames of one tab) share one read of the saved logins.
   concurrent_checks: async () => {
     const store = loginManager();
