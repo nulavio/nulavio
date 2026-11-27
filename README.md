@@ -7,7 +7,7 @@
   </a>
 </p>
 
-<p align="center"><strong>The Linux browser that is protected from the start.</strong></p>
+<p align="center"><strong>The Linux browser that comes protected.</strong></p>
 
 <p align="center">
   <a href="https://github.com/nulavio/nulavio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/nulavio/nulavio/actions/workflows/ci.yml/badge.svg?branch=main"></a>
@@ -36,7 +36,7 @@
   </picture>
 </p>
 
-Nulavio is an open-source desktop browser for Linux, built from Mozilla's signature-verified Firefox source. It blocks ads and trackers from the first launch, keeps each part of your life in its own profile, encrypts the profiles you protect, and sends nothing to servers of its own: there is no telemetry and no Nulavio account.
+Nulavio is an open-source desktop browser for Linux, built from Mozilla's signature-verified Firefox source. It blocks trackers from the first launch and ads once uBlock Origin has installed itself and loaded its lists, keeps each part of your life in its own profile, encrypts the profiles you protect, and sends nothing to servers of its own: there is no telemetry and no Nulavio account.
 
 ## Highlights
 
