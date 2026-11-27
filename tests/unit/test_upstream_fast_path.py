@@ -26,6 +26,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "upstream"))
 sys.path.insert(0, str(ROOT / "scripts" / "release"))
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
 
 import autobuild  # noqa: E402
 import bump_engine  # noqa: E402
@@ -33,6 +34,7 @@ import fetch_firefox_source  # noqa: E402
 import mfsa  # noqa: E402
 import upstream_issue  # noqa: E402
 import watch_upstream  # noqa: E402
+from child_env import child_env  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "upstream"
 D158 = "b5beff55fa73a29a674a867da5922f5d7699f51e351e6bbe4405fcc4ba55a824"  # Mozilla's signed digests (2026-10-27)
@@ -1342,7 +1344,9 @@ class ReleaseFilesTest(TempDirTest):
         (repo / "scripts" / "build").mkdir(parents=True)
         for name in ("networking_check.py", "apply_patches.py"):
             shutil.copy(ROOT / "scripts" / "build" / name, repo / "scripts" / "build" / name)
-        env = {"PATH": os.environ.get("PATH", "/usr/bin"), "HOME": str(self.tmp), "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C"}
+        env = child_env(
+            {"PATH": os.environ.get("PATH", "/usr/bin"), "HOME": str(self.tmp), "GIT_CONFIG_NOSYSTEM": "1", "LC_ALL": "C"}
+        )
         for command in (
             ["init", "-q"],
             ["add", "-A"],
