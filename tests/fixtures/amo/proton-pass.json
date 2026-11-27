@@ -1,0 +1,91 @@
+{
+ "recorded": "2026-11-26T19:37Z",
+ "how": "GET of each path below on https://addons.mozilla.org/api/v5/ (no authentication), as watch_dependencies.py requests it; version objects trimmed to the fields the watch reads, null for a 404",
+ "lock": {
+  "key": "proton-pass",
+  "id": "78272b6fa58f4a1abaac99321d503a20@proton.me",
+  "version": "1.41.1",
+  "sha256": "f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936",
+  "size": 8452118
+ },
+ "replies": {
+  "addons/addon/78272b6fa58f4a1abaac99321d503a20%40proton.me/": {
+   "guid": "78272b6fa58f4a1abaac99321d503a20@proton.me",
+   "slug": "proton-pass",
+   "current_version": {
+    "id": 6727718,
+    "version": "1.44.0",
+    "file": {
+     "id": 5271799,
+     "created": "2026-11-18T13:10:53Z",
+     "hash": "sha256:f53440bff8e754c1be060e1a015a0f4df62a4669917564fe09c7e3709fe41c60",
+     "size": 13607193,
+     "status": "public",
+     "url": "https://addons.mozilla.org/firefox/downloads/file/5271799/proton_pass-1.44.0.xpi"
+    }
+   }
+  },
+  "addons/addon/78272b6fa58f4a1abaac99321d503a20%40proton.me/versions/1.41.1/": {
+   "id": 6511374,
+   "version": "1.41.1",
+   "channel": "listed",
+   "file": {
+    "id": 5055526,
+    "created": "2026-09-24T14:10:36Z",
+    "hash": "sha256:f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936",
+    "size": 8452118,
+    "status": "public",
+    "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi"
+   }
+  },
+  "addons/addon/78272b6fa58f4a1abaac99321d503a20%40proton.me/versions/?page=1&page_size=50": {
+   "count": 3,
+   "next": null,
+   "previous": null,
+   "page_count": 1,
+   "page_size": 50,
+   "results": [
+    {
+     "id": 6727718,
+     "version": "1.44.0",
+     "channel": "listed",
+     "file": {
+      "id": 5271799,
+      "created": "2026-11-18T13:10:53Z",
+      "hash": "sha256:f53440bff8e754c1be060e1a015a0f4df62a4669917564fe09c7e3709fe41c60",
+      "size": 13607193,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5271799/proton_pass-1.44.0.xpi"
+     }
+    },
+    {
+     "id": 6659336,
+     "version": "1.43.1",
+     "channel": "listed",
+     "file": {
+      "id": 5203430,
+      "created": "2026-11-03T15:32:16Z",
+      "hash": "sha256:a973bb13e22816b73bc8be9c6a4df9d2b478b4e3d57d11f50033ff4e15f9b7b4",
+      "size": 13332730,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5203430/proton_pass-1.43.1.xpi"
+     }
+    },
+    {
+     "id": 6511374,
+     "version": "1.41.1",
+     "channel": "listed",
+     "file": {
+      "id": 5055526,
+      "created": "2026-09-24T14:10:36Z",
+      "hash": "sha256:f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936",
+      "size": 8452118,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi"
+     }
+    }
+   ]
+  },
+  "blocklist/block/78272b6fa58f4a1abaac99321d503a20%40proton.me/": null
+ }
+}

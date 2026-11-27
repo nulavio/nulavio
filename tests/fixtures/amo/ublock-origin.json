@@ -1,0 +1,702 @@
+{
+ "recorded": "2026-11-26T19:37Z",
+ "how": "GET of each path below on https://addons.mozilla.org/api/v5/ (no authentication), as watch_dependencies.py requests it; version objects trimmed to the fields the watch reads, null for a 404",
+ "lock": {
+  "key": "ublock-origin",
+  "id": "uBlock0@raymondhill.net",
+  "version": "1.76.4",
+  "sha256": "66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e",
+  "size": 6332093
+ },
+ "replies": {
+  "addons/addon/uBlock0%40raymondhill.net/": {
+   "guid": "uBlock0@raymondhill.net",
+   "slug": "ublock-origin",
+   "current_version": {
+    "id": 6764166,
+    "version": "1.77.2",
+    "file": {
+     "id": 5308235,
+     "created": "2026-11-26T00:11:02Z",
+     "hash": "sha256:c9186bcbb5ef542465187ce52aa7d76b5315e8a020c360e3e701f678ad47d776",
+     "size": 6407328,
+     "status": "public",
+     "url": "https://addons.mozilla.org/firefox/downloads/file/5308235/ublock_origin-1.77.2.xpi"
+    }
+   }
+  },
+  "addons/addon/uBlock0%40raymondhill.net/versions/1.76.4/": {
+   "id": 6713395,
+   "version": "1.76.4",
+   "channel": "listed",
+   "file": {
+    "id": 5257481,
+    "created": "2026-11-15T17:26:52Z",
+    "hash": "sha256:66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e",
+    "size": 6332093,
+    "status": "public",
+    "url": "https://addons.mozilla.org/firefox/downloads/file/5257481/ublock_origin-1.76.4.xpi"
+   }
+  },
+  "addons/addon/uBlock0%40raymondhill.net/versions/?page=1&page_size=50": {
+   "count": 159,
+   "next": "https://addons.mozilla.org/api/v5/addons/addon/uBlock0@raymondhill.net/versions/?page=2&page_size=50",
+   "previous": null,
+   "page_count": 4,
+   "page_size": 50,
+   "results": [
+    {
+     "id": 6764166,
+     "version": "1.77.2",
+     "channel": "listed",
+     "file": {
+      "id": 5308235,
+      "created": "2026-11-26T00:11:02Z",
+      "hash": "sha256:c9186bcbb5ef542465187ce52aa7d76b5315e8a020c360e3e701f678ad47d776",
+      "size": 6407328,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5308235/ublock_origin-1.77.2.xpi"
+     }
+    },
+    {
+     "id": 6746467,
+     "version": "1.77.0",
+     "channel": "listed",
+     "file": {
+      "id": 5290541,
+      "created": "2026-11-22T15:13:43Z",
+      "hash": "sha256:894ea48dedd26a637ab98ba627ae70b7ed94798eabfd4b089f5e5e73524a24eb",
+      "size": 6408780,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5290541/ublock_origin-1.77.0.xpi"
+     }
+    },
+    {
+     "id": 6738604,
+     "version": "1.76.6",
+     "channel": "listed",
+     "file": {
+      "id": 5282683,
+      "created": "2026-11-20T16:09:10Z",
+      "hash": "sha256:debffadf7d5117bd2d4e9218e27bfdf3112544fd2e87f14882d274a11dc95375",
+      "size": 6371851,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5282683/ublock_origin-1.76.6.xpi"
+     }
+    },
+    {
+     "id": 6713395,
+     "version": "1.76.4",
+     "channel": "listed",
+     "file": {
+      "id": 5257481,
+      "created": "2026-11-15T17:26:52Z",
+      "hash": "sha256:66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e",
+      "size": 6332093,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5257481/ublock_origin-1.76.4.xpi"
+     }
+    },
+    {
+     "id": 6706258,
+     "version": "1.76.2",
+     "channel": "listed",
+     "file": {
+      "id": 5250345,
+      "created": "2026-11-13T23:00:31Z",
+      "hash": "sha256:36320e4735818f4f9b5ac1506610590233f4b201ca50196c2834e30f3e808a1e",
+      "size": 6321639,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5250345/ublock_origin-1.76.2.xpi"
+     }
+    },
+    {
+     "id": 6681183,
+     "version": "1.76.0",
+     "channel": "listed",
+     "file": {
+      "id": 5225273,
+      "created": "2026-11-08T17:02:02Z",
+      "hash": "sha256:6f20ff6749193599548770539103069c20948dfcd3e61c3089a67da7bfc3be39",
+      "size": 6341734,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5225273/ublock_origin-1.76.0.xpi"
+     }
+    },
+    {
+     "id": 6658919,
+     "version": "1.75.4",
+     "channel": "listed",
+     "file": {
+      "id": 5203014,
+      "created": "2026-11-03T13:56:57Z",
+      "hash": "sha256:e2df503cce7cf5069130618c349695f62bdddb9eb8c189156d027269ae4ae267",
+      "size": 6343923,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5203014/ublock_origin-1.75.4.xpi"
+     }
+    },
+    {
+     "id": 6654971,
+     "version": "1.75.2",
+     "channel": "listed",
+     "file": {
+      "id": 5199068,
+      "created": "2026-11-02T16:41:35Z",
+      "hash": "sha256:b941eac9ac4b156edefa9273bdf5a313204919f751e1a86b8c81e254b9471599",
+      "size": 6329324,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5199068/ublock_origin-1.75.2.xpi"
+     }
+    },
+    {
+     "id": 6490666,
+     "version": "1.75.0",
+     "channel": "listed",
+     "file": {
+      "id": 5034826,
+      "created": "2026-09-16T14:24:45Z",
+      "hash": "sha256:5b74415860456370644bd80f16125e865b0e6c356bb5dfcfb84069967eaa5287",
+      "size": 4650100,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5034826/ublock_origin-1.75.0.xpi"
+     }
+    },
+    {
+     "id": 6437252,
+     "version": "1.74.0",
+     "channel": "listed",
+     "file": {
+      "id": 4981431,
+      "created": "2026-08-25T13:43:56Z",
+      "hash": "sha256:175756d74468c9ba45863f7fc333d3be670f82d5b066314e915814dd547d1652",
+      "size": 4617614,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4981431/ublock_origin-1.74.0.xpi"
+     }
+    },
+    {
+     "id": 6396396,
+     "version": "1.73.0",
+     "channel": "listed",
+     "file": {
+      "id": 4940584,
+      "created": "2026-08-05T16:30:02Z",
+      "hash": "sha256:bccc51a773150af4af6e1fd62c7bfdeb7238b79ff2381b998fa9f2e38f64786a",
+      "size": 4679419,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4940584/ublock_origin-1.73.0.xpi"
+     }
+    },
+    {
+     "id": 6344484,
+     "version": "1.72.2",
+     "channel": "listed",
+     "file": {
+      "id": 4888680,
+      "created": "2026-07-08T12:43:50Z",
+      "hash": "sha256:40c315b0da7871868155ecfae7a50a58dfa0920aebd865e008214986f1b7c578",
+      "size": 4585322,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4888680/ublock_origin-1.72.2.xpi"
+     }
+    },
+    {
+     "id": 6328616,
+     "version": "1.72.0",
+     "channel": "listed",
+     "file": {
+      "id": 4872816,
+      "created": "2026-06-28T20:02:55Z",
+      "hash": "sha256:79cd426ab599801c59dfe9895cb4b8002faf3da059f7111c2721ac10168a3b64",
+      "size": 4623228,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4872816/ublock_origin-1.72.0.xpi"
+     }
+    },
+    {
+     "id": 6269867,
+     "version": "1.71.0",
+     "channel": "listed",
+     "file": {
+      "id": 4814095,
+      "created": "2026-05-20T12:37:51Z",
+      "hash": "sha256:47f788a1fc2c014830b30bb0ef9588615701b98c5265fb19b8cf4ba779849feb",
+      "size": 4504632,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4814095/ublock_origin-1.71.0.xpi"
+     }
+    },
+    {
+     "id": 6177391,
+     "version": "1.70.0",
+     "channel": "listed",
+     "file": {
+      "id": 4721638,
+      "created": "2026-03-11T00:51:50Z",
+      "hash": "sha256:f2730d2877005763a45d765749892e936f49cae713d28f7aa6ea314454b89cf1",
+      "size": 4439899,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4721638/ublock_origin-1.70.0.xpi"
+     }
+    },
+    {
+     "id": 6131061,
+     "version": "1.69.0",
+     "channel": "listed",
+     "file": {
+      "id": 4675310,
+      "created": "2026-01-25T20:15:19Z",
+      "hash": "sha256:785bcde68a25faa8a0949964ec5ffe9bdcb85d3f0ae21c23f607c6c8f91472cf",
+      "size": 4342765,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4675310/ublock_origin-1.69.0.xpi"
+     }
+    },
+    {
+     "id": 6084869,
+     "version": "1.68.0",
+     "channel": "listed",
+     "file": {
+      "id": 4629131,
+      "created": "2025-11-26T21:31:29Z",
+      "hash": "sha256:5caf4abda494018841222a12156919bbdd8cad82a783c38c36b22dd642704315",
+      "size": 4264056,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4629131/ublock_origin-1.68.0.xpi"
+     }
+    },
+    {
+     "id": 6054590,
+     "version": "1.67.0",
+     "channel": "listed",
+     "file": {
+      "id": 4598854,
+      "created": "2025-10-15T15:06:48Z",
+      "hash": "sha256:b83c6ec49f817a8d05d288b53dbc7005cceccf82e9490d8683b3120aab3c133a",
+      "size": 4251126,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4598854/ublock_origin-1.67.0.xpi"
+     }
+    },
+    {
+     "id": 6034416,
+     "version": "1.66.4",
+     "channel": "listed",
+     "file": {
+      "id": 4578681,
+      "created": "2025-09-15T14:05:06Z",
+      "hash": "sha256:bc62cd930601212f1568964389352bbd4b1808466f2c9ac1198c754338077fb0",
+      "size": 4215414,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4578681/ublock_origin-1.66.4.xpi"
+     }
+    },
+    {
+     "id": 6029024,
+     "version": "1.66.0",
+     "channel": "listed",
+     "file": {
+      "id": 4573289,
+      "created": "2025-09-06T16:42:41Z",
+      "hash": "sha256:155820bace5bf7c8ba547e27678a4a25251131c54904f02f5bf340996f6fdbdc",
+      "size": 4205988,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4573289/ublock_origin-1.66.0.xpi"
+     }
+    },
+    {
+     "id": 5987034,
+     "version": "1.65.0",
+     "channel": "listed",
+     "file": {
+      "id": 4531307,
+      "created": "2025-07-10T15:23:22Z",
+      "hash": "sha256:3e73c96a29a933866065f0756fe032984bf5b254af8dd1afd7a7f7e0668a33cf",
+      "size": 4126260,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4531307/ublock_origin-1.65.0.xpi"
+     }
+    },
+    {
+     "id": 5948100,
+     "version": "1.64.0",
+     "channel": "listed",
+     "file": {
+      "id": 4492375,
+      "created": "2025-05-13T13:32:41Z",
+      "hash": "sha256:b9e1c868bd1ac1defcabf2e01776d1a90effba34b07fe6a21350d45f022e0e9f",
+      "size": 4072140,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4492375/ublock_origin-1.64.0.xpi"
+     }
+    },
+    {
+     "id": 5914174,
+     "version": "1.63.2",
+     "channel": "listed",
+     "file": {
+      "id": 4458450,
+      "created": "2025-03-20T11:41:00Z",
+      "hash": "sha256:d93176cef4dc042e41ba500aa2a90e5d57b5be77449cbd522111585e3a0cd158",
+      "size": 4009694,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4458450/ublock_origin-1.63.2.xpi"
+     }
+    },
+    {
+     "id": 5912333,
+     "version": "1.63.0",
+     "channel": "listed",
+     "file": {
+      "id": 4456610,
+      "created": "2025-03-17T20:54:03Z",
+      "hash": "sha256:8a208284b53565957c878a93b717b46ea0d079cb097214062b76bb96dc18a0f4",
+      "size": 4013511,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4456610/ublock_origin-1.63.0.xpi"
+     }
+    },
+    {
+     "id": 5868389,
+     "version": "1.62.0",
+     "channel": "listed",
+     "file": {
+      "id": 4412673,
+      "created": "2025-01-01T13:47:11Z",
+      "hash": "sha256:8a9e02aa838c302fb14e2b5bc88a6036d36358aadd6f95168a145af2018ef1a3",
+      "size": 3972499,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4412673/ublock_origin-1.62.0.xpi"
+     }
+    },
+    {
+     "id": 5846724,
+     "version": "1.61.2",
+     "channel": "listed",
+     "file": {
+      "id": 4391011,
+      "created": "2024-11-19T15:23:54Z",
+      "hash": "sha256:ee3a724a46ff32c17d1723077fecc6ede7fdab742154020b51fb6253ddcbba14",
+      "size": 3947258,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4391011/ublock_origin-1.61.2.xpi"
+     }
+    },
+    {
+     "id": 5838246,
+     "version": "1.61.0",
+     "channel": "listed",
+     "file": {
+      "id": 4382536,
+      "created": "2024-11-05T15:26:08Z",
+      "hash": "sha256:e6fd55b799a568c66c10892a8f22428e6773fe16d7466ce9dee2952f224b203d",
+      "size": 3955977,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4382536/ublock_origin-1.61.0.xpi"
+     }
+    },
+    {
+     "id": 5815646,
+     "version": "1.60.0",
+     "channel": "listed",
+     "file": {
+      "id": 4359936,
+      "created": "2024-09-26T14:47:20Z",
+      "hash": "sha256:e2cda9b2a1b0a7f6e5ef0da9f87f28df52f8560587ba2e51a3003121cfb81600",
+      "size": 3964532,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4359936/ublock_origin-1.60.0.xpi"
+     }
+    },
+    {
+     "id": 5784388,
+     "version": "1.59.0",
+     "channel": "listed",
+     "file": {
+      "id": 4328681,
+      "created": "2024-07-30T16:57:19Z",
+      "hash": "sha256:1db9c676a07d141f8d36dbbc24f9e3d64a6cc2340dbfc6c848bc4395f96cfb14",
+      "size": 3951183,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4328681/ublock_origin-1.59.0.xpi"
+     }
+    },
+    {
+     "id": 5746167,
+     "version": "1.58.0",
+     "channel": "listed",
+     "file": {
+      "id": 4290466,
+      "created": "2024-05-21T13:25:43Z",
+      "hash": "sha256:470c56994a7174db21578adce598b158a5dc0970c87c5cfe889ac632bd3085ea",
+      "size": 3902133,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4290466/ublock_origin-1.58.0.xpi"
+     }
+    },
+    {
+     "id": 5717409,
+     "version": "1.57.2",
+     "channel": "listed",
+     "file": {
+      "id": 4261710,
+      "created": "2024-04-08T13:51:42Z",
+      "hash": "sha256:9928e79a52cecf7cfa231fdb0699c7d7a427660d94eb10d711ed5a2f10d2eb89",
+      "size": 3861786,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4261710/ublock_origin-1.57.2.xpi"
+     }
+    },
+    {
+     "id": 5713060,
+     "version": "1.57.0",
+     "channel": "listed",
+     "file": {
+      "id": 4257361,
+      "created": "2024-03-29T14:51:24Z",
+      "hash": "sha256:393736f7350b3ef4a849e4e31b63ed6e9ec33f6e7a4c662595c543a01b10447e",
+      "size": 3858235,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4257361/ublock_origin-1.57.0.xpi"
+     }
+    },
+    {
+     "id": 5693353,
+     "version": "1.56.0",
+     "channel": "listed",
+     "file": {
+      "id": 4237670,
+      "created": "2024-02-17T14:54:31Z",
+      "hash": "sha256:f5fbeeac511ca4e10a74723413727fda8e6f9236c726d16eb54ade1fbe7be5be",
+      "size": 3819727,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4237670/ublock_origin-1.56.0.xpi"
+     }
+    },
+    {
+     "id": 5672315,
+     "version": "1.55.0",
+     "channel": "listed",
+     "file": {
+      "id": 4216633,
+      "created": "2024-01-03T20:24:50Z",
+      "hash": "sha256:a02ca1d32737c3437f97553e5caaead6479a66ac1f8ff3b84a06cfa6bb0c7647",
+      "size": 3647341,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4216633/ublock_origin-1.55.0.xpi"
+     }
+    },
+    {
+     "id": 5654508,
+     "version": "1.54.0",
+     "channel": "listed",
+     "file": {
+      "id": 4198829,
+      "created": "2023-11-22T16:24:35Z",
+      "hash": "sha256:9797160908191710ff0858536ba6dc29ecad9923c30b2ad6d3e5e371d759e44d",
+      "size": 3630690,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4198829/ublock_origin-1.54.0.xpi"
+     }
+    },
+    {
+     "id": 5644148,
+     "version": "1.53.0",
+     "channel": "listed",
+     "file": {
+      "id": 4188488,
+      "created": "2023-10-31T12:35:52Z",
+      "hash": "sha256:5403474101f753b5d38c09135e40d82a115afcd01310d78133a4af363462194b",
+      "size": 3593021,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4188488/ublock_origin-1.53.0.xpi"
+     }
+    },
+    {
+     "id": 5626680,
+     "version": "1.52.2",
+     "channel": "listed",
+     "file": {
+      "id": 4171020,
+      "created": "2023-09-21T17:09:35Z",
+      "hash": "sha256:e8ee3f9d597a6d42db9d73fe87c1d521de340755fd8bfdd69e41623edfe096d6",
+      "size": 3578876,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4171020/ublock_origin-1.52.2.xpi"
+     }
+    },
+    {
+     "id": 5620609,
+     "version": "1.52.0",
+     "channel": "listed",
+     "file": {
+      "id": 4164949,
+      "created": "2023-09-08T13:45:36Z",
+      "hash": "sha256:3932506ce4df306e4da7527d93d60fe0421cf15045c2f4ea73589d9a0902266b",
+      "size": 3576858,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4164949/ublock_origin-1.52.0.xpi"
+     }
+    },
+    {
+     "id": 5596914,
+     "version": "1.51.0",
+     "channel": "listed",
+     "file": {
+      "id": 4141256,
+      "created": "2023-07-19T23:09:25Z",
+      "hash": "sha256:8b73468bc233a11dd2895219466381783d19123857dd0b6fd16a01820fca4834",
+      "size": 3538418,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4141256/ublock_origin-1.51.0.xpi"
+     }
+    },
+    {
+     "id": 5577564,
+     "version": "1.50.0",
+     "channel": "listed",
+     "file": {
+      "id": 4121906,
+      "created": "2023-06-07T14:50:07Z",
+      "hash": "sha256:10618003e70b528c3f17996e373146d39e6b15f777ac4ca1f214da2ffdb7a5b3",
+      "size": 3504841,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4121906/ublock_origin-1.50.0.xpi"
+     }
+    },
+    {
+     "id": 5558705,
+     "version": "1.49.2",
+     "channel": "listed",
+     "file": {
+      "id": 4103048,
+      "created": "2023-04-26T14:37:33Z",
+      "hash": "sha256:39266486f720cd31d291d2fdad78625b079782a05517e1936eec7e780bc2a84d",
+      "size": 3383174,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4103048/ublock_origin-1.49.2.xpi"
+     }
+    },
+    {
+     "id": 5554800,
+     "version": "1.49.0",
+     "channel": "listed",
+     "file": {
+      "id": 4099143,
+      "created": "2023-04-18T15:32:44Z",
+      "hash": "sha256:7c32a32fc6ad2ee76d6c097a7562799b3765c8200ca27f77436f9771d3fd6c64",
+      "size": 3376457,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4099143/ublock_origin-1.49.0.xpi"
+     }
+    },
+    {
+     "id": 5547815,
+     "version": "1.48.4",
+     "channel": "listed",
+     "file": {
+      "id": 4092158,
+      "created": "2023-04-01T21:20:42Z",
+      "hash": "sha256:d7666b963c2969b0014937aae55472eea5098ff21ed3bea8a2e1f595f62856c1",
+      "size": 3343703,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4092158/ublock_origin-1.48.4.xpi"
+     }
+    },
+    {
+     "id": 5545716,
+     "version": "1.48.2",
+     "channel": "listed",
+     "file": {
+      "id": 4090059,
+      "created": "2023-03-28T14:49:23Z",
+      "hash": "sha256:3b0bff2192e5f86be6411daa9199bfdbeb87d6ce6aff66f33a8501c97f1df1af",
+      "size": 3332653,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4090059/ublock_origin-1.48.2.xpi"
+     }
+    },
+    {
+     "id": 5542549,
+     "version": "1.48.0",
+     "channel": "listed",
+     "file": {
+      "id": 4086892,
+      "created": "2023-03-21T16:25:25Z",
+      "hash": "sha256:787950ad4fdbf57ffab136c706918077ed15b0b4fb22b5429ddd0043de3c9720",
+      "size": 3321222,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4086892/ublock_origin-1.48.0.xpi"
+     }
+    },
+    {
+     "id": 5534721,
+     "version": "1.47.4",
+     "channel": "listed",
+     "file": {
+      "id": 4079064,
+      "created": "2023-03-03T22:26:56Z",
+      "hash": "sha256:a35a6c8758ba74616afc09648c96d74ec2e7d27fe30f311d1db6e9a4966e7858",
+      "size": 3246151,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4079064/ublock_origin-1.47.4.xpi"
+     }
+    },
+    {
+     "id": 5529576,
+     "version": "1.47.2",
+     "channel": "listed",
+     "file": {
+      "id": 4073921,
+      "created": "2023-02-21T14:07:31Z",
+      "hash": "sha256:2ae62bf1e5632f793c734e36ef9dabfc16c8865516adaf8e90e5a4d1852170f6",
+      "size": 3230568,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4073921/ublock_origin-1.47.2.xpi"
+     }
+    },
+    {
+     "id": 5525624,
+     "version": "1.47.0",
+     "channel": "listed",
+     "file": {
+      "id": 4069969,
+      "created": "2023-02-13T18:12:01Z",
+      "hash": "sha256:e76958a8c8eb4b71954dac9b0eb1f5a7a545f746159227e0b821b1a1b23f7cd4",
+      "size": 3224904,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4069969/ublock_origin-1.47.0.xpi"
+     }
+    },
+    {
+     "id": 5503008,
+     "version": "1.46.0",
+     "channel": "listed",
+     "file": {
+      "id": 4047353,
+      "created": "2022-12-22T16:49:43Z",
+      "hash": "sha256:6bf8af5266353fab5eabdc7476de026e01edfb7901b0430c5e539f6791f1edc8",
+      "size": 3215576,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4047353/ublock_origin-1.46.0.xpi"
+     }
+    },
+    {
+     "id": 5484631,
+     "version": "1.45.2",
+     "channel": "listed",
+     "file": {
+      "id": 4028976,
+      "created": "2022-11-11T14:15:28Z",
+      "hash": "sha256:fb173895c76c3b05f132caf87a716c75e3db21be861ead1b14ba6abc7e715e8b",
+      "size": 3234876,
+      "status": "public",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/4028976/ublock_origin-1.45.2.xpi"
+     }
+    }
+   ]
+  },
+  "blocklist/block/uBlock0%40raymondhill.net/": null
+ }
+}
