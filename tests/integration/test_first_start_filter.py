@@ -96,14 +96,23 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.counter += 1
         return f"{tag}{self.counter}"
 
-    def read(self, n: str, times: int = 1, ads_before: int = 0) -> bool:
-        """Whether the image the lists block reached the server for `n`, once the control image did (`times` times)
-        and every image of the current page is done. Raises when the control image never came."""
-        if not harness.wait_until(lambda: self.server.count(control(n)) >= times, timeout=READING):
+    def read(self, n: str, asked: float, times: int = 1, ads_before: int = 0) -> dict:
+        """One reading for `n`, asked for at `asked` (seconds since the start): when the control image reached the
+        server (its `times`-th request), whether the image the lists block did too (more than `ads_before` times),
+        and when every image of the current page was done. Raises when the control image never came: such a reading
+        says nothing."""
+        if not harness.wait_until(lambda: len(self.server.hit_times(control(n))) >= times, timeout=READING):
             raise AssertionError(f"could not measure: the control image {control(n)} was not requested; {self.server.hits[-6:]}")
         if not harness.wait_until(lambda: self.m.execute(IMAGES_DONE), timeout=READING):
             raise AssertionError(f"could not measure: the page's images did not finish for n={n}")
-        return self.server.count(ad(n)) > ads_before
+        done = self.now()
+        ads = self.server.hit_times(ad(n))
+        return {
+            "asked": asked,
+            "requested": self.now(self.server.hit_times(control(n))[times - 1]),
+            "leaked": len(ads) > ads_before,
+            "done": done,
+        }
 
     def addon(self) -> dict | None:
         self.m.set_context("chrome")
@@ -120,12 +129,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         n = self.fresh("p")
         handle = self.m.new_tab()
         self.m.switch_to(handle)
-        at = self.now()
+        asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
-        leaked = self.read(n)
+        reading = self.read(n, asked)
         self.m.send("WebDriver:CloseWindow")
         self.m.switch_to(self.early)
-        return {"at": at, "leaked": leaked}
+        return reading
 
     # -- the measurement ------------------------------------------------------------------------------------
     def wait_for_the_filter(self) -> None:
@@ -147,9 +156,9 @@ class FirstStartFilterWindowTest(unittest.TestCase):
                 raise AssertionError(message)
             raise unittest.SkipTest(message)
         self.assertEqual(streak, 2, f"a new tab was still not filtered {READY_WITHIN} s after the start: {probes[-4:]}")
-        leaks = [p["at"] for p in probes if p["leaked"]]
+        leaks = [p["requested"] for p in probes if p["leaked"]]
         self.record["last_new_tab_leaked_at"] = leaks[-1] if leaks else None
-        self.record["new_tab_filtered_at"] = probes[-2]["at"]
+        self.record["new_tab_filtered_at"] = probes[-2]["requested"]
 
     def check_the_early_tab(self, n: str) -> None:
         """Once the filter is ready for new tabs: the early tab's page, then a new address in it, then a reload."""
@@ -157,19 +166,19 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         for _ in range(AFTER_READY):
             later_probes.append(self.probe())
             late = self.fresh(f"{n}-late")
-            at = self.now()
+            asked = self.now()
             self.m.execute(ADD_IMAGES, [control(late), ad(late)])
-            same_document.append({"at": at, "leaked": self.read(late)})
+            same_document.append(self.read(late, asked))
         self.record["new_tabs_after_ready"] = later_probes
         self.record["early_page_after_ready"] = same_document
         address = self.fresh("e")
-        at = self.now()
+        asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={address}"))
-        self.record["early_tab_new_address"] = {"at": at, "leaked": self.read(address)}
-        before = self.server.count(ad(address))
-        at = self.now()
+        self.record["early_tab_new_address"] = self.read(address, asked)
+        # A reload asks for the same images again (the server says no-store): the second request of each counts.
+        before, asked = len(self.server.hit_times(ad(address))), self.now()
         self.m.send("WebDriver:Refresh")
-        self.record["early_tab_reload"] = {"at": at, "leaked": self.read(address, times=2, ads_before=before)}
+        self.record["early_tab_reload"] = self.read(address, asked, times=2, ads_before=before)
 
     def finish(self, case: str) -> None:
         self.record["case"] = case
@@ -179,7 +188,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         r = self.record
 
         def word(entry: dict) -> str:
-            return f"{'LEAKED' if entry['leaked'] else 'blocked'}@{entry['at']}s"
+            return f"{'LEAKED' if entry['leaked'] else 'blocked'}@{entry['requested']}s"
 
         print(
             f"\nfirst-start-filter {case}: first page {word(r['first_page'])}, uBlock Origin active@{r['ublock_active_at']}s,"
@@ -208,8 +217,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         if not harness.wait_until(lambda: self.server.count(control(n)) >= 1, timeout=READING):
             raise AssertionError(f"could not measure: the address given at the start never loaded; {self.server.hits[-6:]}")
         self.early = self.find_tab(f"/ads-fixture?n={n}")
-        leaked = self.read(n)
-        self.record["first_page"] = {"at": self.now(self.server.first_hit(control(n))), "leaked": leaked}
+        self.record["first_page"] = self.read(n, asked=0.0)
         self.wait_for_the_filter()
         self.check_the_early_tab(n)
         self.finish("link")
@@ -226,9 +234,9 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(STAGED), timeout=READING), "the welcome did not end")
         self.record["welcome_ended_at"] = self.now()
         n = self.fresh("s")
+        asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
-        leaked = self.read(n)
-        self.record["first_page"] = {"at": self.now(self.server.first_hit(control(n))), "leaked": leaked}
+        self.record["first_page"] = self.read(n, asked)
         self.wait_for_the_filter()
         self.check_the_early_tab(n)
         self.finish("welcome")

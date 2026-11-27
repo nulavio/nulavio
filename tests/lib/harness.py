@@ -737,10 +737,10 @@ class FixtureServer:
         with self._lock:
             return sum(1 for hit in self.hits if hit == path)
 
-    def first_hit(self, path: str) -> float | None:
-        """time.monotonic() of the first request whose path (including the query string) equals ``path``."""
+    def hit_times(self, path: str) -> list[float]:
+        """time.monotonic() of each request whose path (including the query string) equals ``path``."""
         with self._lock:
-            return next((when for hit, when in zip(self.hits, self.times, strict=True) if hit == path), None)
+            return [when for hit, when in zip(self.hits, self.times, strict=True) if hit == path]
 
     def __enter__(self):
         self.thread.start()
