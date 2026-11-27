@@ -59,6 +59,7 @@ jobs:
           NULAVIO_REQUIRE_GOCRYPTFS: "1"
           NULAVIO_REQUIRE_APKSIGNER: "1" # test_apk_sign checks the Companion's signer with the runner's Android build-tools
           NULAVIO_REQUIRE_GRADLE: "1" # test_ci_gradle runs the Maven mirror's init script in the Gradle the protocol library step unpacked
+          NULAVIO_REQUIRE_NODE: "1" # the Shell modules' behavioural tests run under the runner's Node (tests/lib/node_tool.py)
         run: python3 -I tests/run.py unit
       - name: Pinned Firefox source digest is the one Mozilla signed (engine.json)
         if: ${{ !cancelled() }} # reported even when an earlier step failed

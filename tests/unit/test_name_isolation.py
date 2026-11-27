@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 SHELL = ROOT / "browser" / "shell"
 NAMES = SHELL / "lib" / "names.js"
 
@@ -78,7 +82,7 @@ def isolated(text: str) -> bool:
     return depth == 0
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class InSentenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
