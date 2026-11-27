@@ -39,6 +39,7 @@ let drawn = false; // a ready render read the conversation and the items since t
 let tabCheck = null; // the last check of the selected tab (refreshPage) that has not bound the items yet (#816)
 let waiting = null; // a Send that waits for that check (#816): `cancel()` ends the wait, and nothing goes
 let drops = 0; // items that left the message with a notice (drop): a Send keeps the notice of one its wait dropped
+let rows = []; // the items drawn now, in their order: {chipId, row, remove}, `remove` its Remove button (#760)
 
 const $ = id => document.getElementById(id);
 /** The one way `chips` changes: the revision moves with it. */
@@ -238,6 +239,7 @@ async function copy(text) {
   }
 }
 
+/** An item's row and its Remove button. */
 function chipItem(chip) {
   const selection = chip.kind === "selection";
   const size = selection
@@ -247,7 +249,17 @@ function chipItem(chip) {
     : chip.truncated
       ? t("assistantPageLong", [count(MAX_PAGE_CHARS)])
       : t("assistantPageChars", [count(chip.chars)]);
-  return h(
+  const remove = h(
+    "button",
+    {
+      class: "assistant__chip-remove",
+      type: "button",
+      "aria-label": t(selection ? "assistantRemoveSelection" : "assistantRemovePage", [chip.title]),
+      onclick: () => removeChip(chip),
+    },
+    h("span", { "aria-hidden": "true", text: "×" })
+  );
+  const row = h(
     "li",
     { class: "assistant__chip", "data-chip-id": chip.chipId, "data-kind": chip.kind },
     h(
@@ -259,28 +271,27 @@ function chipItem(chip) {
       chip.frameAddress ? h("span", { class: "hint", "data-part": "frame", text: t("assistantSelectionFrame", [chip.frameAddress]) }) : null,
       h("span", { class: "hint", "data-part": "size", text: size })
     ),
-    h(
-      "button",
-      {
-        class: "assistant__chip-remove",
-        type: "button",
-        "aria-label": t(selection ? "assistantRemoveSelection" : "assistantRemovePage", [chip.title]),
-        onclick: () => removeChip(chip),
-      },
-      h("span", { "aria-hidden": "true", text: "×" })
-    )
+    remove
   );
+  return { row, remove };
 }
 
-/** The included items, the offer to include the current page, and the reason one left. */
-function showContext() {
+/** The included items, the offer to include the current page, and the reason one left. `removed`: the person removed
+    an item with its Remove button (removeChip). */
+function showContext({ removed = false } = {}) {
   const task = mode() === "task";
   $("context").hidden = task;
   $("attached").hidden = !chips.length;
   if (chips.length) {
     $("attached-heading").textContent = t("assistantAttachedHeading", [state.recipient]);
   }
-  $("chips").replaceChildren(...chips.map(chipItem));
+  // A redraw replaces the Remove buttons (#760): the one with focus hands it to the same item's new button, or, when
+  // that item is gone, to the item now in its place, the one before it, the offer to include the page or the question.
+  // Only while the panel has focus: a redraw never takes it from the page.
+  const focused = document.hasFocus() ? rows.findIndex(r => r.remove === document.activeElement) : -1;
+  const left = rows[focused]?.chipId;
+  rows = chips.map(chip => ({ chipId: chip.chipId, ...chipItem(chip) }));
+  $("chips").replaceChildren(...rows.map(r => r.row));
   const offer = !pageChip() && current;
   $("include-page").hidden = !offer;
   if (offer) {
@@ -289,6 +300,17 @@ function showContext() {
   $("no-page").hidden = Boolean(pageChip() || current);
   $("summarize").hidden = task || !current;
   showSendLine();
+  const include = offer && !$("include-page").disabled; // off while a Send waits (#816) and while a run goes
+  if (removed && include) {
+    // One focus decision for a removal: the offer that brings the page back, as before #760.
+    $("include-page").focus();
+  } else if (focused >= 0) {
+    const same = rows.find(r => r.chipId === left);
+    const next = same ?? rows[Math.min(focused, rows.length - 1)];
+    // The same item's button takes focus where it is: no scroll, the person may be reading the answer below.
+    const target = task ? $("prompt") : (next?.remove ?? (include ? $("include-page") : $("prompt")));
+    target.focus({ preventScroll: Boolean(same && !task) });
+  }
 }
 
 /** An item leaves the message, here and in the browser, and the panel says why (`key` names it). */
@@ -306,8 +328,7 @@ function removeChip(chip) {
   newContext();
   setChips(chips.filter(c => c !== chip));
   ai.assistantRemove(chip.chipId).catch(() => {});
-  showContext();
-  $("include-page").focus();
+  showContext({ removed: true });
 }
 
 /** "Incluir esta página" and "Resumir": the tab shown now is read and kept for the next message.
@@ -498,6 +519,7 @@ async function render() {
     // Hidden now. When the composer shows again, nothing from before waits on it for the reads: no item Send would not
     // carry, no offer of a page, no hint, no size.
     $("chips").replaceChildren();
+    rows = [];
     $("attached").hidden = true;
     $("include-page").hidden = true;
     $("no-page").hidden = true;
@@ -1006,6 +1028,7 @@ async function send(question, { retry = false } = {}) {
   if (!dropNotice) {
     $("drift").hidden = true;
   }
+  $("include-page").disabled = true; // as setRunning below sets it: the redraw does not hand focus to it (#760)
   showContext();
   $("answer-section").hidden = true;
   $("activity-actions").hidden = true;
