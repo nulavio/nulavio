@@ -63,22 +63,23 @@
     }
 
     /* UX3F A5/M4: the launcher widens and narrows on the motion tokens. The
-       engine's sidebar view transition (sidebar.css) reads these: expand and
-       launcher-enter, collapse and launcher-exit. Reduced motion skips the
-       transition in the engine (gReduceMotion). Expand-on-hover takes its
-       duration from sidebar.animation.expand-on-hover.duration-ms. */
-    --motion-dur-sidebar-enter: var(--nv-motion-duration-expand);
-    --motion-dur-sidebar-exit: var(--nv-motion-duration-collapse);
-    --motion-ease-emphasized: var(--nv-motion-easing-standard);
+       engine's sidebar view transition (sidebar.css) reads these design-system
+       tokens (Firefox 161's names; they are layered, so these unlayered values
+       win): expand and launcher-enter, collapse and launcher-exit. Reduced
+       motion skips the transition in the engine (gReduceMotion). Expand-on-hover
+       takes its duration from sidebar.animation.expand-on-hover.duration-ms. */
+    --sidebar-motion-duration-enter: var(--nv-motion-duration-expand);
+    --sidebar-motion-duration-exit: var(--nv-motion-duration-collapse);
+    --sidebar-motion-easing: var(--nv-motion-easing-standard);
 
     /* Motion map (#319): a sidebar panel (history, bookmarks, the assistant)
        opens, closes and gives way to another in the same view transition
        (panel-open, panel-close, panel-switch). The same tokens as the launcher,
        so the two never move at different speeds side by side. */
-    --motion-dur-sidebar-panel-enter: var(--nv-motion-duration-expand);
-    --motion-dur-sidebar-panel-exit: var(--nv-motion-duration-collapse);
-    --motion-dur-sidebar-panel-content-fade: var(--nv-motion-duration-fast);
-    --motion-ease-standard: var(--nv-motion-easing-standard);
+    --sidebar-panel-motion-duration-enter: var(--nv-motion-duration-expand);
+    --sidebar-panel-motion-duration-exit: var(--nv-motion-duration-collapse);
+    --sidebar-panel-content-motion-duration-fade: var(--nv-motion-duration-fast);
+    --sidebar-panel-content-motion-easing-fade: var(--nv-motion-easing-standard);
   }
 
   /* UX3G N4: the launcher is 224px from the first frame (the width the Lateral
