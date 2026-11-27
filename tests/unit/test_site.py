@@ -444,6 +444,7 @@ class SiteTest(unittest.TestCase):
                 self.assertEqual(webp_animation(data)[1], 0, "a still frame does not move")
                 self.assertTrue(name.startswith(entry["recording"] + "-"))
                 self.assertLessEqual(entry["t"], clip["duration_s"], "a frame of that recording")
+                self.assertLessEqual(entry["shown_s"][1], clip["duration_s"] + 1e-3, "on screen in that recording")
                 # One rectangle of one frame, inside the window, at the capture's scale: never enlarged.
                 crop, (width, height) = entry["crop_css"], clip["window_css"]
                 self.assertTrue(
@@ -522,8 +523,11 @@ class SiteTest(unittest.TestCase):
                     self.assertEqual(typed, clip["scene"] != "profile-opens", "typing is said where something is typed")
                     for cut in clip["cuts"]:
                         self.assertIn(build_site.seconds(cut["real_seconds_cut"], locale) + " s ", edits)
-                    frame = stills[Path(still.attrs["src"]).name]["t"]
-                    self.assertIn(build_site.seconds(round(frame, 1), locale) + " s,", edits)
+                    entry = stills[Path(still.attrs["src"]).name]
+                    # The time given is one at which the video shows that frame: not before it is on screen.
+                    when = build_site.still_time(entry)
+                    self.assertTrue(entry["t"] <= entry["shown_s"][0] <= when < entry["shown_s"][1], entry)
+                    self.assertIn(build_site.seconds(when, locale) + " s,", edits)
                     for part in (
                         clip["capture"]["buildid"],
                         f"Firefox {clip['capture']['firefox']}",
@@ -544,6 +548,12 @@ class SiteTest(unittest.TestCase):
         self.assertRaises(build_site.BuildError, build_site.clip_edits, {**clips, "_edits": longer}, "link-routed", "en-US")
         # A scene whose still is not recorded is not built: the page would not say which frame it shows.
         self.assertRaises(build_site.BuildError, build_site.clip_edits, {**clips, "_stills": {}}, "link-routed", "en-US")
+        # 6.414 s rounded down was 6.4 s, when the video still showed the window before; the page gives 6.5 s.
+        self.assertEqual(build_site.still_time({"shown_s": [6.433, 8.5]}), 6.5)
+        self.assertEqual(build_site.still_time({"shown_s": [6.6, 7.4]}), 6.6)
+        self.assertRaises(
+            build_site.BuildError, build_site.still_time, {"shown_s": [6.433, 6.467], "frame": "f", "recording": "r"}
+        )
         self.assertEqual(build_site.seconds(18.6, "pt-BR"), "19")
         self.assertEqual(build_site.seconds(0.8, "pt-BR"), "0,8")
         self.assertEqual(build_site.seconds("0.6", "en-US"), "0.6")

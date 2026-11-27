@@ -15,6 +15,7 @@ A figure that cannot reach the state it shows fails this case and is left out, n
 
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -28,6 +29,9 @@ import harness  # noqa: E402
 
 class CaptureSiteShots(unittest.TestCase):
     def test_capture(self):
+        if Path("/run/.containerenv").exists() and not os.environ.get("NULAVIO_TEST_ARTIFACTS"):
+            # In the container, the default folder is in the copy of the checkout the runner deletes with it.
+            self.fail("set NULAVIO_TEST_ARTIFACTS: the screenshots must outlive the container for compose to read them")
         raw = harness.artifacts_dir() / capture_site.RAW
         self.assertEqual(capture_site.capture(raw, ["pt-BR", "en-US"], {"window", "bands", "guard"}), 0)
         self.assertTrue((raw / "captures.json").is_file())

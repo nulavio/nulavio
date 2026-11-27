@@ -16,8 +16,10 @@ password prompt showed the window after it. So, for each recording in ``site/ass
 
 Nothing is drawn or put together: a still is one rectangle of one frame, without the cursor the videos get
 afterwards. The frames are not in the repository, so ``stills.json`` says which frame of which recording
-each still is, at what time of the video it is on screen, and its rectangle; the script refuses frames whose
-timeline is not the capture the manifest describes (its time and the recording script's blob).
+each still is, from which time of the encoded video it is on screen (``shown_s``: the first and the end of the
+frames that show it, at the video's frame rate), and its rectangle; the script refuses frames whose timeline is
+not the capture the manifest describes (its time and the recording script's blob), frame files that are not the
+recorder's own (``NNNN.png``, a regular file in the scene's directory), and a still the video never shows.
 """
 
 from __future__ import annotations
@@ -25,10 +27,14 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import sys
 from pathlib import Path
 
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import record_site  # the recorder's own checks of what a capture holds, and its frame rate
 
 ROOT = Path(__file__).resolve().parents[2]
 CLIPS = ROOT / "site" / "assets" / "clips"
@@ -48,6 +54,34 @@ CUTS = {
 def frame_at(timeline: dict, t: float) -> dict:
     """The frame on screen at ``t``: the last one captured at or before it."""
     return max((f for f in timeline["frames"] if f["t"] <= t), key=lambda f: f["t"])
+
+
+def shown_s(timeline: dict, file: str) -> list[float]:
+    """When the encoded video shows a captured frame: from its first video frame to the end of its last, in s.
+    The video takes, at each of its frames, the last capture at or before that time (record_site.compose_frames),
+    so a capture is on screen from the next frame on, not from the time it was taken."""
+    fps = record_site.FPS
+    frames = [i for i in range(record_site.frame_count(timeline)) if record_site.frame_at(timeline["frames"], i / fps) == file]
+    if not frames:
+        raise SystemExit(f"{file}: no frame of the encoded video shows it")
+    return [round(frames[0] / fps, 3), round((frames[-1] + 1) / fps, 3)]
+
+
+def publish(files: dict[Path, bytes]) -> None:
+    """Write every file beside its place first, then rename each into place, stills.json last. A write that fails
+    (a full disk) removes what it staged and leaves the stills as they were; the renames need no space."""
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for path, data in files.items():
+            part = path.with_name(f".{path.name}.part")
+            staged.append((part, path))
+            part.write_bytes(data)
+    except BaseException:
+        for part, _ in staged:
+            part.unlink(missing_ok=True)
+        raise
+    for part, path in staged:
+        os.replace(part, path)
 
 
 def cut(frame: Path, box: tuple, scale: float, lossless: bool, captured_px: list[int]) -> tuple[bytes, tuple[int, int]]:
@@ -78,7 +112,11 @@ def main(argv: list[str] | None = None) -> int:
     written: dict[str, bytes] = {}
     for key, clip in manifest["recordings"].items():
         src = frames_root / key
-        timeline = json.loads((src / "timeline.json").read_text(encoding="utf-8"))
+        try:  # the recorder's checks: its own frame names, regular files in the scene's directory, never a link
+            timeline = json.loads(record_site.captured(src / "timeline.json").read_text(encoding="utf-8"))
+            record_site.check_timeline(timeline, clip["scene"], clip["locale"])
+        except ValueError as e:
+            raise SystemExit(f"{key}: {e}") from None
         same = (timeline["captured"], timeline["script_blob"]) == (clip["capture"]["utc"], clip["capture"]["script_blob"])
         if not same or timeline["buildid"] != clip["capture"]["buildid"]:
             raise SystemExit(f"{key}: these frames are not the capture the manifest describes")
@@ -91,7 +129,11 @@ def main(argv: list[str] | None = None) -> int:
             ("detail", last, spec.get("detail", DETAIL), True),
         ):
             name = f"{key}-{suffix}.webp"
-            data, size = cut(src / frame["file"], box, timeline["scale"], lossless, clip["captured_px"])
+            try:
+                path = record_site.captured(src / frame["file"])
+            except ValueError as e:
+                raise SystemExit(f"{key}: {e}") from None
+            data, size = cut(path, box, timeline["scale"], lossless, clip["captured_px"])
             if len(data) > BUDGET:
                 raise SystemExit(f"{name}: {len(data)} bytes, over the budget of {BUDGET}")
             written[name] = data
@@ -99,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                 "recording": key,
                 "frame": frame["file"],
                 "t": frame["t"],
+                "shown_s": shown_s(timeline, frame["file"]),
                 "crop_css": dict(zip("xywh", box, strict=True)),
                 "scale": timeline["scale"],
                 "px": list(size),
@@ -115,9 +158,8 @@ def main(argv: list[str] | None = None) -> int:
         "budget_bytes_per_file": BUDGET,
         "stills": stills,
     }
-    for name, data in written.items():
-        (CLIPS / name).write_bytes(data)
-    (CLIPS / "stills.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    text = json.dumps(record, indent=2, ensure_ascii=False) + "\n"
+    publish({**{CLIPS / name: data for name, data in written.items()}, CLIPS / "stills.json": text.encode("utf-8")})
     print(f"{len(written)} stills, {sum(map(len, written.values())) // 1024} KiB")
     return 0
 

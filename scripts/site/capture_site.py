@@ -9,10 +9,12 @@ recordings are made and whose fonts are fixed, has no Pillow and only a copy of 
 
 1. capture (needs the engine): ``tests/integration/capture_site_shots.py``, run by name where the
    integration tests run, writes the window screenshots as they came and ``captures.json`` (crops in CSS
-   px, what the DOM said) to ``<artifacts>/site-shots/``;
+   px, what the DOM said) to ``<artifacts>/site-shots/``, marked ``complete`` once every scene asked for
+   was tried;
 2. compose (needs Pillow and git, no engine): ``python3 -I scripts/site/capture_site.py compose <dir>``
-   cuts and encodes them into the tree and writes the manifest. It stamps this checkout's commit: run it
-   on the commit the build's Shell was packed from.
+   refuses a capture that did not finish, cuts and encodes the rest into the tree and writes the manifest,
+   staging every file before it replaces any. It stamps this checkout's commit: run it on the commit the
+   build's Shell was packed from.
 
 Every scene runs on tests/lib/harness.GeckoProfileSession: a throwaway HOME,
 registered engine profiles, headless, never a user profile. The cast is the one of the
@@ -671,9 +673,22 @@ def capture(raw: Path, locales: list[str], only: set[str]) -> int:
         shutil.rmtree(raw)  # compose never finds a screenshot of an earlier run
     out = Output(raw)
     argv = ["--locales", *locales, "--only", ",".join(sorted(only))]
-    where = ", in ci/containers/fedora-release-itest" if Path("/run/.containerenv").exists() else ""
+    # The container is named only when the runner says which one it is: another image has other fonts and tools.
+    image = os.environ.get("NULAVIO_INTEGRATION_IMAGE", "")
+    if Path("/run/.containerenv").exists():
+        where = f", in ci/containers/{image}" if re.fullmatch(r"[a-z0-9-]+", image) else ", in a container"
+    else:
+        where = ""
     meta = {"harness": f"tests/lib/harness.GeckoProfileSession (throwaway HOME, headless){where}"}
     left_out: list[str] = []
+
+    def write(complete: bool) -> None:
+        # Written after each scene, so a run that stops keeps what it made; `complete` only once every scene it
+        # was asked for has been tried, and compose refuses a record without it (a run stopped between languages).
+        record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"],
+                  "args": argv, "scale": SCALE, "complete": complete,
+                  "dom_changes": DOM_CHANGES, "left_out": left_out, "figures": out.figures, "entries": out.entries}  # fmt: skip
+        (raw / "captures.json").write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
     def run(label: str, scene, *scene_args) -> None:
         entries, figures = list(out.entries), {k: dict(v) for k, v in out.figures.items()}
@@ -684,10 +699,7 @@ def capture(raw: Path, locales: list[str], only: set[str]) -> int:
             left_out.append(f"{label}: {type(e).__name__}: {e}")
             print(f"  {label} left out: {e}", flush=True)
             out.entries, out.figures = entries, figures  # nor half made: what it saved before failing goes too
-        record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"],
-                  "args": argv, "scale": SCALE,
-                  "dom_changes": DOM_CHANGES, "left_out": left_out, "figures": out.figures, "entries": out.entries}  # fmt: skip
-        (raw / "captures.json").write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        write(complete=False)
 
     for locale in locales:
         print(f"[{locale}]", flush=True)
@@ -703,6 +715,7 @@ def capture(raw: Path, locales: list[str], only: set[str]) -> int:
                     run(f"fig-5 {locale} {theme}", scene_guard, out, locale, meta, theme)
         finally:
             fixtures.close()
+    write(complete=True)
     print(f"{len(out.entries)} cuts; left out: {left_out}")
     return 1 if left_out else 0
 
@@ -732,7 +745,13 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
         # A temporary or private band adds a dashed lower edge (1.5 px) to the same row: every strip is cut at
         # the row's height, the lowest band's, and the cues must lie inside it.
         height = min(e["strip"]["band"]["h"] for e in group)
-        low = [e["name"] for e in group if max(c["y"] + c["h"] for c in e["strip"]["cues"]) > height]
+        low = [
+            e["name"]
+            for e in group
+            if any(
+                c["y"] < e["strip"]["band"]["y"] or c["y"] + c["h"] > e["strip"]["band"]["y"] + height for c in e["strip"]["cues"]
+            )
+        ]
         if low:
             raise SystemExit(f"{key}: cues below the band's common height of {height} px in {low}; the strips are not cut")
         width = max(right - left for left, right in spans.values()) + 2 * STRIP_PAD
@@ -743,6 +762,23 @@ def strip_boxes(entries: list[dict]) -> dict[str, dict]:
             x = min(max(band["x"], x), band["x"] + band["w"] - width)
             boxes[e["name"]] = {"x": x, "y": band["y"], "w": width, "h": height}
     return boxes
+
+
+def publish(files: dict[Path, bytes]) -> None:
+    """Write every file beside its place first, then rename each into place, the manifest last. A write that
+    fails (a full disk) removes what it staged and leaves the set as it was; the renames need no space."""
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for path, data in files.items():
+            part = path.with_name(f".{path.name}.part")
+            staged.append((part, path))
+            part.write_bytes(data)
+    except BaseException:
+        for part, _ in staged:
+            part.unlink(missing_ok=True)
+        raise
+    for part, path in staged:
+        os.replace(part, path)
 
 
 NAME = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")  # a file name of words and hyphens: no separator, no dot
@@ -757,6 +793,8 @@ def compose(raw: Path) -> int:
     from PIL import Image  # here, not at the top: the capture step runs where Pillow is not installed
 
     record = json.loads((raw / "captures.json").read_text(encoding="utf-8"))
+    if record.get("complete") is not True:
+        raise SystemExit("captures.json: the capture stopped before it tried every scene it was asked for; capture again")
     scale = record["scale"]
     for e in record["entries"]:  # names become paths in the tree: only the shapes the capture step writes
         if not NAME.fullmatch(e["name"]) or not RAW_FILE.fullmatch(e["raw"]):
@@ -776,7 +814,9 @@ def compose(raw: Path) -> int:
         image = Image.open(raw / e["raw"]).convert("RGB")
         crop = strips.get(e["name"], e["crop_css"])
         if crop:
-            box = tuple(round(v * scale) for v in (crop["x"], crop["y"], crop["x"] + crop["w"], crop["y"] + crop["h"]))
+            # The size is rounded once, not each edge: strips of one CSS width get one pixel width wherever they start.
+            left, top = round(crop["x"] * scale), round(crop["y"] * scale)
+            box = (left, top, left + round(crop["w"] * scale), top + round(crop["h"] * scale))
             if box[0] < 0 or box[1] < 0 or box[2] > image.width or box[3] > image.height:
                 raise SystemExit(f"{e['name']}: the cut {crop} leaves the screenshot ({image.width}x{image.height} px)")
             image = image.crop(box)
@@ -830,10 +870,11 @@ def compose(raw: Path) -> int:
             raise SystemExit(f"manifest would contain a personal value ({private!r}); not written")
     SHOTS.mkdir(parents=True, exist_ok=True)
     MASTERS.mkdir(parents=True, exist_ok=True)
+    publishing: dict[Path, bytes] = {}
     for name, (master, data) in staged.items():
-        (MASTERS / f"{name}.png").write_bytes(master)
-        (SHOTS / f"{name}.webp").write_bytes(data)
-    manifest_path.write_text(text, encoding="utf-8")
+        publishing[MASTERS / f"{name}.png"], publishing[SHOTS / f"{name}.webp"] = master, data
+    publishing[manifest_path] = text.encode("utf-8")
+    publish(publishing)
     listed = {f["file"] for f in manifest["files"]}
     for stale in sorted(SHOTS.glob("*.webp")):  # a capture the set no longer has (a renamed state) is not served
         if stale.name not in listed:

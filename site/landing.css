@@ -343,8 +343,11 @@ select.field { padding-right: var(--nv-space-7); }
 /* The corner of the window at its real size (a 2x capture shown at half its pixels). The
    figure runs to the edge of the viewport and cuts the capture there: the window goes on.
    Where the figure is wider than the capture, the capture and its caption move right, so that
-   the capture still ends at the viewport's edge and never stops short of it. */
+   the capture still ends at the viewport's edge and never stops short of it. Its width is in
+   px, not rem: the capture's 600 CSS px and its 1px left border, so a larger default font
+   size never enlarges the window it shows. */
 .closeup {
+  --capture: calc(600px + 1px);
   min-width: 0;
   margin-right: calc(-1 * var(--gutter));
   margin-left: calc(-1 * var(--nv-space-5));
@@ -352,9 +355,9 @@ select.field { padding-right: var(--nv-space-7); }
   overflow-x: clip;
 }
 .closeup .shot {
-  width: 37.5rem;
+  width: var(--capture);
   max-width: none;
-  margin-left: max(0px, 100% - 37.5rem);
+  margin-left: max(0px, 100% - var(--capture));
   border-right: 0;
   border-bottom: 0;
   border-radius: var(--nv-radius-md) 0 0 0;
@@ -362,7 +365,7 @@ select.field { padding-right: var(--nv-space-7); }
 }
 .closeup figcaption {
   max-width: 27rem;
-  margin-left: max(0px, 100% - 37.5rem);
+  margin-left: max(0px, 100% - var(--capture));
   padding: var(--nv-space-4) var(--gutter) 0 0;
   border-top: var(--hairline);
   color: var(--nv-color-text-secondary);
@@ -757,8 +760,10 @@ select.field { padding-right: var(--nv-space-7); }
 .legend li { display: inline-flex; align-items: center; gap: var(--nv-space-3); }
 .sources { max-width: 46rem; margin-top: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
 .swipe { margin-bottom: var(--nv-space-4); color: var(--nv-color-text-secondary); font-size: 0.875rem; }
-/* Hidden only where the table fits whole: its 62rem and border, the line's lane and the gutters. */
-@media (min-width: 71.25rem) {
+/* Hidden only where the table fits whole: the width the table's box really has (its 62rem and
+   two 1px borders), measured on its column, so a classic scrollbar or a wider lane is counted. */
+.compare .wrap { container-type: inline-size; }
+@container (min-width: calc(62rem + 2px)) {
   .swipe { display: none; }
 }
 
@@ -835,6 +840,11 @@ select.field { padding-right: var(--nv-space-7); }
   height: 8px;
   border-radius: 50%;
   background: var(--nv-color-route-vertical);
+}
+/* Forced colours paint backgrounds over: the line and its dots are drawn in the text's colour,
+   as the window's band draws its glyphs (browser/shell/shared/window-band.css). */
+@media (forced-colors: active) {
+  .route::before, .trail i, .cta .wrap::after { forced-color-adjust: none; background: CanvasText; }
 }
 .cta-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); }
 /* the heading's first line sits level with the turn */

@@ -70,6 +70,7 @@ import functools
 import hashlib
 import html
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -414,7 +415,18 @@ def clip_edits(clips: dict, scene: str, locale: str) -> str:
     still = clips["_stills"].get(f"{scene}-{locale}-still.webp")
     if still is None:  # the still is served with the scene: which frame it is is said, or nothing is built
         raise BuildError(f"{scene} ({locale}): its still is not in stills.json, so the page cannot say which frame it is")
-    return line + " " + words["still"].format(n=seconds(round(still["t"], 1), locale))
+    return line + " " + words["still"].format(n=seconds(still_time(still), locale))
+
+
+def still_time(still: dict) -> float:
+    """The time the page gives for a still: the first tenth of a second at which the video shows it. The capture's
+    own time can be before that (the video takes a capture from its next frame on), and rounded down it pointed
+    at the frame before."""
+    first, end = still["shown_s"]
+    when = math.ceil(first * 10 - 1e-6) / 10
+    if when >= end:
+        raise BuildError(f"{still['frame']} of {still['recording']} is on screen for less than a tenth of a second")
+    return when
 
 
 def clip_stamp(clips: dict, name: str, scene: str, locale: str | None, page: str) -> str:
