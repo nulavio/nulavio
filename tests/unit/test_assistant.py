@@ -1200,7 +1200,8 @@ $("ask").elements = { mode: { value: "ask" } };
 globalThis.Node = Node;
 globalThis.document = { getElementById: $, createElement: tag => new El(tag), createElementNS: (_ns, tag) => new El(tag),
   createTextNode: String, querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
-  body: new El("body"), documentElement: new El("html"), activeElement: null };
+  body: new El("body"), documentElement: new El("html"), activeElement: null, hasFocus: () => panelFocused };
+let panelFocused = true; // whether the panel's document has focus (document.hasFocus), not the page
 globalThis.window = { addEventListener() {} };
 globalThis.requestAnimationFrame = () => 1;
 globalThis.cancelAnimationFrame = () => {};
@@ -2151,6 +2152,33 @@ $("prompt").focus();
 activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 }));
 await idle();
 out.focusElsewhere = document.activeElement === $("prompt");
+// The person went on in the page: the panel's last focused button stays its activeElement, and a redraw takes no focus.
+focusedButton = removeOf("f4");
+focusedButton.focus();
+panelFocused = false;
+activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 }));
+await idle();
+out.focusPageKept = document.activeElement === focusedButton && removeOf("f4") !== focusedButton;
+panelFocused = true;
+// A Send waits for the check of a tab selected meanwhile (#816), which drops the focused item: the offer to include the
+// page is off while it waits, so focus goes to the question.
+kept = [item("f5", "Foco 5")];
+await focusRender();
+removeOf("f5").focus();
+holdPage = true;
+selected = otherTab;
+activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+await idle();
+before = starts.length;
+await send("Pergunta foco");
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.focusWaitShown = shown();
+out.focusWaitPrompt = document.activeElement === $("prompt");
+if (starts.length > before) {
+  await finish();
+}
 kept = [];
 $("allow-profile").fire("click");
 await idle();
@@ -2481,7 +2509,14 @@ class PanelChipsTest(unittest.TestCase):
         self.assertTrue(out["focusGoneAll"])  # the offer to include the page, when none is left
 
     def test_a_redraw_takes_no_focus_from_elsewhere(self):
-        self.assertTrue(self._run()["focusElsewhere"])
+        out = self._run()  # #760
+        self.assertTrue(out["focusElsewhere"])  # another control of the panel keeps it
+        self.assertTrue(out["focusPageKept"])  # and a panel without focus is not given it
+
+    def test_a_redraw_while_a_send_waits_moves_focus_to_the_question(self):
+        out = self._run()  # #760: the offer to include the page is off then (#816)
+        self.assertEqual(out["focusWaitShown"], [])
+        self.assertTrue(out["focusWaitPrompt"])
 
 
 if __name__ == "__main__":

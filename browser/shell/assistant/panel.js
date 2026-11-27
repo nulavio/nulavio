@@ -286,7 +286,8 @@ function showContext() {
   }
   // A redraw replaces the Remove buttons (#760): the one with focus hands it to the same item's new button, or, when
   // that item is gone, to the item now in its place, the one before it, the offer to include the page or the question.
-  const focused = rows.findIndex(r => r.remove === document.activeElement);
+  // Only while the panel has focus: a redraw never takes it from the page.
+  const focused = document.hasFocus() ? rows.findIndex(r => r.remove === document.activeElement) : -1;
   const left = rows[focused]?.chipId;
   rows = chips.map(chip => ({ chipId: chip.chipId, ...chipItem(chip) }));
   $("chips").replaceChildren(...rows.map(r => r.row));
@@ -300,7 +301,8 @@ function showContext() {
   showSendLine();
   if (focused >= 0) {
     const next = rows.find(r => r.chipId === left) ?? rows[Math.min(focused, rows.length - 1)];
-    (task ? $("prompt") : (next?.remove ?? (offer ? $("include-page") : $("prompt")))).focus();
+    const include = offer && !$("include-page").disabled; // off while a Send waits (#816)
+    (task ? $("prompt") : (next?.remove ?? (include ? $("include-page") : $("prompt")))).focus();
   }
 }
 

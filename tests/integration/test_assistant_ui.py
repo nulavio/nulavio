@@ -555,6 +555,20 @@ class AssistantUiTest(unittest.TestCase):
         # The remove control takes it out before Send.
         self.panel("document.getElementById('include-page').click();")
         self.wait_view(lambda v: v["attached"])
+        # A redraw of the items keeps focus on the item's Remove button (#760): the tab's updates as it reloads redraw them.
+        focused = self.panel(
+            "const b = document.querySelector('#chips button'); b.focus(); b.dataset.drawnBefore = '';"
+            "return [document.hasFocus(), document.activeElement === b];"
+        )
+        self.assertEqual(focused, [True, True])
+        self.m.chrome("gBrowser.selectedBrowser.reload();")
+        self.wait_loaded(url)
+        redrawn = (
+            "const b = document.activeElement;"
+            "return b.classList.contains('assistant__chip-remove') && b.isConnected && !('drawnBefore' in b.dataset);"
+        )
+        self.assertTrue(harness.wait_until(lambda: self.panel(redrawn), 10), "focus left the item's Remove button")
+        self.assertTrue(self.view()["attached"])  # the item stayed: same tab, same address
         self.panel("document.querySelector('#chips button').click();")
         view = self.wait_view(lambda v: not v["attached"] and v["offer"])
         self.assertTrue(self.panel("return document.activeElement.id === 'include-page';"))
