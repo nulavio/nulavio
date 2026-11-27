@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The brand review of 2026-11 (#175): proposals and the sheets that show them in context.
 
-Nothing here changes the brand. The approved marks stay in docs/brand/assets/logo and
-.../icons, written by build_logo.py and build_icons.py; this script only reads them. It writes
+Decided on 2026-11-27: proposal A, applied by build_logo.py and build_icons.py. This script is
+the dated record of the review: it only reads the approved marks. Its "today" sheets were rendered on
+2026-11-20 from the brand of that day; rendering them again now would show the applied brand. It writes
 under docs/brand/assets/review/2026-11/:
 
   proposals/*.svg   the proposed marks, from the same geometry as build_logo.py (deterministic;
@@ -53,73 +54,28 @@ def svg(view_box: str, body: str, *, title: str, width: str | None = None, heigh
     )
 
 
-def n(value: float) -> str:
-    """A coordinate with at most two decimals and no trailing zeros."""
-    return f"{value:.2f}".rstrip("0").rstrip(".")
+n = bl.n
 
 
 # --- Proposal A: the route is the wordmark's initial -------------------------------------------
-# The symbol, at the wordmark's stroke and between its ascender and its baseline, takes the place
-# of the first letter: "N" + "ulavio" is the name as it is written in running text.
-A_WIDTH = 38.0  # between the two stems' centrelines (the symbol's 36:44, at 48 units of height)
-A_STEM_END = 32.0  # the first stem is solid from the top down to here, then dissolves
-A_GAP = 17.0  # to the next letter, the wordmark's own n-to-u spacing
-
-
-def _wordmark_without_initial() -> tuple[str, list[tuple[float, float, float]], float]:
-    """The wordmark's path, dots and advance without its first letter: "ulavio", still where the
-    wordmark draws it (the u starts at x = 41)."""
-    path, dots, advance = bl.wordmark_paths()
-    x, top, base, r = 0.0, bl.X_TOP, bl.BASE, bl.ARCH_R
-    first = f"M{x} {base} V{top} M{x} {top + r} A{r} {r} 0 0 1 {x + 2 * r} {top + r} V{base} "
-    if not path.startswith(first):
-        raise ValueError("build_logo.wordmark_paths() no longer starts with the n this script removes")
-    return path[len(first) :], dots, advance
-
-
-def initial_dots() -> list[tuple[float, float, float]]:
-    """The symbol's three points under the initial's first stem: at the same places along the
-    stem as in the symbol, and the first as wide as the wordmark's stroke so that they survive
-    the sizes a wordmark is shown at (the symbol's own first point is 84 % of its stroke)."""
-    top, height = bl.ASC, bl.BASE - bl.ASC
-    out = []
-    for _cx, cy, r in bl.DOTS:
-        fraction = (cy - 26.0) / 44.0  # the symbol's route runs from y = 26 to y = 70
-        out.append((0.0, round(top + fraction * height, 1), round(r / bl.DOTS[0][2] * bl.W_STROKE / 2, 2)))
-    return out
+# Chosen by the maintainer on 2026-11-27 and applied: the geometry now lives in build_logo.py, which
+# writes the approved lockups; the proposal files here are the same drawing under the review's header.
+A_WIDTH, A_STEM_END, A_GAP = bl.A_WIDTH, bl.A_STEM_END, bl.A_GAP
+initial_dots = bl.initial_dots
 
 
 def initial_lockup(mark_color: str, text_color: str) -> tuple[str, float, float]:
     """(svg, viewBox width, viewBox height) of "N" + "ulavio"."""
-    rest, dots, advance = _wordmark_without_initial()
-    shift = A_WIDTH + A_GAP - (2 * bl.ARCH_R + 17)  # "u" starts where the removed n's advance ended
-    route = f"M0 {n(A_STEM_END)} V{n(bl.ASC)} L{n(A_WIDTH)} {n(bl.BASE)} V{n(bl.ASC)}"
-    pad = bl.W_STROKE / 2 + 1
-    width, height = advance + shift + 2 * pad, 64.0
-    stroke = f'fill="none" stroke-width="{n(bl.W_STROKE)}" stroke-linecap="round" stroke-linejoin="round"'
-    circles = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in initial_dots())
-    tail = "".join(f'<circle cx="{n(cx)}" cy="{n(cy)}" r="{n(r)}"/>' for cx, cy, r in dots)
-    body = (
-        f'<path d="{route}" stroke="{mark_color}" {stroke}/>\n'
-        f'<g fill="{mark_color}">{circles}</g>\n'
-        f'<g transform="translate({n(shift)} 0)">'
-        f'<path d="{rest}" stroke="{text_color}" {stroke}/>'
-        f'<g fill="{mark_color}">{tail}</g></g>'
-    )
-    return svg(f"{n(-pad)} 4 {n(width)} {n(height)}", body, title="Nulavio"), width, height
+    view_box, body = bl.initial_lockup_parts(mark_color, text_color)
+    width, height = (float(v) for v in view_box.split()[2:])
+    return svg(view_box, body, title="Nulavio"), width, height
 
 
 # --- The app icon of proposals A and B: the same route, larger in its tile ----------------------
-# Today's scalable icon draws the mark 46 units wide in a 96-unit tile (48 %); the hand-tuned 16 px
-# master already draws it 8 px wide (50 %) and 10 px tall (62 %). The proposal scales the route
-# about the tile's centre so the large sizes match the masters. The masters themselves stay.
-ROUTE_SCALE = 1.15
-ROUTE_CENTRE = (48.0, 48.05)  # centre of the route's box (x 25..71, y 21..75.1)
-
-
-def scaled(body: str, scale: float, centre: tuple[float, float], to: tuple[float, float] = (48.0, 48.0)) -> str:
-    transform = f"translate({n(to[0])} {n(to[1])}) scale({n(scale)}) translate({n(-centre[0])} {n(-centre[1])})"
-    return f'<g transform="{transform}">\n{body}\n</g>'
+# Applied with A: build_logo.icon_tile() draws it.
+ROUTE_SCALE = bl.ICON_SCALE
+ROUTE_CENTRE = bl.ROUTE_CENTRE
+scaled = bl.scaled
 
 
 def route_tile() -> str:

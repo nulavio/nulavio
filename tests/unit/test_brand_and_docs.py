@@ -44,6 +44,8 @@ class TokensTest(unittest.TestCase):
             (build_tokens.build_chrome, build_tokens.CHROME_OUTPUT),
             (build_tokens.build_identity, build_tokens.IDENTITY_OUTPUT),
             (build_tokens.build_sidebar_focus, build_tokens.SIDEBAR_OUTPUT),
+            (build_tokens.build_shield_ok, build_tokens.SHIELD_OK_OUTPUT),
+            (build_tokens.build_shield_alert, build_tokens.SHIELD_ALERT_OUTPUT),
         ):
             with self.subTest(output=output):
                 self.assertEqual(generate(data), output.read_text(), "run scripts/brand/build_tokens.py")
@@ -104,6 +106,25 @@ class TokensTest(unittest.TestCase):
             accent = contrast.resolve(tokens, f"color.{theme}.accent.default")
             self.assertNotEqual(secure, accent, "secure state must not rely on the mint/green accent")
 
+    def test_the_secure_status_illustration_is_neutral_not_mint(self):
+        # #175 (finding 8): the Settings privacy status drew its "on guard" shield in the mint scale,
+        # so mint read as "safe". It takes status.secure on status.secureTint, the same shape.
+        tokens = contrast.flatten(json.loads(contrast.TOKENS.read_text()))
+        mint = {contrast.resolve(tokens, f"color.primitive.mint.{s}").upper() for s in ("100", "200", "400", "700", "900")}
+        shield = build_tokens.SHIELD_OK_OUTPUT.read_text()
+        used = {c.upper() for c in re.findall(r"#[0-9A-Fa-f]{6}", shield)}
+        self.assertEqual(used & mint, set())
+        for theme in ("light", "dark"):
+            for name in ("secure", "secureTint"):
+                self.assertIn(contrast.resolve(tokens, f"color.{theme}.status.{name}").upper(), used)
+        alert = build_tokens.SHIELD_ALERT_OUTPUT.read_text()
+        outline = 'd="M50 10 L84 22 V50 C84 72 70 88 50 96 C30 88 16 72 16 50 V22 Z"'
+        self.assertIn(outline, shield)
+        self.assertIn(outline, alert)
+        checked = {(p["fg"], p["bg"]) for p in contrast.checked_pairs(json.loads(contrast.TOKENS.read_text()))}
+        for theme in ("light", "dark"):
+            self.assertIn((f"color.{theme}.status.secure", f"color.{theme}.status.secureTint"), checked)
+
     def test_known_contrast_values(self):
         self.assertAlmostEqual(contrast.ratio("#000000", "#FFFFFF"), 21.0, places=2)
         self.assertAlmostEqual(contrast.ratio("#FFFFFF", "#FFFFFF"), 1.0, places=2)
@@ -142,6 +163,80 @@ class AssetsTest(unittest.TestCase):
         self.assertIn("ColorScheme-Text", text)
         self.assertIn("currentColor", text)
         self.assertNotRegex(text, r"#6FE0C5|#0B1623")
+
+    def test_android_adaptive_icon_is_generated_and_centred(self):
+        # #175 (finding 6): the foreground was hand-written and 1.2 units off centre.
+        text = build_logo.ANDROID_FOREGROUND.read_text()
+        self.assertEqual(text, build_logo.android_foreground(), "run scripts/brand/build_logo.py")
+        group = dict(re.findall(r'android:(\w+)="([^"]*)"', re.search(r"<group\b[^>]*>", text).group(0)))
+        scale = float(group["scaleX"])
+        self.assertEqual(scale, float(group["scaleY"]))
+        px, py, tx, ty = (float(group[k]) for k in ("pivotX", "pivotY", "translateX", "translateY"))
+        # The route's box on the 96 grid (x 25..71, y 21..75.1, stroke and points included), mapped as a
+        # VectorDrawable group maps it: scaled about the pivot, then moved.
+        box = [((x - px) * scale + px + tx, (y - py) * scale + py + ty) for x in (25, 71) for y in (21, 75.1)]
+        centre = (sum(x for x, _ in box) / 4, sum(y for _, y in box) / 4)
+        self.assertAlmostEqual(centre[0], 54, places=1)
+        self.assertAlmostEqual(centre[1], 54, places=1)
+        for x, y in box:  # every corner inside the 66-unit circle a launcher's mask always keeps
+            self.assertLessEqual(((x - 54) ** 2 + (y - 54) ** 2) ** 0.5, build_logo.ANDROID_SAFE_RADIUS)
+        background = (ROOT / "android" / "app" / "src" / "main" / "res" / "drawable" / "ic_launcher_background.xml").read_text()
+        self.assertIn(f'android:color="{build_logo.NAVY}"', background)
+
+    def test_no_lockup_shows_the_initial_twice(self):
+        # #175, proposal A (chosen 2026-11-27): the route is the name's initial, then "ulavio".
+        wordmark = build_logo.wordmark_paths()[0]
+        lowercase_n = wordmark[: wordmark.index(" M41.0 ")]
+        lockups = sorted((ASSETS / "logo").glob("nulavio-lockup-*.svg"))
+        self.assertEqual(
+            [p.name for p in lockups],
+            [
+                "nulavio-lockup-horizontal-mono-black.svg",
+                "nulavio-lockup-horizontal-mono-white.svg",
+                "nulavio-lockup-horizontal-on-dark.svg",
+                "nulavio-lockup-horizontal.svg",
+            ],
+        )
+        for path in lockups:
+            text = path.read_text()
+            with self.subTest(lockup=path.name):
+                self.assertEqual(text.count(f'd="{build_logo.initial_route()}"'), 1)
+                self.assertNotIn(lowercase_n, text)
+                self.assertNotIn(f'd="{build_logo.ROUTE}"', text, "the symbol beside the name")
+                self.assertIn(wordmark[len(lowercase_n) + 1 :], text, '"ulavio" follows the initial')
+
+    def test_the_initial_keeps_the_symbols_trail(self):
+        dots = build_logo.initial_dots()
+        self.assertEqual(len(dots), len(build_logo.DOTS))
+        radii = [r for _cx, _cy, r in dots]
+        self.assertEqual(radii, sorted(radii, reverse=True), "the points shrink away from the stem")
+        self.assertEqual(radii[0], build_logo.W_STROKE / 2, "the first point is as wide as the wordmark's stroke")
+        self.assertGreater(dots[0][1] - radii[0], build_logo.A_STEM_END + build_logo.W_STROKE / 2, "clear of the stem's cap")
+
+    def test_the_app_icon_draws_the_route_larger_and_the_small_masters_stay(self):
+        scalable = (ASSETS / "icons" / "hicolor" / "scalable" / "apps" / "nulavio.svg").read_text()
+        self.assertIn(f"scale({build_logo.n(build_logo.ICON_SCALE)})", scalable)
+        self.assertAlmostEqual(46 * build_logo.ICON_SCALE / 96, 0.55, places=2)  # 55 % of the tile's width
+        for path in (ASSETS / "favicon" / "favicon.svg", ASSETS / "logo" / "nulavio-tile.svg"):
+            self.assertIn(f"scale({build_logo.n(build_logo.ICON_SCALE)})", path.read_text(), path.name)
+        for size in (16, 24):  # hand-tuned, one point (guidelines §1)
+            master = (ASSETS / "icons" / "masters" / f"nulavio-{size}.svg").read_text()
+            self.assertEqual(master.count("<circle"), 1, size)
+            self.assertNotIn("scale(", master, size)
+
+    def test_about_dialog_name_is_the_lockup_with_an_adaptive_initial(self):
+        sys.path.insert(0, str(ROOT / "scripts" / "build"))
+        import make_branding
+
+        text = make_branding.context_fill_wordmark()
+        ET.fromstring(text)
+        self.assertIn(f'd="{build_logo.initial_route()}" class="nv-mark"', text)
+        self.assertIn('stroke="context-fill light-dark(#0B1623, #F1F7F5)"', text)  # the letters follow the chrome
+        # The initial: Mint 700 by default, mint only where the scheme is dark (never mint on light).
+        default, dark = text.split("@media (prefers-color-scheme: dark)")
+        self.assertIn(build_logo.MINT_DARK, default)
+        self.assertNotIn(build_logo.MINT, default)
+        self.assertIn(build_logo.MINT, dark)
 
     def test_logo_generator_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:

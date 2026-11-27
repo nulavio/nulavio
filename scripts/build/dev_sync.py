@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Copy the Nulavio Shell, branding theme, branding prefs and modules into an
+"""Copy the Nulavio Shell, branding, branding prefs and modules into an
 installed Track B build, for fast iteration without rebuilding the engine.
 
     python3 -I scripts/build/dev_sync.py --install ~/.cache/nulavio-ux/install/nulavio
@@ -8,7 +8,10 @@ installed Track B build, for fast iteration without rebuilding the engine.
 Development only: the result is checked again with a real build
 (scripts/build/build_nulavio.sh) before anything ships. It rewrites
 <install>/browser/omni.ja, keeping the original as omni.ja.orig, and refreshes
-the distribution files and the Nulavio tools next to it. Test profiles are fresh,
+the distribution files and the Nulavio tools next to it. With ImageMagick
+(`magick`) it also replaces the branding that scripts/build/make_branding.py
+generates (the About dialog's name and logo, the Settings status illustrations,
+the window icons); without it the build's own branding files stay. Test profiles are fresh,
 so no startup cache needs purging; for a long-lived profile start the engine
 with -purgecaches.
 """
@@ -16,6 +19,7 @@ with -purgecaches.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +46,28 @@ def replacements(shell_dir: Path) -> dict[str, bytes]:
     for path in BRANDING.glob("*.sys.mjs"):
         out[f"modules/nulavio/{path.name}"] = path.read_bytes()
     return out
+
+
+JAR_ENTRY = re.compile(r"^\s+content/branding/(\S+)(?:\s+\((\S+)\))?", re.M)
+ICON_SIZES = (16, 32, 48, 64, 128)
+
+
+def branding_content(work: Path) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """(omni.ja entries, window icons by file name) of the branding as make_branding.py builds it.
+    Empty without ImageMagick, which make_branding needs to render the PNGs."""
+    if not shutil.which("magick"):
+        return {}, {}
+    import make_branding
+
+    target = work / "nulavio"
+    make_branding.build(target)
+    jar = (target / "content" / "jar.mn").read_text(encoding="utf-8")
+    entries = {}
+    for match in JAR_ENTRY.finditer(jar):
+        name, source = match.group(1), match.group(2) or match.group(1)
+        entries[f"chrome/browser/content/branding/{name}"] = (target / "content" / source).resolve().read_bytes()
+    icons = {f"default{size}.png": (target / f"default{size}.png").read_bytes() for size in ICON_SIZES}
+    return entries, icons
 
 
 def rewrite(omni: Path, new: dict[str, bytes]) -> tuple[int, int]:
@@ -85,7 +111,14 @@ def main() -> int:
         print(f"reset {omni}")
         return 0
     with tempfile.TemporaryDirectory(prefix="nulavio-dev-sync-") as tmp:
-        replaced, added = rewrite(omni, replacements(Path(tmp) / "shell"))
+        new = replacements(Path(tmp) / "shell")
+        branding, icons = branding_content(Path(tmp) / "branding")
+        new.update(branding)
+        replaced, added = rewrite(omni, new)
+    icon_dir = install / "browser" / "chrome" / "icons" / "default"
+    if icons and icon_dir.is_dir():
+        for name, data in icons.items():
+            (icon_dir / name).write_bytes(data)
     for script, target in (("make_distribution.py", "distribution"), ("make_tools.py", "nulavio-tools")):
         subprocess.run(
             [sys.executable, "-I", str(ROOT / "scripts" / "build" / script), "--out", str(install / target)],
