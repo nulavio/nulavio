@@ -8,6 +8,7 @@
 * The pinned extensions against addons.mozilla.org: Mozilla's blocklist, a replaced or removed file for the
   pinned version (read on every run, also once a newer version is out), and how long the lock has lagged
   behind AMO: since the first version AMO published after the pin, however many came after it.
+  One AMO reply missing or malformed hides no failure the others show; AMO's requests get AMO_BUDGET seconds in all.
 * The pinned extensions against the security advisories their repositories publish on GitHub (the table in
   docs/security/extension-advisory-sources.json): an advisory whose range covers the pinned version fails at once.
 * The base images' tag@digest pins against their registries (a newer build is reported, not failed).
@@ -50,6 +51,10 @@ ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json
 MIN_REQUEST_SECONDS = 10
 RETRY_DELAYS = (2, 8, 30)  # a transient GitHub failure is retried before it is reported (as watch_upstream.py does)
 GITHUB_BUDGET = 120  # seconds of retrying across all repositories, so the step ends and writes its summary in time
+# seconds for every addons.mozilla.org request together: AMO timing out (30 s a request) cost main 150 s, one request
+# for each of the five extensions; the watch now asks AMO up to 7 times each, so it is capped here instead, and
+# OSV (60 s) plus AMO (120 s) leave 180 s of the 360 for GitHub (GITHUB_BUDGET) and the registries
+AMO_BUDGET = 120
 WATCH_BUDGET = 360  # seconds for the whole watch (every request of every check); the step's timeout-minutes is 8 (480 s)
 EXCEPTIONS = ROOT / "docs" / "security" / "vulnerability-exceptions.json"
 APK_LOCKFILE = "android/app/gradle.lockfile"  # the APK's classpath (releaseRuntimeClasspath), nv1 included
@@ -105,6 +110,7 @@ class Net:
         self.clock = clock
         self.wall = wall  # the epoch clock, for the rate limit's reset time
         self.github_started: float | None = None
+        self.amo_started: float | None = None
         self.deadline = clock() + budget  # no request starts after it, and none may outlast it: the summary always prints
 
     def _open(
@@ -133,8 +139,15 @@ class Net:
         return urllib.request.urlopen(request, timeout=min(timeout or self.timeout, left))  # noqa: S310 - https only, checked above
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
+        timeout = None
+        if url.startswith(AMO):
+            if self.amo_started is None:
+                self.amo_started = self.clock()
+            timeout = min(self.timeout, self.amo_started + AMO_BUDGET - self.clock())
+            if timeout <= 0:
+                raise TimeoutError("the time budget for addons.mozilla.org is spent")  # unavailable data, as a timeout
         try:
-            with self._open(url, data) as response:
+            with self._open(url, data, timeout=timeout) as response:
                 return json.load(response)
         except urllib.error.HTTPError as exc:
             if missing_ok and exc.code == 404:
@@ -378,7 +391,10 @@ def vulnerability_rows(findings: list[tuple[Dep, str]], details: dict[str, dict]
 def parse_time(text: str) -> _dt.datetime:
     if not isinstance(text, str):
         raise TypeError(f"not a date: {text!r}")  # in UNAVAILABLE, as a malformed reply
-    return _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    parsed = _dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"a date without a time zone: {text!r}")  # it could not be compared with AMO's other dates
+    return parsed
 
 
 def amo_file(version: dict) -> dict:
@@ -396,21 +412,22 @@ def amo_file(version: dict) -> dict:
     return {"version": version["version"], "sha256": digest, "size": file["size"], "created": file["created"]}
 
 
-def first_newer(net: Net, guid: str, pinned: dict) -> tuple[dict | None, bool]:
+def first_newer(net: Net, guid: str, pinned: dict, newer: list[dict], hidden: set[str]) -> tuple[dict | None, bool]:
     """The earliest listed, public version newer than the pin, and whether the list was read back to the pin.
 
     AMO lists versions newest first. The pages are read until the pinned version (or one made before it) shows up,
     for at most VERSIONS_PAGES pages; the URLs are built here, a reply's "next" only says whether there is more.
+    newer and hidden collect, page by page, the versions after the pin that count and those AMO does not list as
+    public: a page that fails later leaves them to the caller, as a lower bound of the lag.
     """
     since = parse_time(pinned["created"])
     floor = version_key(pinned["version"])
-    newer: list[dict] = []
     for page in range(1, VERSIONS_PAGES + 1):
         data = net.json(f"{AMO}addons/addon/{guid}/versions/?page={page}&page_size={VERSIONS_PAGE_SIZE}")
         results = data["results"]
         if not isinstance(results, list):
             raise ValueError("AMO's versions list is not a list")
-        reached = False
+        reached, counted, skipped = False, [], set()  # a page counts only once all of it has been read
         for item in results:
             if not isinstance(item, dict) or not isinstance(item.get("file"), dict) or not isinstance(item.get("version"), str):
                 raise ValueError("AMO's versions list holds an element that is not a version")
@@ -421,14 +438,32 @@ def first_newer(net: Net, guid: str, pinned: dict) -> tuple[dict | None, bool]:
             channel, status = item.get("channel"), item["file"].get("status")
             if not isinstance(channel, str) or not isinstance(status, str):
                 raise ValueError(f"AMO's versions list does not say whether {item['version']} is listed and public")
-            if channel == "listed" and status == "public" and version_key(item["version"]) > floor:
-                newer.append({"version": item["version"], "created": item["file"]["created"]})
+            if channel != "listed" or status != "public":
+                skipped.add(item["version"])
+            elif version_key(item["version"]) > floor:
+                counted.append({"version": item["version"], "created": item["file"]["created"]})
         more = data["next"]  # null on the last page; a missing or odd one is a malformed reply, not the end
         if more is not None and not isinstance(more, str):
             raise ValueError("AMO's versions list has a next link that is not text")
+        newer += counted
+        hidden |= skipped
         if reached or more is None:
-            return min(newer, key=lambda v: parse_time(v["created"]), default=None), True
-    return min(newer, key=lambda v: parse_time(v["created"]), default=None), False
+            return earliest(newer), True
+    return earliest(newer), False
+
+
+def earliest(versions: list[dict]) -> dict | None:
+    return min(versions, key=lambda v: parse_time(v["created"]), default=None)
+
+
+def after_pin(current, served: dict, hidden: set[str]) -> bool:
+    """Does AMO's current version count as one published after the pin: listed and public, higher, made later?"""
+    return (
+        isinstance(current, dict)
+        and current["version"] not in hidden
+        and version_key(current["version"]) > version_key(served["version"])
+        and parse_time(current["created"]) > parse_time(served["created"])
+    )
 
 
 def extension_verdict(
@@ -439,12 +474,14 @@ def extension_verdict(
     block: dict | None,
     now: _dt.datetime,
     complete: bool = True,
+    hidden: frozenset[str] | set[str] = frozenset(),
 ) -> tuple[str, str]:
     """The extension row's state and text.
 
     served: AMO's file for the pinned version (None: AMO no longer has it); current: AMO's current version;
     newer: the first version AMO published after the pin (None when there is none, or the pin is current);
-    complete: whether the versions list was read back to the pin (otherwise the lag is a lower bound).
+    complete: whether the versions list was read back to the pin (otherwise the lag is a lower bound);
+    hidden: the versions after the pin that AMO's versions list does not show as listed and public.
     """
     pinned = entry["version"]
     failure = pin_failure(entry, served, block, current)
@@ -454,20 +491,32 @@ def extension_verdict(
         return "ok", f"{entry['key']} {pinned} is AMO's current version"
     since = newer
     if since is None:  # no listed, public version after the pin in the list: AMO's current one, if it came after it
-        after = version_key(current["version"]) > version_key(pinned) and parse_time(current["created"]) > parse_time(
-            served["created"]
-        )
-        if not after:  # a backport, say: following it would downgrade the pin
-            text = f"{entry['key']} pinned {pinned}, AMO's current version {current['version']} is not newer than the pin"
+        if not after_pin(current, served, hidden):  # a backport, say: following it would downgrade the pin
+            why = (
+                "is not listed and public in AMO's versions list" if current["version"] in hidden else "is not newer than the pin"
+            )
+            text = f"{entry['key']} pinned {pinned}, AMO's current version {current['version']} {why}"
             if not complete:
                 return "error", f"{text}, and AMO's versions list was not read back to the pin"
             return "warn", text
         since = current
+    return lag(entry, since, current, now, complete)
+
+
+def lag(entry: dict, since: dict, current, now: _dt.datetime, complete: bool) -> tuple[str, str]:
+    """How long the pin has lagged since `since`, the first version AMO published after it (a lower bound if not complete).
+
+    current may be MISSING (the add-on's summary did not come).
+    """
+    pinned = entry["version"]
     days = (now - parse_time(since["created"])).days
     text = f"{entry['key']} pinned {pinned}, AMO has had {since['version']} for {'at least ' if not complete else ''}{days} days"
-    if since["version"] != current["version"]:
+    if isinstance(current, dict) and since["version"] != current["version"]:
         text += f" (current {current['version']})"
     if days > EXTENSION_LAG_DAYS:
+        if isinstance(current, dict) and version_key(current["version"]) <= version_key(pinned):
+            # refresh_extensions_lock.py takes AMO's current version: here that would downgrade the pin
+            return "fail", f"{text}: update the lock to {since['version']} by hand and review"
         return "fail", f"{text}: run scripts/upstream/refresh_extensions_lock.py and review"
     if not complete:
         return "error", f"{text}: AMO's versions list was not read back to the pin"
@@ -520,6 +569,19 @@ def pinned_file(net: Net, guid: str, entry: dict) -> dict | None:
     return served
 
 
+def blocklist_entry(net: Net, guid: str) -> dict | None:
+    """Mozilla's blocklist entry for the extension (None: a 404, not blocked); a malformed one is unavailable data."""
+    block = net.json(f"{AMO}blocklist/block/{guid}/", missing_ok=True)
+    if block is None:
+        return None
+    if not isinstance(block, dict) or not isinstance(block["is_all_versions"], bool):
+        raise ValueError("AMO's blocklist entry does not say whether it covers every version")
+    lists = {key: block[key] for key in ("blocked", "soft_blocked")}
+    if not all(isinstance(v, list) and all(isinstance(x, str) for x in v) for v in lists.values()):
+        raise ValueError("AMO's blocklist entry does not list the blocked versions as text")
+    return {"is_all_versions": block["is_all_versions"], **lists}
+
+
 def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
     lock = json.loads((root / "browser" / "distribution" / "extensions.lock.json").read_text(encoding="utf-8"))
     rows = []
@@ -528,22 +590,27 @@ def extension_rows(net: Net, now: _dt.datetime, root: Path = ROOT) -> list[Row]:
         problems: list[Exception] = []  # each reply is read on its own: the other extensions are still checked too
         current = read(problems, current_file, net, guid)
         served = read(problems, pinned_file, net, guid, entry)
-        newer, complete = None, True
-        if isinstance(served, dict) and isinstance(current, dict) and current["version"] != entry["version"]:
-            found = read(problems, first_newer, net, guid, served)
+        found, newer, complete = MISSING, None, True
+        seen: list[dict] = []  # the versions after the pin the list showed, also when a later page failed
+        hidden: set[str] = set()
+        if isinstance(served, dict) and not (isinstance(current, dict) and current["version"] == entry["version"]):
+            found = read(problems, first_newer, net, guid, served, seen, hidden)  # also without AMO's summary
             if found is not MISSING:
                 newer, complete = found
-        block = read(problems, net.json, f"{AMO}blocklist/block/{guid}/", missing_ok=True)  # 404: not blocked
+        block = read(problems, blocklist_entry, net, guid)
         try:
             if not problems:
-                state, text = extension_verdict(entry, served, current, newer, block, now, complete)
+                state, text = extension_verdict(entry, served, current, newer, block, now, complete, hidden)
             elif failure := pin_failure(entry, served, block, current):  # confirmed whatever the missing reply says
                 state, text = "fail", failure
-            elif block is MISSING and len(problems) == 1:  # only the blocklist is missing: a lag over the limit stands
-                state, text = extension_verdict(entry, served, current, newer, None, now, complete)
+            elif isinstance(served, dict) and (
+                since := earliest(seen + ([current] if after_pin(current, served, hidden) else []))
+            ):
+                # a lag needs the pin's own reply; what did come bounds it, and over the limit it is confirmed
+                state, text = lag(entry, since, current, now, found is not MISSING and complete)
             else:
                 state = "error"
-        except UNAVAILABLE as exc:  # a malformed blocklist entry, say
+        except UNAVAILABLE as exc:  # a malformed date, say
             problems.append(exc)
             state = "error"
         if state != "fail" and problems:

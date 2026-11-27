@@ -745,7 +745,7 @@ class ExtensionLagTest(unittest.TestCase):
             for v, t in reversed(made)
         ]
 
-    def stream_net(self, versions):
+    def stream_net(self, versions, down_pages=()):
         """AMO for that stream: the versions list in pages, with a "next" link that points elsewhere."""
         base = f"{watch.AMO}addons/addon/x%40y/"
 
@@ -765,6 +765,8 @@ class ExtensionLagTest(unittest.TestCase):
                     raise AssertionError(f"unexpected URL {url}")
                 query = urllib.parse.parse_qs(url.partition("?")[2])
                 page, size = int(query["page"][0]), int(query["page_size"][0])
+                if page in down_pages:
+                    raise OSError(f"test: page {page} is down")
                 more = page * size < len(versions)
                 return {
                     "next": "https://elsewhere.example/next" if more else None,
@@ -773,8 +775,8 @@ class ExtensionLagTest(unittest.TestCase):
 
         return Stream()
 
-    def stream_row(self, versions, now, page_size=5, pages=watch.VERSIONS_PAGES):
-        net = self.stream_net(versions)
+    def stream_row(self, versions, now, page_size=5, pages=watch.VERSIONS_PAGES, down_pages=()):
+        net = self.stream_net(versions, down_pages)
         entry = {"key": "x", "id": "x@y", "version": "1.0", "sha256": "a" * 64, "size": 10}
         with tempfile.TemporaryDirectory() as tmp:
             lock = Path(tmp) / "browser" / "distribution" / "extensions.lock.json"
@@ -818,6 +820,88 @@ class ExtensionLagTest(unittest.TestCase):
         backport = {**versions[1], "version": "0.9.1"}  # made after the pin, numbered below it
         row, _ = self.stream_row([versions[0], backport, versions[-1]], at("2026-06-15T00:00:00Z"))
         self.assertEqual(row.detail["newer"], "1.4", row.text)
+
+    # OCR round 2 on #820 -----------------------------------------------------------------------------------------
+
+    def test_a_current_version_the_list_shows_disabled_is_not_counted(self):
+        versions = self.stream(1)  # 1.1 (2026-05-11), AMO's current, and the pin
+        versions[0] = {**versions[0], "file": {**versions[0]["file"], "status": "disabled"}}
+        row, _ = self.stream_row(versions, at("2026-06-20T00:00:00Z"))
+        self.assertEqual(row.state, "warn", row.text)
+        self.assertIn("1.1 is not listed and public in AMO's versions list", row.text)
+
+    def test_a_malformed_blocklist_entry_hides_no_other_failure(self):
+        now = at("2026-11-26T20:00:00Z")
+        block = "blocklist/block/uBlock0%40raymondhill.net/"
+        pinned = UBLOCK + "versions/1.76.4/"
+        reply = RecordedAmo(["ublock-origin"]).replies[pinned]
+        replaced = {pinned: {**reply, "file": {**reply["file"], "hash": "sha256:" + "b" * 64}}}
+        row = self.rows(RecordedAmo(["ublock-origin"], {**replaced, block: {"blocked": None, "soft_blocked": []}}), now)
+        self.assertEqual(row["ublock-origin"].state, "fail", row["ublock-origin"].text)
+        self.assertIn("different file", row["ublock-origin"].text)
+        for entry in (
+            [{"blocked": ["1.76.4"]}],  # a list, not an entry
+            {"blocked": [], "soft_blocked": [], "is_all_versions": "false"},  # text, not a boolean
+            {"blocked": [], "soft_blocked": [1], "is_all_versions": False},
+            {"soft_blocked": [], "is_all_versions": False},  # no "blocked": not known to be unblocked
+        ):
+            row = self.rows(RecordedAmo(["ublock-origin"], {block: entry}), now)["ublock-origin"]
+            self.assertEqual(row.state, "error", (entry, row.text))
+
+    def test_a_lag_seen_before_the_list_failed_stands(self):
+        versions = self.stream(17)  # 1.13 ... 1.17 on page one, the oldest of them 52 days old on 2026-10-30
+        row, _ = self.stream_row(versions, at("2026-10-30T00:00:00Z"), down_pages=(2,))
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.13 for at least 52 days (current 1.17)", row.text)
+        # the list down from its first page: AMO's current version, after the pin in number and date, is a lower bound
+        row, _ = self.stream_row(versions, at("2026-12-15T00:00:00Z"), down_pages=(1,))
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.17 for at least 58 days", row.text)
+        row, _ = self.stream_row(versions, at("2026-11-15T00:00:00Z"), down_pages=(1,))  # 28 days: nothing confirmed
+        self.assertEqual(row.state, "error", row.text)
+        # a malformed page counts for nothing: 1.14 (48 days) is on it, and 1.17 is 28 days old
+        broken = [*versions[:4], {"version": 2}, *versions[4:]]
+        row, _ = self.stream_row(broken, at("2026-11-15T00:00:00Z"))
+        self.assertEqual(row.state, "error", row.text)
+
+    def test_the_versions_list_judges_the_lag_when_the_summary_is_missing(self):
+        net = RecordedAmo(["ublock-origin"], {UBLOCK: {"current_version": None}})  # a malformed summary
+        row = self.rows(net, at("2026-12-22T20:00:00Z"))["ublock-origin"]
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.76.6 for 32 days", row.text)
+        row = self.rows(RecordedAmo(["ublock-origin"], {UBLOCK: {"current_version": None}}), at("2026-11-26T20:00:00Z"))
+        self.assertEqual(row["ublock-origin"].state, "error", row["ublock-origin"].text)
+
+    def test_amo_timing_out_leaves_the_watch_time_for_the_other_checks(self):
+        clock = [0.0]
+
+        def urlopen(request, timeout):
+            clock[0] += timeout  # every AMO request waits for its whole timeout
+            raise TimeoutError("test: timed out")
+
+        net = watch.Net(clock=lambda: clock[0], sleep=lambda _: None)
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch.urllib.request, "urlopen", urlopen):
+            rows = watch.extension_rows(net, at("2026-11-26T20:00:00Z"), RecordedAmo(self.KEYS).lock(Path(tmp)))
+        self.assertEqual({r.state for r in rows}, {"error"})
+        self.assertLessEqual(clock[0], 150)  # what main spent in that outage: one 30 s request per extension
+
+    def test_a_lag_behind_a_backport_made_current_is_not_fixed_by_the_refresh_script(self):
+        versions = self.stream(1)  # 1.1 (2026-05-11) and the pin
+        backport = {**versions[0], "version": "0.9.1", "file": {**versions[0]["file"], "created": "2026-06-01T00:00:00Z"}}
+        row, _ = self.stream_row([backport, *versions], at("2026-06-20T00:00:00Z"))
+        self.assertEqual(row.state, "fail", row.text)
+        self.assertIn("AMO has had 1.1 for 40 days (current 0.9.1)", row.text)
+        self.assertNotIn("refresh_extensions_lock.py and review", row.text)  # it takes AMO's current one, a downgrade
+        self.assertIn("update the lock to 1.1 by hand", row.text)
+
+    def test_a_date_without_a_time_zone_is_malformed(self):
+        with self.assertRaises(ValueError):
+            watch.parse_time("2026-10-02")
+        path = "addons/addon/keepassxc-browser%40keepassxc.org/versions/1.10.4.1/"
+        net = RecordedAmo(["keepassxc-browser"])
+        net.replies[path]["file"]["created"] = "2026-10-02T00:00:00"
+        row = self.rows(net, at("2026-11-26T20:00:00Z"))["keepassxc-browser"]
+        self.assertEqual(row.state, "error", row.text)
 
 
 class GradleReviewTest(unittest.TestCase):
