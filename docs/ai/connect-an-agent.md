@@ -72,7 +72,7 @@ A web page can write instructions for the agent anywhere it is read: in its text
 | `evaluate` | `value` |
 | `session_state`, `profiles_list`, `tab_close` | none: no `untrusted` list |
 
-A field is listed when the result has it, also when it is empty (`dialog` with no dialog open, an address the result does not describe). An error that quotes an exception the page threw (`Browser error: javascript error`) says the same before the page's text. The engine's own error messages, tab ids, element ids, counts and the Bridge's own words are not marked; neither is the site named in an error about a tab that moved to another site, which is its origin only. In 160.0.1-0.3 and before, only `page_read`, `page_snapshot` and `evaluate` were marked, with `"untrusted": true` (#665).
+A field is listed when the result has it, also when it is empty (`dialog` with no dialog open, an address the result does not describe). An error that quotes an exception the page threw (`Browser error: javascript error`) says the same before the page's text. A refusal of an address does not quote it: a link's scheme, which a click's refusal used to name, is the page's text too. The engine's own error messages, tab ids, element ids, counts and the Bridge's own words are not marked; neither is the site named in an error about a tab that moved to another site, which is its origin only. In 160.0.1-0.3 and before, only `page_read`, `page_snapshot` and `evaluate` were marked, with `"untrusted": true` (#665).
 
 ## What this does and does not protect
 
