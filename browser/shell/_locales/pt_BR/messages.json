@@ -847,7 +847,7 @@
   "err_assistant_paused": {"message": "O agente do assistente está pausado: nada vai para o modelo."},
   "err_private_window": {"message": "O assistente fica desligado em janelas privativas."},
   "err_page_changed": {"message": "A aba mudou de página depois que você a incluiu, então nada foi enviado. Inclua a página de novo, se quiser."},
-  "err_tab_changed": {"message": "Outra aba foi selecionada antes de a mensagem sair, e o que você incluiu era da aba anterior, então nada foi enviado. Volte a essa aba para incluir de novo, se quiser."},
+  "err_tab_changed": {"message": "Outra aba foi selecionada antes de a mensagem sair, e o que você incluiu não é dela, então nada foi enviado. Volte à aba de onde você incluiu para incluir de novo, se quiser."},
   "err_task_unfinished": {"message": "A tarefa parou sem resposta. Ações podem ter acontecido na Área de IA: veja em Atividade."},
   "connectTitle_kde_connect": {"message": "KDE Connect"},
   "connectTitle_screen_cast": {"message": "Compartilhamento de tela"},
