@@ -78,7 +78,8 @@ THEMES = {"light": 0, "dark": 1}
 SCALE = 2
 WINDOW_CROP = {"x": 0, "y": 0, "w": 600, "h": 420}  # CSS px of the 900x640 window
 SEALS = {"private": "nv-band-private", "temporary": "nv-band-temporary"}
-STRIP_PAD = 8  # CSS px around the cues of a strip crop
+STRIP_PAD = 8  # CSS px to the left and right of the cues of a strip crop
+STRIP_WINDOW = (900, 640)  # as the window of the corner crop: the band has a row to itself
 NOT_ATTEMPTED = ["band-agent (C2e): needs a live AI Bridge session", "assistant (C4): not attempted"]
 RAW = "site-shots"  # under the artifacts directory: what the capture step leaves for compose
 DOM_CHANGES = ["removed the remotecontrol attribute from the browser window's root element (automation cue)"]
@@ -387,17 +388,30 @@ def capture_band(out: Output, m, state_key: str, locale: str, meta: dict, width:
         # the state has a seal at the row's far end, that seal as a second crop (never composited).
         out.save(png, f"band-{state_key}-crop-{locale}-{theme}", union(state["identity"], state["protection"]), base)
         seal = SEALS.get(state_key)
-        cues, align = union(state["identity"], state["protection"]), "start"
         if seal:
             rect = next((c["rect"] for c in state["cues"] if seal in c["kind"].split()), None)
             if rect is None:
                 raise RuntimeError(f"no visible {seal} in the band")
             out.save(png, f"band-{state_key}-seal-{locale}-{theme}", union(rect), base)
-            cues, align = union(rect), "end"  # the seal sits at the far end of the row
-        # The landing's strip: compose gives the states of one language and theme one width, so `cues` here is
-        # what must be inside, `band` the height, and `align` the side of the band the cues are on.
-        out.save(png, f"band-{state_key}-strip-{locale}-{theme}", None, base,
-                 strip={"cues": cues, "band": state["band"], "align": align, "window_w": width})  # fmt: skip
+    # The landing's strip, from a narrower window: there the band has a row to itself in every state, so the
+    # states share its height. Compose gives the states of one language and theme one width; `cues` is what
+    # must be inside the cut and `align` the side of the band they are on.
+    m.send("WebDriver:SetWindowRect", {"width": STRIP_WINDOW[0], "height": STRIP_WINDOW[1]})
+    time.sleep(0.8)
+    for theme in THEMES:
+        set_theme(m, theme)
+        state = band_state(m)
+        size = m.chrome("return [innerWidth, innerHeight];")
+        seal = SEALS.get(state_key)
+        cues = [state["identity"], state["protection"]]
+        if seal:  # the seal sits at the far end of the row
+            cues = [c["rect"] for c in state["cues"] if seal in c["kind"].split()]
+        if not cues or not all(cues):
+            raise RuntimeError("the band does not show what its strip is cut around")
+        base = {**meta, "figure": "fig-2", "state": state_key, "locale": locale, "theme": theme,
+                "viewport_css": size, "transcript": transcript_of(state), "band_data": state["data"]}  # fmt: skip
+        out.save(window_png(m), f"band-{state_key}-strip-{locale}-{theme}", None, base,
+                 strip={"cues": cues, "band": state["band"], "align": "end" if seal else "start"})  # fmt: skip
     set_theme(m, "light")
     out.figure(f"band-{state_key}", locale, transcript=transcript, port=meta.get("port"))
     return transcript
@@ -665,7 +679,8 @@ def capture(raw: Path, locales: list[str], only: set[str]) -> int:
         except Exception as e:  # a figure that cannot be made real is left out, never faked
             left_out.append(f"{label}: {type(e).__name__}: {e}")
             print(f"  {label} left out: {e}", flush=True)
-        record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"], "args": argv, "scale": SCALE,
+        record = {"schema": 1, "harness": meta["harness"], "buildid": info["buildid"], "firefox": info["version"],
+                  "args": argv, "scale": SCALE,
                   "dom_changes": DOM_CHANGES, "left_out": left_out, "figures": out.figures, "entries": out.entries}  # fmt: skip
         (raw / "captures.json").write_text(json.dumps(record, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -695,20 +710,25 @@ def git(*args: str) -> str:
 
 
 def strip_boxes(entries: list[dict]) -> dict[str, dict]:
-    """The strip crops, in CSS px: the states of one language and theme get the width of the widest."""
+    """The strip crops, in CSS px: the states of one language and theme get one width and the band's height."""
     groups: dict[tuple, list[dict]] = {}
     for e in entries:
         if e.get("strip"):
             groups.setdefault((e["meta"]["locale"], e["meta"]["theme"]), []).append(e)
     boxes = {}
-    for group in groups.values():
-        width = max(e["strip"]["cues"]["w"] for e in group)  # union() already added its own 4 px each side
-        width = width - 8 + 2 * STRIP_PAD
+    for key, group in groups.items():
+        spans = {
+            e["name"]: (min(c["x"] for c in e["strip"]["cues"]), max(c["x"] + c["w"] for c in e["strip"]["cues"])) for e in group
+        }
+        heights = {round(e["strip"]["band"]["h"], 1) for e in group}
+        if len(heights) > 1:
+            raise SystemExit(f"{key}: the band is not one height in every state ({sorted(heights)}); the strips are not cut")
+        width = max(right - left for left, right in spans.values()) + 2 * STRIP_PAD
         for e in group:
-            cues, band = e["strip"]["cues"], e["strip"]["band"]
-            left, right = cues["x"] + 4 - STRIP_PAD, cues["x"] + cues["w"] - 4 + STRIP_PAD
-            x = left if e["strip"]["align"] == "start" else right - width
-            x = min(max(0, x), e["strip"]["window_w"] - width)
+            (left, right), band = spans[e["name"]], e["strip"]["band"]
+            x = left - STRIP_PAD if e["strip"]["align"] == "start" else right + STRIP_PAD - width
+            # Where the band's own edge is nearer than the pad, the cut stops at the edge: it never leaves the band.
+            x = min(max(band["x"], x), band["x"] + band["w"] - width)
             boxes[e["name"]] = {"x": x, "y": band["y"], "w": width, "h": band["h"]}
     return boxes
 
