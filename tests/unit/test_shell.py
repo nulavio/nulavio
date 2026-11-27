@@ -1266,10 +1266,11 @@ class PasswordsTest(unittest.TestCase):
         # One title whether or not the module finds a pair: another extension reads a tab's title.
         self.assertNotIn("document.title", page)
         # What "continue" keeps (in the profile, or in a private window in memory only) is written once the module
-        # answers, never before: the reason has no text of its own while the page waits (#652).
+        # answers, never before: the reason is hidden, with no text of its own, while the page waits (#652).
         html = (SHELL / "passwords" / "lookalike.html").read_text(encoding="utf-8")
-        self.assertIn('<li id="why-continue"></li>', html)
-        self.assertIn('t(inPrivate ? "lookalikeWhy3Private" : "lookalikeWhy3")', page)
+        self.assertIn('<li id="why-continue" hidden></li>', html)
+        shown = page.index('why.textContent = t(inPrivate ? "lookalikeWhy3Private" : "lookalikeWhy3");')
+        self.assertGreater(page.index("why.hidden = false;"), shown)
         schema = json.loads((SHELL / "experiments" / "passwords" / "schema.json").read_text(encoding="utf-8"))[0]
         params = {f["name"]: [p["name"] for p in f["parameters"]] for f in schema["functions"]}
         self.assertEqual(params["dismiss"], ["url", "site", "similar", "back"])

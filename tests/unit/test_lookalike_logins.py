@@ -140,6 +140,13 @@ class LookalikeLoginsTest(unittest.TestCase):
         self.assertEqual((case["second"], case["secondAfter"]), ({"dismissed": False}, warned), case)
         self.assertEqual(case["prefs"], [], case)
 
+    def test_no_private_pair_is_dropped_before_the_last_private_window_closes(self):
+        """The page says "until you close them all": the 201st pair confirmed in one private session keeps the first."""
+        case = self.cases["dismiss_in_private_many"]
+        self.assertEqual(case["kept"], 201, case)
+        self.assertEqual((case["first"], case["last"]), ({"suspicious": False}, {"suspicious": False}), case)
+        self.assertEqual(case["prefs"], [], case)
+
     def test_a_pair_confirmed_in_a_normal_window_is_not_warned_in_a_private_one(self):
         case = self.cases["dismiss_in_normal_counts_in_private"]
         self.assertEqual((case["answer"], case["inPrivate"]), ({"dismissed": True}, {"suspicious": False}), case)

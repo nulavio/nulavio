@@ -49,10 +49,13 @@ if (url && HOST.test(similar) && site) {
   const note = document.getElementById("continue-note");
   // In a private window (the module says so, from the engine), "continue" is kept in memory for private windows
   // only, until the last one closes, and nothing is written to the profile: the note and the reason say that instead.
-  // The reason has no text until this answer, so it never says the other one while the page waits for it.
+  // The reason is hidden, with no text, until this answer, so it never says the other one (or shows an empty line)
+  // while the page waits for it.
   const inPrivate = verdict.inPrivate === true;
   note.textContent = t(inPrivate ? "lookalikeContinueNotePrivate" : "lookalikeContinueNote", [site, similar]);
-  document.getElementById("why-continue").textContent = t(inPrivate ? "lookalikeWhy3Private" : "lookalikeWhy3");
+  const why = document.getElementById("why-continue");
+  why.textContent = t(inPrivate ? "lookalikeWhy3Private" : "lookalikeWhy3");
+  why.hidden = false;
   button.hidden = note.hidden = !onward;
   button.addEventListener("click", async () => {
     button.disabled = true;

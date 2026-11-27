@@ -472,16 +472,16 @@ class PasswordsTest(unittest.TestCase):
         url = self.focus_password(self.fake)
         self.assertTrue(url.startswith(self.base + "passwords/lookalike.html"), f"the warning did not come back: {url}")
 
-    def open_private_window(self) -> tuple[str, str]:
-        """A new private window, and the handles of its tab and of the tab Marionette was in."""
-        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+    def open_private_window(self) -> str:
+        """A new private window, ready on its start page: the handle of its tab, which Marionette is now in."""
         before = set(self.m.window_handles())
         self.m.chrome("OpenBrowserWindow({private: true});")
         self.assertTrue(harness.wait_until(lambda: set(self.m.window_handles()) - before, 20), "no private window")
         private = (set(self.m.window_handles()) - before).pop()
         self.m.switch_to(private)
-        harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", 20)
-        return private, main
+        ready = harness.wait_until(lambda: self.m.current_url() == "about:privatebrowsing", 20)
+        self.assertTrue(ready, f"the private window did not start: {self.m.current_url()}")
+        return private
 
     def end_private_browsing(self) -> bool | None:
         """Close every private window: whether the engine then said private browsing ended (None: none was open).
@@ -505,13 +505,14 @@ class PasswordsTest(unittest.TestCase):
         Settings; the pair is not warned again in private windows until the last one closes, and a normal window still
         warns. test_02 covers a normal window, which remembers the pair in the profile."""
         pref = f"return Services.prefs.prefHasUserValue({PASSWORDS}.PREF_DISMISSED);"
-        self.assertFalse(self.m.chrome(pref), "test_06 left a confirmed pair")
-        private, main = self.open_private_window()
-        # Whatever fails below, the next tests start in the normal tab, with no private window and no confirmed pair
-        # (test_07 expects the warning). Cleanups run last first.
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        # Whatever fails below, from the first check on, the next tests start in the normal tab, with no private
+        # window and no confirmed pair (test_07 expects the warning). Cleanups run last first.
         self.addCleanup(self.m.chrome, f"Services.prefs.clearUserPref({PASSWORDS}.PREF_DISMISSED);")
         self.addCleanup(self.end_private_browsing)
         self.addCleanup(self.m.switch_to, main)
+        self.assertFalse(self.m.chrome(pref), "test_06 left a confirmed pair")
+        private = self.open_private_window()
         self.focus_password(self.fake)
         self.assertTrue(harness.wait_until(self.on_warning, 10), self.m.current_url())
         self.warning_ready()

@@ -362,6 +362,24 @@ const cases = {
     const secondAfter = await passwords.checkLogin(LOOKALIKE, { inPrivate: true });
     return result(store, { first, firstAfter, kept, second, secondAfter, prefs: [...prefs.keys()] });
   },
+  // Many pairs confirmed in one private session (more than the profile's 200): none is dropped before the last private
+  // window closes, as the page says, so the first one is still not warned.
+  dismiss_in_private_many: async () => {
+    const store = loginManager();
+    const passwords = await module(store);
+    const dismissed = [];
+    for (let n = 0; n <= 200; n++) {
+      const answer = await passwords.dismissFor(`https://paypal-login.p${n}.example/`, {
+        site: `p${n}.example`,
+        similar: "paypal.example",
+        inPrivate: true,
+      });
+      dismissed.push(answer.dismissed);
+    }
+    const first = await passwords.checkLogin("https://paypal-login.p0.example/", { inPrivate: true });
+    const last = await passwords.checkLogin("https://paypal-login.p200.example/", { inPrivate: true });
+    return result(store, { kept: dismissed.filter(Boolean).length, first, last, prefs: [...prefs.keys()] });
+  },
   // A pair confirmed in a normal window (kept in the profile) is not warned in a private window either.
   dismiss_in_normal_counts_in_private: async () => {
     const store = loginManager();

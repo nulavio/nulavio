@@ -374,13 +374,11 @@ class Passwords {
     }
   }
 
-  /** Remember a pair for private windows only, in memory, until the engine says the last private window closed. */
+  /** Remember a pair for private windows only, in memory, until the engine says the last private window closed. No
+     pair is dropped before then, as the page says: each one is a "Continue" the person pressed on a pair the module
+     found, and they all go when the private windows close. */
   #confirmPrivate(pair) {
-    this.#privatePairs.delete(pair);
     this.#privatePairs.add(pair);
-    if (this.#privatePairs.size > 200) {
-      this.#privatePairs.delete(this.#privatePairs.values().next().value);
-    }
   }
 
   /**
