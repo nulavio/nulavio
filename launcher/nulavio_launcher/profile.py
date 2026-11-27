@@ -394,17 +394,27 @@ def prepare_for_launch(profile: Profile, context: dict[str, str]) -> list[str]:
     return [name for name, _ in to_write]
 
 
+class PrefsJsBusy(TimeoutError):
+    """prefs_js_lock was still held by another launcher after its `wait`."""
+
+
+# How long `nulavio run` waits for another launcher's change to prefs.js (review 3 of #826).
+PREFS_JS_WAIT = 10.0
+
+
 @contextlib.contextmanager
 def prefs_js_lock(profile_dir: Path, *, wait: float | None = None):
     """Held while the launcher reads and then replaces a profile's prefs.js: `nulavio run` appending seed and pending
     prefs here, and the AI Bridge taking its temporary prefs out (ai/workspace.py, ProfileTarget). Each then reads the
     file as the other left it, and neither puts back a copy from before the other's change (review of #826).
 
-    An exclusive flock on the profile's folder, which adds no file to it. Where the folder cannot be opened or
-    locked, the change is made without it, as before. With `wait`, a lock still held by another after that many
-    seconds raises TimeoutError, and nothing is changed (review 2 of #826)."""
+    An exclusive flock on the profile's folder, which adds no file to it. A path that is a link to the folder locks
+    that folder, so a profile given by a link and run by its own path share the lock (review 3 of #826); the lock
+    reads and writes nothing there. Where the folder cannot be opened or locked, the change is made without it, as
+    before. With `wait`, a lock still held by another after that many seconds raises PrefsJsBusy, and nothing is
+    changed (review 2 of #826)."""
     try:
-        fd = os.open(profile_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(profile_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     except OSError:
         yield
         return
@@ -415,7 +425,7 @@ def prefs_js_lock(profile_dir: Path, *, wait: float | None = None):
                 fcntl.flock(fd, fcntl.LOCK_EX | (0 if deadline is None else fcntl.LOCK_NB))
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise TimeoutError(f"{profile_dir}: prefs.js is being changed by another launcher") from None
+                    raise PrefsJsBusy(f"{profile_dir}: prefs.js is being changed by another launcher") from None
                 time.sleep(0.05)
                 continue
             except OSError:
@@ -428,24 +438,34 @@ def prefs_js_lock(profile_dir: Path, *, wait: float | None = None):
 
 def _append_prefs_js(profile: Profile, items: list[tuple[str, prefs.PrefValue]]) -> None:
     target = profile.path / "prefs.js"
-    with prefs_js_lock(profile.path):
-        # Checked again under the lock, which may have been waited for behind the AI Bridge: a profile an engine
-        # opened meanwhile is that engine's (review 2 of #826).
-        profile.require_not_running()
-        try:
-            # Never through a symlink or from a FIFO: the browser writes this folder, and this runs outside its
-            # confinement.
-            existing = paths.read_private_file(target).decode("utf-8")
-        except FileNotFoundError:
-            existing = ""
-        except UnicodeDecodeError:
-            raise ProfileError(f"{target} is not valid UTF-8; the launcher does not append to it") from None
-        stamp = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
-        block = [f"// Nulavio launcher: applied {len(items)} pref(s) at {stamp}"]
-        block += [prefs.format_pref(name, value) for name, value in items]
-        if existing and not existing.endswith("\n"):
-            existing += "\n"
-        paths.write_private_file(target, existing + "\n".join(block) + "\n")
+    try:
+        with prefs_js_lock(profile.path, wait=PREFS_JS_WAIT):
+            _append_locked(profile, target, items)
+    except PrefsJsBusy:
+        # Nothing was written, and the pending prefs stay queued: prepare_for_launch saves the settings only after.
+        raise ProfileError(
+            f"profile '{profile.name}' is being changed by another Nulavio command; try again in a moment"
+        ) from None
+
+
+def _append_locked(profile: Profile, target: Path, items: list[tuple[str, prefs.PrefValue]]) -> None:
+    # Checked again under the lock, which may have been waited for behind the AI Bridge: a profile an engine
+    # opened meanwhile is that engine's (review 2 of #826).
+    profile.require_not_running()
+    try:
+        # Never through a symlink or from a FIFO: the browser writes this folder, and this runs outside its
+        # confinement.
+        existing = paths.read_private_file(target).decode("utf-8")
+    except FileNotFoundError:
+        existing = ""
+    except UnicodeDecodeError:
+        raise ProfileError(f"{target} is not valid UTF-8; the launcher does not append to it") from None
+    stamp = _dt.datetime.now(_dt.UTC).isoformat(timespec="seconds")
+    block = [f"// Nulavio launcher: applied {len(items)} pref(s) at {stamp}"]
+    block += [prefs.format_pref(name, value) for name, value in items]
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    paths.write_private_file(target, existing + "\n".join(block) + "\n")
 
 
 PREVIEW_THEME_MARKER = "Nulavio Preview chrome theme (Track A, userChrome.css)"

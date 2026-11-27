@@ -358,7 +358,7 @@ class ProfileTarget(Workspace):
                     paths.write_private_file(prefs_js, b"".join(kept))
         except OSError:
             # None (FileNotFoundError); one that cannot even be opened (another user's) or replaced (an immutable
-            # file); or the lock held too long (TimeoutError).
+            # file); or the lock held too long (profile.PrefsJsBusy).
             return
 
     def start(self, timeout: float = 60.0) -> Bidi:
@@ -384,10 +384,12 @@ class ProfileTarget(Workspace):
         box = Container(self.profile_dir)
         try:
             protected = box.vault_path.exists()
-        except OSError:  # Python 3.11 raises PermissionError for a folder that cannot be looked into
+        except (OSError, ValueError):
+            # Python 3.11 raises PermissionError for a folder that cannot be looked into, and a grant with no folder
+            # name ("/") has no Vault path (ValueError).
             if not stopping:
                 raise
-            protected = False  # the engine is stopped all the same (review 2 of #826)
+            protected = False  # the engine is stopped all the same (reviews 2 and 3 of #826)
         if self.holding or not protected:
             yield
             return

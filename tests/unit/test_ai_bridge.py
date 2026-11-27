@@ -4298,6 +4298,70 @@ class WorkspaceTest(Home):
             profile._append_prefs_js(prof, [("nulavio.test.pending", 7)])
         self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
 
+    def test_a_launch_behind_a_stuck_prefs_js_change_is_refused_as_busy(self):
+        """`nulavio run` waits a bounded time for prefs_js_lock, then stops with a retryable message and leaves
+        prefs.js (and the pending prefs, saved only after it) as they were (review 3 of #826)."""
+        import fcntl
+
+        from nulavio_launcher import profile
+
+        folder = self.home / "profiles" / "work"
+        folder.mkdir(parents=True)
+        (folder / "prefs.js").write_text(self.KEPT_PREFS, encoding="utf-8")
+        prof = profile.Profile(name="work", path=folder)
+        outcome = []
+
+        def launch():
+            try:
+                profile._append_prefs_js(prof, [("nulavio.test.pending", 7)])
+                outcome.append("appended")
+            except profile.ProfileError as exc:
+                outcome.append(str(exc))
+
+        fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # a suspended launcher or Bridge
+        try:
+            with mock.patch.object(profile, "PREFS_JS_WAIT", 0.2):
+                launching = threading.Thread(target=launch, daemon=True)
+                launching.start()
+                launching.join(5)
+                self.assertFalse(launching.is_alive(), "nulavio run waited without end")
+        finally:
+            os.close(fd)
+        launching.join(10)
+        self.assertEqual(len(outcome), 1)
+        self.assertIn("try again", outcome[0])
+        self.assertEqual((folder / "prefs.js").read_text(encoding="utf-8"), self.KEPT_PREFS)
+
+    def test_a_linked_profile_folder_shares_the_prefs_js_lock(self):
+        """A profile given by a link to its folder takes the same lock as `nulavio run` on the folder itself, so the
+        clean-up never puts back a copy from before that launch's change (review 3 of #826)."""
+        import fcntl
+
+        real = self.home / "profiles" / "work"
+        real.mkdir(parents=True)
+        link = self.home / "work-link"
+        link.symlink_to(real)
+        (real / "prefs.js").write_text(self.ENGINE_PREFS, encoding="utf-8")
+        target = ProfileTarget("ag-1", "Trabalho", link, downloads_dir=self.home / "dl")
+        target.wrote_prefs = True
+        fd = os.open(real, os.O_RDONLY | os.O_DIRECTORY)
+        fcntl.flock(fd, fcntl.LOCK_EX)  # `nulavio run` appending through the folder's own path
+        try:
+            with mock.patch.object(Workspace, "stop"), mock.patch.object(ProfileTarget, "PREFS_WAIT", 0.2):
+                target.stop()
+        finally:
+            os.close(fd)
+        self.assertEqual((real / "prefs.js").read_text(encoding="utf-8"), self.ENGINE_PREFS, "replaced without the lock")
+
+    def test_a_target_whose_folder_has_no_name_still_stops(self):
+        """stop() looks for a Vault next to the profile's folder; a grant with no folder name ("/") makes that lookup
+        fail, and the engine is stopped and the Bridge goes on all the same (review 3 of #826)."""
+        target = ProfileTarget("ag-1", "Root", Path("/"), downloads_dir=self.home / "dl")
+        with mock.patch.object(Workspace, "stop") as stopped:
+            target.stop()
+        stopped.assert_called_once()
+
     def test_the_bridge_drives_only_the_nulavio_build(self):
         # The band and lock of an agent's window, the forms guard and Nulavio's pages refusing permission requests
         # live in the Nulavio build: another browser (the distribution's Firefox) is refused before the profile is
