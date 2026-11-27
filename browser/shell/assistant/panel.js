@@ -719,7 +719,13 @@ async function showError(error, task) {
   if (STATE_CHANGED.has(reason)) {
     await render().catch(() => {});
   } else if (reason === "page-changed" || reason === "tab-changed") {
-    await refreshPage(); // the item went with the refusal: the panel offers the page of the tab selected now (#861)
+    // The item went with the refusal, and the page offered may be the one left: "Incluir esta página" and "Resumir"
+    // come back with the page of the tab selected now, once it is read, never naming one and taking another (#861).
+    // Before any await: the run's end turned them on again.
+    current = null;
+    $("include-page").hidden = true;
+    $("summarize").hidden = true;
+    await refreshPage();
   }
 }
 

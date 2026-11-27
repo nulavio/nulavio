@@ -2199,6 +2199,32 @@ out.tabChangedStatus = announced.at(-1);
 out.tabChangedPrompt = $("prompt").value;
 out.tabChangedReadAgain = pageReads > readsBefore;
 out.tabChangedAfter = shown();
+// The same refusal while the panel still offers the page of the tab left (OpenCodeReview, round 2): from the moment
+// the refusal arrives until the selected tab is read again, neither "Incluir esta página" nor "Resumir" is offered,
+// so no click acts on a page other than the one the button names. Then the page of the tab selected now is offered.
+await finish();
+selected = tab;
+$("allow-profile").fire("click");
+await idle();
+kept = [item("c47", "Antiga")];
+$("allow-profile").fire("click");
+await idle();
+holdStart = true;
+refuse = "tab-changed";
+await send("Pergunta 42");
+selected = otherTab; // another tab selected; the panel has not heard of it yet
+holdPage = true;
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle(); // refused; the selected tab's read is on its way
+refuse = null;
+out.tabChangedOfferWhileReading = [$("include-page").hidden ? null : $("include-page").textContent, !$("summarize").hidden];
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.tabChangedOfferAfter = $("include-page").hidden ? null : $("include-page").textContent;
+out.tabChangedSummarizeAfter = !$("summarize").hidden;
+selected = tab;
 console.log(JSON.stringify(out));
 """
 
@@ -2510,6 +2536,12 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["tabChangedPrompt"], "Pergunta 41")
         self.assertTrue(out["tabChangedReadAgain"])  # the page of the tab selected now is offered
         self.assertEqual(out["tabChangedAfter"], [])
+
+    def test_a_tab_changed_refusal_offers_no_page_until_the_selected_tab_is_read(self):
+        out = self._run()  # #861, OpenCodeReview round 2
+        self.assertEqual(out["tabChangedOfferWhileReading"], [None, False])  # not the left tab's page, nor Resumir
+        self.assertIn("assistantIncludePage|Outra", out["tabChangedOfferAfter"])  # the tab selected now
+        self.assertTrue(out["tabChangedSummarizeAfter"])
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()
