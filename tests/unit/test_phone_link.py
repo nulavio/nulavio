@@ -597,6 +597,52 @@ class PhoneSessionTest(unittest.TestCase):
             with self.subTest(error=type(error).__name__), mock.patch.object(phone_session, "sessions_dir", side_effect=error):
                 phone_session._end_replaced("an-earlier-session", "this-session")
 
+    def test_07i_a_later_start_cannot_replace_a_request_before_its_qr_is_out(self):
+        # #823 review, round 3: two starts that overlap (two clicks on one page, say). The later one claims the record
+        # at the worst moment, after this one's claim and before its QR. The QR goes out under the record's lock, so
+        # the later claim waits for it: the QR shown was the profile's pending request when it was shown. Before,
+        # the earlier start could answer with a QR already replaced, which nothing on main does.
+        self.pair()
+        box = profiles.container(self.prof)
+        session = phone_session.Session("unlock")
+        later = threading.Thread(target=phone_session.claim_request, args=(box, "a-later-session"), daemon=True)
+        seen = []
+        shown = threading.Event()
+
+        def emit(message):
+            if not shown.is_set():
+                later.start()
+                later.join(1.0)  # well under REQUEST_LOCK_WAIT: the later claim is still waiting, or done
+                seen.append((message.get("session"), phone_session._recorded(box)))  # no lock: it is held here
+                shown.set()
+
+        args = (session, {"path": str(self.prof.path), "autolock": False}, emit, self.phone.resolver)
+        thread = threading.Thread(target=phone_session.unlock, args=args, daemon=True)
+        thread.start()
+        self.assertTrue(shown.wait(20), "no first answer")
+        later.join(10)
+        session.handle({"action": "cancel"})
+        thread.join(10)
+        self.assertEqual(seen, [(session.id, session.id)])
+        self.assertFalse(later.is_alive())
+        self.assertEqual(phone_session._recorded(box), "a-later-session")  # the later start still took its place
+        self.assertFalse(box.mounted())
+
+    def test_07j_a_request_lock_with_another_name_is_refused_and_left_as_it_is(self):
+        # #823 review, round 3 (I9): a lock file that is also another file (a hard link, from a folder put back by
+        # hand, say) is refused before its mode is changed: making it 0600 would change that other file too. main
+        # leaves its own lock file's mode alone.
+        box = profiles.container(self.prof)
+        outside = self.tmp / "outside.sh"
+        outside.write_text("#!/bin/sh\n")
+        os.chmod(outside, 0o755)
+        os.link(outside, box.root / f"{phone_session.REQUEST_RECORD}.lock")
+        with self.assertRaises(phone_session.paths.UnsafePathError):
+            phone_session.claim_request(box, "a-session")
+        self.assertFalse(phone_session.is_current_request(box, "a-session"))
+        self.assertEqual(outside.stat().st_mode & 0o777, 0o755)
+        self.assertFalse((box.root / phone_session.REQUEST_RECORD).exists())
+
 
 @unittest.skipUnless(sodium.available() and storage.tools_available(), "needs gocryptfs, FUSE and libsodium")
 class PhoneApiTest(unittest.TestCase):

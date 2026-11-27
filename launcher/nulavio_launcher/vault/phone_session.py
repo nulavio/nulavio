@@ -11,10 +11,11 @@ the pairing QR carries the invite's secret and is meant for that screen only.
 A profile has one pending phone unlock at a time, across helper processes
 (#669, U-T19): its folder of encrypted files (`P.vault/`) records the session id
 of the latest request (`phone-request`, 0600). A new request replaces that
-record and tells the earlier helper it was replaced, which stops once its own
-record, read, names another session; a helper opens the profile only while the record still names its
-own session, checked under the profile's state lock just before the volume is
-mounted.
+record, shows its QR before any later request can replace it, and tells the
+earlier helper it was replaced, which stops once its own record, read, names
+another session; a helper opens the profile only while the record still names
+its own session, checked under the profile's state lock just before the volume
+is mounted.
 """
 
 from __future__ import annotations
@@ -202,7 +203,9 @@ def _request_lock(box: storage.Container, wait: float | None = None):
     fd = os.open(box.root / f"{REQUEST_RECORD}.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         st = os.fstat(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():  # I9: not a FIFO, not someone else's file
+        # I9: not a FIFO, not someone else's file, and not one with another name too (a hard link): its mode is
+        # changed below, and that would change the other file's as well (#823 review, round 3).
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_nlink != 1:
             raise paths.UnsafePathError(f"not a private regular file: {REQUEST_RECORD}.lock")
         if stat.S_IMODE(st.st_mode) & ~paths.PRIVATE_FILE_MODE:
             os.fchmod(fd, paths.PRIVATE_FILE_MODE)  # I9: one put back with a broader mode is made 0600
@@ -227,14 +230,20 @@ def _recorded(box: storage.Container) -> str:
         return ""
 
 
-def claim_request(box: storage.Container, session_id: str) -> str:
-    """Record `session_id` as the profile's pending phone request; return the session it replaces ("" if none)."""
+def claim_request(box: storage.Container, session_id: str, publish=None) -> str:
+    """Record `session_id` as the profile's pending phone request; return the session it replaces ("" if none).
+
+    `publish` (the helper's first answer, its QR) runs once the record is written and before the lock is let go:
+    a later request cannot replace this one between the two, so a QR shown was the pending request when it was
+    shown (#823 review, round 3)."""
     with _request_lock(box):
         try:
             previous = _recorded(box)
         except (OSError, UnicodeDecodeError, paths.UnsafePathError):
             previous = ""  # a damaged record names no session; it is replaced below
         paths.write_private_file(box.root / REQUEST_RECORD, session_id)
+        if publish is not None:
+            publish()
     return previous
 
 
@@ -381,14 +390,15 @@ def unlock(session: Session, request: dict, emit, resolver: link.Resolver = link
     req_id, expiry = signed["r"]["req_id"], signed["r"]["expiry"]
     session.superseded = lambda: is_replaced(box, session.id)  # before the claim: a later one may tell at once
     try:
-        previous = claim_request(box, session.id)  # this request is now the profile's only pending one
+        # This request is now the profile's only pending one; its QR goes out under the same lock.
+        previous = claim_request(box, session.id, lambda: emit({"session": session.id, "qr": canonical(signed).decode(),
+                                                                 "expiry": expiry}))  # fmt: skip
     except (OSError, paths.UnsafePathError):
         coordinator.cancel()  # wipes the request's session key and a combined unlock's password key (I8)
         vault.lock()
         emit({"error": "storage-failed"})
         return
-    emit({"session": session.id, "qr": canonical(signed).decode(), "expiry": expiry})
-    _end_replaced(previous, session.id)
+    _end_replaced(previous, session.id)  # after the lock is let go: the earlier helper reads the record under it
     deadline = _deadline_for(expiry)
     name = link.instance_name("u", req_id)
 
