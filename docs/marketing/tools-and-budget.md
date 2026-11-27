@@ -95,12 +95,12 @@ Each generated or licensed asset gets one entry, beside the asset, like [`site/a
 
 ## Budget
 
-The voice-over is short. All of it, the trailer and the six shorts in both languages, is about 5,600 characters (counted on 2026-11-27). With four takes of each line, about 22,000 characters.
+The voice-over is short. All of it, the trailer and the six shorts in both languages, is about 5,800 characters (counted on 2026-11-27). With four takes of each line, about 23,000 characters.
 
 | Option | Status | What it buys | Cost | Quality risk |
 |---|---|---|---|---|
 | **Free** | **Decided: the start** | Kokoro or Piper voice, Stable Audio Open or Pixabay music, Freesound CC0 effects, Motion Canvas, FFmpeg | US$0 in tools. The cost is the maintainer's computer time | The Portuguese voices are the weakest part: Kokoro's are ungraded, Piper's sound more synthetic |
-| **Low** | Decided: only if the free Portuguese voice sample does not serve | Free, plus ElevenLabs Starter for one month for the voice (22,000 characters fit its 30,000 credits) | US$6 once, plus taxes | Low for the sound: a natural voice. Open for rule 3: the voice's provenance is not verified (its row above). Music stays from the free route |
+| **Low** | Decided: only if the free Portuguese voice sample does not serve | Free, plus ElevenLabs Starter for one month for the voice (23,000 characters fit its 30,000 credits) | US$6 once, plus taxes | Low for the sound: a natural voice. Open for rule 3: the voice's provenance is not verified (its row above). Music stays from the free route |
 | **Full** | Not chosen | Low, but ElevenLabs Creator for headroom, plus Suno Pro for one month for an original score | US$22 + US$10 = US$32 for one month, plus taxes. Each later re-render month (after 1.0, for example) is the same again | Low. Generated music needs listening for artefacts and resemblance to known songs |
 
 **Decided on 2026-11-27 ([#176](https://github.com/nulavio/nulavio/issues/176#issuecomment-7210333283)): free first; low only if the free Portuguese voice does not serve.** The order of work:

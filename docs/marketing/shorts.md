@@ -61,7 +61,7 @@ For Bruno: what a protected profile holds stays encrypted while it is locked.
 
 The short says nothing about what a stolen laptop reveals as a whole. The theft is of a computer that is off: a disk read by someone else, with no session of the person running. The claim is about one locked protected profile's folder: an unlocked profile can be read by a program running as the person, and a locked one still shows its name and the sites routed to it (C09), which the second row says on screen.
 
-What that folder's encryption is worth depends on how the profile opens, and the third row says so. With the profile's own password it is as strong as that password. With the system login the key is in the desktop keyring, which is on the same disk: whoever has the login password opens it, and while the person's session is on, a program running as them can take the key from the unlocked keyring even with the profile locked (C09). The first limit is on screen and the second is spoken. The recovery code is on screen only.
+What that folder's encryption is worth depends on how the profile opens, and the third row says so. With the profile's own password it is as strong as that password. With the system login the key is in the desktop keyring, which is on the same disk: whoever has the login password opens it, and while the person's session is on, a program running as them can take the key from the unlocked keyring even with the profile locked (C09). The second limit is spoken and the first is on screen, in the row's small line. The recovery code is on screen only.
 
 The card of the fourth row holds two notices nobody speaks ("coming soon", "planned"), so it has 6 s: 96 characters in English and 103 in Portuguese, 16 and 17 a second.
 
@@ -74,11 +74,11 @@ For Ana: she wants to know when something touched her browser.
 | Time | Picture | On screen (en / pt-BR) | VO en | VO pt-BR | Claims |
 |---|---|---|---|---|---|
 | 0:00–0:04 | Motion: hook | "Changed while it was closed?" / "Mudou com ele fechado?" | "Some programs change your browser while it's closed." | "Alguns programas mexem no navegador enquanto ele está fechado." | C14 |
-| 0:04–0:16 | R07 `guard` | the Guard review as recorded | "On the next start, Guard shows the changes it watches: an extension, a certificate authority, a protective setting. You keep each one, or undo it where Guard can." | "No próximo início, o Guard mostra as mudanças que ele acompanha: uma extensão, uma autoridade certificadora, uma configuração de proteção. Você mantém cada uma, ou desfaz quando o Guard consegue." | C13 |
+| 0:04–0:16 | R07 `guard` | the Guard review as recorded | "On the next start, Guard shows the changes it watches: a new extension, a new certificate authority, a protective setting. You keep each one, or undo it where Guard can." | "No próximo início, o Guard mostra as mudanças que acompanha: uma extensão nova, uma autoridade certificadora nova, uma configuração de proteção. Você mantém cada uma, ou desfaz quando ele consegue." | C13 |
 | 0:16–0:23 | Motion card | "Guard tells you. It doesn't prevent." / "O Guard avisa. Ele não impede." | "Guard tells you; it doesn't prevent. No browser stops malware already running on your computer." | "O Guard avisa; ele não impede. Nenhum navegador detém um programa malicioso que já roda no computador." | C14 |
 | 0:23–0:26 | End card | as above | — | — | C24 |
 
-The recorded review holds a `user.js` and a native-messaging finding too. They offer "Show file" and "Keep", with no undo, and a setting outside Guard's list is not reported (C13). So the line says "the changes it watches" and "where Guard can". The recording is of an ordinary profile: Guard does not check a temporary profile or a browser an AI agent is driving (C13), and no line here says it does.
+The recorded review holds a `user.js` and a native-messaging finding too. They offer "Show file" and "Keep", with no undo, and a setting outside Guard's list is not reported (C13). So the line says "the changes it watches" and "where Guard can", and "new" of the extension and the certificate authority: Guard reports a certificate authority that was added, not one that was removed (C13). The recording is of an ordinary profile: Guard does not check a temporary profile or a browser an AI agent is driving (C13), and no line here says it does.
 
 ## S5 · AI that goes only as far as you let it (30 s)
 
