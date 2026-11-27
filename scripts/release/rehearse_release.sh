@@ -43,12 +43,35 @@ out=$(mkdir -p "${2:-$repo/dist/$kind-$version}" && cd "${2:-$repo/dist/$kind-$v
 mkdir -p "$out/logs"
 report="$out/rehearsal.md"
 start=$(date +%s)
+
+# Whether each package named is of this release (#637). A reused directory (the default one is per Firefox version)
+# may still hold another revision's: the manifest would list it and its SBOM would carry this release's name.
+of_this_release() {
+    local file name dist release="$version-$NULAVIO_RELEASE"
+    for file in "$@"; do
+        name=${file##*/}
+        # An RPM is nulavio-<release>.<one distribution segment>.x86_64.rpm, as release_manifest.py names it: a
+        # longer tail (0.2.alpha.fc44) is another revision, not this one.
+        dist=${name#"nulavio-$release."}
+        dist=${dist%.x86_64.rpm}
+        if [[ $name == "nulavio_${release}_amd64.deb" ]]; then continue; fi
+        if [[ $name == "nulavio-$release.$dist.x86_64.rpm" && $dist =~ ^[a-z][a-z0-9_]*$ ]]; then continue; fi
+        echo "rehearsal: $name is not of release $release: rehearse into a clean directory" >&2
+        return 1
+    done
+}
+
 if (( precheck )); then
     # Nothing a release run could take for its own: no manifest, no packages, and a report that says so.
     rm -f "$out/manifest.json" "$out/precheck.json"
     printf '# Engine pre-check: Firefox %s\n\nNot a release: the mozconfig.no-lto variant, no packages, nothing to sign.\nStarted %s.\n\n| Step | Time | Result |\n|---|---|---|\n' "$version" "$(date -u +%FT%TZ)" > "$report"
 else
     mkdir -p "$out/packages"
+    # Refused before anything runs, and before the earlier rehearsal's report is overwritten.
+    shopt -s nullglob
+    found=("$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb)
+    shopt -u nullglob
+    of_this_release "${found[@]}" || exit 2
     printf '# Release rehearsal: Firefox %s\n\nStarted %s.\n\n| Step | Time | Result |\n|---|---|---|\n' "$version" "$(date -u +%FT%TZ)" > "$report"
 fi
 
@@ -89,9 +112,13 @@ install_tree() {
 }
 
 sbom() {
-    local file
-    for file in "$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb; do
-        python3 -I "$repo/scripts/release/sbom.py" --package "$file" --engine-version "$version" > "$file.cdx.json"
+    # One list for the check and the SBOMs: each SBOM names its package by this release (#637), and is written only
+    # once every package is of it. Without nullglob: a package that is missing is refused too.
+    local file packages=("$out"/packages/x86_64/nulavio-*.rpm "$out"/packages/nulavio_*.deb)
+    of_this_release "${packages[@]}" || return 1
+    for file in "${packages[@]}"; do
+        python3 -I "$repo/scripts/release/sbom.py" --package "$file" --engine-version "$version" \
+            --release-version "$version-$NULAVIO_RELEASE" > "$file.cdx.json"
     done
 }
 

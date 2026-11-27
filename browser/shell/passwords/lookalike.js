@@ -8,7 +8,8 @@
    site `url` looks like is asked of the passwords module, which compares its origin (the module needs
    only the host) with this profile's saved logins again: another extension can open this page with
    parameters of its own, and the page names no site the module did not and goes to no address but
-   `url`, or back. */
+   `url`, or back. "Continue" passes the pair it shows, and the module remembers it only if it still finds
+   that same pair for `url`; otherwise nothing is remembered and the page stays, saying so. */
 
 import { localize, t } from "../lib/i18n.js";
 import { closeOwnTab } from "../lib/tabs.js";
@@ -49,14 +50,22 @@ if (url && HOST.test(similar) && site) {
   button.hidden = note.hidden = !onward;
   button.addEventListener("click", async () => {
     button.disabled = true;
+    let answer;
     try {
-      await browser.nulavioPasswords.dismiss(origin, back);
+      // The pair this page shows: the module remembers it only if it still finds that same pair for the address.
+      answer = await browser.nulavioPasswords.dismiss(origin, site, similar, back);
     } catch (e) {
       // Not remembered: do not open the site as if it were (the warning would silently differ next time). With no
       // page to go back to any more, only the real site is left.
       console.error("look-alike: could not remember the choice", e);
       button.disabled = false;
       button.hidden = note.hidden = e?.message === "no-way-back";
+      announce(t("lookalikeDismissFailed"), "error");
+      return;
+    }
+    if (answer?.dismissed !== true) {
+      // Nothing remembered: the module no longer finds the pair shown (the saved logins changed meanwhile).
+      button.disabled = false;
       announce(t("lookalikeDismissFailed"), "error");
       return;
     }
