@@ -153,7 +153,7 @@ What a link to Nulavio shows when it is shared (#199). Two destinations, two com
 
 | Link | Image | Says | Made by |
 |---|---|---|---|
-| `github.com/nulavio/nulavio` | `assets/social/github/social-preview.png`, 1280 × 640, RGB without alpha, about 110 kB | The name as the picture, "An open-source browser for Linux." and `nulavio.net`. English, the repository's language: GitHub takes one image for every reader | `build_social.py` (the `.svg` beside it is the source) |
+| `github.com/nulavio/nulavio` | `assets/social/github/social-preview.png`, 1280 × 640, RGB without alpha, about 95 kB | The name as the picture, "An open-source browser for Linux." and `nulavio.net`. English, the repository's language: GitHub takes one image for every reader | `build_social.py` (the `.svg` beside it is the source) |
 | `nulavio.net`, the pages in Portuguese without a picture of their own | `site/assets/og-pt.png`, 1200 × 630, about 140 kB | "A web é sua. Seus dados também.", the tagline, the waitlist and the address | `scripts/site/og-template.html`, captured at 1200 × 630 with `?lang=pt` (the command is at the top of that file) |
 | `nulavio.net/en/`, the pages in English without a picture of their own | `site/assets/og-en.png`, 1200 × 630, about 130 kB | "Your web. Your rules.", the tagline, the waitlist and the address | The same template with `?lang=en` |
 
