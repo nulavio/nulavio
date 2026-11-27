@@ -1188,7 +1188,7 @@ class El extends Node {
   append(...nodes) { this.children.push(...nodes); }
   prepend(...nodes) { this.children.unshift(...nodes); }
   replaceChildren(...nodes) { this.text = ""; this.children = nodes; }
-  focus() { document.activeElement = this; }
+  focus(options) { document.activeElement = this; focusCalls.push([this, options]); }
   closest() { return null; }
   querySelector() { return null; }
   querySelectorAll() { return []; }
@@ -1202,6 +1202,7 @@ globalThis.document = { getElementById: $, createElement: tag => new El(tag), cr
   createTextNode: String, querySelector: () => null, querySelectorAll: () => [], addEventListener() {},
   body: new El("body"), documentElement: new El("html"), activeElement: null, hasFocus: () => panelFocused };
 let panelFocused = true; // whether the panel's document has focus (document.hasFocus), not the page
+const focusCalls = []; // each focus() the panel made: the element and its options (#760)
 globalThis.window = { addEventListener() {} };
 globalThis.requestAnimationFrame = () => 1;
 globalThis.cancelAnimationFrame = () => {};
@@ -2129,17 +2130,25 @@ await focusRender();
 out.focusShown = shown();
 let focusedButton = removeOf("f2");
 focusedButton.focus();
+focusCalls.length = 0;
 activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 })); // the tab event's redraw (refreshPage)
 await idle();
 out.focusTabRedrawn = removeOf("f2") !== focusedButton; // the button was drawn again
 out.focusTabKept = document.activeElement === removeOf("f2");
+// The same item's button: no scroll to it, the person may have scrolled to read the answer (OpenCodeReview, #883).
+out.focusTabNoScroll = focusCalls.length > 0 && focusCalls.every(([, options]) => options?.preventScroll === true);
 focusedButton = removeOf("f2");
 await focusRender(); // the ready render's redraws
 out.focusRenderRedrawn = removeOf("f2") !== focusedButton;
 out.focusRenderKept = document.activeElement === removeOf("f2");
 kept = [item("f1", "Foco 1"), selectionOf("f3", "Foco 3")]; // the focused item left the browser's list
+focusCalls.length = 0;
 await focusRender();
 out.focusGoneNext = document.activeElement === removeOf("f3");
+// Another item's button: scrolled into view as focus first moves there; a later redraw keeps it in place.
+const focusLabels = () =>
+  focusCalls.map(([el, options]) => [el.getAttribute("aria-label") ?? el.id, options?.preventScroll === true]);
+out.focusGoneScrolls = focusLabels().find(([label]) => label.endsWith("Foco 3"))?.[1] === false;
 kept = [item("f1", "Foco 1")];
 await focusRender();
 out.focusGoneLast = document.activeElement === removeOf("f1");
@@ -2179,6 +2188,44 @@ out.focusWaitPrompt = document.activeElement === $("prompt");
 if (starts.length > before) {
   await finish();
 }
+// OpenCodeReview on #883: the check this Send waits for keeps the focused item, and Send then takes it. The offer to
+// include the page is turned off for the run in the same turn, so focus goes to the question, not to the offer.
+selected = tab;
+kept = [item("f6", "Foco 6")];
+await focusRender();
+removeOf("f6").focus();
+holdPage = true;
+activated.forEach(listener => listener({ tabId: tab.tabId, windowId: 1 }));
+await idle();
+before = starts.length;
+await send("Pergunta foco 2");
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.focusSentStarts = starts.length - before;
+out.focusSentPrompt = document.activeElement === $("prompt");
+if (starts.length > before) {
+  await finish();
+}
+// The person removes an item: one focus decision (OpenCodeReview on #883). The page out, "Incluir esta página" shows
+// and takes focus, as before #760, without passing through the selection's button first.
+kept = [item("f7", "Foco 7"), selectionOf("f8", "Foco 8")];
+await focusRender();
+removeOf("f7").focus();
+focusCalls.length = 0;
+removeOf("f7").fire("click");
+await idle();
+out.focusRemovedPage = focusLabels().map(([label]) => label);
+out.focusRemovedPageOffer = document.activeElement === $("include-page") && !$("include-page").hidden;
+// The selection out, the page stays and the offer does not show: focus goes to the page's button, once.
+kept = [item("f9", "Foco 9"), selectionOf("f10", "Foco 10")];
+await focusRender();
+removeOf("f10").focus();
+focusCalls.length = 0;
+removeOf("f10").fire("click");
+await idle();
+out.focusRemovedSelection = focusCalls.length;
+out.focusRemovedSelectionNext = document.activeElement === removeOf("f9");
 kept = [];
 $("allow-profile").fire("click");
 await idle();
@@ -2517,6 +2564,23 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()  # #760: the offer to include the page is off then (#816)
         self.assertEqual(out["focusWaitShown"], [])
         self.assertTrue(out["focusWaitPrompt"])
+
+    def test_a_send_that_takes_the_focused_item_moves_focus_to_the_question(self):
+        out = self._run()  # #760, OpenCodeReview on #883: not to the offer that the run turns off
+        self.assertEqual(out["focusSentStarts"], 1)
+        self.assertTrue(out["focusSentPrompt"])
+
+    def test_removing_an_item_moves_focus_once(self):
+        out = self._run()  # #760, OpenCodeReview on #883
+        self.assertEqual(out["focusRemovedPage"], ["include-page"])
+        self.assertTrue(out["focusRemovedPageOffer"])
+        self.assertEqual(out["focusRemovedSelection"], 1)
+        self.assertTrue(out["focusRemovedSelectionNext"])
+
+    def test_focus_kept_on_the_same_item_does_not_scroll(self):
+        out = self._run()  # #760, OpenCodeReview on #883
+        self.assertTrue(out["focusTabNoScroll"])
+        self.assertTrue(out["focusGoneScrolls"])
 
 
 if __name__ == "__main__":

@@ -276,8 +276,9 @@ function chipItem(chip) {
   return { row, remove };
 }
 
-/** The included items, the offer to include the current page, and the reason one left. */
-function showContext() {
+/** The included items, the offer to include the current page, and the reason one left. `removed`: the person removed
+    an item with its Remove button (removeChip). */
+function showContext({ removed = false } = {}) {
   const task = mode() === "task";
   $("context").hidden = task;
   $("attached").hidden = !chips.length;
@@ -299,10 +300,16 @@ function showContext() {
   $("no-page").hidden = Boolean(pageChip() || current);
   $("summarize").hidden = task || !current;
   showSendLine();
-  if (focused >= 0) {
-    const next = rows.find(r => r.chipId === left) ?? rows[Math.min(focused, rows.length - 1)];
-    const include = offer && !$("include-page").disabled; // off while a Send waits (#816)
-    (task ? $("prompt") : (next?.remove ?? (include ? $("include-page") : $("prompt")))).focus();
+  const include = offer && !$("include-page").disabled; // off while a Send waits (#816) and while a run goes
+  if (removed && include) {
+    // One focus decision for a removal: the offer that brings the page back, as before #760.
+    $("include-page").focus();
+  } else if (focused >= 0) {
+    const same = rows.find(r => r.chipId === left);
+    const next = same ?? rows[Math.min(focused, rows.length - 1)];
+    // The same item's button takes focus where it is: no scroll, the person may be reading the answer below.
+    const target = task ? $("prompt") : (next?.remove ?? (include ? $("include-page") : $("prompt")));
+    target.focus({ preventScroll: Boolean(same && !task) });
   }
 }
 
@@ -321,8 +328,7 @@ function removeChip(chip) {
   newContext();
   setChips(chips.filter(c => c !== chip));
   ai.assistantRemove(chip.chipId).catch(() => {});
-  showContext();
-  $("include-page").focus();
+  showContext({ removed: true });
 }
 
 /** "Incluir esta página" and "Resumir": the tab shown now is read and kept for the next message.
@@ -1022,6 +1028,7 @@ async function send(question, { retry = false } = {}) {
   if (!dropNotice) {
     $("drift").hidden = true;
   }
+  $("include-page").disabled = true; // as setRunning below sets it: the redraw does not hand focus to it (#760)
   showContext();
   $("answer-section").hidden = true;
   $("activity-actions").hidden = true;
