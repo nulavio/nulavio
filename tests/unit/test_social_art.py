@@ -447,6 +447,13 @@ class SocialArtTest(unittest.TestCase):
             self.assertIn("New", (out / "16x9-en.svg").read_text(encoding="utf-8"))
             self.assertEqual(sorted(p.name for p in out.iterdir()), sorted(names))  # no lock file, nothing left behind
 
+    def test_a_token_that_is_not_written_as_hex_is_refused(self):
+        self.assertEqual(build_social.colour("color.primitive.navy.875"), build_social.CANVAS)
+        for value in ("rgba(15, 28, 42, 1)", "rgba(15,\x0b28, 42, 1)", "#0F1C2A\n", '#0F1C2A" onload="x', "navy", 5, None):
+            refused = self.assertRaisesRegex(ValueError, "color.primitive.navy.875: .*#RRGGBB")
+            with self.subTest(value=value), mock.patch.object(build_social, "resolve", return_value=value), refused:
+                build_social.colour("color.primitive.navy.875")
+
     def test_writing_touches_only_the_social_directory(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(build_social, "OUT", Path(tmp) / "social"):
             written = build_social.write_all(svg_only=True)

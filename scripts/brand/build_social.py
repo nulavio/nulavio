@@ -66,7 +66,12 @@ _TOKENS = flatten(json.loads(TOKENS.read_text(encoding="utf-8")))
 
 
 def colour(path: str) -> str:
-    return resolve(_TOKENS, path).upper()
+    """A token's colour as the SVG files write it, in attributes: #RRGGBB only, as build_tokens.py takes
+    the status illustrations' colours. Another spelling could be one that XML or SVG does not read."""
+    value = resolve(_TOKENS, path)
+    if not (isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)):
+        raise ValueError(f"{path}: the social art writes a colour as #RRGGBB, got {value!r}")
+    return value.upper()
 
 
 # The brand's dark scheme, its home (guidelines §9), as scripts/site/og-template.html uses it.
