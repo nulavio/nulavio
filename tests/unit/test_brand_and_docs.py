@@ -466,10 +466,15 @@ class DocsTest(unittest.TestCase):
                 self.assertIsNotNone(release.get("apt_sources"))
                 self.assertIn(ubuntu, text)
                 # The checksum gates the install when the block is pasted whole (OCR on #878).
+                # In a private folder, so the checked file is the installed one, and a failed refresh stops too (OCR
+                # round 2 on #878).
                 self.assertIn(
-                    f"curl -fsSLO --proto '=https' {release['apt_sources']} &&\n"
+                    'cd "$(mktemp -d)" &&\n'
+                    f"  curl -fsSLO --proto '=https' {release['apt_sources']} &&\n"
                     f"  echo '{digest}  nulavio.sources' | sha256sum --check &&\n"
-                    "  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &&\n",
+                    "  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &&\n"
+                    "  sudo apt-get -o APT::Update::Error-Mode=any update &&\n"
+                    "  sudo apt install nulavio\n",
                     text,
                 )
                 # A test count goes stale with the next test; the README names none.

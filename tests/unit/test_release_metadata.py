@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/release/release_metadata.py"
@@ -115,6 +116,51 @@ class ReleaseMetadataTest(unittest.TestCase):
         result = self.run_metadata()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(readme.read_bytes(), f"# Nulavio\r\n\r\nNow {link}.\r\n".encode())
+
+    def test_a_wrapped_link_is_replaced_and_a_readme_without_markers_is_never_decoded(self):
+        # OCR round 2 on #878: a link wrapped across lines is still one marker pair, and a README without the markers
+        # is left byte for byte, even one that is not UTF-8.
+        link = b"<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        readme, other = self.repo / "README.md", self.repo / "README.pt-BR.md"
+        readme.write_bytes(b"Now <!--release-->[v160.0-0.1]\r\n(https://example.invalid)<!--/release-->.\r\n")
+        other.write_bytes(b"Latin-1 \xe9, no markers.\n")
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), b"Now " + link + b".\r\n")
+        self.assertEqual(other.read_bytes(), b"Latin-1 \xe9, no markers.\n")
+
+    def test_a_symlinked_output_is_refused_before_anything_is_written(self):
+        # OCR round 2 on #878: a README that is a link would have its target rewritten, outside the paths the
+        # workflow stages.
+        target = self.repo / "elsewhere.md"
+        target.write_text(self.readmes["README.md"])
+        (self.repo / "README.md").unlink()
+        (self.repo / "README.md").symlink_to(target)
+        before = self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("symbolic link", result.stderr)
+        self.assertEqual(target.read_text(), self.readmes["README.md"])
+        self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()), before)
+
+    def test_an_interrupted_write_leaves_the_readme_whole_and_keeps_its_mode(self):
+        # OCR round 2 on #878: each file is written beside itself and renamed over, so a failed write leaves the old
+        # file whole (and a retry finds its markers) and no stray file behind.
+        sys.path.insert(0, str(SCRIPT.parent))
+        self.addCleanup(sys.path.remove, str(SCRIPT.parent))
+        import release_metadata
+
+        readme = self.repo / "README.md"
+        readme.chmod(0o640)
+        manifest = {**self.manifest, "nulavio_base_commit": self.sha}
+        listing = sorted(p.name for p in self.repo.iterdir())
+        with mock.patch.object(release_metadata.os, "replace", side_effect=OSError("disk full")), self.assertRaises(OSError):
+            release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest)
+        self.assertEqual(readme.read_text(), self.readmes["README.md"])
+        self.assertEqual(sorted(p.name for p in self.repo.iterdir()), listing)
+        self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertIn("releases/tag/v160.0-0.2)<!--/release-->", readme.read_text())
+        self.assertEqual(readme.stat().st_mode & 0o777, 0o640)
 
     def test_the_first_release_with_the_companion_apk_names_it_for_the_download_pages(self):
         # ADR 0014: the pages offer the Companion once a published release carries its APK.

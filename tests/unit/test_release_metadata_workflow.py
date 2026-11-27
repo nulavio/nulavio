@@ -160,6 +160,26 @@ class MetadataWorkflowTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = Path(self.env["GH_CALLS"]).read_text()
         self.assertEqual(calls.count('["pr", "create"'), 1)
+        self.assertNotIn("differs", result.stdout + Path(self.env["GITHUB_STEP_SUMMARY"]).read_text())
+
+    def test_an_open_pr_that_lacks_part_of_the_generated_change_is_reported(self):
+        # OCR round 2 on #878: a metadata PR opened before the READMEs were part of it is reused but reported, with the
+        # recovery patch.
+        branch = "agent/release/chore-metadata-v160.0-0.2"
+        self.git("switch", "-qc", branch)
+        (self.repo / "CHANGELOG.md").write_text("# Changelog\n\n<!-- releases -->\n\nOlder run.\n")
+        self.git("commit", "-qam", "older run")
+        self.git("push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+        self.git("switch", "-q", "main")
+        self.prepare()
+        self.env["GH_TOKEN"] = "test-only-placeholder"
+        self.env["EXISTING_PR"] = "https://github.com/nulavio/nulavio/pull/999"
+        result = self.step("Open the metadata pull request, or report recovery instructions")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("::warning::The open metadata PR differs", result.stdout)
+        self.assertIn("release-metadata.patch", Path(self.env["GITHUB_STEP_SUMMARY"]).read_text())
+        self.assertEqual(self.git("branch", "--show-current").strip(), "main")
+        self.assertNotIn('"create"', Path(self.env["GH_CALLS"]).read_text())
 
     def test_bad_attestation_stops_before_bookkeeping_and_invalid_tag_never_reaches_gh(self):
         self.env["ATTESTATION_RC"] = "1"

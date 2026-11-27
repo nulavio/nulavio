@@ -77,6 +77,12 @@ jobs:
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json url --jq '.[0].url // empty')
           if [ -n "$existing" ]; then
             printf 'Existing metadata PR: %s\n' "$existing" >> "$GITHUB_STEP_SUMMARY"
+            # A PR opened by an older run (before the READMEs were part of it, say) is not rewritten: say so instead.
+            if ! { git fetch -q origin "$branch" &&
+              git diff --quiet FETCH_HEAD -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md; }; then
+              echo '::warning::The open metadata PR differs from what this run generated; the release-metadata artifact holds the patch.'
+              printf '\nIt differs from what this run generated (or main moved since): compare it with release-metadata.patch in the release-metadata artifact and apply that on its branch if the PR lacks a change.\n' >> "$GITHUB_STEP_SUMMARY"
+            fi
             exit 0
           fi
           git switch -c "$branch"
