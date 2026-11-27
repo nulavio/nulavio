@@ -1173,6 +1173,7 @@ let holdInclude = false; // and for an Include's reply (assistantInclude)
 const includeHeld = [];
 let includes = 0;
 const starts = [];
+const started = []; // what each start was given, as it was given
 const events = [];
 const noEvent = { addListener() {} };
 const activated = []; // the panel's tabs.onActivated listener: another tab selected in this window
@@ -1201,6 +1202,7 @@ globalThis.browser = {
     assistantRuns: async () => [],
     assistantStart(kind, details) {
       starts.push({ kind, chips: details.chips ?? null });
+      started.push(details);
       kept = []; // every start empties the window's items (#678), refused or not
       const runId = `run-${starts.length}`;
       const code = refuse;
@@ -1871,6 +1873,67 @@ blocked = null;
 $("allow-profile").fire("click");
 await idle();
 out.pausedAfter = shown(); // read again on resume: the item is from the tab left, so it leaves then
+
+// OpenCodeReview on #852: what Send was pressed for is taken at the press, not after the wait. A Task chosen while Send
+// waits starts nothing: the question stays for another press.
+const waitForCheck = async (chipId, question) => {
+  selected = tab;
+  kept = [item(chipId, "Na espera")];
+  $("allow-profile").fire("click");
+  await idle();
+  holdPage = true;
+  selected = otherTab;
+  activated.forEach(listener => listener({ tabId: otherTab.tabId, windowId: 1 }));
+  await idle();
+  before = starts.length;
+  await send(question);
+};
+const endWait = async () => {
+  holdPage = false;
+  pageHeld.splice(0).forEach(answer => answer());
+  await idle();
+};
+await waitForCheck("c35", "Pergunta 30");
+$("ask").elements.mode.value = "task";
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+await endWait();
+out.modeStarts = starts.slice(before).map(start => start.kind);
+out.modePrompt = $("prompt").value;
+if (starts.length > before) {
+  await finish();
+}
+$("ask").elements.mode.value = "ask";
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+// The recipient changes in Settings while Send waits (the panel renders again): Send still names the one shown when it
+// was pressed, so the tools refuse it rather than send it to the new one.
+const recipientBefore = recipient;
+recipient = "Antes";
+await waitForCheck("c36", "Pergunta 31");
+recipient = "Novo";
+$("allow-profile").fire("click");
+await idle();
+await endWait();
+out.recipientStarts = starts.length - before;
+out.recipientExpected = started.at(-1)?.expected?.recipient;
+await finish();
+recipient = recipientBefore;
+// "Continuar" pressed while Send waits leaves the question Send took, and a redraw meanwhile (a mode change) keeps Send
+// off; the size that goes is the question's.
+await waitForCheck("c37", "Pergunta 32");
+$("continue").fire("click");
+$("ask").fire("change", { target: { name: "mode" } });
+await idle();
+out.continuePrompt = $("prompt").value;
+out.continueSendOff = $("send").disabled;
+await endWait();
+out.continueStarts = starts.length - before;
+out.continueQuestion = started.at(-1)?.question;
+out.continueChars = started.at(-1)?.expected?.chars;
+await finish();
+$("allow-profile").fire("click");
+await idle();
 selected = tab;
 console.log(JSON.stringify(out));
 """
@@ -2113,6 +2176,24 @@ class PanelChipsTest(unittest.TestCase):
         self.assertEqual(out["pausedStarts"], 0)
         self.assertEqual(out["pausedPrompt"], "Pergunta 29")
         self.assertEqual(out["pausedAfter"], [])
+
+    def test_a_send_that_waits_starts_no_task_when_task_is_chosen_meanwhile(self):
+        out = self._run()  # OpenCodeReview on #852
+        self.assertEqual(out["modeStarts"], [])
+        self.assertEqual(out["modePrompt"], "Pergunta 30")
+
+    def test_a_send_that_waits_names_the_recipient_shown_when_it_was_pressed(self):
+        out = self._run()
+        self.assertEqual(out["recipientStarts"], 1)
+        self.assertEqual(out["recipientExpected"], "Antes")  # the tools refuse it: the recipient changed
+
+    def test_a_send_that_waits_keeps_its_question_and_send_off(self):
+        out = self._run()
+        self.assertEqual(out["continuePrompt"], "Pergunta 32")  # "Continuar" does not write over it
+        self.assertTrue(out["continueSendOff"])
+        self.assertEqual(out["continueStarts"], 1)
+        self.assertEqual(out["continueQuestion"], "Pergunta 32")
+        self.assertEqual(out["continueChars"], 100 + len("Pergunta 32"))  # instructions and the question, no item
 
 
 if __name__ == "__main__":

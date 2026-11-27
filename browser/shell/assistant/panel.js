@@ -106,9 +106,9 @@ function mode() {
 
 const pageChip = () => chips.find(c => c.kind === "page") ?? null;
 
-/** The whole request as the tools will count it: Nulavio's instructions, each item, the question. */
-function requestChars() {
-  const question = codePoints($("prompt").value.trim());
+/** The whole request as the tools will count it: Nulavio's instructions, each item, the question (the one Send took). */
+function requestChars(text = $("prompt").value.trim()) {
+  const question = codePoints(text);
   const items = chips.reduce((sum, c) => sum + c.blockChars, 0);
   return (state?.systemChars ?? 0) + (thread?.historyChars ?? 0) + items + (chips.length ? codePoints(QUESTION_PREFIX) : 0) + question;
 }
@@ -143,8 +143,8 @@ function showSendLine() {
     $("thread-moved-text").textContent = t("assistantThreadMoved", [thread.recipient, state.recipient]);
     $("moved-carry").textContent = t("assistantCarryThread", [state.recipient]);
   }
-  if (!run) {
-    $("send").disabled = tooLarge || moved;
+  if (!run && !busy) {
+    $("send").disabled = tooLarge || moved; // a Send that waits for a tab check keeps it off (#816)
   }
 }
 
@@ -856,7 +856,7 @@ function onRunEvent(event) {
 let laterDraft = null; // "@ia" text that came during a run: written in once it ends
 
 function applyLaterDraft() {
-  if (laterDraft && !run) {
+  if (laterDraft && !run && !busy) {
     $("prompt").value = laterDraft;
     laterDraft = null;
     showSendLine();
@@ -929,7 +929,11 @@ async function send(question, { retry = false } = {}) {
   if (busy) {
     return; // a Send that waits for the tab check below: one is enough
   }
-  if (tabCheck && mode() !== "task" && !retry) {
+  const task = mode() === "task";
+  // What the line above Send says now is what the tools check: where it goes, and its size. Taken at the press, so a
+  // Send that waits below still goes as an Ask, and to the recipient shown, or is refused (#816).
+  const expected = { recipient: state.recipient, model: state.provider.model };
+  if (tabCheck && !task && !retry) {
     // Another tab was selected, or an included one changed, and the panel's check of the selected tab is on its way:
     // Send waits for it, so an item that tab does not hold leaves first and never goes (#816, AI-02).
     busy = true;
@@ -942,16 +946,15 @@ async function send(question, { retry = false } = {}) {
       $("prompt").readOnly = false;
       showSendLine(); // the size of what is left
     }
-    if (run || document.body.dataset.state !== "ready") {
-      applyLaterDraft(); // an "@ia" draft that came meanwhile, as after a refused start
-      return; // the panel went to another state meanwhile: nothing goes, the question stays for the person
+    if (run || document.body.dataset.state !== "ready" || mode() === "task") {
+      // The panel went to another state, or the person chose a Task, meanwhile: nothing goes. The question stays in
+      // the composer, unless an "@ia" draft came meanwhile: that is written in, as after a refused start.
+      applyLaterDraft();
+      return;
     }
   }
-  const task = mode() === "task";
-  // What the line above Send says now is what the tools check: where it goes, and its size.
-  const expected = { recipient: state.recipient, model: state.provider.model };
   const items = task || retry ? [] : chips.map(c => c.chipId);
-  const chars = retry ? Number($("retry").dataset.chars) : requestChars();
+  const chars = retry ? Number($("retry").dataset.chars) : requestChars(question);
   newContext();
   ++sends;
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
@@ -1175,6 +1178,9 @@ localize();
 $("truncated").prepend(icon("warning", "callout__icon"));
 // "Continuar" after a cut answer is an ordinary next turn: written for the person, the size shown, Send theirs (Q14).
 $("continue").addEventListener("click", () => {
+  if (busy) {
+    return; // a Send that waits for a tab check holds the question it took (#816)
+  }
   $("prompt").value = t("assistantContinuePrompt");
   showSendLine();
   $("send").focus();
