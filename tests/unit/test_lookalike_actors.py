@@ -8,20 +8,24 @@ flow in tests/integration/test_passwords.py.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 from urllib.parse import parse_qs
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests" / "lib"))
+
+from node_tool import requires_node  # noqa: E402
+
 MODULES = ROOT / "browser" / "shell" / "modules"
 WARNING = "moz-extension://shell/passwords/lookalike.html?"
 REAL, FAKE = "https://paypal.example/account", "https://paypa1.example/login"
 SITE = "https://paypa1.example/"  # the origin of FAKE: what a site found below the tab's page gives
 
 
-@unittest.skipUnless(shutil.which("node"), "node is not installed")
+@requires_node
 class LookalikeActorsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

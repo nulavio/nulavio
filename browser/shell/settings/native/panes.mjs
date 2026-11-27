@@ -486,7 +486,7 @@
     const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
     const msg = (key, ...subs) => extension?.localizeMessage(key, subs) ?? "";
     const pageOf = path => WebExtensionPolicy.getByID(SHELL)?.getURL(path);
-    const { freeName, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
+    const { freeName, inSentence, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
       "resource://builtin-addons/nulavio-shell/lib/names.js",
       here
     );
@@ -1536,7 +1536,7 @@
                 control: "moz-toggle",
                 slot: "actions",
                 below: msg("engineSuggestLabel"),
-                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${engine.name}`, "data-engine": engine.id },
+                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`, "data-engine": engine.id },
               },
             ],
           })),
@@ -1707,7 +1707,7 @@
                     disabled: chooseBench.state.busy,
                     controlAttrs: {
                       label: msg("chooseUse"),
-                      "aria-label": msg("chooseUseNamed", row.name),
+                      "aria-label": msg("chooseUseNamed", inSentence(row.name)),
                       "data-action": "choose",
                       "data-choice": row.key,
                     },
@@ -1736,7 +1736,8 @@
         const shown = suggest ? { suggestHost: row.suggestHost ?? "" } : {};
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
         // chosen engine's own, which the module checked against the one the row named.
-        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", row.name);
+        // The name isolated (#796): an engine names itself, and its name may hold direction controls.
+        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", inSentence(row.name));
         const said = id => {
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
@@ -1820,12 +1821,12 @@
       }),
     ];
     // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
-    // Each name quoted: a name may hold ", " itself (review of #772).
+    // Each name quoted: a name may hold ", " itself (review of #772); and isolated, as it may hold direction controls (#796).
     const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
     const searchAliasBar = searchBench.bar(
       "nulavio-search-alias-reserved",
       "warning",
-      () => msg("searchAliasReserved", releasedNow().map(name => `“${name}”`).join(", ")),
+      () => msg("searchAliasReserved", releasedNow().map(name => `“${inSentence(name)}”`).join(", ")),
       () => releasedNow().length > 0
     );
     const searchBars = [
