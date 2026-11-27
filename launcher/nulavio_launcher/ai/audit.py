@@ -4,9 +4,11 @@ One JSON line per tool call in $XDG_STATE_HOME/nulavio/ai/audit.jsonl (0600):
 time, agent, bridge session, tool, capability, decision and reason, the
 target's origin (scheme://host:port, never the path or query), outcome,
 duration and sizes. Typed text, page text, scripts and screenshots are not
-stored. The file rotates at a fixed size and keeps KEEP previous files; the
-Activity view reads them all, so a burst of cheap calls cannot push an
-agent's earlier actions out of sight (audit A7).
+stored. The file rotates past MAX_BYTES and keeps KEEP previous files; the
+Activity view reads them all (audit A7). Once KEEP files exist, each rotation
+drops the oldest, and every call is recorded, `session_state` included, so
+enough calls (tens of thousands of cheap ones) do push an agent's earlier
+entries out of the log. Entries older than RETENTION_DAYS are dropped too.
 """
 
 from __future__ import annotations
