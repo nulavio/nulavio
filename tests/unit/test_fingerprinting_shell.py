@@ -345,6 +345,17 @@ class GuardAndTheShellsOwnSetTest(unittest.TestCase):
         self.assertEqual(case["reported"], case["findings"])
         self.assertEqual(len(case["reported"]), 1)
 
+    def test_only_the_shells_memory_forged_does_not_hide_the_replacement_of_a_persons_set(self):
+        # OpenCodeReview on #825: the person's own set is in the record; only the module's memory of its set, a
+        # setting the Guard does not watch, is changed in the closed profile to name it. The module then writes the
+        # build's set over the person's: still a change made outside, since the record never held that set as Nulavio's.
+        case = self.out["forgedMemoryOnly"]
+        self.assertEqual(case["set"], self.out["current"], "the module did not write its set: nothing was tested")
+        self.assertEqual(
+            case["findings"], [["privacy.fingerprintingProtection.overrides", "+CanvasRandomization", self.out["current"]]]
+        )
+        self.assertEqual(case["reported"], case["findings"])
+
     def test_the_setting_turned_on_outside_is_reported_with_the_set_it_brings(self):
         case = self.out["shareOutside"]
         self.assertEqual(case["told"], [])

@@ -108,6 +108,13 @@ out.forgedWritten = start({ [SHARE]: true, [OVERRIDES]: "+JSDateTimeUTC", [WRITT
   [SHARE]: true,
   [OVERRIDES]: EARLIER,
 });
+// A set of the person's own, in the record, and only the module's memory forged in the closed profile to name it
+// (OpenCodeReview on #825): the module takes the set for its own and writes the build's set over it. The record never
+// held that set as the module's, so the change is still reported.
+out.forgedMemoryOnly = start({ [SHARE]: true, [OVERRIDES]: "+CanvasRandomization", [WRITTEN]: "+CanvasRandomization" }, {
+  [SHARE]: true,
+  [OVERRIDES]: "+CanvasRandomization",
+});
 // The setting turned on in the closed profile: the module writes a set where there was none, and tells nothing.
 out.shareOutside = start({ [SHARE]: true }, {});
 // The setting off: nothing is written at a start.
