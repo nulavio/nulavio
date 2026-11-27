@@ -49,6 +49,39 @@ const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonM
 AddonManager.getAddonByID(arguments[0]).then(
   a => done(a ? {active: a.isActive, version: a.version} : null), e => done({error: String(e)}));
 """
+# What the add-on manager says while uBlock Origin is installed and started, each with the time (Date.now()). Set up
+# in chrome as soon as Marionette answers: what happened before that is missing, and `seen_at_listen` says where the
+# install was by then. Only read by the test.
+LISTEN = """
+const done = arguments[arguments.length - 1];
+const id = arguments[0];
+const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+const events = window.nulavioFirstStart = [];
+const note = what => events.push({what, at: Date.now()});
+const ours = install =>
+  install.addon?.id === id || install.existingAddon?.id === id || /ublock/i.test(install.sourceURI?.spec ?? "");
+const installs = {};
+for (const name of ["onNewInstall", "onDownloadStarted", "onDownloadEnded", "onInstallStarted", "onInstallEnded",
+                    "onDownloadFailed", "onInstallFailed"]) {
+  installs[name] = install => { if (ours(install)) note(name); };
+}
+AddonManager.addInstallListener(installs);
+const addons = {};
+for (const name of ["onInstalling", "onInstalled", "onEnabling", "onEnabled"]) {
+  addons[name] = addon => { if (addon.id === id) note(name); };
+}
+AddonManager.addAddonListener(addons);
+try {
+  const {ExtensionParent} = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
+  ExtensionParent.apiManager.on("startup", (_, extension) => { if (extension.id === id) note("extension startup"); });
+} catch (e) {
+  note("no extension startup event: " + e);
+}
+Promise.all([AddonManager.getAddonByID(id), AddonManager.getAllInstalls()]).then(([addon, all]) => done({
+  addon: addon ? {active: addon.isActive} : null,
+  installs: all.filter(ours).map(install => install.state),
+}), e => done({error: String(e)}));
+"""
 IMAGES_DONE = "return document.readyState === 'complete' && [...document.images].every(i => i.complete);"
 ADD_IMAGES = """
 for (const src of arguments) { const image = new Image(); image.src = src; document.body.append(image); }
@@ -87,7 +120,13 @@ class FirstStartFilterWindowTest(unittest.TestCase):
     # -- clock and readings ---------------------------------------------------------------------------------
     def started(self) -> None:
         """Set the clock's zero to the moment the engine process started."""
-        self.zero = time.monotonic() - seconds_since_start(self.session.process.pid)
+        since = seconds_since_start(self.session.process.pid)
+        self.zero, self.zero_wall = time.monotonic() - since, time.time() - since
+        self.m.set_context("chrome")
+        try:
+            self.record["seen_at_listen"] = {"at": self.now(), **self.m.execute_async(LISTEN, [UBLOCK])}
+        finally:
+            self.m.set_context("content")
 
     def now(self, moment: float | None = None) -> float:
         return round((time.monotonic() if moment is None else moment) - self.zero, 2)
@@ -182,6 +221,8 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
     def finish(self, case: str) -> None:
         self.record["case"] = case
+        events = self.m.chrome("return window.nulavioFirstStart;")
+        self.record["ublock_events"] = [{"what": e["what"], "at": round(e["at"] / 1000 - self.zero_wall, 2)} for e in events]
         self.record["engine"] = self.m.chrome("return Services.appinfo.version + ' ' + Services.appinfo.appBuildID;")
         name = f"first-start-filter-{case}-{time.strftime('%Y%m%dT%H%M%S')}.json"
         (self.artifacts / name).write_text(json.dumps(self.record, indent=2) + "\n")
@@ -191,7 +232,8 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             return f"{'LEAKED' if entry['leaked'] else 'blocked'}@{entry['requested']}s"
 
         print(
-            f"\nfirst-start-filter {case}: first page {word(r['first_page'])}, uBlock Origin active@{r['ublock_active_at']}s,"
+            f"\nfirst-start-filter {case}: first page asked@{r['first_page']['asked']}s {word(r['first_page'])},"
+            f" uBlock Origin events {[(e['what'], e['at']) for e in r['ublock_events']]}, active@{r['ublock_active_at']}s,"
             f" last new tab leaked@{r['last_new_tab_leaked_at']}s, new tab filtered@{r['new_tab_filtered_at']}s,"
             f" early page after ready {[word(e) for e in r['early_page_after_ready']]},"
             f" new address {word(r['early_tab_new_address'])}, reload {word(r['early_tab_reload'])};"
