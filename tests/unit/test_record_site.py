@@ -408,6 +408,13 @@ class SamplesTest(unittest.TestCase):
             self.assertEqual(track, record_site.webvtt(recording["captions"], end), key)
             self.assertIn(f"--> {record_site.vtt_time(end)}", track.splitlines()[-2], key)
 
+    def test_the_cut_says_what_its_real_seconds_include(self):
+        """#928: the seconds cut are not all start-up or routing; the script's own preparation and pause are in them."""
+        self.assertEqual(self.manifest["edits"], record_site.EDITS)
+        cut = next(edit for edit in record_site.EDITS if "nothing is recorded" in edit)
+        self.assertIn("content blocker", cut)
+        self.assertIn(f"fixed {record_site.ROUTED_SETTLE} s pause", cut)
+
     def test_each_recording_says_what_captured_it_and_what_composed_it(self):
         self.assertNotIn("commit", self.manifest)  # no revision is claimed for the footage as a whole
         for key, recording in self.manifest["recordings"].items():

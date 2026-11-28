@@ -36,9 +36,10 @@ captures, other hosts' fonts) is in docs/design/site-redesign.md.
 
 What a recording changes, all listed in the manifest: the window's ``remotecontrol`` attribute is
 removed (the striped address bar of automation); the cursor is drawn afterwards, because a headless
-window has no pointer, so hover states are not shown; the time until the window a scene cuts to is up
-(a new instance starting, or one already running opening the link) is cut (a cut between windows says
-so); typing is shown at a fixed pace, one frame per key really typed.
+window has no pointer, so hover states are not shown; the time until the window a scene cuts to is ready
+to film is cut (a cut between windows says so, with the real seconds): a new instance starting and the
+script preparing its window, or one already running opening the link and a fixed pause after the page
+loads (``link-routed``); typing is shown at a fixed pace, one frame per key really typed.
 """
 
 from __future__ import annotations
@@ -83,14 +84,18 @@ CAPTION_CPS = 20  # a caption is on screen long enough to be read: at most this 
 CLICK_LENGTH = 0.45  # seconds a click's ripple lasts
 TYPE_STEP = 0.075  # seconds per typed key in the video
 MOVE = 0.75  # seconds for a cursor move
+ROUTED_SETTLE = 0.8  # seconds link-routed waits after the routed page loads: its tab's loading animation is over
 OUT = ROOT / "docs" / "design" / "recordings" / "2026-11"
 
 DOM_CHANGES = ["removed the remotecontrol attribute from each browser window's root element (automation cue)"]
 EDITS = [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while the window the video cuts to is not up yet (a new instance starting, or one already running opening the"
-    " link), nothing is recorded: the video cuts to that window once it is up",
+    "while the window the video cuts to is not ready to film, nothing is recorded: either a new instance starting and"
+    " the script preparing its window (its size, layout and fixture pages, then a check of at least 2 s that the"
+    " content blocker was ready), or one already running opening the link, the script selecting that tab and a fixed"
+    f" {ROUTED_SETTLE} s pause after the page loads, so the tab's loading animation is over; the video cuts to that"
+    " window once it is ready, and the real seconds cut include all of this",
     f"the last frame is held for {TAIL} s at the end",
 ]
 
@@ -1064,7 +1069,7 @@ class Scenes:
         )
         said = wait(lambda: child.chrome(notice), 15, "the band's note that the rule opened it")
         wait(lambda: not child.chrome("return gBrowser.selectedTab.hasAttribute('busy');"), 15, "the routed page loaded")
-        time.sleep(0.8)  # the tab's own loading animation is over before the frame the poster is made from
+        time.sleep(ROUTED_SETTLE)  # the tab's own loading animation is over before the frame the poster is made from
         if fx.hits.count("/intranet") != 1:
             raise RuntimeError(f"the routed page was requested {fx.hits.count('/intranet')} times")
         rec.cut(t["work"], time.monotonic() - started)
