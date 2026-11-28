@@ -112,6 +112,11 @@ NO_REGION_LOOKUP = {  # no request to Mozilla's location service on a new profil
 NO_DRM_UPDATE_PROBE = {  # no request to Google about a DRM module that is off (issue #103)
     "media.gmp-widevinecdm.allow-chromium-update": False,
 }
+# No feature tips from Mozilla's messaging system (#929): since the 161 engine the tab group tips have no gate of their
+# own, and they load Mozilla's artwork from its CDN. A default the person turns on in Settings, never locked.
+NO_FEATURE_TIPS = {
+    "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features": False,
+}
 # The two daily checks at Mozilla's update server say nothing about the system or the distribution (issue #126).
 UPDATE_CHECKS = {
     "media.gmp-manager.url": "GMP",
@@ -179,6 +184,17 @@ class MozillaAiAndAccountTest(unittest.TestCase):
                 {"media.eme.enabled", "media.gmp-widevinecdm.enabled", "media.gmp-provider.enabled"} & names,
                 "DRM itself stays the engine's and the person's switch",
             )
+
+    def test_no_feature_tips_from_mozilla_in_either_track(self):
+        baseline = {p.name: p for p in profile.baseline_prefs()}
+        branding_text = (ROOT / "browser" / "branding" / "nulavio" / "pref" / "firefox-branding.js").read_text(encoding="utf-8")
+        for name, value in NO_FEATURE_TIPS.items():
+            with self.subTest(pref=name):
+                self.assertEqual(baseline[name].value, value, "Track A (baseline.js)")
+                self.assertEqual(baseline[name].mode, "seed", "the switch in Settings must keep working")
+                self.assertEqual(branding_prefs().get(name), value, "Track B default (firefox-branding.js)")
+                self.assertNotIn(f'lockPref("{name}"', branding_text)
+                self.assertNotRegex(branding_text, rf'pref\("{re.escape(name)}",[^)]*sticky')
 
     def test_the_update_checks_name_neither_the_system_nor_the_distribution(self):
         """The values as written. That they are still the engine's own addresses with only those three fields
