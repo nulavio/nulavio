@@ -1,13 +1,13 @@
 WEBVTT
 
 1
-00:00:00.000 --> 00:00:04.354
-O perfil «Bancos» é protegido: os seus dados ficam cifrados no disco.
+00:00:00.000 --> 00:00:04.516
+O perfil «Bancos» é protegido: os arquivos dele ficam cifrados enquanto está bloqueado.
 
 2
-00:00:04.354 --> 00:00:09.197
+00:00:04.516 --> 00:00:09.290
 Para abri-lo, a senha do perfil.
 
 3
-00:00:09.197 --> 00:00:12.800
+00:00:09.290 --> 00:00:12.900
 Desbloqueado, ele abre na sua própria janela.

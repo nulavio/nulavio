@@ -8,7 +8,7 @@
   "edits": [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while a new instance starts, nothing is recorded: the video cuts to its window once it is up",
+    "after the last frame of the window the video cuts from, nothing is recorded until the window it cuts to is ready to film; the real seconds cut count from that last frame and hold what comes after it: either the rest of a new instance starting and the script preparing its window (its size, layout and fixture pages, then at least 2 s in which the content blocker's button did not mark a tab as loaded before the blocker was ready, which does not show that the blocker is installed), or the rest of one already running opening the link, the script selecting that tab and a fixed 0.8 s pause after the page loads, so the tab's loading animation is over; what the browser did while the window the video cuts from was still filmed is not in them",
     "the last frame is held for 0.6 s at the end"
   ],
   "encoders": {
@@ -37,7 +37,7 @@
         1280,
         800
       ],
-      "frames_captured": 15,
+      "frames_captured": 19,
       "loop_s": [
         1.8,
         6.8
@@ -47,7 +47,7 @@
         {
           "t": 3.943,
           "to": "Trabalho",
-          "real_seconds_cut": 18.1
+          "real_seconds_cut": 14.6
         }
       ],
       "transcript": "Na tela: Configurações › Perfis, com «Pessoal» e «Trabalho»; clique em Abrir no «Trabalho»; a janela do «Trabalho» abre, com a faixa «Trabalho · Sem senha».",
@@ -71,36 +71,36 @@
         "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
       ],
       "capture": {
-        "utc": "2026-11-27T09:10:39Z",
+        "utc": "2026-11-28T03:50:07Z",
         "buildid": "20261119020726",
         "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
         {
           "file": "profile-opens-pt-BR.webm",
-          "bytes": 183846,
-          "sha256": "dcd93e9fab7abb5575b353923b7d665defc6a075b987cf23657bf29004149b1c"
+          "bytes": 183774,
+          "sha256": "577b5796659cb908dd50ecc5d98d036373eb024308c7738ebde73e1336e9da5c"
         },
         {
           "file": "profile-opens-pt-BR.mp4",
-          "bytes": 292388,
-          "sha256": "578c7dd47dd21cf8d8a02924a26a06d84248608c8faffe517bbbb9489fe32e56"
+          "bytes": 293229,
+          "sha256": "3478da3e722da2477c750ae4034b6549704f16be27d1faee2f324f05524b8b7b"
         },
         {
           "file": "profile-opens-pt-BR-loop.webp",
-          "bytes": 39578,
-          "sha256": "4e8d49e5305d705661c126363b77f06c253b801c6656c269ad1f846a001a8830"
+          "bytes": 39568,
+          "sha256": "0b1ec908eaeec0c4c929949dc941958028ad008d08443b5945340f01da33a60c"
         },
         {
           "file": "profile-opens-pt-BR-poster.webp",
-          "bytes": 34230,
-          "sha256": "5577bca1e311b7cdb113a2c6976256529349eb6a4d7987309eddf4e59dd2c864"
+          "bytes": 34178,
+          "sha256": "866768b0841f936cf8b65e79f3037d001756be972fc5d04009bef1be21b65c2b"
         },
         {
           "file": "profile-opens-pt-BR.vtt",
@@ -127,7 +127,7 @@
         1280,
         800
       ],
-      "frames_captured": 18,
+      "frames_captured": 10,
       "loop_s": [
         1.8,
         6.8
@@ -135,9 +135,9 @@
       "loop_ms": 5000,
       "cuts": [
         {
-          "t": 3.984,
+          "t": 3.999,
           "to": "Work",
-          "real_seconds_cut": 14.8
+          "real_seconds_cut": 24.4
         }
       ],
       "transcript": "On screen: Settings › Profiles, with “Personal” and “Work”; a click on Open for “Work”; the “Work” window opens, its band reading “Work · No password”.",
@@ -147,11 +147,11 @@
           "text": "In Settings › Profiles, each part of life has a profile of its own."
         },
         {
-          "t": 3.984,
+          "t": 3.999,
           "text": "“Work” opens in its own window, with its own colour and name."
         },
         {
-          "t": 7.384,
+          "t": 7.399,
           "text": "“Work” keeps its history, logins and cookies apart from “Personal”."
         }
       ],
@@ -161,139 +161,47 @@
         "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
       ],
       "capture": {
-        "utc": "2026-11-27T09:09:58Z",
+        "utc": "2026-11-28T03:49:29Z",
         "buildid": "20261119020726",
         "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
         {
           "file": "profile-opens-en-US.webm",
-          "bytes": 152916,
-          "sha256": "6acb849c4ecabbfcc4c5563853f74c4cd892a687f4b591734860afc52bd91c88"
+          "bytes": 151461,
+          "sha256": "de9f5d65c7bd0d1807f4214e33419162d77e7421b3792104c454e57d65164310"
         },
         {
           "file": "profile-opens-en-US.mp4",
-          "bytes": 228696,
-          "sha256": "35fdb0ad964b272a29b982b60df0c1c1df009c3951a0cde5d99befa465348902"
+          "bytes": 225908,
+          "sha256": "b5c8b2e4e516ba1c0754bdabbd64e6f1e0698055cebba80a83d25c36cc918b52"
         },
         {
           "file": "profile-opens-en-US-loop.webp",
-          "bytes": 37372,
-          "sha256": "302b9ccf2fa1e9a785b9312024c3412c345c79930a40129425afe71a7e3ef3e5"
+          "bytes": 37310,
+          "sha256": "3cb40c3fbd7f51974dff9ff036bc78c935f13712998da0c94d821a185cad2129"
         },
         {
           "file": "profile-opens-en-US-poster.webp",
           "bytes": 31782,
-          "sha256": "023e213784e77ad8bc2d7acc0aa746907e7a9cc6fb5e53b18eb398d25b36e080"
+          "sha256": "5b064fe164240b68d60515219245b778a3157dba7a3c37599c84ae69600e1383"
         },
         {
           "file": "profile-opens-en-US.vtt",
           "bytes": 318,
-          "sha256": "fc1428113a6717d28389b23934841d051cc86e7c2965d7dee2dabc46236a4a91"
+          "sha256": "7743a10393b2dbe5bbefb0792e160186defaaef9e04999e93e2d07978420799b"
         }
       ]
     },
     "link-routed-pt-BR": {
       "scene": "link-routed",
       "locale": "pt-BR",
-      "duration_s": 11.733,
-      "video_px": [
-        1280,
-        800
-      ],
-      "fps": 30,
-      "captured_px": [
-        1920,
-        1200
-      ],
-      "scale": 1.5,
-      "window_css": [
-        1280,
-        800
-      ],
-      "frames_captured": 48,
-      "loop_s": [
-        3.07,
-        8.07
-      ],
-      "loop_ms": 5000,
-      "cuts": [
-        {
-          "t": 6.414,
-          "to": "Trabalho",
-          "real_seconds_cut": 0.8
-        }
-      ],
-      "transcript": "Na tela: no perfil «Pessoal», o endereço «http://localhost:37351/intranet» é digitado; ele abre na janela do «Trabalho», cuja faixa diz «Aberto pela sua regra · Mudar».",
-      "captions": [
-        {
-          "t": 0.0,
-          "text": "Uma regra manda a intranet do trabalho para o «Trabalho»."
-        },
-        {
-          "t": 3.07,
-          "text": "No perfil «Pessoal», digita-se o endereço dela."
-        },
-        {
-          "t": 6.414,
-          "text": "O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra."
-        }
-      ],
-      "notes": [
-        "the work profile was created by the script (NulavioProfiles.create, template work) before the scene",
-        "the routing rule (localhost opens in the work profile) was added by the script before the scene",
-        "the personal profile's search engine was set by the script to a local test engine on loopback",
-        "the work profile was started by the script before the scene",
-        "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
-      ],
-      "capture": {
-        "utc": "2026-11-27T09:09:21Z",
-        "buildid": "20261119020726",
-        "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
-      },
-      "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
-        "worktree_clean": true
-      },
-      "files": [
-        {
-          "file": "link-routed-pt-BR.webm",
-          "bytes": 195027,
-          "sha256": "46ee6a613e1e62016a3ae4253a15db611f0428b1cf30ee107bf06ac5f10cf326"
-        },
-        {
-          "file": "link-routed-pt-BR.mp4",
-          "bytes": 302831,
-          "sha256": "6ec423a451b4d0117638fca1681385527bb5014f315afa75898e08429b5dc66f"
-        },
-        {
-          "file": "link-routed-pt-BR-loop.webp",
-          "bytes": 42026,
-          "sha256": "fe83d2bd371515fa0c1f73fbc834d8650ea451aaa9b1e33f17afb1cae5ca6aa3"
-        },
-        {
-          "file": "link-routed-pt-BR-poster.webp",
-          "bytes": 35150,
-          "sha256": "641dce158939ca6d9b0653f5be56e19632fc11b191b822940cd1f377171c0d93"
-        },
-        {
-          "file": "link-routed-pt-BR.vtt",
-          "bytes": 291,
-          "sha256": "f23b4f4df55418526474337c51e2a725f2d18d36d8768ba9576df9783d46217c"
-        }
-      ]
-    },
-    "link-routed-en-US": {
-      "scene": "link-routed",
-      "locale": "en-US",
       "duration_s": 11.767,
       "video_px": [
         1280,
@@ -309,7 +217,7 @@
         1280,
         800
       ],
-      "frames_captured": 50,
+      "frames_captured": 52,
       "loop_s": [
         3.07,
         8.07
@@ -317,12 +225,104 @@
       "loop_ms": 5000,
       "cuts": [
         {
-          "t": 6.438,
-          "to": "Work",
+          "t": 6.451,
+          "to": "Trabalho",
           "real_seconds_cut": 0.8
         }
       ],
-      "transcript": "On screen: in the “Personal” profile, the address “http://localhost:46307/intranet” is typed; it opens in the “Work” window, whose band says “Opened by your rule · Change”.",
+      "transcript": "Na tela: no perfil «Pessoal», o endereço «http://localhost:45807/intranet» é digitado; ele abre na janela do «Trabalho», cuja faixa diz «Aberto pela sua regra · Mudar».",
+      "captions": [
+        {
+          "t": 0.0,
+          "text": "Uma regra manda a intranet do trabalho para o «Trabalho»."
+        },
+        {
+          "t": 3.07,
+          "text": "No perfil «Pessoal», digita-se o endereço dela."
+        },
+        {
+          "t": 6.451,
+          "text": "O link abre na janela do «Trabalho», e a faixa diz que foi a sua regra."
+        }
+      ],
+      "notes": [
+        "the work profile was created by the script (NulavioProfiles.create, template work) before the scene",
+        "the routing rule (localhost opens in the work profile) was added by the script before the scene",
+        "the personal profile's search engine was set by the script to a local test engine on loopback",
+        "the work profile was started by the script before the scene",
+        "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
+      ],
+      "capture": {
+        "utc": "2026-11-28T03:48:42Z",
+        "buildid": "20261119020726",
+        "firefox": "160.0.1",
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
+      },
+      "composed": {
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
+        "worktree_clean": true
+      },
+      "files": [
+        {
+          "file": "link-routed-pt-BR.webm",
+          "bytes": 195546,
+          "sha256": "414e51f7abe69e9b461e97639aac8b85a04e86a3245dfa6b2d316e7a26375259"
+        },
+        {
+          "file": "link-routed-pt-BR.mp4",
+          "bytes": 305822,
+          "sha256": "ce30a4f313dc77f0c320d016ccc11d567f5ce43b5154aa3e1cf8eaeacd190296"
+        },
+        {
+          "file": "link-routed-pt-BR-loop.webp",
+          "bytes": 42926,
+          "sha256": "d81aa5a56a52d36e3927afbfa8b406eb67e4fab18af8babf34203c904daf2838"
+        },
+        {
+          "file": "link-routed-pt-BR-poster.webp",
+          "bytes": 35158,
+          "sha256": "5006f6b7131bf6198a1304ed84fe5fa90d473060358232e46c70584fa49a1916"
+        },
+        {
+          "file": "link-routed-pt-BR.vtt",
+          "bytes": 291,
+          "sha256": "1cc84b6f9a4f998aa7345d422885aff31f77c9e8472ac35b4dd36e31bdf4ca18"
+        }
+      ]
+    },
+    "link-routed-en-US": {
+      "scene": "link-routed",
+      "locale": "en-US",
+      "duration_s": 11.7,
+      "video_px": [
+        1280,
+        800
+      ],
+      "fps": 30,
+      "captured_px": [
+        1920,
+        1200
+      ],
+      "scale": 1.5,
+      "window_css": [
+        1280,
+        800
+      ],
+      "frames_captured": 46,
+      "loop_s": [
+        3.07,
+        8.07
+      ],
+      "loop_ms": 5000,
+      "cuts": [
+        {
+          "t": 6.399,
+          "to": "Work",
+          "real_seconds_cut": 0.9
+        }
+      ],
+      "transcript": "On screen: in the “Personal” profile, the address “http://localhost:43465/intranet” is typed; it opens in the “Work” window, whose band says “Opened by your rule · Change”.",
       "captions": [
         {
           "t": 0.0,
@@ -333,7 +333,7 @@
           "text": "In the “Personal” profile, its address is typed."
         },
         {
-          "t": 6.438,
+          "t": 6.399,
           "text": "The link opens in the “Work” window, and the band says the rule did it."
         }
       ],
@@ -345,48 +345,48 @@
         "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
       ],
       "capture": {
-        "utc": "2026-11-27T09:08:50Z",
+        "utc": "2026-11-28T03:48:01Z",
         "buildid": "20261119020726",
         "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
         {
           "file": "link-routed-en-US.webm",
-          "bytes": 185556,
-          "sha256": "a2de8ba007e3ebaaf0f9c19ee8291d5625331340cfd47918f913ef5798962a94"
+          "bytes": 184946,
+          "sha256": "b6594284bf9aaedd70e1a0767a2c2c72f7d0a208f50356e3eb1963c46bc83aec"
         },
         {
           "file": "link-routed-en-US.mp4",
-          "bytes": 293115,
-          "sha256": "6b4fc50ddb7eac4c1222379c6b3e1240df17f6cfe16cd1df650f283a281fcb04"
+          "bytes": 294197,
+          "sha256": "f693177558ab591b3ec91707d03b7572dcd95cc479098f1631bed9818a1d4974"
         },
         {
           "file": "link-routed-en-US-loop.webp",
-          "bytes": 40396,
-          "sha256": "e3ceb0583f08040b2dc6aab571fbe3adb0a341786cb1ab3ac80c3ec72e20551b"
+          "bytes": 39512,
+          "sha256": "c4a2e42d0d824b3484de2e334f00264d0676ffd31392bd3079daf54f583457bd"
         },
         {
           "file": "link-routed-en-US-poster.webp",
-          "bytes": 32604,
-          "sha256": "eaa52d01134ba8a5e329d663b0802800cc1b721dac3abd61f14d096ec1663724"
+          "bytes": 32602,
+          "sha256": "de5c4449f304b7556a36c9e9cb2582d0aadb7bb584846c051c5ab6fb5790b3c1"
         },
         {
           "file": "link-routed-en-US.vtt",
           "bytes": 293,
-          "sha256": "1567b5a48ac2b23473d1eb2e1fd8cd617c3d09740f5bfc6154ca9e02eb0ef826"
+          "sha256": "939911a714b992888b182d25ea78dd69cd4efc7f1514096fdfe92c67a7984852"
         }
       ]
     },
     "protected-unlocks-pt-BR": {
       "scene": "protected-unlocks",
       "locale": "pt-BR",
-      "duration_s": 12.8,
+      "duration_s": 12.9,
       "video_px": [
         1280,
         800
@@ -401,31 +401,31 @@
         1280,
         800
       ],
-      "frames_captured": 43,
+      "frames_captured": 54,
       "loop_s": [
-        6.649,
-        11.649
+        6.811,
+        11.811
       ],
       "loop_ms": 5000,
       "cuts": [
         {
-          "t": 9.197,
+          "t": 9.29,
           "to": "Bancos",
-          "real_seconds_cut": 19.0
+          "real_seconds_cut": 16.5
         }
       ],
       "transcript": "Na tela: Configurações › Perfis, com «Bancos» bloqueado; clique em Desbloquear; a página de desbloqueio pede a senha, que é digitada; ela diz «Bancos está desbloqueado e abrindo. Ele volta a bloquear quando você fechar a última janela dele.»; a janela do «Bancos» abre, com a faixa «Bancos · Protegido».",
       "captions": [
         {
           "t": 0.0,
-          "text": "O perfil «Bancos» é protegido: os seus dados ficam cifrados no disco."
+          "text": "O perfil «Bancos» é protegido: os arquivos dele ficam cifrados enquanto está bloqueado."
         },
         {
-          "t": 4.354,
+          "t": 4.516,
           "text": "Para abri-lo, a senha do perfil."
         },
         {
-          "t": 9.197,
+          "t": 9.29,
           "text": "Desbloqueado, ele abre na sua própria janela."
         }
       ],
@@ -435,48 +435,48 @@
         "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
       ],
       "capture": {
-        "utc": "2026-11-27T09:12:12Z",
+        "utc": "2026-11-28T03:51:35Z",
         "buildid": "20261119020726",
         "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
         {
           "file": "protected-unlocks-pt-BR.webm",
-          "bytes": 279395,
-          "sha256": "3f37282aa1f3ae6f9fbb62ca17937c164781babee447c3d2223187315021ed59"
+          "bytes": 282346,
+          "sha256": "e1b0f05d61964e1225e5fd7a514a1c87db067fa2e8eaf21670004278afc51bed"
         },
         {
           "file": "protected-unlocks-pt-BR.mp4",
-          "bytes": 419847,
-          "sha256": "585fb6b2890c21defd1715d1de042646553112c7c3b96b8ba4f6f2c96091a203"
+          "bytes": 421880,
+          "sha256": "7e06dc8f39a3cf8d447d01149233433e0c6c0ff299750af2b4e2e9dd7258421a"
         },
         {
           "file": "protected-unlocks-pt-BR-loop.webp",
-          "bytes": 36990,
-          "sha256": "483e5034e0d5024cf67583df9cb4d9bae5b093f55c7d4d29268a7d0e8d090e96"
+          "bytes": 37000,
+          "sha256": "28196fd140016f4ed3ffe9bdfe0db0bcb0007cbcf30a0d508b6f8913a530a7c9"
         },
         {
           "file": "protected-unlocks-pt-BR-poster.webp",
-          "bytes": 26486,
-          "sha256": "fadf1c50e4c0726e5213970e37dc6286d66c494728ca774af7fa87e817b8e788"
+          "bytes": 26506,
+          "sha256": "f6b2e6e7b742174818d41b6bc66a408b0a3e5fefe289e09d9068d6d791defb15"
         },
         {
           "file": "protected-unlocks-pt-BR.vtt",
-          "bytes": 259,
-          "sha256": "61380c8e7d67f2987ba62a130c61337378a809fec040f6d4e0d8c59d4abbc079"
+          "bytes": 278,
+          "sha256": "4a887d90b71f376400060da697b4a1102de1b2201f164937653fc9128f546d1f"
         }
       ]
     },
     "protected-unlocks-en-US": {
       "scene": "protected-unlocks",
       "locale": "en-US",
-      "duration_s": 12.367,
+      "duration_s": 12.933,
       "video_px": [
         1280,
         800
@@ -491,31 +491,31 @@
         1280,
         800
       ],
-      "frames_captured": 45,
+      "frames_captured": 51,
       "loop_s": [
-        6.205,
-        11.205
+        6.771,
+        11.771
       ],
       "loop_ms": 5000,
       "cuts": [
         {
-          "t": 8.76,
+          "t": 9.311,
           "to": "Banking",
-          "real_seconds_cut": 18.6
+          "real_seconds_cut": 21.6
         }
       ],
       "transcript": "On screen: Settings › Profiles, with “Banking” locked; a click on Unlock; the unlock page asks for the password, which is typed; it says “Banking is unlocked and opening. It locks again when you close its last window.”; the “Banking” window opens, its band reading “Banking · Protected”.",
       "captions": [
         {
           "t": 0.0,
-          "text": "The “Banking” profile is protected: its data is encrypted on disk."
+          "text": "The “Banking” profile is protected: its files stay encrypted while it is locked."
         },
         {
-          "t": 3.91,
+          "t": 4.476,
           "text": "To open it, the profile's password."
         },
         {
-          "t": 8.76,
+          "t": 9.311,
           "text": "Once unlocked, it opens in a window of its own."
         }
       ],
@@ -525,41 +525,41 @@
         "the tabs each window opened with were replaced by the script with fixture pages on loopback before that window's first frame (a window's own first page, the new tab, names a search engine)"
       ],
       "capture": {
-        "utc": "2026-11-27T09:11:26Z",
+        "utc": "2026-11-28T03:50:55Z",
         "buildid": "20261119020726",
         "firefox": "160.0.1",
-        "script_blob": "e9a211f7906495d440a6f1ad6ddeffb7ffccce37"
+        "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-27T09:12:48Z",
-        "commit": "ac4d5ec",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
         {
           "file": "protected-unlocks-en-US.webm",
-          "bytes": 264239,
-          "sha256": "5d413f0476ca66168c56f90254b8ca552a042643ba5c73e3d53f5e3724ce0b24"
+          "bytes": 255298,
+          "sha256": "9c0493661a7e3ec19a0255c28802233fc33d231f3a0db5f81e8d9d4e704a01b5"
         },
         {
           "file": "protected-unlocks-en-US.mp4",
-          "bytes": 387697,
-          "sha256": "ef26f09e2e4f257a6cd16edf73964b657c81bb41dc076c310214f9dac8e6d730"
+          "bytes": 395250,
+          "sha256": "b392f9f0d9e78b28d2620caeac6482f35df87ca11d971f805fafdb0f85a80448"
         },
         {
           "file": "protected-unlocks-en-US-loop.webp",
-          "bytes": 34154,
-          "sha256": "ca24411addbaae5cce75e9da8641c5da62fe8aad354bc019c381e2ecdde89278"
+          "bytes": 34384,
+          "sha256": "30b5305c63f27004d2e55ae0a80f4b920cbee58a1b4d57f7b48a2013e423e726"
         },
         {
           "file": "protected-unlocks-en-US-poster.webp",
-          "bytes": 26068,
-          "sha256": "46110ca3db60f6ffe5d465378d3deed0cff793181ff0267a77c80d11d94d77f3"
+          "bytes": 26052,
+          "sha256": "01851d3985b4ed58234acddc024c3770d74980a9dfbfddc4c5920610f83423eb"
         },
         {
           "file": "protected-unlocks-en-US.vtt",
-          "bytes": 261,
-          "sha256": "52430eb4f74c0d147e3b4aa5b5b9dda1f8bfcf72e26558df2eaeb92b89829c83"
+          "bytes": 275,
+          "sha256": "ca805f5fa143a0f37c8c052eef38fdb41928153de12b09ff0d0477f7a65849cf"
         }
       ]
     }

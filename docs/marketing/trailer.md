@@ -136,7 +136,7 @@ Read on 2026-11-27 from [pull request #859](https://github.com/nulavio/nulavio/p
 - **Recorded, in pt-BR and en-US:** `profile-opens`, `link-routed` and `protected-unlocks`, as samples from a development package (this tree's Shell on the 160.0.1-0.2 engine).
 - **Planned in its specification, not recorded:** the first launch, Guard, the search provider, Copy Link to Highlight and the AI Bridge.
 - **Not in its list:** the site panel, a temporary profile, the password manager step, the DNS question and the listing of a locked folder. They are asked for here.
-- **What a recording changes, and says in its manifest:** the automation cue removed from the window; the cursor drawn afterwards; typing shown at a fixed pace, each key really typed; the time a new instance takes to start cut out; and what the script set up before the scene (the profiles, a routing rule, a local test search engine).
+- **What a recording changes, and says in its manifest:** the automation cue removed from the window; the cursor drawn afterwards; typing shown at a fixed pace, each key really typed; the time from the last frame of the window a scene cuts from until the window it cuts to is ready to film cut out (the rest of a new instance starting and the script preparing its window, or of one already running opening the link, and a fixed 0.8 s pause after the page loads), so the seconds cut are not start-up or routing time: part of that is filmed before the cut, and the script's preparation and pause are in them; and what the script set up before the scene (the profiles, a routing rule, a local test search engine).
 
 Consequences for these scripts:
 

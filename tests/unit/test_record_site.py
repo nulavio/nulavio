@@ -408,6 +408,23 @@ class SamplesTest(unittest.TestCase):
             self.assertEqual(track, record_site.webvtt(recording["captions"], end), key)
             self.assertIn(f"--> {record_site.vtt_time(end)}", track.splitlines()[-2], key)
 
+    def test_the_cut_says_what_its_real_seconds_include(self):
+        """#928: the seconds cut are not all start-up or routing; the script's own preparation and pause are in them."""
+        self.assertEqual(self.manifest["edits"], record_site.EDITS)
+        cut = next(edit for edit in record_site.EDITS if "nothing is recorded" in edit)
+        self.assertIn("content blocker", cut)
+        self.assertIn(f"fixed {record_site.ROUTED_SETTLE} s pause", cut)
+
+    def test_the_cut_says_where_its_seconds_start_and_what_the_blocker_check_shows(self):
+        """#928 round 2: the timer starts after the last filmed frame of the window cut from, and some start-up or
+        routing happens before it; the blocker check only sees that no tab is marked late, not that it is installed."""
+        self.assertEqual(self.manifest["edits"], record_site.EDITS)
+        cut = next(edit for edit in record_site.EDITS if "nothing is recorded" in edit)
+        self.assertIn("the real seconds cut count from that last frame", cut)
+        self.assertIn("while the window the video cuts from was still filmed is not in them", cut)
+        self.assertIn("does not show that the blocker is installed", cut)
+        self.assertNotIn("content blocker was ready", cut)
+
     def test_each_recording_says_what_captured_it_and_what_composed_it(self):
         self.assertNotIn("commit", self.manifest)  # no revision is claimed for the footage as a whole
         for key, recording in self.manifest["recordings"].items():

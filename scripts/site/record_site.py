@@ -36,8 +36,11 @@ captures, other hosts' fonts) is in docs/design/site-redesign.md.
 
 What a recording changes, all listed in the manifest: the window's ``remotecontrol`` attribute is
 removed (the striped address bar of automation); the cursor is drawn afterwards, because a headless
-window has no pointer, so hover states are not shown; the time a new instance takes to start is cut
-(a cut between windows says so); typing is shown at a fixed pace, one frame per key really typed.
+window has no pointer, so hover states are not shown; from the last frame of the window a scene cuts from
+until the window it cuts to is ready to film, nothing is recorded (a cut between windows says so, with the
+real seconds counted from that last frame): the rest of a new instance starting and the script preparing
+its window, or of one already running opening the link, and a fixed pause after the page loads
+(``link-routed``); typing is shown at a fixed pace, one frame per key really typed.
 """
 
 from __future__ import annotations
@@ -82,13 +85,20 @@ CAPTION_CPS = 20  # a caption is on screen long enough to be read: at most this 
 CLICK_LENGTH = 0.45  # seconds a click's ripple lasts
 TYPE_STEP = 0.075  # seconds per typed key in the video
 MOVE = 0.75  # seconds for a cursor move
+ROUTED_SETTLE = 0.8  # seconds link-routed waits after the routed page loads: its tab's loading animation is over
 OUT = ROOT / "docs" / "design" / "recordings" / "2026-11"
 
 DOM_CHANGES = ["removed the remotecontrol attribute from each browser window's root element (automation cue)"]
 EDITS = [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while a new instance starts, nothing is recorded: the video cuts to its window once it is up",
+    "after the last frame of the window the video cuts from, nothing is recorded until the window it cuts to is ready"
+    " to film; the real seconds cut count from that last frame and hold what comes after it: either the rest of a new"
+    " instance starting and the script preparing its window (its size, layout and fixture pages, then at least 2 s in"
+    " which the content blocker's button did not mark a tab as loaded before the blocker was ready, which does not"
+    " show that the blocker is installed), or the rest of one already running opening the link, the script selecting"
+    f" that tab and a fixed {ROUTED_SETTLE} s pause after the page loads, so the tab's loading animation is over; what"
+    " the browser did while the window the video cuts from was still filmed is not in them",
     f"the last frame is held for {TAIL} s at the end",
 ]
 
@@ -549,7 +559,7 @@ TEXT = {
                 "O link abre na janela do «{work}», e a faixa diz que foi a sua regra.",
             ],
             "protected-unlocks": [
-                "O perfil «{bank}» é protegido: os seus dados ficam cifrados no disco.",
+                "O perfil «{bank}» é protegido: os arquivos dele ficam cifrados enquanto está bloqueado.",
                 "Para abri-lo, a senha do perfil.",
                 "Desbloqueado, ele abre na sua própria janela.",
             ],
@@ -574,7 +584,7 @@ TEXT = {
                 "The link opens in the “{work}” window, and the band says the rule did it.",
             ],
             "protected-unlocks": [
-                "The “{bank}” profile is protected: its data is encrypted on disk.",
+                "The “{bank}” profile is protected: its files stay encrypted while it is locked.",
                 "To open it, the profile's password.",
                 "Once unlocked, it opens in a window of its own.",
             ],
@@ -1062,7 +1072,7 @@ class Scenes:
         )
         said = wait(lambda: child.chrome(notice), 15, "the band's note that the rule opened it")
         wait(lambda: not child.chrome("return gBrowser.selectedTab.hasAttribute('busy');"), 15, "the routed page loaded")
-        time.sleep(0.8)  # the tab's own loading animation is over before the frame the poster is made from
+        time.sleep(ROUTED_SETTLE)  # the tab's own loading animation is over before the frame the poster is made from
         if fx.hits.count("/intranet") != 1:
             raise RuntimeError(f"the routed page was requested {fx.hits.count('/intranet')} times")
         rec.cut(t["work"], time.monotonic() - started)
@@ -1110,7 +1120,7 @@ class Scenes:
         button = prefs_point(m, row)  # scrolls the row into view before the first frame
         rec.caption(cap[0])
         rec.shot(m)
-        rec.hold(2.2)
+        rec.hold(2.8)  # the first caption says what stays encrypted (R89): long enough to read before the click
         rec.move(button)
         rec.shot(m)
         rec.click()
