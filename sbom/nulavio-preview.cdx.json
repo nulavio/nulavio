@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:16935593-12e1-516f-a595-44d44725b744",
+  "serialNumber": "urn:uuid:0fac366d-2a34-53df-884d-c88c4a5d9e9a",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "5ee28c9a500e6b32cd0e6f857f920a7b1c0cb422"
+          "value": "396e8c3a3d4b5654a34b4897f46c590a394f5066"
         }
       ]
     }
@@ -120,18 +120,18 @@
       "type": "library",
       "bom-ref": "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
       "name": "Proton Pass",
-      "version": "1.41.1",
+      "version": "1.44.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936"
+          "content": "f53440bff8e754c1be060e1a015a0f4df62a4669917564fe09c7e3709fe41c60"
         }
       ],
       "scope": "optional",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5271799/proton_pass-1.44.0.xpi"
         },
         {
           "type": "website",
@@ -144,7 +144,7 @@
           "value": "credential-provider"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/proton-pass@1.41.1",
+      "purl": "pkg:generic/addons.mozilla.org/proton-pass@1.44.0",
       "licenses": [
         {
           "license": {
