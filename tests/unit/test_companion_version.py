@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "release" / "companion_version.py"
+CI = ROOT / ".github" / "workflows" / "ci.yml"
 
 GRADLE = """android {{
     defaultConfig {{
@@ -51,9 +53,22 @@ class CompanionVersionTest(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", message)
 
-    def check(self) -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(self.repo)],
+    def check(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(self.repo), *args],
                               capture_output=True, text=True, check=False)  # fmt: skip
+
+    def pull_request(self, path: str, text: str, version: tuple[int, str] | None = None) -> str:
+        """A pull request's checkout: a branch off main that writes `path` (and the version), merged into main
+        without fast-forward as GitHub's refs/pull/<n>/merge is. Returns the base commit, HEAD is the merge."""
+        base = self.git("rev-parse", "HEAD").strip()
+        self.git("switch", "-q", "-c", "topic")
+        self.write(path, text)
+        if version:
+            self.version(*version)
+        self.commit("the pull request")
+        self.git("switch", "-q", "main")
+        self.git("merge", "-q", "--no-ff", "-m", "merge", "topic")
+        return base
 
     def test_an_app_change_without_a_new_version_is_refused(self):
         self.write("android/app/src/main/java/App.java", "class App { int changed; }\n")
@@ -114,6 +129,79 @@ class CompanionVersionTest(unittest.TestCase):
                              capture_output=True, text=True, check=False)  # fmt: skip
         self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
         self.assertIn("shallow clone", run.stderr)
+
+    def test_a_pull_request_that_leaves_the_app_alone_passes_even_when_main_needs_a_version(self):
+        # #906: main got an app change without a version (merged before this check); a docs pull request is not the
+        # place to fix it, and the release run still refuses it.
+        self.write("android/app/src/main/java/App.java", "class App { int changed; }\n")
+        self.commit("change the app on main")
+        self.assertEqual(self.check().returncode, 1)
+        base = self.pull_request("docs/notes.md", "notes\n")
+        run = self.check("--changed-since", base)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn(f"android/ did not change since {base}", run.stdout)
+
+    def test_a_pull_request_that_changes_only_files_outside_the_apk_passes(self):
+        base = self.pull_request("android/AGENTS.md", "more notes\n")
+        self.assertEqual(self.check("--changed-since", base).returncode, 0)
+
+    def test_a_pull_request_that_changes_the_app_without_a_new_version_is_refused(self):
+        base = self.pull_request("android/app/src/main/java/App.java", "class App { int changed; }\n")
+        run = self.check("--changed-since", base)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("android/ changed since v160.0-0.5", run.stderr)
+
+    def test_a_pull_request_that_changes_the_app_with_a_new_version_passes(self):
+        base = self.pull_request("android/app/src/main/java/App.java", "class App { int changed; }\n", (2, "0.2.0"))
+        run = self.check("--changed-since", base)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("0.2.0 (2); v160.0-0.5 had 0.1.0 (1)", run.stdout)
+
+    def test_the_second_app_change_after_a_release_needs_no_second_version(self):
+        # The comparison is with the last release, not with main: one new version per release, not per change.
+        self.pull_request("android/app/src/main/java/App.java", "class App { int changed; }\n", (2, "0.2.0"))
+        self.git("branch", "-q", "-D", "topic")
+        base = self.pull_request("android/app/src/main/java/Other.java", "class Other {}\n")
+        self.assertEqual(self.check("--changed-since", base).returncode, 0)
+
+    def test_a_base_that_is_not_in_the_clone_or_looks_like_an_option_is_refused(self):
+        for base in ("b" * 40, "", "--output=/dev/null"):
+            with self.subTest(base=base):
+                run = self.check(f"--changed-since={base}")
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                self.assertIn("is not a commit in this clone", run.stderr)
+
+    def test_a_shallow_clone_is_refused_on_a_pull_request_too(self):
+        base = self.git("rev-parse", "HEAD").strip()
+        shallow = Path(tempfile.mkdtemp(prefix="nulavio-companion-shallow-"))
+        self.addCleanup(shutil.rmtree, shallow, True)
+        subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{self.repo}", str(shallow / "c")], check=True)
+        run = subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(shallow / "c"), "--changed-since", base],
+                             capture_output=True, text=True, check=False)  # fmt: skip
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("shallow clone", run.stderr)
+
+
+class WorkflowTest(unittest.TestCase):
+    """ci.yml runs the check on pull requests, in the required Companion job (#906)."""
+
+    def setUp(self):
+        text = CI.read_text(encoding="utf-8")
+        self.job = text[text.index("\n  companion:\n") : text.index("\n  changes:\n")]
+
+    def test_the_companion_job_runs_the_check_with_the_base_and_the_tags(self):
+        self.assertIn("name: Companion app (lint, release build)\n", self.job)  # the required check's name
+        self.assertIn("fetch-depth: 0 #", self.job)  # every tag and the base; the script refuses a shallow clone
+        step = re.search(r"(?m)^      - name: .*companion_version\.py.*\n((?:        .*\n)+)", self.job)
+        self.assertIsNotNone(step)
+        self.assertIn("if: ${{ !cancelled() && github.event_name == 'pull_request' }}", step[1])
+        self.assertIn("BASE: ${{ github.event.pull_request.base.sha }}", step[1])
+        self.assertIn('run: python3 -I scripts/release/companion_version.py --repo . --changed-since "$BASE"', step[1])
+        self.assertNotIn("continue-on-error", step[1])  # it fails the job, not only warns
+        self.assertLess(self.job.index(":app:assembleRelease"), self.job.index("companion_version.py"))
+
+    def test_the_release_still_refuses_on_its_own(self):
+        self.assertIn("companion_version.py", (ROOT / "scripts" / "release" / "build_companion.sh").read_text())
 
 
 if __name__ == "__main__":

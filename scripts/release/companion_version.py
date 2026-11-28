@@ -19,6 +19,15 @@ With no such tag (a clone without tags, the first release with the APK),
 there is nothing to compare and the check passes; a shallow clone is refused,
 since it would pass blind. build_companion.sh runs it
 before it builds; the release job fetches the tags for it.
+
+    python3 -I scripts/release/companion_version.py --changed-since BASE
+
+checks only when what goes into the APK changed between BASE and `--ref` (from
+their merge base, as a pull request's diff), and passes otherwise: ci.yml's
+Companion job runs it on every pull request with the base branch's commit, so a
+change to android/ that needs a new version fails before it merges, not in the
+release run (#906), and a pull request that leaves the app alone is never held
+up by one.
 """
 
 from __future__ import annotations
@@ -66,10 +75,22 @@ def previous_release(repo: Path, ref: str) -> str | None:
     return max(tags)[2] if tags else None
 
 
-def check(repo: Path, ref: str = "HEAD") -> str:
+def apk_changed(repo: Path, *revs: str) -> bool:
+    """Whether what goes into the APK differs between `revs` (two commits, or `A...B`: from their merge base to B)."""
+    return git(repo, "diff", "--quiet", *revs, "--", "android", *IGNORED, check=False).returncode != 0
+
+
+def check(repo: Path, ref: str = "HEAD", since: str | None = None) -> str:
     if git(repo, "rev-parse", "--is-shallow-repository").stdout.strip() == "true":
         # A shallow clone has no tags to compare with, and passing then would be passing blind.
         raise VersionError("this is a shallow clone: fetch the whole history and the tags (fetch-depth: 0) first")
+    if since is not None:
+        # A base that is not in the clone would make `git diff` fail, and that is no answer either way.
+        found = git(repo, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}", check=False).returncode == 0
+        if since.startswith("-") or not found:
+            raise VersionError(f"the base {since} is not a commit in this clone")
+        if not apk_changed(repo, f"{since}...{ref}"):
+            return f"android/ did not change since {since}: no new Companion version needed"
     now = version(git(repo, "show", f"{ref}:{GRADLE}").stdout, ref)
     tag = previous_release(repo, ref)
     if tag is None:
@@ -77,8 +98,7 @@ def check(repo: Path, ref: str = "HEAD") -> str:
     before = version(git(repo, "show", f"{tag}:{GRADLE}").stdout, tag)
     if now[0] < before[0]:
         raise VersionError(f"versionCode went down from {before[0]} ({tag}) to {now[0]}")
-    changed = git(repo, "diff", "--quiet", tag, ref, "--", "android", *IGNORED, check=False).returncode != 0
-    if changed and (now[0] == before[0] or now[1] == before[1]):
+    if apk_changed(repo, tag, ref) and (now[0] == before[0] or now[1] == before[1]):
         raise VersionError(
             f"android/ changed since {tag}, which shipped the Companion {before[1]} ({before[0]}), and the version "
             f"did not: raise versionCode and change versionName in {GRADLE}"
@@ -90,9 +110,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", type=Path, default=ROOT)
     parser.add_argument("--ref", default="HEAD")
+    parser.add_argument("--changed-since", metavar="BASE", help="check only if the APK's files changed since BASE")
     args = parser.parse_args(argv)
     try:
-        print(check(args.repo, args.ref))
+        print(check(args.repo, args.ref, args.changed_since))
     except VersionError as exc:
         print(f"companion_version: {exc}", file=sys.stderr)
         return 1
