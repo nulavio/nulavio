@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "comment": "Pinned, hash-verified first-install sources. Firefox additionally verifies the Mozilla (AMO) signature and keeps the extension updated afterwards. Refresh with scripts/upstream/refresh_extensions_lock.py and review the diff.",
-  "verified_on": "2026-11-16",
+  "verified_on": "2026-11-28",
   "extensions": [
     {
       "key": "ublock-origin",
@@ -9,10 +9,10 @@
       "name": "uBlock Origin",
       "role": "content-filter",
       "default_install": true,
-      "version": "1.76.4",
-      "url": "https://addons.mozilla.org/firefox/downloads/file/5257481/ublock_origin-1.76.4.xpi",
-      "sha256": "66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e",
-      "size": 6332093,
+      "version": "1.77.4",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5316374/ublock_origin-1.77.4.xpi",
+      "sha256": "5ffd52b863d5a02a639423e90252f7a7f8866c5599e360970f4d1f69dfc4b74a",
+      "size": 6414243,
       "license": "GPL-3.0-only",
       "homepage": "https://github.com/gorhill/uBlock",
       "reviewed_permissions": [
@@ -107,10 +107,10 @@
       "name": "Bitwarden Password Manager",
       "role": "credential-provider",
       "default_install": false,
-      "version": "2026.10.2",
-      "url": "https://addons.mozilla.org/firefox/downloads/file/5198653/bitwarden_password_manager-2026.10.2.xpi",
-      "sha256": "abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73",
-      "size": 23833411,
+      "version": "2026.11.0",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5278513/bitwarden_password_manager-2026.11.0.xpi",
+      "sha256": "607d6433d9de151a4c51135ad9e70882460d0e0493a9b585f15a9848d5f10b97",
+      "size": 28129360,
       "license": "UNDECLARED on AMO; upstream repo mixes GPL-3.0 and the Bitwarden License (bitwarden_license/). Not redistributed by Nulavio; verify before any bundling.",
       "homepage": "https://github.com/bitwarden/clients",
       "reviewed_permissions": [
@@ -137,10 +137,10 @@
       "name": "1Password – Password Manager",
       "role": "credential-provider",
       "default_install": false,
-      "version": "8.12.44.33",
-      "url": "https://addons.mozilla.org/firefox/downloads/file/5203941/1password_x_password_manager-8.12.44.33.xpi",
-      "sha256": "dd896610a3e6776582b76f180ea0d3180b03413a244314f9d3c6b08ec6c59819",
-      "size": 18867348,
+      "version": "8.12.46.29",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5266358/1password_x_password_manager-8.12.46.29.xpi",
+      "sha256": "c10426d7f091a518ec6c93152409c99a2d44544e487a7884c00c2b36df42c134",
+      "size": 18908462,
       "license": "Proprietary (AMO: All Rights Reserved). Not redistributed by Nulavio: installed from addons.mozilla.org on the person's request.",
       "homepage": "https://1password.com",
       "reviewed_permissions": [

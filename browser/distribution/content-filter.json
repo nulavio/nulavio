@@ -4,7 +4,7 @@
   "extension": "ublock-origin",
   "changed_on": "2026-11-16",
   "registry": {
-    "version": "1.76.4",
+    "version": "1.77.4",
     "sha256": "e994253fe9987f987149bec99bf366e1e3636f166e6acf444bfe0702fc15cfcc"
   },
   "default_on": [
