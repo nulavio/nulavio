@@ -771,6 +771,7 @@ class MalformedInputTest(TempHome):
             "e-name.json": '{"name": "\\ud800", "path": "/nonexistent/host"}',
             "f-path.json": '{"name": "f", "path": "/bin/\\ud800"}',
             "g-allowed.json": '{"name": "g", "path": "/bin/sh", "allowed_extensions": ["\\ud800"]}',
+            "h-nul.json": '{"name": "h", "path": "/usr/bin/a\\u0000b"}',
         }
         for name, text in manifests.items():
             hosts.joinpath(name).write_text(text)
@@ -783,7 +784,8 @@ class MalformedInputTest(TempHome):
         self.assertIn("host binary missing", checks["e-name"].detail)  # a name that cannot be printed: the same
         self.assertEqual(checks["f"].detail, "unreadable manifest: 'path' is not a string")
         self.assertIn("'allowed_extensions'", checks["g"].detail)
-        for name in ("a-list.json", "b", "c", "d-name", "e-name", "f", "g"):
+        self.assertIn("host binary missing", checks["h"].detail)  # a path os.stat refuses (NUL): not a traceback
+        for name in ("a-list.json", "b", "c", "d-name", "e-name", "f", "g", "h"):
             self.assertEqual(checks[name].status, "warn", checks[name])
             self.assertEqual(len(checks[name].detail.splitlines()), 1)
             f"{checks[name].name} {checks[name].detail}".encode()  # what doctor prints

@@ -268,7 +268,7 @@ def _check_manifest(path: Path) -> Check:
     try:
         # One stat: a host removed after an exists() check is missing too, not an error for the whole report.
         st = os.stat(host) if host.is_absolute() else None
-    except OSError:
+    except (OSError, ValueError):  # ValueError: a path the kernel cannot take (an embedded NUL)
         st = None
     if st is None:
         return Check("native-messaging", name, "warn", f"host binary missing: {host}")
