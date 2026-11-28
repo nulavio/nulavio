@@ -71,6 +71,35 @@ FILTER = """return ChromeUtils.importESModule("resource://builtin-addons/nulavio
 NEWTAB = "return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"
 LINE = """const dd = document.querySelector('#status [data-status=filter]');
 return dd?.dataset.level ? {level: dd.dataset.level, text: dd.textContent} : null;"""
+# uBlock Origin's toolbar button, every 100 ms from Marionette's first answer, each change with its time since the
+# engine started (#898): "loading" from the start of its background, "own" once its request listener took over, and
+# its badge "!" when a request went out while it had no listener (vAPI.Net in its js/vapi-background.js). A new
+# `start` is a new start of the add-on. Read-only; it shows what NulavioPrivacy.filterReady() reads.
+TRACE_START = """
+const win = Services.wm.getMostRecentWindow("navigator:browser");
+const { ExtensionParent } = ChromeUtils.importESModule("resource://gre/modules/ExtensionParent.sys.mjs");
+const zero = Services.startup.getStartupInfo().process.getTime();
+const trace = (win.nulavioFilterTrace = []);
+const id = arguments[0];
+let last = "", seen = null, starts = 0;
+const look = () => {
+  const policy = WebExtensionPolicy.getByID(id);
+  const ext = policy?.extension ?? null;
+  if (ext && ext !== seen) { seen = ext; starts++; }
+  const data = ext ? ExtensionParent.apiManager.global.browserActionFor?.(ext)?.action?.getContextData(null) : null;
+  const loading = data && JSON.stringify(data.icon).includes("-loading.");
+  const icon = !data ? "none" : !Object.hasOwn(data, "icon") ? "manifest" : loading ? "loading" : "own";
+  const now = {active: Boolean(policy?.active), icon, badge: data ? data.badgeText : null, start: starts};
+  const key = JSON.stringify(now);
+  if (key !== last) { last = key; trace.push({at: Math.round(Date.now() - zero) / 1000, ...now}); }
+};
+look();
+win.nulavioFilterTraceTimer = win.setInterval(look, 100);
+"""
+TRACE_READ = """
+const win = Services.wm.getMostRecentWindow("navigator:browser");
+return win?.nulavioFilterTrace ?? null;
+"""
 IMAGES_DONE = "return document.readyState === 'complete' && [...document.images].every(i => i.complete);"
 ADD_IMAGES = """
 for (const src of arguments) { const image = new Image(); image.src = src; document.body.append(image); }
@@ -118,6 +147,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.m.set_context("chrome")
         try:
             self.record["ublock_at_first_answer"] = {"at": self.now(), **self.m.execute_async(FIRST_ANSWER, [UBLOCK])}
+            self.m.execute(TRACE_START, [UBLOCK])
         finally:
             self.m.set_context("content")
 
@@ -247,6 +277,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             print(f"\nfirst-start-filter {case}: stopped before the end, partial record {self.saved}", file=sys.stderr)
 
     def finish(self) -> None:
+        self.record["ublock_trace"] = self.m.chrome(TRACE_READ)
         self.record["engine"] = self.m.chrome("return Services.appinfo.version + ' ' + Services.appinfo.appBuildID;")
         self.record["complete"] = True
         self.save()
