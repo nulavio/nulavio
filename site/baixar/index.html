@@ -66,7 +66,7 @@ sudo dnf install nulavio</code></pre></div>
 <p class="prose">A mesma chave pública fica em <code translate="no">{{key_url}}</code>. O repositório vem com a verificação de assinatura dos pacotes e dos metadados ligada.</p>
 <!--apt:on-->
 <h3 id="install-ubuntu-h">Ubuntu</h3>
-<p class="prose">Baixe o arquivo do repositório do Nulavio, confira-o, instale-o e instale o pacote:</p>
+<p class="prose">Baixe o arquivo do repositório do Nulavio, confira-o, instale-o e instale o pacote. Cole o bloco inteiro no bash, o shell padrão do Ubuntu; em outro shell, como o fish, rode <code translate="no">bash</code> antes:</p>
 <div class="pre-scroll" role="region" aria-label="Comandos de instalação no Ubuntu" tabindex="0"><pre translate="no"><code>(d=$(mktemp -d) &amp;&amp; cd "$d" &amp;&amp;
   curl -fsSLO --proto '=https' {{sources_file}} &amp;&amp;
   echo '{{sources_sha256}}  nulavio.sources' | sha256sum --check &amp;&amp;
