@@ -67,14 +67,15 @@ sudo dnf install nulavio</code></pre></div>
 <!--apt:on-->
 <h3 id="install-ubuntu-h">Ubuntu</h3>
 <p class="prose">Download the Nulavio repository file, check it, install it and install the package:</p>
-<div class="pre-scroll" role="region" aria-label="Install commands for Ubuntu" tabindex="0"><pre translate="no"><code>curl -fsSLO --proto '=https' {{sources_file}}
-sha256sum nulavio.sources
-sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/
-sudo apt update
-sudo apt install nulavio</code></pre></div>
-<p class="prose">The second command shows the file's SHA-256: go on only if it is this one, and delete the file if it is not:</p>
+<div class="pre-scroll" role="region" aria-label="Install commands for Ubuntu" tabindex="0"><pre translate="no"><code>(d=$(mktemp -d) &amp;&amp; cd "$d" &amp;&amp;
+  curl -fsSLO --proto '=https' {{sources_file}} &amp;&amp;
+  echo '{{sources_sha256}}  nulavio.sources' | sha256sum --check &amp;&amp;
+  sudo install -m 0644 nulavio.sources /etc/apt/sources.list.d/ &amp;&amp;
+  sudo apt-get -o APT::Update::Error-Mode=any update &amp;&amp;
+  sudo apt install nulavio)</code></pre></div>
+<p class="prose">The steps run in a subshell, so your terminal stays where it was. They run in a new folder only your account can open (<code translate="no">mktemp -d</code>; they stop if it cannot be made), so no other account can swap the file between the check and the install. <code translate="no">sha256sum --check</code> stops them unless the file has exactly this SHA-256, and <code translate="no">Error-Mode=any</code> stops them when apt cannot refresh a repository, instead of installing from the list it had:</p>
 <p class="prose"><code class="mono" translate="no">{{sources_sha256}}</code></p>
-<p class="prose">The file carries the public key above, and apt accepts only what that key signed. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
+<p class="prose">The file carries the public key above, and apt accepts from Nulavio's repository only what that key signed; like any apt source, though, another repository you added that offers a newer <code translate="no">nulavio</code> would win. The package brings an AppArmor profile that lets the browser isolate its tabs, as Ubuntu does for Firefox.</p>
 <!--/apt:on-->
 <h3 id="install-flatpak-h">Other distributions (Flatpak)</h3>
 <p class="prose">Nulavio comes to other distributions through Flathub, which keeps it up to date. Until then there is no Flatpak to install: the bundle that came with earlier versions never updated itself, so releases no longer carry it.</p>

@@ -1556,6 +1556,11 @@ class DownloadPagesTest(unittest.TestCase):
         sources.write_text(re.sub(r"(?m)^ =\S+$", " =AAAA", sources.read_text(encoding="ascii")), encoding="ascii")
         with self.assertRaises(build_site.BuildError):
             build_site.release_values(src)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_block = re.search(r"(?m)^\(d=\$\(mktemp -d\) .*?nulavio\)$", readme, re.S).group(0)
+        readme_digest = hashlib.sha256((ROOT / build_site.SOURCES_FILE).read_bytes()).hexdigest()
+        self.assertIn(f"echo '{readme_digest}  nulavio.sources' | sha256sum --check &&", readme_block)
+        readme_block = readme_block.replace("https://nulavio.net/apt/nulavio.sources", on["sources_file"])
         pages = {}
         for name, values in (("off", off), ("on", on)):
             out = self.tmp / f"apt-site-{name}"
@@ -1573,6 +1578,7 @@ class DownloadPagesTest(unittest.TestCase):
                     self.assertNotIn("<!--/apt:", html)
                     self.assertNotIn("\n\n<h3", html)
                 self.assertNotIn("apt update", pages["off"][page])
+                self.assertNotIn("apt-get", pages["off"][page])
                 self.assertNotIn("nulavio.sources", pages["off"][page])
                 self.assertIn("APT", pages["off"][page])  # "not yet: there is no APT repository"
                 on_page = pages["on"][page]
@@ -1580,9 +1586,10 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertIn("curl -fsSLO --proto '=https' https://nulavio.net/apt/nulavio.sources", on_page)
                 self.assertNotIn("sudo curl", on_page)
                 self.assertIn(on["sources_sha256"], on_page)
-                self.assertLess(on_page.index("sha256sum nulavio.sources"), on_page.index("sudo install -m 0644 nulavio.sources"))
-                self.assertLess(on_page.index("sudo install -m 0644 nulavio.sources"), on_page.index("sudo apt update"))
-                self.assertIn("sudo apt install nulavio", on_page)
+                # #897: the README's steps (#878), with this release's file and digest. The checksum gates the install
+                # when the block is pasted whole, in a private folder, and a failed refresh stops it too.
+                self.assertIn(readme_block.replace(readme_digest, on["sources_sha256"]), html_module.unescape(on_page))
+                self.assertNotIn("sha256sum nulavio.sources", on_page, "a digest printed for the eye gates nothing")
                 self.assertIn("sudo apt remove nulavio\nsudo rm /etc/apt/sources.list.d/nulavio.sources", on_page)
                 self.assertNotIn("apt remove", pages["off"][page])
                 self.assertIn("Ubuntu 24.04", on_page)
@@ -1590,6 +1597,55 @@ class DownloadPagesTest(unittest.TestCase):
                 self.assertNotIn("repositório APT</dd>", on_page)
         ids = [[m for m in re.findall(r'id="([^"]+)"', pages["on"][page])] for page in build_site.DOWNLOAD_PAGES]
         self.assertEqual(ids[0], ids[1], "both languages have the same sections")
+
+    def test_the_ubuntu_steps_install_nothing_unless_the_file_checks_out(self):
+        # #897: pasted whole, the steps put nulavio.sources where apt reads it only once its SHA-256 matched, and
+        # install the package only once apt refreshed every repository. Run as bash runs a paste, with curl and sudo
+        # faked: curl writes the file it would download, sudo records what it was asked to do.
+        on = build_site.release_values(self.source("apt-run", "159.0.1-0.1", self.fpr, self.armored, apt=True))
+        served = (self.tmp / "apt-run" / build_site.SOURCES_FILE).read_bytes()
+        out = self.tmp / "apt-run-site"
+        real = build_site.release_values
+        build_site.release_values = lambda src: on
+        try:
+            build_site.build(out)
+        finally:
+            build_site.release_values = real
+
+        def run(page: str, case: str, body: bytes, curl_ok: bool = True, update_ok: bool = True) -> list[str]:
+            work = self.tmp / f"apt-run-{case}-{page.split('/')[0]}"
+            fake, tmpdir = work / "bin", work / "tmp"
+            fake.mkdir(parents=True)
+            tmpdir.mkdir()
+            (work / "nulavio.sources").write_text("the reader's own file\n", encoding="ascii")
+            served_copy = work / "body"
+            served_copy.write_bytes(body)
+            log = work / "sudo.log"
+            curl = f"cat {str(served_copy)!r} > nulavio.sources\n" if curl_ok else "exit 22\n"
+            (fake / "curl").write_text("#!/bin/sh\n" + curl, encoding="ascii")
+            fail = '[ "$4" = update ] && exit 100\n' if not update_ok else ""
+            # The file installed is the one checked.
+            sudo = f'echo "$*" >> {str(log)!r}\n{fail}if [ "$1" = install ]; then cmp -s "$4" {str(served_copy)!r}; fi\n'
+            (fake / "sudo").write_text("#!/bin/sh\n" + sudo, encoding="ascii")
+            for tool in ("curl", "sudo"):
+                (fake / tool).chmod(0o755)
+            block = re.search(r'id="install-ubuntu-h".*?<code>(.*?)</code>', (out / page).read_text(encoding="utf-8"), re.S)
+            env = {"PATH": f"{fake}:{os.environ.get('PATH', os.defpath)}", "HOME": str(work), "TMPDIR": str(tmpdir),
+                   "LC_ALL": "C"}  # fmt: skip
+            subprocess.run(["bash"], input=html_module.unescape(block.group(1)) + "\n", cwd=work, env=env,
+                           capture_output=True, text=True, timeout=60)  # fmt: skip
+            # The reader's folder is left alone: the file is fetched into a new one.
+            self.assertEqual((work / "nulavio.sources").read_text(encoding="ascii"), "the reader's own file\n")
+            return log.read_text(encoding="ascii").splitlines() if log.exists() else []
+
+        install = "install -m 0644 nulavio.sources /etc/apt/sources.list.d/"
+        update = "apt-get -o APT::Update::Error-Mode=any update"
+        for page in build_site.DOWNLOAD_PAGES:
+            with self.subTest(page=page):
+                self.assertEqual(run(page, "good", served), [install, update, "apt install nulavio"])
+                self.assertEqual(run(page, "tampered", served + b"Types: deb\n"), [])
+                self.assertEqual(run(page, "no-download", served, curl_ok=False), [])
+                self.assertEqual(run(page, "no-refresh", served, update_ok=False), [install, update])
 
     def test_no_flatpak_bundle_is_offered_until_flathub(self):
         # #467: the bundle never updated itself (R75), so the pages offer none until Flathub (#88-#91), tell people who
