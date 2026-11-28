@@ -2,7 +2,8 @@
 
 The window decides where the mode applies: never where the band cannot name the page, never in a
 pop-up, never while the camera, the microphone or the screen is shared, nor while the engine draws its in-use icon
-for the location or a serial port on the selected tab; and a panel anchored on the toolbar keeps it shown."""
+for the location or a serial port, or its paused capture icon for a camera or microphone grace period, on the selected
+tab; and a panel anchored on the toolbar keeps it shown."""
 
 from __future__ import annotations
 
@@ -452,6 +453,75 @@ class ImmersiveTest(unittest.TestCase):
         self.assertTrue(self.settled(True)["toolbar"])
         self.m.chrome(serial, [False])
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 10), self.window())
+
+    def test_06e_a_camera_or_microphone_grace_period_keeps_the_toolbar(self):
+        """#821: once a capture ends, the engine keeps a temporary permission for the tab (its grace period), so the
+        site may start again without a prompt, and draws its capture icon as paused in the identity box while it
+        lasts, for the selected tab only. Neither the sharing state nor the tab says so. The toolbar stays while the
+        engine draws that icon."""
+        self.assertFalse(self.settled(False)["toolbar"])
+        perms = "const SP = ChromeUtils.importESModule('resource:///modules/SitePermissions.sys.mjs').SitePermissions;"
+        first = "const browser = gBrowser.tabs[0].linkedBrowser;"
+        # The capture's state as the engine records it (WebRTCParent.updateIndicators -> updateBrowserSharing).
+        share = first + "gBrowser.updateBrowserSharing(browser, {webRTC: arguments[0]});"
+        ended = {"sharing": "", "camera": 0, "microphone": 0, "screen": "", "paused": False}
+        # The grace period as the engine gives it when a device stops (WebRTCParent.deactivateDevicePerm): a
+        # temporary allow for that device of the site, scoped to the tab, for the time the engine's pref says.
+        grace = (
+            perms + first + "SP.setForPrincipal(browser.contentPrincipal, arguments[0], SP.ALLOW, SP.SCOPE_TEMPORARY,"
+            " browser, arguments[1]);"
+        )
+        revoke = perms + first + "SP.removeFromPrincipal(browser.contentPrincipal, arguments[0], browser);"
+        icon = (
+            "const e = document.getElementById('webrtc-sharing-icon');"
+            "return [e.getAttribute('sharing'), e.getAttribute('paused')];"
+        )
+        for device in ("camera^nulavio-test", "microphone^nulavio-test"):
+            self.addCleanup(self.m.chrome, revoke, [device])
+        self.addCleanup(self.m.chrome, share, [None])
+        self.m.chrome(share, [{"sharing": "camera", "camera": 1, "microphone": 0, "screen": "", "paused": False}])
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 15), self.window())
+        # The capture ends and the grace period begins: the engine draws the paused camera icon, the toolbar stays.
+        self.m.chrome(grace, ["camera^nulavio-test", 600000])
+        self.m.chrome(share, [ended])
+        self.assertEqual(self.m.chrome(icon), ["camera", "true"])
+        self.assertFalse(self.m.chrome("return gBrowser.tabs[0].hasAttribute('sharing');"))
+        state = self.settled(True)
+        self.assertEqual((state["on"], state["off"], state["toolbar"]), (False, "sharing", True), state)
+        # Another tab selected: it has no grace period, the engine draws no icon for it, and the mode is back; the
+        # first tab again: not.
+        self.m.chrome("gBrowser.selectedTab = gBrowser.addTrustedTab(arguments[0]);", [self.page])
+        self.addCleanup(self.m.chrome, "while (gBrowser.tabs.length > 1) gBrowser.removeTab(gBrowser.tabs.at(-1));")
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+        self.assertEqual(self.m.chrome(icon), [None, None])
+        self.m.chrome("gBrowser.selectedTab = gBrowser.tabs[0];")
+        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 10), self.window())
+        self.assertEqual(self.m.chrome(icon), ["camera", "true"])
+        # The permission removed, as the identity panel's button does: the engine's icon goes, and the mode is back.
+        self.m.chrome(revoke, ["camera^nulavio-test"])
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
+        self.assertEqual(self.m.chrome(icon), [None, None])
+        # A microphone grace period that runs out by itself: the toolbar stays while it lasts and leaves with it. Its
+        # five seconds run in the browser, so the browser records the mode and the icon together at every change of
+        # either, from before the grant: a driver call that comes late cannot miss the period (OCR, #938).
+        record = (
+            "const root = document.documentElement, e = document.getElementById('webrtc-sharing-icon');"
+            "const seen = (window.nvGrace = []);"
+            "const note = () => seen.push([root.getAttribute('nulavio-immersive-off'), e.getAttribute('sharing'),"
+            " e.getAttribute('paused')]);"
+            "window.nvGraceObserver = new MutationObserver(note);"
+            "window.nvGraceObserver.observe(root, {attributes: true, attributeFilter: ['nulavio-immersive-off']});"
+            "window.nvGraceObserver.observe(e, {attributes: true, attributeFilter: ['sharing', 'paused']});"
+            "note();"
+        )
+        self.addCleanup(self.m.chrome, "window.nvGraceObserver?.disconnect(); delete window.nvGrace;")
+        self.m.chrome(record + grace, ["microphone^nulavio-test", 5000])
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 30), self.window())
+        self.assertEqual(self.m.chrome(icon), [None, None])
+        seen = self.m.chrome("window.nvGraceObserver.disconnect(); return window.nvGrace;")
+        self.assertEqual(seen[0], [None, None, None], seen)
+        self.assertIn(["sharing", "microphone", "true"], seen, seen)
+        self.assertEqual(seen[-1], [None, None, None], seen)
 
     def test_06b_a_prompt_on_the_tab_brings_the_full_window_back(self):
         """Independent review (2026-11-11): the engine's tab prompts are not panels. For a cross-site HTTP
