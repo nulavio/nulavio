@@ -20,7 +20,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "launcher"))
 
-from nulavio_launcher import cli, confine, doctor, guard, log, paths, prefs, profile  # noqa: E402
+from nulavio_launcher import cli, confine, doctor, extensions, guard, log, paths, prefs, profile  # noqa: E402
 from nulavio_launcher import engine as engine_mod  # noqa: E402
 
 
@@ -689,6 +689,12 @@ class MalformedInputTest(TempHome):
         ("baseline_version", ["x"]),
         ("seeded", []),
         ("seeded_values", {"browser.startup.page": 1}),
+        # A lone surrogate: JSON allows it, but it cannot be printed or written as UTF-8.
+        ("provider", "\ud800"),
+        ("baseline_version", "\udcff"),
+        ("pending_prefs", {"browser.startup.page": "\ud800"}),
+        ("pending_prefs", {"\ud800": 1}),
+        ("seeded_values", {"browser.startup.page": "\ud800"}),
     )
 
     def setUp(self):
@@ -762,6 +768,9 @@ class MalformedInputTest(TempHome):
             "b-path.json": '{"name": "b", "path": 5}',
             "c-allowed.json": '{"name": "c", "path": "/bin/sh", "allowed_extensions": [1]}',
             "d-name.json": '{"name": 3, "path": "/nonexistent/host"}',
+            "e-name.json": '{"name": "\\ud800", "path": "/nonexistent/host"}',
+            "f-path.json": '{"name": "f", "path": "/bin/\\ud800"}',
+            "g-allowed.json": '{"name": "g", "path": "/bin/sh", "allowed_extensions": ["\\ud800"]}',
         }
         for name, text in manifests.items():
             hosts.joinpath(name).write_text(text)
@@ -771,9 +780,70 @@ class MalformedInputTest(TempHome):
         self.assertEqual(checks["b"].detail, "unreadable manifest: 'path' is not a string")
         self.assertIn("'allowed_extensions'", checks["c"].detail)
         self.assertIn("host binary missing", checks["d-name"].detail)  # a name of another type: the file's own
-        for name in ("a-list.json", "b", "c", "d-name"):
+        self.assertIn("host binary missing", checks["e-name"].detail)  # a name that cannot be printed: the same
+        self.assertEqual(checks["f"].detail, "unreadable manifest: 'path' is not a string")
+        self.assertIn("'allowed_extensions'", checks["g"].detail)
+        for name in ("a-list.json", "b", "c", "d-name", "e-name", "f", "g"):
             self.assertEqual(checks[name].status, "warn", checks[name])
             self.assertEqual(len(checks[name].detail.splitlines()), 1)
+            f"{checks[name].name} {checks[name].detail}".encode()  # what doctor prints
+
+    def test_a_malformed_extension_list_never_hides_a_writable_host(self):
+        hosts = self.home / "native-messaging-hosts"
+        hosts.mkdir(parents=True)
+        host = self.home / "host"
+        host.write_text("#!/bin/sh\n")
+        os.chmod(host, 0o777)
+        for listed in ('"abc"', "[1]", '["\\ud800"]'):
+            with self.subTest(listed=listed):
+                manifest = hosts / "h.json"
+                manifest.write_text(f'{{"name": "h", "path": "{host}", "allowed_extensions": {listed}}}')
+                check = doctor._check_manifest(manifest)
+                self.assertEqual((check.status, check.detail), ("fail", f"host {host} is group/world-writable"))
+
+    def test_a_host_removed_during_doctor_is_reported_as_missing(self):
+        manifest = self.home / "h.json"
+        manifest.write_text('{"name": "h", "path": "/usr/lib/h/host"}')
+        # The host was there when its existence was checked and is gone when its mode is read.
+        with (
+            mock.patch.object(Path, "exists", return_value=True),
+            mock.patch.object(doctor.os, "stat", side_effect=FileNotFoundError(2, "gone")),
+        ):
+            check = doctor._check_manifest(manifest)
+        self.assertEqual((check.status, check.detail), ("warn", "host binary missing: /usr/lib/h/host"))
+
+    def test_provider_set_repairs_a_provider_of_another_type_and_checks_the_rest(self):
+        good = json.loads(self.prof.settings_path.read_text())
+        for provider in (5, "\ud800"):
+            with self.subTest(provider=provider):
+                paths.write_private_file(self.prof.settings_path, json.dumps({**good, "provider": provider}))
+                code, _out, said = self.cli("provider", "set", "builtin", "--profile", "work")
+                self.assertEqual(code, 0, said)
+                self.assertEqual(self.prof.load_settings()["provider"], "builtin")
+        paths.write_private_file(self.prof.settings_path, json.dumps({**good, "provider": 5, "pending_prefs": None}))
+        code, _out, said = self.cli("provider", "set", "builtin", "--profile", "work")
+        self.assertEqual(code, 1, said)
+        self.assertOneLineError(said, "unreadable Nulavio settings", "'pending_prefs'")
+
+    def test_profile_list_reports_a_settings_link_that_leads_nowhere(self):
+        profile.create("other")
+        settings = profile.get("other").settings_path
+        settings.unlink()
+        settings.symlink_to(self.home / "nowhere.json")
+        code, out, said = self.cli("profile", "list")
+        self.assertEqual(code, 1, said)
+        self.assertOneLineError(said, "symlink", str(settings))
+        self.assertEqual([line.split()[0] for line in out.splitlines()], ["other", "work"])
+
+    def test_a_lock_with_a_pid_no_process_can_have_is_not_running(self):
+        os.symlink("127.0.0.1:+99999999999999999999", self.prof.path / "lock")
+        self.assertIsNone(self.prof.running_pid())
+        profile.create("other")
+        paths.write_private_file(self.prof.settings_path, '{"schema": ')
+        code, out, said = self.cli("profile", "list")
+        self.assertEqual(code, 1, said)
+        self.assertEqual([line.split()[0] for line in out.splitlines()], ["other", "work"])
+        self.assertIn("stopped", out.splitlines()[1])
 
     def test_an_extension_version_of_another_type_is_listed_as_unknown(self):
         registry = {
@@ -788,6 +858,31 @@ class MalformedInputTest(TempHome):
         unpinned = [line for line in out.splitlines() if line.startswith("(unpinned)")]
         self.assertEqual(len(unpinned), 1, out)
         self.assertEqual(unpinned[0].split(), ["(unpinned)", "?", "x@y"])
+
+    def test_extension_text_that_cannot_be_printed_is_listed_as_unknown(self):
+        registry = {
+            "addons": [
+                {"id": "x@y", "type": "extension", "location": "app-profile", "version": "\ud800", "active": True,
+                 "defaultLocale": {"name": "\udcff"}},
+                {"id": "\ud800@y", "type": "extension", "location": "app-profile", "version": "1", "active": True},
+            ]
+        }  # fmt: skip
+        self.prof.path.joinpath("extensions.json").write_text(json.dumps(registry))
+        code, out, said = self.cli("extensions", "list", "--profile", "work")
+        self.assertEqual(code, 0, said)
+        out.encode()  # what a UTF-8 terminal gets
+        unpinned = [line for line in out.splitlines() if line.startswith("(unpinned)")]
+        self.assertEqual([line.split() for line in unpinned], [["(unpinned)", "?", "x@y"]])
+
+    def test_the_start_page_never_shows_the_pinned_filter_version_for_an_unknown_registered_one(self):
+        ublock = extensions.load_lock()["ublock-origin"]
+        registry = {"addons": [{"id": ublock.id, "type": "extension", "location": "app-profile", "version": 3, "active": True}]}
+        self.prof.path.joinpath("extensions.json").write_text(json.dumps(registry))
+        self.assertEqual(cli._filter_context(self.prof)["filter"], ublock.name)
+        self.prof.path.joinpath("extensions.json").unlink()
+        self.prof.path.joinpath("extensions").mkdir()
+        self.prof.path.joinpath("extensions", f"{ublock.id}.xpi").write_bytes(b"")
+        self.assertEqual(cli._filter_context(self.prof)["filter"], f"{ublock.name} {ublock.version}")  # not registered yet
 
 
 class OnePasswordDoctorTest(unittest.TestCase):

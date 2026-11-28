@@ -185,7 +185,7 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
         # A registry, or an entry, of another shape is read as unreadable, like a registry that is not JSON.
         addons = data.get("addons") if isinstance(data, dict) else None
         for addon in addons if isinstance(addons, list) else []:
-            if not isinstance(addon, dict) or not isinstance(addon.get("id"), str):
+            if not isinstance(addon, dict) or not paths.is_text(addon.get("id")):
                 continue
             if addon.get("type") != "extension" or addon.get("location") != "app-profile":
                 continue
@@ -194,9 +194,10 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
             version = addon.get("version")
             found[addon["id"]] = {
                 "id": addon["id"],
-                "name": name if isinstance(name, str) else addon["id"],
-                # A version of another type is unknown, as for an extension not registered yet (#675).
-                "version": version if isinstance(version, str) else None,
+                "name": name if paths.is_text(name) else addon["id"],
+                # A version of another type, or one that cannot be printed, is unknown, as for an extension not
+                # registered yet (#675).
+                "version": version if paths.is_text(version) else None,
                 "active": bool(addon.get("active")),
                 "registered": True,
                 # Engines with autoDisableScopes covering the profile (Mozilla's own builds)

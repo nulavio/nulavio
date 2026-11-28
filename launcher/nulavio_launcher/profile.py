@@ -96,14 +96,18 @@ SETTINGS_FIELDS: dict[str, tuple[type, str]] = {
 
 def _settings_problem(data: dict[str, Any]) -> str | None:
     """What makes a settings object unreadable by the launcher, or None."""
+    # A string must also be writable as UTF-8: it is printed, and written to the start page and prefs.js.
     for field, (kind, described) in SETTINGS_FIELDS.items():
-        if field in data and not isinstance(data[field], kind):
+        if field in data and not (paths.is_text(data[field]) if kind is str else isinstance(data[field], kind)):
             return f"'{field}' is not {described}"
+    for field in ("seeded", "seeded_values", "pending_prefs"):
+        if not all(paths.is_text(name) for name in data.get(field, {})):
+            return f"'{field}' has a name that is not a string"
     for name, value in data.get("seeded_values", {}).items():
-        if not isinstance(value, str):
+        if not paths.is_text(value):
             return f"'seeded_values' has a value for {name!r} that is not a string"
     for name, value in data.get("pending_prefs", {}).items():
-        if not isinstance(value, (bool, int, str)):
+        if not (isinstance(value, (bool, int)) or paths.is_text(value)):
             return f"'pending_prefs' has a value for {name!r} that is not true, false, a whole number or a string"
     return None
 
@@ -134,7 +138,9 @@ class Profile:
         return (self.startpage_dir / "index.html").as_uri()
 
     # -- settings ---------------------------------------------------------
-    def load_settings(self) -> dict[str, Any]:
+    def load_settings(self, *, checked: bool = True) -> dict[str, Any]:
+        """The profile's settings. `checked=False` leaves the type of each field to the caller, which checks them
+        with `check_settings` once it has replaced the fields it repairs."""
         try:
             # The folder too: the browser can write the profile, and a link there could lead to another profile's.
             paths.check_private(self.meta_dir, paths.PRIVATE_DIR_MODE)
@@ -147,10 +153,14 @@ class Profile:
             raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}")
         if data.get("schema") != SETTINGS_SCHEMA:
             raise ProfileError(f"unsupported settings schema in {self.settings_path}")
+        if checked:
+            self.check_settings(data)
+        return data
+
+    def check_settings(self, data: dict[str, Any]) -> None:
         problem = _settings_problem(data)
         if problem:
             raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}: {problem}")
-        return data
 
     def save_settings(self, data: dict[str, Any]) -> None:
         paths.ensure_private_dir(self.meta_dir)
@@ -176,6 +186,8 @@ class Profile:
             os.kill(pid, 0)
         except ProcessLookupError:
             return None  # stale lock after a crash
+        except OverflowError:
+            return None  # a PID no process can have: a damaged lock (#675)
         except PermissionError:
             return pid
         if _reused_pid(pid, lock, self.path):
@@ -250,8 +262,10 @@ def set_provider(profile: Profile, provider: str, *, _creating: bool = False) ->
         raise ProfileError(f"unknown provider '{provider}' (choose: {', '.join(providers)})")
     if not _creating:
         profile.require_not_running()
-    settings = profile.load_settings()
+    # Setting the provider repairs one of another type (#675); the other fields are still checked.
+    settings = profile.load_settings(checked=False)
     settings["provider"] = provider
+    profile.check_settings(settings)
     # Provider prefs are explicit user decisions: queue them even if seeded.
     settings.setdefault("pending_prefs", {}).update(providers[provider]["prefs"])
     profile.save_settings(settings)

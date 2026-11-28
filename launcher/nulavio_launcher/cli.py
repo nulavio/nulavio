@@ -106,7 +106,9 @@ def _filter_context(prof: profile.Profile) -> dict[str, str]:
     ublock = lock["ublock-origin"]
     for ext in extensions.installed_in_profile(prof.path):
         if ext["id"] == ublock.id:
-            return {"filter": f"{ublock.name} {ext['version'] or ublock.version}", "filter_state": extensions.state_of(ext)}
+            # One not registered yet is the pinned file; a registered one whose version is unknown shows no version.
+            version = ext["version"] or ("" if ext["registered"] else ublock.version)
+            return {"filter": f"{ublock.name} {version}".strip(), "filter_state": extensions.state_of(ext)}
     return {"filter": "", "filter_state": "absent"}
 
 
@@ -268,7 +270,8 @@ def cmd_profile(args: argparse.Namespace) -> int:
         damaged = False
         for prof in profile.list_profiles():
             try:
-                settings = prof.load_settings() if prof.exists() else {}
+                # A link is read too, so that it is refused like any other, even one that leads nowhere.
+                settings = prof.load_settings() if prof.exists() or prof.settings_path.is_symlink() else {}
             except (profile.ProfileError, paths.UnsafePathError, OSError) as exc:
                 # One damaged profile is reported, and the others are still listed (#675).
                 _err(str(exc))
