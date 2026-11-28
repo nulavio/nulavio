@@ -965,7 +965,9 @@ def _volume_in_use(box: Container, wait: float = 0.0) -> bool:
             if not entry.name.isdigit():
                 continue
             try:
-                args = (entry / "cmdline").read_bytes().decode(errors="replace").split("\0")
+                # Read as paths are, as the mount table is: a profile under a name that is not UTF-8 keeps its
+                # bytes in `sources`, so a replaced byte here would miss its volume (#926 review, round 3).
+                args = os.fsdecode((entry / "cmdline").read_bytes()).split("\0")
             except OSError:
                 continue  # gone meanwhile, or another user's
             if args and Path(args[0]).name == "gocryptfs" and sources.intersection(args[1:]):

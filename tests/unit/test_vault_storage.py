@@ -669,6 +669,35 @@ class OverlappingUnlockTest(StorageCase):
             self.assertTrue(storage.Container(spaced).mounted())
             self.assertFalse(storage.Container(self.tmp / "work").mounted())
 
+    def test_a_detached_volume_under_a_name_in_another_encoding_is_still_in_use(self):
+        # A profile chosen by --path under a name that is not UTF-8, its volume detached with a file open (gone from
+        # the mount table, still served by gocryptfs), and another disk with such a name: a new key still waits for
+        # it. Before the mount table was read as paths are, that other disk stopped the new key with an error; the
+        # gocryptfs command line must be read the same way, or nothing would stop it now (#926 review, round 3).
+        box = storage.Container(Path(os.fsdecode(os.fsencode(str(self.tmp)) + b"/caf\xe9")))
+        table = b"36 35 98:0 / /mnt/disk\xe9 rw,noatime - ext4 /dev/sdb1 rw\n"
+        served = b"\0".join([b"/usr/bin/gocryptfs", b"-fg", os.fsencode(str(box.cipher)), os.fsencode(str(box.mountpoint))])
+        fake = {"/proc/self/mountinfo": table, "/proc/4242/cmdline": served + b"\0"}
+        real_bytes, real_text, real_iterdir = Path.read_bytes, Path.read_text, Path.iterdir
+
+        def read_bytes(path):
+            return fake[str(path)] if str(path) in fake else real_bytes(path)
+
+        def read_text(path, *args, **kwargs):  # as the kernel's file reads in UTF-8
+            return fake[str(path)].decode() if str(path) in fake else real_text(path, *args, **kwargs)
+
+        def iterdir(path):
+            return iter([Path("/proc/4242")]) if str(path) == "/proc" else real_iterdir(path)
+
+        with (
+            mock.patch.object(Path, "read_bytes", read_bytes),
+            mock.patch.object(Path, "read_text", read_text),
+            mock.patch.object(Path, "iterdir", iterdir),
+        ):
+            self.assertTrue(storage._volume_in_use(box))
+            fake["/proc/4242/cmdline"] = served.replace(b"gocryptfs", b"sshfs", 1) + b"\0"
+            self.assertFalse(storage._volume_in_use(box))
+
     def test_a_second_unlock_waits_for_the_first_ones_generation_check(self):
         # The second request finds the volume mounted while the first is still checking its generation: it says
         # "unlocked" only after that check, and never of a volume the check then refuses and takes away (U-T21,
