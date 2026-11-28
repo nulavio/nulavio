@@ -1612,31 +1612,42 @@ class DownloadPagesTest(unittest.TestCase):
         finally:
             build_site.release_values = real
 
+        # Only the README's block runs (#878), with this release's file and digest: a changed block fails here before
+        # bash sees it (OCR on #914).
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        expected = re.search(r"(?m)^\(d=\$\(mktemp -d\) .*?nulavio\)$", readme, re.S).group(0)
+        expected = re.sub(r"[0-9a-f]{64}", on["sources_sha256"], expected)
+        expected = expected.replace("https://nulavio.net/apt/nulavio.sources", on["sources_file"])
+        # curl and sudo are shell functions, and so are the tools the block needs, which call them by their full
+        # path; PATH finds nothing, so not even `command curl` or `command sudo` reaches the real ones, and nothing is
+        # run from the temporary folder, which may be mounted noexec (OCR on #914).
+        tools = {name: shutil.which(name) for name in ("mktemp", "sha256sum", "cat", "cmp")}
+        bash = shutil.which("bash")
+        if bash is None or None in tools.values():
+            self.skipTest(f"needs bash and {', '.join(tools)}")
+
         def run(page: str, case: str, body: bytes, curl_ok: bool = True, update_ok: bool = True) -> list[str]:
             work = self.tmp / f"apt-run-{case}-{page.split('/')[0]}"
-            fake, tmpdir = work / "bin", work / "tmp"
-            fake.mkdir(parents=True)
-            tmpdir.mkdir()
+            tmpdir = work / "tmp"
+            tmpdir.mkdir(parents=True)
             (work / "nulavio.sources").write_text("the reader's own file\n", encoding="ascii")
             served_copy = work / "body"
             served_copy.write_bytes(body)
             log = work / "sudo.log"
-            # The paths reach the fakes through the environment, and the block finds them as functions, not on PATH:
-            # a TMPDIR with a colon, quotes or non-ASCII letters can neither break them nor let the real curl run
-            # (OCR on #914).
-            curl = 'cat "$FAKE_BODY" > nulavio.sources\n' if curl_ok else "exit 22\n"
-            (fake / "curl").write_text("#!/bin/sh\n" + curl, encoding="ascii")
-            fail = '[ "$4" = update ] && exit 100\n' if not update_ok else ""
-            # The file installed is the one checked.
-            sudo = f'echo "$*" >> "$FAKE_LOG"\n{fail}if [ "$1" = install ]; then cmp -s "$4" "$FAKE_BODY"; fi\n'
-            (fake / "sudo").write_text("#!/bin/sh\n" + sudo, encoding="ascii")
-            for tool in ("curl", "sudo"):
-                (fake / tool).chmod(0o755)
+            # The paths reach the fakes through the environment: a TMPDIR with a colon, quotes or non-ASCII letters
+            # cannot break them. curl writes the file it would download; sudo records what it was asked to do and
+            # checks that the file installed is the one checked.
+            curl = 'cat "$FAKE_BODY" > nulavio.sources' if curl_ok else "return 22"
+            fail = 'if [ "$4" = update ]; then return 100; fi; ' if not update_ok else ""
+            sudo = f'echo "$*" >> "$FAKE_LOG"; {fail}if [ "$1" = install ]; then cmp -s "$4" "$FAKE_BODY"; fi'
+            fakes = f"curl() {{ {curl}; }}\nsudo() {{ {sudo}; }}\n"
+            fakes += "".join(f'{name}() {{ "$TOOL_{name.upper()}" "$@"; }}\n' for name in tools)
             block = re.search(r'id="install-ubuntu-h".*?<code>(.*?)</code>', (out / page).read_text(encoding="utf-8"), re.S)
-            fakes = 'curl() { "$FAKE_BIN/curl" "$@"; }\nsudo() { "$FAKE_BIN/sudo" "$@"; }\n'
-            env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(work), "TMPDIR": str(tmpdir), "LC_ALL": "C",
-                   "FAKE_BIN": str(fake), "FAKE_BODY": str(served_copy), "FAKE_LOG": str(log)}  # fmt: skip
-            subprocess.run(["bash"], input=fakes + html_module.unescape(block.group(1)) + "\n", cwd=work, env=env,
+            self.assertEqual(html_module.unescape(block.group(1)), expected)
+            env = {"PATH": os.devnull, "HOME": str(work), "TMPDIR": str(tmpdir), "LC_ALL": "C",
+                   "FAKE_BODY": str(served_copy), "FAKE_LOG": str(log)}  # fmt: skip
+            env.update({f"TOOL_{name.upper()}": target for name, target in tools.items()})
+            subprocess.run([bash, "--noprofile", "--norc"], input=fakes + expected + "\n", cwd=work, env=env,
                            capture_output=True, text=True, timeout=60)  # fmt: skip
             # The reader's folder is left alone: the file is fetched into a new one.
             self.assertEqual((work / "nulavio.sources").read_text(encoding="ascii"), "the reader's own file\n")
