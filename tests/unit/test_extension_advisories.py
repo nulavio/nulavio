@@ -579,9 +579,10 @@ class ReplyTest(unittest.TestCase):
             if timeouts is not None:
                 timeouts.append(request.timeout)
             status, headers, body = routes[request.full_url]
+            status, phrase = status if isinstance(status, tuple) else (status, http.HTTPStatus(status).phrase)
             if clock is not None:
                 clock[0] += step  # a slow connection: the headers come `step` seconds after the request
-            head = f"HTTP/1.1 {status} {http.HTTPStatus(status).phrase}\r\n"
+            head = f"HTTP/1.1 {status} {phrase}\r\n"
             head += "".join(f"{key}: {value}\r\n" for key, value in headers.items()) + "\r\n"
             drip = body if isinstance(body, Drip) else Drip(body)
             wire = Wire(head.encode(), drip)
@@ -749,11 +750,67 @@ class ReplyTest(unittest.TestCase):
             "https://addons.mozilla.org.example/api/v5/blocklist/block/y/",
             "https://addons.mozilla.org@elsewhere.example/api/v5/blocklist/block/y/",
             "https://addons.mozilla.org:x/api/v5/blocklist/block/y/",
+            "https://addons.mozilla.org:0/api/v5/blocklist/block/y/",  # OpenCodeReview round 2: 0 was read as 443
         ):
             with self.subTest(target):
                 result, asked = self.fetch({block: (301, {"Location": target}, b""), target: (200, {}, not_blocked)}, block)
                 self.assertIsInstance(result, urllib.error.HTTPError)
                 self.assertEqual(asked, [block])
+
+    def test_a_refused_redirect_names_neither_the_address_nor_the_reason_phrase(self):
+        # OpenCodeReview round 2 on #916: urllib's own refusal of a data: or file: address names all of it, and the
+        # watch's carried the server's reason phrase
+        block = watch.AMO + "blocklist/block/x/"
+        for target, where in (
+            ("data:application/json,SECRET", "a data: address"),
+            ("file:///home/SECRET", "a file: address"),
+            ("ftp://someone:SECRET@cdn.example/x", "ftp://cdn.example"),
+            ("https://cdn.example/x?Signature=SECRET", "https://cdn.example"),
+            ("https://cdn<SECRET>.example/x", "a https: address"),
+        ):
+            with self.subTest(target):
+                status = (302, "Found https://cdn.example/x?Signature=SECRET")
+                result, asked = self.fetch({block: (status, {"Location": target}, b"")}, block)
+                self.assertIsInstance(result, urllib.error.HTTPError)
+                self.assertIn(f"refusing a redirect to {where} (only", str(result))
+                self.assertNotIn("SECRET", str(result))
+                self.assertEqual(asked, [block])
+
+    def test_a_chunked_reply_dripping_its_size_line_or_trailers_is_cut_off_at_its_end(self):
+        # OpenCodeReview round 2 on #916: http.client reads a size line and the trailers inside one read1
+        url = watch.OSV + "vulns/X"
+        chunked = {"Transfer-Encoding": "chunked"}
+        cases = {
+            "trailers": b'8\r\n{"a": 1}\r\n0\r\n' + b"X-Pad: y\r\n" * 50 + b"\r\n",  # http.client takes 100 at most
+            "size line": b"8;" + b"x" * 10_000 + b'\r\n{"a": 1}\r\n0\r\n\r\n',  # a chunk extension
+        }
+        for name, data in cases.items():
+            with self.subTest(name):
+                net, now = self.clocked(5)
+                result, _ = self.fetch({url: (200, chunked, Drip(data, now, 1, piece=10))}, url, net=net)
+                self.assertIsInstance(result, TimeoutError)
+                self.assertLessEqual(now[0], 5 + 1)  # one socket read past the end at most
+                net, now = self.clocked(5000)  # the same reply, over in time
+                result, _ = self.fetch({url: (200, chunked, Drip(data, now, 1, piece=10))}, url, net=net)
+                self.assertEqual(result, {"a": 1})
+
+    def test_a_null_reply_names_its_host_and_not_its_query(self):
+        # OpenCodeReview round 2 on #916: a registry's token realm may carry a signature in its query
+        url = "https://auth.example/token?service=registry&scope=SECRET"
+        asked = []
+        https, plain = self.serve({url: (200, {}, b"null")}, asked)
+        with https, plain, self.assertRaises(ValueError) as caught:
+            watch.Net().json(url)
+        self.assertIn("auth.example", str(caught.exception))
+        self.assertNotIn("SECRET", str(caught.exception))
+
+    def test_a_malformed_status_line_is_not_copied_into_the_report(self):
+        # OpenCodeReview round 2 on #916: BadStatusLine keeps the server's line
+        bad = http.client.BadStatusLine("HTTP/1.1 https://cdn.example/x?Signature=SECRET")
+        with mock.patch.object(watch, "urlopen", side_effect=bad), self.assertRaises(ConnectionError) as caught:
+            watch.Net().json(watch.OSV + "vulns/X")
+        self.assertIn("BadStatusLine", str(caught.exception))
+        self.assertNotIn("SECRET", str(caught.exception))
 
 
 CHUNK = 64 * 1024  # what a server sends at a time

@@ -35,6 +35,7 @@ import argparse
 import dataclasses
 import datetime as _dt
 import http.client
+import io
 import json
 import re
 import sys
@@ -86,16 +87,39 @@ class Redirects(urllib.request.HTTPRedirectHandler):
     `request.time_left`) is not followed: the next request gets what is left, not the first one's timeout.
     """
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        if fp is not None:
-            fp.close()  # urllib then reads nothing of a body the watch does not use; a refusal keeps no socket open
+    def http_error_302(self, req, fp, code, msg, headers):
+        # judged before urllib's own scheme check, whose HTTPError names the whole address (a data: URL's, say)
+        location = headers["location"] if "location" in headers else headers.get("uri")  # as urllib picks it
+        if location is not None:
+            self.refuse_off_origin(req, fp, code, headers, urllib.parse.urljoin(req.full_url, location))
+        return super().http_error_302(req, fp, code, msg, headers)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+    @staticmethod
+    def refuse_off_origin(req, fp, code, headers, newurl):
         allowed = AMO_ORIGIN if same_origin(req.full_url, AMO_ORIGIN) else "https://"
-        if not same_origin(newurl, allowed):
-            target = urllib.parse.urlsplit(newurl)  # no path, query or user: a signed URL's token stays out of the log
-            where = f"{target.scheme}://{target.hostname}" if target.hostname else target.scheme or "an empty address"
-            raise urllib.error.HTTPError(
-                req.full_url, code, f"{msg}: refusing a redirect to {where} (only {allowed})", headers, None
-            )
+        if same_origin(newurl, allowed):
+            return
+        if fp is not None:
+            fp.close()  # a refusal keeps no socket open
+        try:  # no path, query, user or reason phrase: a signed URL's token stays out of the log
+            target = urllib.parse.urlsplit(newurl)
+            host, scheme = target.hostname or "", target.scheme
+        except ValueError:
+            host, scheme = "", ""
+        if not re.fullmatch(r"[a-z][a-z0-9+.-]{0,15}", scheme):
+            where = "an address that cannot be read"
+        elif re.fullmatch(r"[a-z0-9.:-]{1,253}", host):
+            where = f"{scheme}://{host}"
+        else:
+            where = f"a {scheme}: address"
+        raise urllib.error.HTTPError(req.full_url, code, f"refusing a redirect to {where} (only {allowed})", headers, None)
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.refuse_off_origin(req, fp, code, headers, newurl)  # again, on the address urllib quoted and joined
+        if fp is not None:
+            fp.close()  # urllib then reads nothing of a body the watch does not use
         time_left = getattr(req, "time_left", None)
         if time_left is not None:
             left = time_left()
@@ -115,7 +139,10 @@ def same_origin(url: str, allowed: str) -> bool:
         parts, want = urllib.parse.urlsplit(url), urllib.parse.urlsplit(allowed)
         if parts.scheme.lower() != "https" or not parts.hostname:
             return False
-        return not want.hostname or (parts.hostname, parts.port or 443) == (want.hostname, want.port or 443)
+        if not want.hostname:
+            return True
+        port = 443 if parts.port is None else parts.port  # 0 is a port of its own, not the default
+        return (parts.hostname, port) == (want.hostname, 443 if want.port is None else want.port)
     except ValueError:  # a port that is not a number, say
         return False
 
@@ -203,7 +230,7 @@ class Net:
         try:
             response = urlopen(request, timeout=min(timeout or self.timeout, left))
         except http.client.HTTPException as exc:  # a malformed status line or header, say: not an OSError
-            raise ConnectionError(f"a malformed reply: {type(exc).__name__}: {exc}") from exc
+            raise ConnectionError(f"a malformed reply: {type(exc).__name__}") from exc  # its text is the server's
         except urllib.error.HTTPError as exc:  # its status and headers are all the watch reads of it
             exc.close()  # the socket is not kept open while the exception is (AMO's rows keep theirs)
             if self.clock() > end:  # a late 404 is no more "not there" than a late 200 is a reply
@@ -213,7 +240,29 @@ class Net:
         if self.clock() > end:
             response.close()
             raise TimeoutError("the reply's headers came after the request's time budget")
+        self._bound_reads(response, end)
         return response
+
+    def _bound_reads(self, response, end: float) -> None:
+        """Every socket read after the headers (body, chunk size lines, trailers) checks the end before and after.
+
+        http.client reads a chunked reply's size line and trailers inside one read1, as many socket reads as the
+        server takes; a check at the socket read cuts a server dripping them off one socket wait after `end` at most.
+        """
+        raw = getattr(getattr(response, "fp", None), "raw", None)
+        if not isinstance(raw, io.RawIOBase):
+            return
+        readinto = raw.readinto
+
+        def bounded(buffer):
+            if self.clock() > end:
+                raise TimeoutError("the reply's body came after the request's time budget")
+            count = readinto(buffer)
+            if self.clock() > end:
+                raise TimeoutError("the reply's body came after the request's time budget")
+            return count
+
+        raw.readinto = bounded  # an instance attribute: the BufferedReader over it looks readinto up on each read
 
     def _body(self, response, end: float) -> bytes:
         """The whole body, read in chunks: one that arrives after `end` (a server dripping bytes) is cut off.
@@ -234,7 +283,7 @@ class Net:
             if isinstance(length, int) and length > 0:
                 raise http.client.IncompleteRead(b"".join(chunks), length)
         except http.client.HTTPException as exc:  # IncompleteRead (chunked replies raise it), not an OSError
-            raise ConnectionError(f"the reply was cut short: {type(exc).__name__}: {exc!r}") from exc
+            raise ConnectionError(f"the reply was cut short: {type(exc).__name__}") from exc
         return b"".join(chunks)
 
     def _fetch(self, url: str, data: dict | None = None, headers: dict | None = None, timeout=None, until=None):
@@ -243,7 +292,7 @@ class Net:
             body = self._body(response, self._end(until))
         value = json.loads(body)
         if value is None:
-            raise ValueError(f"a reply whose body is null: {url}")
+            raise ValueError(f"a reply whose body is null (from {urllib.parse.urlsplit(url).hostname})")  # no query
         return value
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
