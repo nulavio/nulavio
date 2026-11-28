@@ -35,7 +35,9 @@ const bar = id => (shown(el(id)) ? el(id).message : null);
 const rows = (id, cls) => (shown(el(id)) ? [...el(id).querySelectorAll(`moz-box-item.${cls}`)] : []);
 return {
   engines: rows("nulavio-suggest-engines", "nulavio-engine").map(row => {
-    const toggle = row.querySelector("moz-toggle");
+    // By the engine's id, in the whole group: in a narrow page the switch is in a row of its own, under the name.
+    const toggle = [...el("nulavio-suggest-engines").querySelectorAll("moz-toggle")]
+      .find(t => t.dataset.engine === row.dataset.engine);
     return { id: row.dataset.engine, name: row.label, says: row.description, on: Boolean(toggle?.pressed),
              named: toggle?.ariaLabel ?? null };
   }),
@@ -467,6 +469,50 @@ class SettingsSearchTest(unittest.TestCase):
             "“@ia” deixou de ser o atalho de pesquisa de “\u2068Busca Igual\u2069” (busca.example): ele é a palavra-chave do"
             " assistente na barra de endereços. Escolha outro atalho em Atalhos de pesquisa.",
         )
+
+    def chosen_then(self, after: str, args: list) -> tuple[str, dict]:
+        """Chooses an engine of the person's while `after` (a script body with `id`, the engine chosen, and `args`)
+        changes the list as another window would, before the choice returns. Gives the engine's id and the page once
+        the choice was made and the list read again."""
+        own = self.m.chrome(S + "return S.addCustom({name: 'Busca Mudada', url: 'https://mudada.example/?q=%s'});")
+        self.assertIsInstance(own, str, own)
+        patch = (
+            S
+            + "const choose = S.choose.bind(S); const args = arguments[0];"
+            + "S.choose = async choice => { const id = await choose(choice); "
+            + after
+            + " S.choiceMadeForTest = id; return id; };"
+        )
+        self.m.chrome(patch, [args])
+        self.addCleanup(self.m.chrome, S + "delete S.choose; delete S.choiceMadeForTest;")
+        self.open()
+        key = f"engine-{own}"
+        self.seen(lambda n: any(row["key"] == key for row in n["choices"]))
+        button = f'#nulavio-search-choose moz-button[data-action="choose"][data-choice="{key}"]'
+        self.assertTrue(self.m.chrome(CLICK, [button]))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(S + "return S.choiceMadeForTest ?? null;") == own, 10))
+        # The list read again after the choice, and the time the success bar would take to show.
+        self.assertFalse(harness.wait_until(lambda: self.m.chrome(PAGE)["chose"], 3))
+        return own, self.m.chrome(PAGE)
+
+    def test_08_a_choice_undone_elsewhere_is_not_said_to_be_the_search(self):
+        """Review of #927: the message after a choice is shown only while the list, read again after the choice, has
+        the engine chosen as the default at the host it names. Here another engine is made the default again before
+        the choice returns: the message does not say the chosen one is the search."""
+        back = self.m.chrome(S + "return S.list().then(list => list.find(e => e.isDefault).id);")
+        own, now = self.chosen_then("await S.setDefault(args); await S.setDefault(args, { private: true });", back)
+        self.assertIsNone(now["chose"], now)
+        self.assertIsNone(now["choseError"], now)
+        self.assertEqual(self.m.chrome(S + "return S.list().then(list => list.find(e => e.isDefault).id);"), back)
+        self.assertNotEqual(back, own)
+
+    def test_09_an_engine_removed_while_it_is_chosen_is_not_said_to_be_the_search(self):
+        """Review of #927: the engine chosen is gone (removed in another window) by the time the choice returns.
+        Nothing is said of it; the list says which engine is in use."""
+        own, now = self.chosen_then("await S.remove(id);", None)
+        self.assertIsNone(now["chose"], now)
+        self.assertIsNone(now["choseError"], now)
+        self.assertNotIn(f"engine-{own}", [row["key"] for row in now["choices"]])
 
 
 if __name__ == "__main__":

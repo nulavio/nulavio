@@ -1606,6 +1606,22 @@
     // for private windows too unless the box says otherwise, and sends typed text to it only when that box is on.
     // A provider with accounts says whether this profile is signed in (the presence of its session cookie). --
     const chooseBench = workbench({ privateToo: true, suggest: false }, search);
+    // The last choice the success bar speaks of. The bar is shown only while the list, as read after the choice, still
+    // has it so (review of #927): the engine chosen is the default for the windows the bar names, at the hosts it names.
+    // An engine removed or changed in another window while the list was read again is not reported as the search.
+    let lastChoice = null;
+    const choiceHolds = () => {
+      if (!lastChoice) {
+        return true;
+      }
+      const engine = enginesNow().find(each => each.id === lastChoice.id);
+      return Boolean(
+        engine?.isDefault &&
+          (!lastChoice.privateToo || engine.isDefaultPrivate) &&
+          (engine.host ?? null) === lastChoice.host &&
+          (lastChoice.suggestHost === null || engine.suggestHost === lastChoice.suggestHost)
+      );
+    };
     const chooseSetup = (emitChange, stops) => {
       stops.push(search.listen(emitChange));
       chooseBench.watch(emitChange, stops);
@@ -1748,9 +1764,16 @@
         // is made, from the engine chosen as the list has it then (review of #927): the row may be older than that.
         const privateToo = Boolean(chooseBench.state.privateToo);
         const said = id => {
-          const chosen = row.provider ? null : shell.NulavioSearch.namedOf(id);
-          const done = msg(privateToo ? "chooseDoneBoth" : "chooseDone", chosen ? named(chosen) : rowInSentence(row));
+          const chosen = shell.NulavioSearch.namedOf(id);
+          if (!chosen) {
+            // Gone already (removed in another window, review of #927): nothing is said of an engine the list no longer
+            // has; the list says which one is in use.
+            lastChoice = null;
+            return "";
+          }
+          const done = msg(privateToo ? "chooseDoneBoth" : "chooseDone", row.provider ? rowInSentence(row) : named(chosen));
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
+          lastChoice = { id, host: chosen.host ?? null, privateToo, suggestHost: host };
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
         };
         chooseBench.act(() => shell.NulavioSearch.choose({ ...target, privateToo, suggest, ...shown }), said);
@@ -1779,7 +1802,7 @@
     }
     const chooseBars = [
       chooseBench.bar("nulavio-search-choose-error", "error", () => chooseBench.state.error, () => Boolean(chooseBench.state.error)),
-      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said)),
+      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said) && choiceHolds()),
     ];
     // An instance of the person's own, or a site's own description: an address typed here, added by the module's rules.
     const addByAddress = (name, add, words) => {

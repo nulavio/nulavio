@@ -168,8 +168,21 @@ class CallersNameTheHostTest(unittest.TestCase):
         # (review of #927): a row read before may name a host the engine no longer has.
         said = re.search(r"const said = id => \{(.*?)\n        \};", panes, re.S)
         self.assertIsNotNone(said, "the message after a choice is no longer built from the chosen engine")
-        self.assertIn("const chosen = row.provider ? null : shell.NulavioSearch.namedOf(id);", said.group(1))
-        self.assertIn('"chooseDoneBoth" : "chooseDone", chosen ? named(chosen) : rowInSentence(row))', said.group(1))
+        self.assertIn("const chosen = shell.NulavioSearch.namedOf(id);", said.group(1))
+        self.assertIn('"chooseDoneBoth" : "chooseDone", row.provider ? rowInSentence(row) : named(chosen))', said.group(1))
+        # An engine gone by then is not said to be the search (review of #927, round 2), and the bar stays only while
+        # the list read again after the choice has the engine chosen as the default at the hosts the bar names.
+        self.assertRegex(said.group(1), r"if \(!chosen\) \{[^}]*lastChoice = null;\s*return \"\";")
+        self.assertIn("() => Boolean(chooseBench.state.said) && choiceHolds()", panes)
+        holds = re.search(r"const choiceHolds = \(\) => \{(.*?)\n    \};", panes, re.S)
+        self.assertIsNotNone(holds)
+        for part in (
+            "engine?.isDefault",
+            "(!lastChoice.privateToo || engine.isDefaultPrivate)",
+            "(engine.host ?? null) === lastChoice.host",
+            "engine.suggestHost === lastChoice.suggestHost",
+        ):
+            self.assertIn(part, holds.group(1))
         self.assertIn('msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", "))', panes)
         self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`', panes)
         # A row of a curated provider is named alone; any other row by its engine, with that engine's host.
