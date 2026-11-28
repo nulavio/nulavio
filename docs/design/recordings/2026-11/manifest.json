@@ -8,7 +8,7 @@
   "edits": [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while the window the video cuts to is not ready to film, nothing is recorded: either a new instance starting and the script preparing its window (its size, layout and fixture pages, then a check of at least 2 s that the content blocker was ready), or one already running opening the link, the script selecting that tab and a fixed 0.8 s pause after the page loads, so the tab's loading animation is over; the video cuts to that window once it is ready, and the real seconds cut include all of this",
+    "after the last frame of the window the video cuts from, nothing is recorded until the window it cuts to is ready to film; the real seconds cut count from that last frame and hold what comes after it: either the rest of a new instance starting and the script preparing its window (its size, layout and fixture pages, then at least 2 s in which the content blocker's button did not mark a tab as loaded before the blocker was ready, which does not show that the blocker is installed), or the rest of one already running opening the link, the script selecting that tab and a fixed 0.8 s pause after the page loads, so the tab's loading animation is over; what the browser did while the window the video cuts from was still filmed is not in them",
     "the last frame is held for 0.6 s at the end"
   ],
   "encoders": {
@@ -77,8 +77,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
@@ -167,8 +167,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
@@ -259,8 +259,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
@@ -351,8 +351,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
@@ -441,8 +441,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
@@ -531,8 +531,8 @@
         "script_blob": "2976ad4efa9f1d74e217d79dece73e413acc69a9"
       },
       "composed": {
-        "utc": "2026-11-28T05:17:33Z",
-        "commit": "419ffdc",
+        "utc": "2026-11-28T06:25:07Z",
+        "commit": "fe6a679",
         "worktree_clean": true
       },
       "files": [
