@@ -150,7 +150,7 @@ External agents (Codex CLI and Desktop, Claude Code and Desktop, other MCP clien
 
 ## Phase 5 — Hardening and anti-infostealer measures (with proven limits)
 
-- [x] Guard runtime: changes made outside the browser since the last run (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search engines), reviewed and undone or kept by the user; bypass analysis in [hardening](../security/hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed) (`test_guard`)
+- [x] Guard runtime: changes made outside the browser since the last run (extensions, protective settings, certificate authorities, security modules, native-messaging hosts, policies, `user.js`, search engines), reviewed and kept by the user, or undone where Guard can (extensions, protective settings, certificate authorities, security modules, search engines; a `user.js` or native-messaging finding offers "Show file" and "Keep"); bypass analysis in [hardening](../security/hardening.md#guard-at-run-time-what-it-catches-and-how-it-can-be-bypassed) (`test_guard`)
 - [x] Spikes ([report](../security/phase5-spikes.md)): bubblewrap adopted as the opt-in `nulavio run --confined` (`test_confine`, `test_confined`); Flatpak not then (native messaging solvable through the proxy in Fedora 44 and Ubuntu 26.04+); revisited 2026-11-11: Flatpak from the release build, for Flathub ([build](../architecture/build.md#flatpak-flathub)); SELinux module not adopted; AppArmor profile in the `.deb` for the engine's user namespaces on Ubuntu
 - [x] Sensitive sites, as a profile template rather than a container (containers share extensions): cleared on close, no installs from web pages (`test_profiles` 11)
 
