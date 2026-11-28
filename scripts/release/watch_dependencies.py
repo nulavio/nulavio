@@ -34,6 +34,8 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import datetime as _dt
+import http.client
+import io
 import json
 import re
 import sys
@@ -46,7 +48,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OSV = "https://api.osv.dev/v1/"
-AMO = "https://addons.mozilla.org/api/v5/"
+AMO_ORIGIN = "https://addons.mozilla.org/"
+AMO = AMO_ORIGIN + "api/v5/"
 GITHUB = "https://api.github.com/"
 ADVISORY_SOURCES = ROOT / "docs" / "security" / "extension-advisory-sources.json"
 MIN_REQUEST_SECONDS = 10
@@ -63,13 +66,93 @@ EXTENSION_LAG_DAYS = 30  # counted from the first version AMO published after th
 VERSIONS_PAGE_SIZE = 50  # AMO's largest page
 VERSIONS_PAGES = 4  # versions pages read to find the first one after the pin (newest first)
 EXTENSION_ECOSYSTEM = "Browser extension"  # in vulnerability-exceptions.json: package = the lock's key, version = the pin
-UNAVAILABLE = (OSError, ValueError, KeyError, TypeError)  # network errors, unexpected or malformed replies
+# network errors, unexpected or malformed replies; Net turns http.client's own errors (a reply cut short, a malformed
+# status line), which are not OSErrors, into ConnectionError, and HTTPException is here for any it might not
+UNAVAILABLE = (OSError, http.client.HTTPException, ValueError, KeyError, TypeError)
+READ_CHUNK = 64 * 1024  # a body is read a socket read at a time (64 KiB at most), the request's end checked after each
 MISSING = object()  # an AMO reply the watch could not have: the endpoint was down or the reply malformed
 BATCH = 500  # OSV.dev accepts up to 1000 queries per batch
 INDEX_TYPES = ", ".join([
     "application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
     "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json",
 ])  # fmt: skip
+
+
+class Redirects(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to https, and one from addons.mozilla.org only to addons.mozilla.org.
+
+    urllib's own handler follows a 30x to another host and to http://, and the watch would then judge that body as
+    the source's (#829). A redirect it refuses is an HTTPError, unavailable data as any other. The redirect's own body
+    is never read (urllib's handler reads all of it), and a redirect after the request's end (`Net._open` sets
+    `request.time_left`) is not followed: the next request gets what is left, not the first one's timeout.
+    """
+
+    def http_error_302(self, req, fp, code, msg, headers):
+        # judged before urllib's own scheme check, whose HTTPError names the whole address (a data: URL's, say)
+        location = headers["location"] if "location" in headers else headers.get("uri")  # as urllib picks it
+        if location is not None:
+            self.refuse_off_origin(req, fp, code, headers, urllib.parse.urljoin(req.full_url, location))
+        return super().http_error_302(req, fp, code, msg, headers)
+
+    http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+    @staticmethod
+    def refuse_off_origin(req, fp, code, headers, newurl):
+        allowed = AMO_ORIGIN if same_origin(req.full_url, AMO_ORIGIN) else "https://"
+        if same_origin(newurl, allowed):
+            return
+        if fp is not None:
+            fp.close()  # a refusal keeps no socket open
+        try:  # no path, query, user or reason phrase: a signed URL's token stays out of the log
+            target = urllib.parse.urlsplit(newurl)
+            host, scheme = target.hostname or "", target.scheme
+        except ValueError:
+            host, scheme = "", ""
+        if not re.fullmatch(r"[a-z][a-z0-9+.-]{0,15}", scheme):
+            where = "an address that cannot be read"
+        elif re.fullmatch(r"[a-z0-9.:-]{1,253}", host):
+            where = f"{scheme}://{host}"
+        else:
+            where = f"a {scheme}: address"
+        raise urllib.error.HTTPError(req.full_url, code, f"refusing a redirect to {where} (only {allowed})", headers, None)
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        self.refuse_off_origin(req, fp, code, headers, newurl)  # again, on the address urllib quoted and joined
+        if fp is not None:
+            fp.close()  # urllib then reads nothing of a body the watch does not use
+        time_left = getattr(req, "time_left", None)
+        if time_left is not None:
+            left = time_left()
+            if left <= 0:
+                raise TimeoutError("a redirect came after the request's time budget")
+            timeout = getattr(req, "timeout", None)  # what urllib opens the redirect with
+            req.timeout = left if timeout is None else min(timeout, left)
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and time_left is not None:
+            new.time_left = time_left  # and its own redirects
+        return new
+
+
+def same_origin(url: str, allowed: str) -> bool:
+    """Is url on https at allowed's origin ("https://": any https host), by scheme, host and port, not by spelling?"""
+    try:
+        parts, want = urllib.parse.urlsplit(url), urllib.parse.urlsplit(allowed)
+        if parts.scheme.lower() != "https" or not parts.hostname:
+            return False
+        if not want.hostname:
+            return True
+        port = 443 if parts.port is None else parts.port  # 0 is a port of its own, not the default
+        return (parts.hostname, port) == (want.hostname, 443 if want.port is None else want.port)
+    except ValueError:  # a port that is not a number, say
+        return False
+
+
+OPENER = urllib.request.build_opener(Redirects)
+
+
+def urlopen(request: urllib.request.Request, timeout: float):
+    """urllib.request.urlopen, with the redirects Redirects allows (the unit tests replace it)."""
+    return OPENER.open(request, timeout=timeout)  # https only: Net._open checks the URL, Redirects every redirect
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,6 +197,10 @@ class Net:
         self.amo_started: float | None = None
         self.deadline = clock() + budget  # no request starts after it, and none may outlast it: the summary always prints
 
+    def _end(self, until: float | None) -> float:
+        """When a request must be over: its own end (a budget's), never later than the watch's."""
+        return self.deadline if until is None else min(until, self.deadline)
+
     def _open(
         self,
         url: str,
@@ -121,6 +208,7 @@ class Net:
         headers: dict | None = None,
         method: str | None = None,
         timeout: float | None = None,
+        until: float | None = None,
     ):
         if not url.startswith("https://"):
             raise ValueError(f"refusing a non-https URL: {url}")
@@ -137,19 +225,88 @@ class Net:
                 request.add_header(key, value)
         if body is not None:
             request.add_header("Content-Type", "application/json")
-        return urllib.request.urlopen(request, timeout=min(timeout or self.timeout, left))  # noqa: S310 - https only, checked above
+        end = self._end(until)
+        request.time_left = lambda: end - self.clock()  # Redirects follows no redirect after it
+        try:
+            response = urlopen(request, timeout=min(timeout or self.timeout, left))
+        except http.client.HTTPException as exc:  # a malformed status line or header, say: not an OSError
+            raise ConnectionError(f"a malformed reply: {type(exc).__name__}") from exc  # its text is the server's
+        except urllib.error.HTTPError as exc:  # its status and headers are all the watch reads of it
+            exc.close()  # the socket is not kept open while the exception is (AMO's rows keep theirs)
+            if self.clock() > end:  # a late 404 is no more "not there" than a late 200 is a reply
+                raise TimeoutError("the reply's headers came after the request's time budget") from None
+            raise
+        # the timeout bounds each socket wait, not the connection, its redirects and the headers together
+        if self.clock() > end:
+            response.close()
+            raise TimeoutError("the reply's headers came after the request's time budget")
+        self._bound_reads(response, end)
+        return response
+
+    def _bound_reads(self, response, end: float) -> None:
+        """Every socket read after the headers (body, chunk size lines, trailers) checks the end before and after.
+
+        http.client reads a chunked reply's size line and trailers inside one read1, as many socket reads as the
+        server takes; a check at the socket read cuts a server dripping them off one socket wait after `end` at most.
+        """
+        raw = getattr(getattr(response, "fp", None), "raw", None)
+        if not isinstance(raw, io.RawIOBase):
+            return
+        readinto = raw.readinto
+
+        def bounded(buffer):
+            if self.clock() > end:
+                raise TimeoutError("the reply's body came after the request's time budget")
+            count = readinto(buffer)
+            if self.clock() > end:
+                raise TimeoutError("the reply's body came after the request's time budget")
+            return count
+
+        raw.readinto = bounded  # an instance attribute: the BufferedReader over it looks readinto up on each read
+
+    def _body(self, response, end: float) -> bytes:
+        """The whole body, read in chunks: one that arrives after `end` (a server dripping bytes) is cut off.
+
+        read1 waits on the socket once at most (read(n) waits until it has n bytes), and the end is checked after
+        every read, the last one (the end of the body) too: a reply that is over only after `end` is not a reply.
+        """
+        chunks = []
+        try:
+            while True:
+                chunk = response.read1(READ_CHUNK)
+                if self.clock() > end:
+                    raise TimeoutError("the reply's body came after the request's time budget")
+                if not chunk:
+                    break
+                chunks.append(chunk)
+            length = getattr(response, "length", None)  # read1 ends quietly when the server closes before the end
+            if isinstance(length, int) and length > 0:
+                raise http.client.IncompleteRead(b"".join(chunks), length)
+        except http.client.HTTPException as exc:  # IncompleteRead (chunked replies raise it), not an OSError
+            raise ConnectionError(f"the reply was cut short: {type(exc).__name__}") from exc
+        return b"".join(chunks)
+
+    def _fetch(self, url: str, data: dict | None = None, headers: dict | None = None, timeout=None, until=None):
+        """The decoded JSON body; a reply whose body is null is malformed (only a 404 means "not there")."""
+        with self._open(url, data, headers=headers, timeout=timeout, until=until) as response:
+            body = self._body(response, self._end(until))
+        value = json.loads(body)
+        if value is None:
+            raise ValueError(f"a reply whose body is null (from {urllib.parse.urlsplit(url).hostname})")  # no query
+        return value
 
     def json(self, url: str, data: dict | None = None, missing_ok: bool = False) -> dict | None:
-        timeout = None
+        """The reply's JSON; with missing_ok, None for an HTTP 404 and for nothing else."""
+        timeout = until = None
         if url.startswith(AMO):
             if self.amo_started is None:
                 self.amo_started = self.clock()
-            timeout = min(self.timeout, self.amo_started + AMO_BUDGET - self.clock())
+            until = self.amo_started + AMO_BUDGET
+            timeout = min(self.timeout, until - self.clock())
             if timeout <= 0:
                 raise TimeoutError("the time budget for addons.mozilla.org is spent")  # unavailable data, as a timeout
         try:
-            with self._open(url, data, timeout=timeout) as response:
-                return json.load(response)
+            return self._fetch(url, data, timeout=timeout, until=until)
         except urllib.error.HTTPError as exc:
             if missing_ok and exc.code == 404:
                 return None
@@ -169,14 +326,13 @@ class Net:
             # the budget covers the requests too: a request may not outlast it (but gets a few seconds at least)
             timeout = max(MIN_REQUEST_SECONDS, min(self.timeout, deadline - self.clock()))
             try:
-                with self._open(url, headers=headers, timeout=timeout) as response:
-                    return json.load(response)
+                return self._fetch(url, headers=headers, timeout=timeout, until=max(deadline, self.clock() + timeout))
             except urllib.error.HTTPError as exc:
                 delay = self.backoff(exc, RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
                 failure = exc
                 if delay is None:
                     raise
-            except OSError as exc:  # a reset, a timeout, DNS (HTTPError is handled above)
+            except OSError as exc:  # a reset, a timeout, DNS, a reply cut short (HTTPError is handled above)
                 failure = exc
                 delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
             if attempt == len(RETRY_DELAYS) or self.clock() + delay >= deadline:  # checked after the failure

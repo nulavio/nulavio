@@ -882,10 +882,52 @@ class ExtensionLagTest(unittest.TestCase):
             raise TimeoutError("test: timed out")
 
         net = watch.Net(clock=lambda: clock[0], sleep=lambda _: None)
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch.urllib.request, "urlopen", urlopen):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch, "urlopen", urlopen):
             rows = watch.extension_rows(net, at("2026-11-26T20:00:00Z"), RecordedAmo(self.KEYS).lock(Path(tmp)))
         self.assertEqual({r.state for r in rows}, {"error"})
         self.assertLessEqual(clock[0], 150)  # what main spent in that outage: one 30 s request per extension
+
+    def recorded_net(self, replies: dict, raw: dict) -> watch.Net:
+        """A Net whose _open answers AMO from the recorded replies (None: a 404), and with raw bodies by path (#829)."""
+
+        def opened(url, data=None, **kwargs):
+            path = url[len(watch.AMO) :]
+            if path in raw:
+                return io.BytesIO(raw[path])
+            if replies[path] is None:
+                raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+            return io.BytesIO(json.dumps(replies[path]).encode())
+
+        net = watch.Net(sleep=lambda _: None)
+        net._open = opened
+        return net
+
+    def test_a_null_body_is_not_read_as_a_404(self):
+        # KeePassXC-Browser has a blocklist entry (two old versions): a 200 whose body is null said "not blocked" on main
+        amo = RecordedAmo(["keepassxc-browser"])
+        blocklist = "blocklist/block/keepassxc-browser%40keepassxc.org/"
+        pinned = "addons/addon/keepassxc-browser%40keepassxc.org/versions/1.10.4.1/"
+        now = at("2026-11-26T20:00:00Z")
+        self.assertEqual(self.rows_of(self.recorded_net(amo.replies, {}), amo, now).state, "ok")  # as recorded
+        row = self.rows_of(self.recorded_net(amo.replies, {blocklist: b"null"}), amo, now)
+        self.assertEqual(row.state, "error", row.text)
+        self.assertIn("null", row.text)
+        # the pinned version's own file: a null body is malformed, not "AMO no longer serves the pinned version"
+        row = self.rows_of(self.recorded_net(amo.replies, {pinned: b"null"}), amo, now)
+        self.assertEqual(row.state, "error", row.text)
+        # a 404 still means not on the blocklist
+        row = self.rows_of(self.recorded_net({**amo.replies, blocklist: None}, {}), amo, now)
+        self.assertEqual(row.state, "ok", row.text)
+        net = self.recorded_net({blocklist: None}, {"x/": b"null"})
+        self.assertIsNone(net.json(watch.AMO + blocklist, missing_ok=True))
+        for missing_ok in (True, False):
+            with self.subTest(missing_ok=missing_ok), self.assertRaises(ValueError):
+                net.json(watch.AMO + "x/", missing_ok=missing_ok)
+
+    def rows_of(self, net, amo, now):
+        with tempfile.TemporaryDirectory() as tmp:
+            (row,) = watch.extension_rows(net, now, amo.lock(Path(tmp)))
+        return row
 
     def test_a_lag_behind_a_backport_made_current_is_not_fixed_by_the_refresh_script(self):
         versions = self.stream(1)  # 1.1 (2026-05-11) and the pin
@@ -946,7 +988,7 @@ class ExtensionLagTest(unittest.TestCase):
             return io.BytesIO(json.dumps(reply).encode())
 
         net = watch.Net(clock=lambda: clock[0], sleep=lambda _: None)
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch.urllib.request, "urlopen", urlopen):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(watch, "urlopen", urlopen):
             rows = watch.extension_rows(net, at("2026-11-26T20:00:00Z"), RecordedAmo(self.KEYS).lock(Path(tmp)))
         self.assertEqual(rows[-1].state, "fail", rows[-1].text)
         self.assertIn("is on Mozilla's blocklist", rows[-1].text)
