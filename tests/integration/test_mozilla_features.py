@@ -53,6 +53,44 @@ return { open: menu.state === "open", askChat: item ? !item.hidden : false,
 """
 
 
+# The drag-to-pin card at the top of the vertical tab list (#925): Mozilla's fox artwork and sample icons of third-party
+# sites (sidebar-pins-promo.mjs, the 161 engine shows it with Nova on). Read in one window, found by its id.
+PIN_PROMO = """
+const [id, done] = [arguments[0], arguments[arguments.length - 1]];
+(async () => {
+  const win = [...Services.wm.getEnumerator("navigator:browser")].find(w => String(w.browsingContext.id) === id);
+  if (!win) return { error: "no window " + id };
+  await win.SidebarController.promiseInitialized;
+  const card = win.document.getElementById("drag-to-pin-promo-card");
+  if (!card) return { error: "no drag-to-pin-promo-card in this engine" };
+  await card.updateComplete;
+  const root = card.shadowRoot;
+  const name = "sidebar.verticalTabs.dragToPinPromo.dismissed";
+  return {
+    vertical: win.SidebarController.sidebarVerticalTabsEnabled,
+    expanded: win.SidebarController.sidebarMain.hasAttribute("expanded"),
+    pinned: win.gBrowser.pinnedTabCount,
+    shown: !card.hidden && card.getBoundingClientRect().height > 0,
+    cards: root ? root.querySelectorAll(".promo-card, .pinned-tabs-promo").length : 0,
+    images: root ? [...root.querySelectorAll("img")].map(i => i.getAttribute("src")) : [],
+    dismissed: { value: Services.prefs.getDefaultBranch("").getBoolPref(name), user: Services.prefs.prefHasUserValue(name) },
+  };
+})().then(done, e => done({ error: String(e) }));
+"""
+
+OPEN_WINDOW = """
+const done = arguments[arguments.length - 1];
+const w = OpenBrowserWindow();
+const ready = subject => {
+  if (subject !== w) return;
+  Services.obs.removeObserver(ready, "browser-delayed-startup-finished");
+  w.SidebarController.promiseInitialized.then(() => w.SidebarController.waitUntilStable())
+    .then(() => done(String(w.browsingContext.id)), e => done({ error: String(e) }));
+};
+Services.obs.addObserver(ready, "browser-delayed-startup-finished");
+"""
+
+
 @unittest.skipUnless(harness.nulavio_engine(), "the Nulavio build's defaults (NULAVIO_ENGINE)")
 class MozillaFeaturesTest(unittest.TestCase):
     @classmethod
@@ -115,6 +153,66 @@ class MozillaFeaturesTest(unittest.TestCase):
             "return {chatbot: G.isBlocked, smartWindow: AIWindow.isBlocked, smartWindowOn: AIWindow.isEnabled};"
         )
         self.assertEqual(features, {"chatbot": True, "smartWindow": True, "smartWindowOn": False})
+
+    def pin_promo(self, window_id: str) -> dict:
+        state = self.chrome_async(PIN_PROMO, [window_id])
+        self.assertNotIn("error", state, state)
+        return state
+
+    def test_01b_no_drag_to_pin_promo_in_a_new_window(self):
+        """A new window of a new profile has no drag-to-pin card in its vertical tab list (#925): the build's default
+        says the card was closed. The control writes the engine's own default for one moment and sees the card with
+        its artwork in the same window, so the check cannot pass on a tab list where the card never renders."""
+        name = "sidebar.verticalTabs.dragToPinPromo.dismissed"
+        closed = {"value": True, "user": False}
+        first = self.m.chrome("return String(window.browsingContext.id);")
+        # D-UX2: a new profile starts in Lateral, the vertical tab list with the launcher expanded, where the engine
+        # shows the card.
+        lateral = harness.wait_until(lambda: (s := self.pin_promo(first))["vertical"] and s["expanded"], 15)
+        self.assertTrue(lateral, self.pin_promo(first))
+        opened = self.chrome_async(OPEN_WINDOW)
+        self.assertIsInstance(opened, str, opened)
+        try:
+            self.assertEqual(
+                self.pin_promo(opened),
+                {"vertical": True, "expanded": True, "pinned": 0, "shown": False, "cards": 0, "images": [], "dismissed": closed},
+            )
+            self.save_window_shot(opened, "new-window-tab-list.png")
+            # Control: with the engine's default the same window shows the card, Mozilla's artwork in it.
+            self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", [name])
+            try:
+                shown = harness.wait_until(lambda: (s := self.pin_promo(opened))["cards"] and s, 10)
+                self.assertTrue(shown and shown["shown"], self.pin_promo(opened))
+                self.assertTrue(any("/sidebar/" in src for src in shown["images"]), shown)
+            finally:
+                self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [name])
+            gone = harness.wait_until(lambda: not (s := self.pin_promo(opened))["cards"] and s, 10)
+            self.assertTrue(gone, self.pin_promo(opened))
+            self.assertEqual((gone["shown"], gone["dismissed"]), (False, closed))
+        finally:
+            self.m.chrome(
+                "const w = [...Services.wm.getEnumerator('navigator:browser')]"
+                ".find(w => String(w.browsingContext.id) === arguments[0]); w?.close();",
+                [opened],
+            )
+
+    def save_window_shot(self, window_id: str, name: str) -> None:
+        """The tab list as a person sees it, in that window (an artifact for the reviewer, not a comparison)."""
+        main = self.m.send("WebDriver:GetWindowHandle")["value"]
+        try:
+            for handle in self.m.window_handles():
+                self.m.switch_to(handle)
+                if self.m.chrome("return String(window.browsingContext.id) === arguments[0];", [window_id]):
+                    out = harness.artifacts_dir() / "mozilla-features"
+                    out.mkdir(parents=True, exist_ok=True)
+                    self.m.set_context("chrome")
+                    try:
+                        (out / name).write_bytes(self.m.screenshot_png())
+                    finally:
+                        self.m.set_context("content")
+                    return
+        finally:
+            self.m.switch_to(main)
 
     def test_02_no_chatbot_in_the_sidebar_launcher(self):
         for vertical in (False, True):
