@@ -1621,10 +1621,13 @@ class DownloadPagesTest(unittest.TestCase):
         # curl and sudo are shell functions, and so are the tools the block needs, which call them by their full
         # path; PATH finds nothing, so not even `command curl` or `command sudo` reaches the real ones, and nothing is
         # run from the temporary folder, which may be mounted noexec (OCR on #914).
+        # Made absolute: bash runs in another folder, where a relative PATH entry's tool is not found (OCR on #914).
         tools = {name: shutil.which(name) for name in ("mktemp", "sha256sum", "cat", "cmp")}
         bash = shutil.which("bash")
         if bash is None or None in tools.values():
             self.skipTest(f"needs bash and {', '.join(tools)}")
+        bash = os.path.abspath(bash)
+        tools = {name: os.path.abspath(target) for name, target in tools.items()}
 
         def run(page: str, case: str, body: bytes, curl_ok: bool = True, update_ok: bool = True) -> list[str]:
             work = self.tmp / f"apt-run-{case}-{page.split('/')[0]}"
