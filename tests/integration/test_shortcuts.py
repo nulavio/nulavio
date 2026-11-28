@@ -15,6 +15,12 @@ from test_profiles import chrome_async
 LAYOUT = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioLayout.sys.mjs").NulavioLayout'
 # Hide every panel that is opening or open, as Escape closes it.
 CLOSE_PANELS = "for (const p of document.querySelectorAll('panel')) if (['showing', 'open'].includes(p.state)) p.hidePopup?.();"
+# The Shell's popup (the profile menu) in this window, from the engine's own list: one still loading in a panel that is
+# not shown yet counts too. CLOSE_PANELS cannot see that one, and it opens about 2 s later with the keyboard in it.
+SHELL_POPUP = (
+    "ChromeUtils.importESModule('resource:///modules/ExtensionPopups.sys.mjs')"
+    ".ViewPopup.for(WebExtensionPolicy.getByID('shell@nulavio.net').extension, window)"
+)
 KEYSET = "[...document.querySelectorAll('#ext-keyset-id-shell_nulavio_net key')]"
 NAMES = {"accel": "control", "control": "control", "shift": "shift", "alt": "alt", "meta": "meta"}
 
@@ -399,6 +405,8 @@ class ShortcutsTest(unittest.TestCase):
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(shown), 10), "the profile menu's panel never opened")
         self.m.chrome(CLOSE_PANELS)
         self.assertTrue(harness.wait_until(lambda: not self.m.chrome(shown), 10))
+        # Shut and gone: no menu of the Shell is left in this window, open or still loading.
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(f"return !{SHELL_POPUP};"), 10), "a profile menu is left")
         self.m.chrome("gBrowser.selectedBrowser.focus();")
         # Nothing selected: the link is not copied, and the window says why (as Ctrl+Alt+C does).
         self.m.chrome(pick, ["nulavio-highlight"])
@@ -410,9 +418,11 @@ class ShortcutsTest(unittest.TestCase):
         """#321: Ctrl+Alt+P puts the address bar of its window in the engine's actions mode, focused, with Nulavio's
         actions listed; nothing runs until one is picked."""
         before = self.m.chrome(f"return {LAYOUT}.immersive().on;")
-        # From the page, with no panel left open by an earlier test to take the keyboard back.
+        # From the page, with no panel left open by an earlier test to take the keyboard back, and no profile menu
+        # still loading: #695's failure (the bar in actions mode, its list empty) is what a menu that opens after the
+        # key does, as it takes the keyboard and the bar closes its list.
         self.m.chrome(CLOSE_PANELS + "gBrowser.selectedBrowser.focus();")
-        outside = "return !document.activeElement?.closest('panel');"
+        outside = f"return !document.activeElement?.closest('panel') && !{SHELL_POPUP};"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(outside), 10))
         self.m.chrome(f"{key_of('alt,control+P')}.doCommand();")
         mode = "return {source: gURLBar.searchMode?.source ?? null, focused: gURLBar.focused};"
@@ -424,9 +434,16 @@ class ShortcutsTest(unittest.TestCase):
             harness.wait_until(lambda: self.m.chrome(mode) == {"source": actions_source, "focused": True}, 10),
             self.m.chrome(mode),
         )
-        listed = "return [...gURLBar.view.panel.querySelectorAll('[data-action]')].map(e => e.dataset.action);"
+        rows = "[...gURLBar.view.panel.querySelectorAll('[data-action]')].map(e => e.dataset.action)"
+        listed = f"return {rows};"
+        # On a failure, say where the keyboard went and whether the list is open, not only that it is empty.
+        state = (
+            f"return {{listed: {rows}, focused: gURLBar.focused, open: gURLBar.view.isOpen, menu: !!{SHELL_POPUP},"
+            " panel: document.activeElement?.closest('panel')?.id ?? null};"
+        )
         self.assertTrue(
-            harness.wait_until(lambda: "nulavio-immersive" in (self.m.chrome(listed) or []), 10), self.m.chrome(listed)
+            harness.wait_until(lambda: "nulavio-immersive" in (self.m.chrome(listed) or []), 10),
+            self.m.chrome(state),
         )
         self.assertEqual(self.m.chrome(f"return {LAYOUT}.immersive().on;"), before, "an action ran without a pick")
         self.m.chrome("gURLBar.searchMode = null; gURLBar.view.close(); gBrowser.selectedBrowser.focus();")
