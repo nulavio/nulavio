@@ -30,11 +30,12 @@ release run (#906), and a pull request that leaves the app alone is never held
 up by one. A base, or a `--ref`, that is not a commit, or a range git cannot
 compare (no merge base), is refused, never taken as a change or as none. CI
 does not run again when a pull request only changes its base (no `edited`
-trigger, so a body edit does not restart it), nor when a release is published
-from the base's commit, which makes a new tag without moving the base: a pass
-from before stands, though a second app change on the version just shipped
-would now fail. In both cases the release run's refusal stays the backstop
-(#922).
+trigger, so a body edit does not restart it), nor when a release is published:
+release.yml drafts it with `--target` the commit the release was built from,
+one already on main, so publishing makes a new tag without moving the base. A
+pass from before then stands, though a second app change on the version just
+shipped would now fail. In both cases the release run's refusal stays the
+backstop (#922).
 """
 
 from __future__ import annotations
