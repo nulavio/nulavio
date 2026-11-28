@@ -300,3 +300,9 @@ user_pref("browser.shell.checkDefaultBrowser", false);
 // @why Skip the upstream "what's new" tab so the Nulavio start page is shown.
 // @tradeoff Release notes are still reachable from Help > About.
 user_pref("browser.startup.homepage_override.mstone", "ignore");
+
+// @mode seed
+// @category ui
+// @why No feature tips from Mozilla's messaging system (Settings' "Recommend features as you browse"): since Firefox 161 the tab group tips come back with Mozilla's artwork from its CDN.
+// @tradeoff No tip the first time a tab group is made, nor after a restart with saved groups; changeable in Settings > Tabs and browsing.
+user_pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
