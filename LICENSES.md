@@ -33,6 +33,6 @@ Nothing below is **redistributed** by the Track A preview. Nulavio downloads pin
 
 ## SBOM
 
-`python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run and attaches it as a build artifact. The committed copy has to name the extensions of `browser/distribution/extensions.lock.json` with their versions, as does the table above: `tests/unit/test_sbom.py` fails when either differs.
+`python3 -I scripts/release/sbom.py --committed > sbom/nulavio-preview.cdx.json` (CycloneDX 1.6). CI regenerates it on every run, without `--committed`, and attaches it as a build artifact that names the git revision it was made from. The committed copy names no revision and takes its serial from its own content: the change that regenerates it is a branch commit, which a squash merge leaves out of `main` (#920). It has to be what the generator writes from the current inputs, and to name the extensions of `browser/distribution/extensions.lock.json` with their versions, as does the table above: `tests/unit/test_sbom.py` fails when either differs.
 
 The Companion app has its own: `scripts/release/sbom.py --companion` lists every library of its release build, from the lock of its release classpath (`android/app/gradle.lockfile`), each with its Maven purl and the SHA-256 Gradle verifies. With `--gradle-dependencies <report>` it also records the dependency graph as Gradle resolved it ([build](docs/architecture/build.md#packages-s18)).

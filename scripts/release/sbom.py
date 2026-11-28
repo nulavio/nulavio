@@ -6,7 +6,13 @@ pinned extensions (with SHA-256), and the engine and libsodium as external
 dependencies (distribution packages; not redistributed). Brand
 fonts are referenced, not bundled, so they are not listed.
 
-    python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json
+    python3 -I scripts/release/sbom.py > sbom.cdx.json
+
+CI's SBOM of each run, made so, names the git revision it was made from. The copy committed in this
+repository names none and takes its serial from its own content, because the change that regenerates
+it is a branch commit that a squash merge leaves out of main (#920):
+
+    python3 -I scripts/release/sbom.py --committed > sbom/nulavio-preview.cdx.json
 
 With --package, the SBOM of a Nulavio package (RPM or .deb) instead: the
 engine is then redistributed, built from Mozilla's source release with the
@@ -130,6 +136,15 @@ def engine_built(version: str) -> dict:
             "patches": [{"type": "unofficial", "diff": {"url": f"browser/patches/{name}"}, "resolves": []} for name in names]
         },
     }
+
+
+def content_serial(bom: dict) -> str:
+    """A serial derived from the document itself, everything but its serial: two different
+    inventories never share one, and the same inventory always gets the same one."""
+    body = {key: value for key, value in bom.items() if key != "serialNumber"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, 'nulavio-preview-content:' + digest)}"
 
 
 def git_revision() -> str | None:
@@ -311,6 +326,11 @@ def main() -> int:
     )
     parser.add_argument("--companion", action="store_true", help="describe the Android Companion app instead")
     parser.add_argument(
+        "--committed",
+        action="store_true",
+        help="the preview as committed in sbom/nulavio-preview.cdx.json: no git revision, a serial from its content",
+    )
+    parser.add_argument(
         "--gradle-dependencies", type=Path, help="with --companion: Gradle's report of releaseRuntimeClasspath, for the graph"
     )
     parser.add_argument("--apk", type=Path, help="with --companion: the APK this SBOM describes")
@@ -322,6 +342,9 @@ def main() -> int:
         parser.error(f"--package needs --release-version {args.engine_version}-<Nulavio revision>")
     if args.release_version is not None and not args.package:
         parser.error("--release-version needs --package")
+    # A package's and the Companion's SBOM name the tagged revision they were built from; only the preview has a committed copy.
+    if args.committed and (args.package or args.companion):
+        parser.error("--committed is only for the preview, not with --package or --companion")
     if args.companion:
         if args.package:
             parser.error("--companion takes no --package")
@@ -414,6 +437,12 @@ def main() -> int:
                 {"name": "nulavio:git-revision", "value": git_revision() or "uncommitted"},
             ],
         }
+    if args.committed:
+        root = bom["metadata"]["component"]
+        root["properties"] = [prop for prop in root["properties"] if prop["name"] != "nulavio:git-revision"]
+        if not root["properties"]:
+            del root["properties"]
+        bom["serialNumber"] = content_serial(bom)
     json.dump(bom, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return 0

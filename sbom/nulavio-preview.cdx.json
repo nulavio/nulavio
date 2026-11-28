@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:0fac366d-2a34-53df-884d-c88c4a5d9e9a",
+  "serialNumber": "urn:uuid:eee4ce10-3b3f-5057-a725-ce3a7ab13960",
   "version": 1,
   "metadata": {
     "component": {
@@ -14,12 +14,6 @@
           "license": {
             "id": "MPL-2.0"
           }
-        }
-      ],
-      "properties": [
-        {
-          "name": "nulavio:git-revision",
-          "value": "396e8c3a3d4b5654a34b4897f46c590a394f5066"
         }
       ]
     }
