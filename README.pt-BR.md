@@ -36,7 +36,7 @@
   </picture>
 </p>
 
-O Nulavio é um navegador de código aberto para Linux, compilado a partir do código-fonte do Firefox com a assinatura da Mozilla conferida. Ele bloqueia anúncios e rastreadores desde a primeira abertura, mantém cada parte da sua vida num perfil próprio, cifra os perfis que você protege e não envia nada a servidores próprios: não há telemetria nem conta Nulavio.
+O Nulavio é um navegador de código aberto para Linux, compilado a partir do código-fonte do Firefox com a assinatura da Mozilla conferida. Ele bloqueia rastreadores desde a primeira abertura e anúncios assim que o uBlock Origin se instala e carrega as listas dele, mantém cada parte da sua vida num perfil próprio, cifra os perfis que você protege e não envia nada a servidores próprios: não há telemetria nem conta Nulavio.
 
 ## Destaques
 

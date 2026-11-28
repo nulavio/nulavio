@@ -1,0 +1,307 @@
+"""A page opened in a new profile's first seconds, before uBlock Origin is ready (#875): a measurement.
+
+On a new profile's first start the build's policy installs uBlock Origin from addons.mozilla.org, and uBlock Origin
+then loads its lists. A request made before that is not filtered, and the requests made while it loads them are held
+back and then let through, filtered or not (docs/security/residual-risks.md, R91). This module measures that window
+on the real first start of a new profile, with the first-run sequence on as a person gets it, in the two ways a
+person can reach a page that early:
+
+- `test_01`: a link from another app starts the browser, so the page loads while the browser starts;
+- `test_02`: the person chooses "Use the defaults" on the welcome as soon as it shows and opens a page at once.
+
+The page asks for an image that uBlock Origin's default lists block by its address (`/adbanners/*`, the case
+`test_engine_slice.py` 08 checks) beside a control image that no list blocks. Each reading counts the requests that
+reached the local server; a reading where the control image never came says nothing and fails. While the early tab
+is left alone, a new tab is opened again and again with a new address until the image is blocked there: that is the
+moment the filter is ready for a new page. Then the early tab is checked, in this order (each step hides the one
+before it): an image added to the page it shows, a new address in the same tab, a reload.
+
+What is asserted holds however fast the network is: uBlock Origin is installed, a new tab is filtered within
+`READY_WITHIN` seconds of the start, and once it is, nothing the test asks for afterwards leaves, in new tabs or in
+the early tab (R91 says so). Whether the first page's image left, and how long each part of the window lasted, is
+recorded and not asserted: a JSON file per run in NULAVIO_TEST_ARTIFACTS and one line on stderr (a case that stops
+before its end, failed or skipped, still writes what it measured, with `complete` false). The times depend on
+the network, addons.mozilla.org and the machine, and the residual-risk entry gives what the runs measured. What
+uBlock Origin hides inside a page (by element, not by request) is not measured here.
+
+It needs the network, as a first start does: without it uBlock Origin is never installed, and the module is skipped
+and says so, or fails where the run requires the network (NULAVIO_REQUIRE_NETWORK=1).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
+import harness
+
+UBLOCK = "uBlock0@raymondhill.net"
+READY_WITHIN = 180  # seconds after the engine process started: a new tab is filtered by then
+READING = 20  # seconds a reading may take before it says nothing
+AFTER_READY = 5  # rounds of (a new tab, an image added to the early page) once the filter is ready
+
+ADDON = """
+const done = arguments[arguments.length - 1];
+const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+AddonManager.getAddonByID(arguments[0]).then(
+  a => done(a ? {active: a.isActive, version: a.version} : null), e => done({error: String(e)}));
+"""
+# Where uBlock Origin's install was when Marionette first answered (in the runs of 2026-11-27 it was always active).
+FIRST_ANSWER = """
+const done = arguments[arguments.length - 1];
+const {AddonManager} = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
+Promise.all([AddonManager.getAddonByID(arguments[0]), AddonManager.getAllInstalls()]).then(([addon, all]) => done({
+  active: addon ? addon.isActive : null,
+  installs: all.filter(install => /ublock/i.test(install.sourceURI?.spec ?? "")).map(install => install.state),
+}), e => done({error: String(e)}));
+"""
+IMAGES_DONE = "return document.readyState === 'complete' && [...document.images].every(i => i.complete);"
+ADD_IMAGES = """
+for (const src of arguments) { const image = new Image(); image.src = src; document.body.append(image); }
+"""
+# The window around the page while the first run is staged (test_firstrun_stage.py).
+STAGED = "return document.documentElement.hasAttribute('nulavio-stage');"
+# The new tab's own mark while a first-run card is its question (newtab.js, show()).
+PAGE_STAGED = "return document.documentElement.hasAttribute('data-stage');"
+
+
+def control(n: str) -> str:
+    return f"/assets/control.png?n={n}"
+
+
+def ad(n: str) -> str:
+    return f"/adbanners/nulavio-test.png?n={n}"
+
+
+def seconds_since_start(pid: int) -> float:
+    """How long ago the process started, from the kernel's own record (/proc/<pid>/stat, field 22)."""
+    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    started = int(fields[19]) / os.sysconf("SC_CLK_TCK")
+    return float(Path("/proc/uptime").read_text().split()[0]) - started
+
+
+@unittest.skipUnless(harness.nulavio_engine(), "uBlock Origin comes with the Nulavio build's policies (NULAVIO_ENGINE)")
+class FirstStartFilterWindowTest(unittest.TestCase):
+    def setUp(self):
+        self.server = harness.FixtureServer().__enter__()
+        self.addCleanup(self.server.__exit__, None, None, None)
+        self.session = harness.GeckoProfileSession(name="Pessoal")
+        self.addCleanup(self.session.cleanup)  # stops the engine and removes the temporary home
+        self.artifacts = harness.artifacts_dir()  # kept after the run: the session's temporary home is removed
+        self.counter = 0
+        self.record: dict = {"complete": False}
+        self.saved: str | None = None
+        self.last_control = 0.0  # unrounded seconds since the start: the deadline is decided on it
+        self.addCleanup(self.save)  # added last, so it runs first: whatever was measured is kept, even on a failure
+
+    # -- clock and readings ---------------------------------------------------------------------------------
+    def started(self) -> None:
+        """Set the clock's zero to the moment the engine process started."""
+        since = seconds_since_start(self.session.process.pid)
+        self.zero = time.monotonic() - since
+        self.m.set_context("chrome")
+        try:
+            self.record["ublock_at_first_answer"] = {"at": self.now(), **self.m.execute_async(FIRST_ANSWER, [UBLOCK])}
+        finally:
+            self.m.set_context("content")
+
+    def elapsed(self, moment: float | None = None) -> float:
+        return (time.monotonic() if moment is None else moment) - self.zero
+
+    def now(self, moment: float | None = None) -> float:
+        """Seconds since the start, rounded for the record; decisions use `elapsed`."""
+        return round(self.elapsed(moment), 2)
+
+    def fresh(self, tag: str) -> str:
+        self.counter += 1
+        return f"{tag}{self.counter}"
+
+    def read(self, n: str, asked: float, times: int = 1, ads_before: int = 0) -> dict:
+        """One reading for `n`, asked for at `asked` (seconds since the start): when the control image reached the
+        server (its `times`-th request), whether the image the lists block did too (more than `ads_before` times)
+        and when it did, and when every image of the current page was done. Raises when the control image never
+        came: such a reading says nothing."""
+        if not harness.wait_until(lambda: len(self.server.hit_times(control(n))) >= times, timeout=READING):
+            raise AssertionError(f"could not measure: the control image {control(n)} was not requested; {self.server.hits[-6:]}")
+        if not harness.wait_until(lambda: self.m.execute(IMAGES_DONE), timeout=READING):
+            raise AssertionError(f"could not measure: the page's images did not finish for n={n}")
+        done = self.now()
+        ads = self.server.hit_times(ad(n))
+        self.last_control = self.elapsed(self.server.hit_times(control(n))[times - 1])
+        return {
+            "asked": asked,
+            "requested": round(self.last_control, 2),
+            "leaked": len(ads) > ads_before,
+            "leaked_at": self.now(ads[ads_before]) if len(ads) > ads_before else None,
+            "done": done,
+        }
+
+    def addon(self) -> dict | None:
+        self.m.set_context("chrome")
+        try:
+            state = self.m.execute_async(ADDON, [UBLOCK])
+        finally:
+            self.m.set_context("content")
+        if state and "error" in state:
+            raise AssertionError(state["error"])
+        return state
+
+    def probe(self, into: list) -> None:
+        """A new tab with a new address: is the image blocked there? The reading goes into `into` as soon as it is
+        made, before the tab is closed: a failure while closing it does not lose it."""
+        n = self.fresh("p")
+        handle = self.m.new_tab()
+        self.m.switch_to(handle)
+        asked = self.now()
+        self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
+        into.append(self.read(n, asked))
+        self.m.send("WebDriver:CloseWindow")
+        self.m.switch_to(self.early)
+
+    # -- the measurement ------------------------------------------------------------------------------------
+    def wait_for_the_filter(self) -> None:
+        """New tabs, one after another, until two in a row are filtered; the early tab is not touched. The first of
+        the two counts if its control image came before `READY_WITHIN`: the second then only confirms it."""
+        probes, present, installed, streak = [], False, None, 0
+        self.record["probes"] = probes  # filled as it goes: a failure keeps the probes made
+
+        def before_the_deadline() -> bool:
+            return self.elapsed() < READY_WITHIN or (streak == 1 and self.last_control < READY_WITHIN)
+
+        def look_at_the_addon() -> None:
+            nonlocal present, installed
+            state = self.addon()
+            present = present or state is not None
+            if state and state["active"]:
+                installed = self.now()
+                self.record["ublock_version"] = state["version"]
+            self.record["ublock_active_at"] = installed
+
+        while streak < 2 and before_the_deadline():
+            if installed is None:
+                look_at_the_addon()
+            self.probe(probes)
+            streak = streak + 1 if not probes[-1]["leaked"] else 0
+        if installed is None:
+            look_at_the_addon()  # it may have appeared or become active during the last probe
+        if installed is None:
+            # Installed but never active is a broken activation, not a missing network: it fails everywhere.
+            self.assertFalse(present, f"uBlock Origin was installed by the policy but not active in {READY_WITHIN} s")
+            message = f"uBlock Origin was not installed by the policy in {READY_WITHIN} s (no network?)"
+            if os.environ.get("NULAVIO_REQUIRE_NETWORK") == "1":
+                raise AssertionError(message)
+            raise unittest.SkipTest(message)
+        self.assertEqual(streak, 2, f"a new tab was still not filtered {READY_WITHIN} s after the start: {probes[-4:]}")
+        leaks = [p["leaked_at"] for p in probes if p["leaked"]]
+        self.record["last_new_tab_leaked_at"] = leaks[-1] if leaks else None
+        self.record["new_tab_filtered_at"] = probes[-2]["requested"]
+
+    def check_the_early_tab(self, n: str) -> None:
+        """Once the filter is ready for new tabs: the early tab's page, then a new address in it, then a reload."""
+        same_document, later_probes = [], []
+        self.record["new_tabs_after_ready"] = later_probes  # filled as it goes, as the probes are
+        self.record["early_page_after_ready"] = same_document
+        for _ in range(AFTER_READY):
+            self.probe(later_probes)
+            late = self.fresh(f"{n}-late")
+            asked = self.now()
+            self.m.execute(ADD_IMAGES, [control(late), ad(late)])
+            same_document.append(self.read(late, asked))
+        address = self.fresh("e")
+        asked = self.now()
+        self.m.navigate(self.server.url(f"/ads-fixture?n={address}"))
+        self.record["early_tab_new_address"] = self.read(address, asked)
+        # A reload asks for the same images again (the server says no-store): the second request of each counts.
+        before, asked = len(self.server.hit_times(ad(address))), self.now()
+        self.m.send("WebDriver:Refresh")
+        self.record["early_tab_reload"] = self.read(address, asked, times=2, ads_before=before)
+
+    def save(self) -> None:
+        """Write the record once: from `finish`, or as a cleanup when the case stopped before it (a failure, a
+        skip), with `complete` false and what was measured until then."""
+        if self.saved:
+            return
+        case = self.record.get("case", "unknown")
+        self.saved = f"first-start-filter-{case}-{time.strftime('%Y%m%dT%H%M%S')}.json"
+        (self.artifacts / self.saved).write_text(json.dumps(self.record, indent=2) + "\n")
+        if not self.record["complete"]:
+            print(f"\nfirst-start-filter {case}: stopped before the end, partial record {self.saved}", file=sys.stderr)
+
+    def finish(self) -> None:
+        self.record["engine"] = self.m.chrome("return Services.appinfo.version + ' ' + Services.appinfo.appBuildID;")
+        self.record["complete"] = True
+        self.save()
+        case, name, r = self.record["case"], self.saved, self.record
+
+        def word(entry: dict) -> str:
+            return f"LEAKED@{entry['leaked_at']}s" if entry["leaked"] else f"blocked@{entry['requested']}s"
+
+        print(
+            f"\nfirst-start-filter {case}: first page asked@{r['first_page']['asked']}s {word(r['first_page'])},"
+            f" uBlock Origin at the first answer {r['ublock_at_first_answer']}, active@{r['ublock_active_at']}s,"
+            f" last new tab leaked@{r['last_new_tab_leaked_at']}s, new tab filtered@{r['new_tab_filtered_at']}s,"
+            f" early page after ready {[word(e) for e in r['early_page_after_ready']]},"
+            f" new address {word(r['early_tab_new_address'])}, reload {word(r['early_tab_reload'])};"
+            f" new tabs after ready leaked {sum(p['leaked'] for p in r['new_tabs_after_ready'])}"
+            f"/{len(r['new_tabs_after_ready'])}; uBlock Origin {r.get('ublock_version')}, engine {r['engine']}; {name}",
+            file=sys.stderr,
+        )
+        # What R91 says of the time after the window: once a new tab is filtered, everything is, the early tab too.
+        after = [*r["new_tabs_after_ready"], *r["early_page_after_ready"], r["early_tab_new_address"], r["early_tab_reload"]]
+        self.assertEqual([e for e in after if e["leaked"]], [], f"a request left after the filter was ready: {name}")
+
+    def find_tab(self, address: str) -> str:
+        for handle in self.m.window_handles():
+            self.m.switch_to(handle)
+            if address in self.m.current_url():
+                return handle
+        raise AssertionError(f"no tab shows {address}")
+
+    # -- the two ways to an early page ----------------------------------------------------------------------
+    def test_01_a_link_from_another_app_that_starts_the_browser(self):
+        self.record["case"] = "link"
+        n = self.fresh("s")
+        self.m = self.session.start(self.server.url(f"/ads-fixture?n={n}"), first_run=True)
+        self.started()
+        if not harness.wait_until(lambda: self.server.count(control(n)) >= 1, timeout=READING):
+            raise AssertionError(f"could not measure: the address given at the start never loaded; {self.server.hits[-6:]}")
+        self.early = self.find_tab(f"/ads-fixture?n={n}")
+        self.record["first_page"] = self.read(n, asked=0.0)
+        self.wait_for_the_filter()
+        self.check_the_early_tab(n)
+        self.finish()
+
+    def test_02_a_page_opened_as_soon_as_the_welcome_lets_the_person_through(self):
+        self.record["case"] = "welcome"
+        self.m = self.session.start(first_run=True)
+        self.started()
+        self.early = self.m.send("WebDriver:GetWindowHandle")["value"]
+        # Shown and painted: the new tab stays `visibility: hidden` until it has its final shape (pages.css).
+        skip = "return Boolean(document.getElementById('firstrun-skip')?.checkVisibility({ visibilityProperty: true }));"
+        shown = harness.wait_until(lambda: self.m.execute(skip), timeout=READING)
+        self.assertTrue(shown, "could not measure: the welcome of a new profile did not show")
+        self.record["welcome_shown_at"] = self.now()
+        self.m.send("WebDriver:ElementClick", {"id": self.m.find_element("#firstrun-skip")})
+
+        # Ended on both sides: the page leaves its stage once the click's handler is done, and the window after it.
+        def ended() -> bool:
+            return not self.m.execute(PAGE_STAGED) and not self.m.chrome(STAGED)
+
+        self.assertTrue(harness.wait_until(ended, timeout=READING), "the welcome did not end")
+        self.record["welcome_ended_at"] = self.now()
+        n = self.fresh("s")
+        asked = self.now()
+        self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
+        self.record["first_page"] = self.read(n, asked)
+        self.wait_for_the_filter()
+        self.check_the_early_tab(n)
+        self.finish()
+
+
+if __name__ == "__main__":
+    unittest.main()

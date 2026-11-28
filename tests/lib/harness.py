@@ -321,6 +321,7 @@ class FixtureServer:
 
     def __init__(self):
         self.hits: list[str] = []
+        self.times: list[float] = []  # time.monotonic() of each hit, in the order of `hits`
         self.agents: dict[str, str] = {}  # path (without the query) -> the User-Agent header it was last asked with
         self.cookies: dict[str, str | None] = {}  # path (without the query) -> the Cookie header it was last asked with
         self._lock = threading.Lock()
@@ -330,6 +331,7 @@ class FixtureServer:
             def do_GET(self):
                 with outer._lock:
                     outer.hits.append(self.path)
+                    outer.times.append(time.monotonic())
                     outer.agents[self.path.partition("?")[0]] = self.headers.get("User-Agent", "")
                     outer.cookies[self.path.partition("?")[0]] = self.headers.get("Cookie")
                 if self.path.startswith("/slow-page"):
@@ -374,6 +376,7 @@ class FixtureServer:
                 self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 with outer._lock:
                     outer.hits.append(self.path)
+                    outer.times.append(time.monotonic())
                 body, ctype, _extra = outer.route(self.path)
                 self.send_response(200 if body is not None else 404)
                 self.send_header("Content-Type", ctype)
@@ -734,6 +737,11 @@ class FixtureServer:
         with self._lock:
             return sum(1 for hit in self.hits if hit == path)
 
+    def hit_times(self, path: str) -> list[float]:
+        """time.monotonic() of each request whose path (including the query string) equals ``path``."""
+        with self._lock:
+            return [when for hit, when in zip(self.hits, self.times, strict=True) if hit == path]
+
     def __enter__(self):
         self.thread.start()
         return self
@@ -989,23 +997,31 @@ class GeckoProfileSession:
         )
 
     @staticmethod
-    def enable_marionette(profile_dir: Path) -> None:
-        """Test-only prefs for a disposable profile (Marionette on a random port)."""
-        lines = [f'user_pref("{k}", {Session._js(v)});' for k, v in PROFILE_TEST_PREFS.items()]
+    def enable_marionette(profile_dir: Path, first_run: bool = False) -> None:
+        """Test-only prefs for a disposable profile (Marionette on a random port).
+
+        `first_run`: leave the first-run sequence as a new profile has it, instead of marking it finished."""
+        prefs = {k: v for k, v in PROFILE_TEST_PREFS.items() if not (first_run and k == "nulavio.firstrun.done")}
+        lines = [f'user_pref("{k}", {Session._js(v)});' for k, v in prefs.items()]
         with open(Path(profile_dir) / "user.js", "a", encoding="utf-8") as handle:
             handle.write("// test harness overlay (disposable profile only)\n" + "\n".join(lines) + "\n")
 
-    def start(self) -> Marionette:
+    def start(self, *urls: str, first_run: bool = False) -> Marionette:
+        """Create the profile and start it. `urls` go on the command line, as a link from another app that starts
+        the browser; `first_run` keeps the first-run sequence on (see `enable_marionette`)."""
         self._start_private_bus()
         self.profile_dir.parent.mkdir(parents=True)
         created = self._run("-CreateProfile", f"{self.name} {self.profile_dir}")
         if not self.profile_dir.is_dir():
             raise RuntimeError(f"-CreateProfile failed: {created.stderr[-400:]}")
-        self.enable_marionette(self.profile_dir)
+        if first_run:
+            self.enable_marionette(self.profile_dir, first_run=True)
+        else:  # the one-argument call the site tools' overrides take (capture_site.py, record_site.py)
+            self.enable_marionette(self.profile_dir)
         engine_log = os.environ.get("NULAVIO_TEST_ENGINE_LOG")
         output = open(engine_log, "ab") if engine_log else subprocess.DEVNULL  # noqa: SIM115
         self.process = subprocess.Popen(
-            [str(self.engine.path), "-P", self.name],
+            [str(self.engine.path), "-P", self.name, *urls],
             env=self.env,
             stdout=output,
             stderr=output,

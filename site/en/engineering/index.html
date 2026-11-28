@@ -403,6 +403,7 @@
 <h3><span class="num">3.4</span> Signed extensions, and uBlock Origin</h3>
 <p>Extensions load only with Mozilla's signature. uBlock Origin is installed by a build policy: on first launch, the browser downloads the version the project records (today {{ubo}}) from addons.mozilla.org and checks Mozilla's signature. After that it updates like any extension, and its filter lists also update over the network. It works in private windows, and you can disable it or turn it off for one site.</p>
 <p class="limit"><strong>Limit:</strong> On this path the engine checks the signature but not the SHA-256 the project records. The SHA-256 is checked when Nulavio installs a password extension (section 9).</p>
+<p class="limit"><strong>Limit:</strong> On a new profile's first launch, uBlock Origin takes some seconds to start filtering: 10 to 17 seconds in the measurements of November 2026, on a fast network, and about 40 in three of eighteen. On a slow network it takes longer; if its download from addons.mozilla.org fails, it does not filter until it is installed. A page opened in that time, such as a link from another app that starts the browser, can request what its lists would block. After that, the requests its lists block by address were blocked, also in the tabs opened before; what it hides inside a page loaded before was not measured. The engine's tracking protection applies from the first moment.</p>
 </div>
 <div class="receipt">
 <p class="receipt-title">How to check</p>
