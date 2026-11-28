@@ -602,6 +602,73 @@ class OverlappingUnlockTest(StorageCase):
             record()
         self.assertEqual(mode(box.mountpoint), 0o500)
 
+    def test_a_lock_just_after_a_holder_looked_still_makes_the_folder_read_only(self):
+        # A change to the unlock methods ends: it looks at the folder while the volume is still mounted (nothing to
+        # repair), and `nulavio vault lock` unmounts before the change lets the lock go. The lock waits for it rather
+        # than leave a folder writable underneath, as a version before U-T23's handle mounted it (#926 review, 2).
+        box, vault = self.new_container()
+        bare = os.open(box.mountpoint, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            box.mount(vault)
+            os.chmod(f"/proc/self/fd/{bare}", 0o700)  # the bare folder underneath the volume, writable
+        finally:
+            os.close(bare)
+        holder = storage.Container(box.mountpoint)
+        holder._lock_bare_if_locked = lambda: None  # its look came while the volume was still mounted
+        held, done = threading.Event(), threading.Event()
+
+        def change() -> None:
+            with holder._state_lock(wait=0):
+                held.set()
+                deadline = time.monotonic() + 20
+                while box.mounted() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                time.sleep(0.3)  # the unmount below is done and has found the lock held
+            done.set()
+
+        thread = threading.Thread(target=change, daemon=True)
+        thread.start()
+        self.assertTrue(held.wait(10))
+        storage.Container(box.mountpoint).unmount()
+        thread.join(30)
+        self.assertTrue(done.is_set())
+        self.assertFalse(box.mounted())
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_the_repair_when_the_lock_goes_never_takes_the_holders_place(self):
+        # The look at the mount table when the lock goes is a repair: what it raises does not replace what the holder
+        # did, nor stop the AI Bridge closing its other engines (ProfileTarget.stop, #926 review, round 2).
+        box, _vault = self.new_container()
+        with mock.patch.object(storage, "mounted_paths", side_effect=UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "bad")):
+            with box._state_lock(wait=0):
+                pass
+            with self.assertRaises(KeyError), box._state_lock(wait=0):
+                raise KeyError("the holder's own error")
+
+    def test_a_mount_point_name_in_another_encoding_neither_raises_nor_hides_the_profile(self):
+        # Another disk mounted under a name that is not UTF-8, or with a non-breaking space: the mount table is read
+        # as paths are, and split on the spaces the kernel escapes only (#926 review, round 2).
+        odd = Path(os.fsdecode(os.fsencode(str(self.tmp)) + b"/caf\xe9"))
+        odd.mkdir()
+        spaced = self.tmp / "a\xa0b c"
+        spaced.mkdir()
+        table = (
+            b"36 35 98:0 / /mnt/disk\xe9 rw,noatime - ext4 /dev/sdb1 rw\n"
+            + b"37 35 98:0 / " + os.fsencode(str(odd)) + b" rw - fuse.gocryptfs /x\xff rw\n"
+            + b"38 35 98:0 / " + os.fsencode(str(spaced)).replace(b" ", b"\\040") + b" rw - fuse.gocryptfs /y rw\n"
+        )  # fmt: skip
+        real = Path.read_bytes
+
+        def read_bytes(path):
+            return table if str(path) == "/proc/self/mountinfo" else real(path)
+
+        with mock.patch.object(Path, "read_bytes", read_bytes):
+            paths = storage.mounted_paths()
+            self.assertIn(os.fsdecode(b"/mnt/disk\xe9"), paths)
+            self.assertTrue(storage.Container(odd).mounted())
+            self.assertTrue(storage.Container(spaced).mounted())
+            self.assertFalse(storage.Container(self.tmp / "work").mounted())
+
     def test_a_second_unlock_waits_for_the_first_ones_generation_check(self):
         # The second request finds the volume mounted while the first is still checking its generation: it says
         # "unlocked" only after that check, and never of a volume the check then refuses and takes away (U-T21,
