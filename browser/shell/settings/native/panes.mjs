@@ -1744,16 +1744,16 @@
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
         // chosen engine's own, which the module checked against the one the row named.
         // The name isolated (#796) and, for an engine that is not a curated provider, its host (#828): an engine names
-        // itself, and its name may hold direction controls or read the same as another engine's.
-        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", rowInSentence(row));
+        // itself, and its name may hold direction controls or read the same as another engine's. Said once the choice
+        // is made, from the engine chosen as the list has it then (review of #927): the row may be older than that.
+        const privateToo = Boolean(chooseBench.state.privateToo);
         const said = id => {
+          const chosen = row.provider ? null : shell.NulavioSearch.namedOf(id);
+          const done = msg(privateToo ? "chooseDoneBoth" : "chooseDone", chosen ? named(chosen) : rowInSentence(row));
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
         };
-        chooseBench.act(
-          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest, ...shown }),
-          said
-        );
+        chooseBench.act(() => shell.NulavioSearch.choose({ ...target, privateToo, suggest, ...shown }), said);
         // Consent is given for one provider at a time: the box is clear again for the next choice.
         chooseBench.show({ suggest: false });
       },

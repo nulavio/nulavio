@@ -144,7 +144,7 @@ class CallersIsolateTest(unittest.TestCase):
         )
         self.assertRegex(panes, r"const named = \(engine, quoted = false\) =>\s+engineInSentence\(engine, ")
         self.assertIn('msg("chooseUseNamed", rowInSentence(row))', panes)
-        self.assertIn('"chooseDoneBoth" : "chooseDone", rowInSentence(row))', panes)
+        self.assertIn('"chooseDoneBoth" : "chooseDone", chosen ? named(chosen) : rowInSentence(row))', panes)
         self.assertIn('msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", "))', panes)
         # The suggestions switch's accessible name carries the engine's name too, after its label.
         self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`', panes)

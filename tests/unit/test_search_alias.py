@@ -136,6 +136,14 @@ class ReservedAliasTest(unittest.TestCase):
         self.assertEqual(after["fresh"], "")
         self.assertEqual(after["released"], ["Duck"])
 
+    def test_an_engine_is_named_as_the_list_has_it_now(self):
+        """Review of #927: Settings says what was chosen from the engine chosen, once the choice is made: its name, the
+        host its searches go to now and its provider key, the same fields as `releasedAliases()`."""
+        named = self.out["namedOf"]
+        self.assertEqual(named["was"], {"id": named["was"]["id"], "name": "Duck", "host": "duck.example", "provider": None})
+        self.assertEqual(named["now"], {**named["was"], "host": "moved.example"})
+        self.assertIsNone(named["gone"])
+
 
 if __name__ == "__main__":
     unittest.main()

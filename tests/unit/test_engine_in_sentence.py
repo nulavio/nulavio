@@ -164,7 +164,12 @@ class CallersNameTheHostTest(unittest.TestCase):
             panes,
         )
         self.assertIn('msg("chooseUseNamed", rowInSentence(row))', panes)
-        self.assertIn('"chooseDoneBoth" : "chooseDone", rowInSentence(row))', panes)
+        # The message after a choice is said once the choice is made, from the engine chosen as the list has it then
+        # (review of #927): a row read before may name a host the engine no longer has.
+        said = re.search(r"const said = id => \{(.*?)\n        \};", panes, re.S)
+        self.assertIsNotNone(said, "the message after a choice is no longer built from the chosen engine")
+        self.assertIn("const chosen = row.provider ? null : shell.NulavioSearch.namedOf(id);", said.group(1))
+        self.assertIn('"chooseDoneBoth" : "chooseDone", chosen ? named(chosen) : rowInSentence(row))', said.group(1))
         self.assertIn('msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", "))', panes)
         self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`', panes)
         # A row of a curated provider is named alone; any other row by its engine, with that engine's host.

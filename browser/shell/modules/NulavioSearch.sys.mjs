@@ -473,6 +473,14 @@ class NulavioSearchClass {
     return engine ? suggestHost(engine) : null;
   }
 
+  /** An engine as a sentence names it (#828), from the engine's list now: its name, the host its searches go to and its
+      provider key, as `list()` gives them, or null when it is gone. Settings says what was chosen with it once the
+      choice is made (review of #927), so the words follow the engine chosen even when the row read before was older. */
+  namedOf(id) {
+    const engine = lazy.SearchService.getEngineById(String(id));
+    return engine ? { id: engine.id, name: engine.name, host: engine.searchUrlDomain, provider: this.#providerKey(engine) } : null;
+  }
+
   /**
    * #151: whether this profile is signed in to each provider that has accounts, from the presence of its session
    * cookie in this profile's normal (not private) cookie jar. `signedIn` is null when the cookies could not be read.

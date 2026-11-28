@@ -206,4 +206,9 @@ fresh.alias = "";
 await flush();
 out.replacedThenCleared = { fresh: fresh.alias, released: (await released()).sort() };
 
+// An engine as Settings names it after a choice (review of #927): as the list has it now, not as a row read before.
+const was = NulavioSearch.namedOf(ddg.id);
+ddg.url = "https://moved.example/?q={searchTerms}";
+out.namedOf = { was, now: NulavioSearch.namedOf(ddg.id), gone: NulavioSearch.namedOf("user-none") };
+
 process.stdout.write(JSON.stringify(out));
