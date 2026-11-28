@@ -151,17 +151,17 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             raise AssertionError(state["error"])
         return state
 
-    def probe(self) -> dict:
-        """A new tab with a new address: is the image blocked there? The tab is closed afterwards."""
+    def probe(self, into: list) -> None:
+        """A new tab with a new address: is the image blocked there? The reading goes into `into` as soon as it is
+        made, before the tab is closed: a failure while closing it does not lose it."""
         n = self.fresh("p")
         handle = self.m.new_tab()
         self.m.switch_to(handle)
         asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
-        reading = self.read(n, asked)
+        into.append(self.read(n, asked))
         self.m.send("WebDriver:CloseWindow")
         self.m.switch_to(self.early)
-        return reading
 
     # -- the measurement ------------------------------------------------------------------------------------
     def wait_for_the_filter(self) -> None:
@@ -185,7 +185,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         while streak < 2 and before_the_deadline():
             if installed is None:
                 look_at_the_addon()
-            probes.append(self.probe())
+            self.probe(probes)
             streak = streak + 1 if not probes[-1]["leaked"] else 0
         if installed is None:
             look_at_the_addon()  # it may have appeared or become active during the last probe
@@ -207,7 +207,7 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.record["new_tabs_after_ready"] = later_probes  # filled as it goes, as the probes are
         self.record["early_page_after_ready"] = same_document
         for _ in range(AFTER_READY):
-            later_probes.append(self.probe())
+            self.probe(later_probes)
             late = self.fresh(f"{n}-late")
             asked = self.now()
             self.m.execute(ADD_IMAGES, [control(late), ad(late)])
