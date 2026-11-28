@@ -146,6 +146,7 @@
   "chooseDone": {"message": "$NAME$ is this profile's search in normal windows.", "placeholders": {"name": {"content": "$1"}}},
   "chooseDoneBoth": {"message": "$NAME$ is this profile's search in normal and private windows.", "placeholders": {"name": {"content": "$1"}}},
   "chooseEngineHost": {"message": "Searches go to $HOST$.", "placeholders": {"host": {"content": "$1"}}},
+  "engineNamedHost": {"message": "$NAME$ ($HOST$)", "placeholders": {"name": {"content": "$1"}, "host": {"content": "$2"}}},
   "chooseSuggestTo": {"message": "Suggestions ticked: what you type goes to $HOST$ while you type.", "placeholders": {"host": {"content": "$1"}}},
   "err_invalid_search_choice": {"message": "That choice could not be made. The list was refreshed."},
   "err_invalid_profile_search": {"message": "The search chosen for the new profile could not be used. Choose it again, or create the profile with Nulavio's default search."},

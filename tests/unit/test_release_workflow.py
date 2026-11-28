@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -261,13 +262,23 @@ if {"r2-key-id", "r2-secret"} & set(os.environ.values()):
 """
 RUNBOOK_CURL = """#!/bin/sh
 # Stand-in for curl ... --max-filesize <n>M -o <file> <url>: the URL's path from FAKE_CDN when it holds it (a cached
-# copy), else from FAKE_BUCKET; curl's 22 (a 404), or its 63 for a file past --max-filesize.
+# copy), else from FAKE_BUCKET; curl's 22 (a 404), or its 63 for a file past --max-filesize. curl --version prints
+# FAKE_CURL_VERSION (8.18.0, Fedora 44's, by default) on FAKE_LIBCURL_VERSION (the same by default) and exits with
+# FAKE_CURL_VERSION_STATUS (0 by default); FAKE_CURL_VERSION_LINE, when set, replaces that first line.
 exec python3 -I -c '
 import json, os, shutil, sys
 LEAK
 args = sys.argv[1:]
 with open(os.environ["FAKE_CURL_LOG"], "a") as log:
     print(json.dumps(args), file=log)
+if args == ["--version"]:
+    version = os.environ.get("FAKE_CURL_VERSION", "8.18.0")
+    libcurl = os.environ.get("FAKE_LIBCURL_VERSION", version)
+    line = f"curl {version} (x86_64-redhat-linux-gnu) libcurl/{libcurl} OpenSSL/3.5.4 zlib/1.3.1"
+    print(os.environ.get("FAKE_CURL_VERSION_LINE", line))
+    print("Release-Date: 2026-01-07")
+    print("Protocols: file ftp ftps http https")
+    sys.exit(int(os.environ.get("FAKE_CURL_VERSION_STATUS", "0")))
 if os.environ.get("FAKE_FSIZE_LOG"):
     import resource
     with open(os.environ["FAKE_FSIZE_LOG"], "a") as log:
@@ -418,11 +429,14 @@ class FailedPublishRunbookTest(unittest.TestCase):
                     "AWS_PROFILE": "admin", "AWS_DEFAULT_PROFILE": "admin",
                     "AWS_ACCESS_KEY_ID": "maintainer-key", "AWS_SECRET_ACCESS_KEY": "maintainer-secret"}  # fmt: skip
 
-    def run_block(self, *options: str, file_size_limit: str = ""):
+    def run_block(self, *options: str, file_size_limit: str = "", ifs: str | None = None):
         # file_size_limit: the soft and hard limit (in KiB, ulimit -f) of the shell the block is pasted into.
+        # ifs: that shell's IFS (bash sets its own at start, so the block is read into a shell that set this one).
         shell = ["bash"]
         if file_size_limit:
             shell = ["bash", "-c", 'ulimit -f "$1" && exec bash "${@:2}"', "bash", file_size_limit]
+        if ifs is not None:
+            shell = ["bash", "-c", 'IFS=$1 && . "${@: -1}"', "bash", ifs]
         return subprocess.run([*shell, *options, str(self.tmp / "block.sh")], cwd=self.repo, env=self.env,
                               capture_output=True, text=True, input="r2-key-id\nr2-secret\n")  # fmt: skip
 
@@ -436,8 +450,12 @@ class FailedPublishRunbookTest(unittest.TestCase):
     def writes(self) -> list[dict]:
         return [call for call in self.calls() if call["args"][-1].startswith("s3://")]
 
-    def curls(self) -> list[list[str]]:
+    def curl_calls(self) -> list[list[str]]:
         return [json.loads(line) for line in self.curl_log.read_text().splitlines()] if self.curl_log.exists() else []
+
+    def curls(self) -> list[list[str]]:
+        """The downloads: every curl call but curl --version."""
+        return [args for args in self.curl_calls() if args != ["--version"]]
 
     def test_the_verified_pair_is_uploaded_in_the_upload_order_and_served(self):
         out = self.run_block()
@@ -447,6 +465,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
         b, rev, local = self.BUCKET, self.REVISION, self.LOCAL
         self.assertEqual([[arg if arg.startswith("s3://") else local for arg in call["args"][9:]] for call in self.calls()], [
             [f"{b}/{rev}/repomd.xml", local], [f"{b}/{rev}/repomd.xml.asc", local], [f"{b}/repomd.xml.asc", local],
+            [f"{b}/repomd.xml", local],  # the served pair, to skip a write that an earlier paste made (#777)
             [f"s3://nulavio-packages/rpm/{self.href}", local],  # the primary file it names, from R2 too
             [local, f"{b}/repomd.xml.asc"], [local, f"{b}/repomd.xml"],  # the signature first, as upload_repo.sh
             [f"{b}/repomd.xml.asc", local], [f"{b}/repomd.xml", local],
@@ -520,6 +539,73 @@ class FailedPublishRunbookTest(unittest.TestCase):
         limits = {tuple(json.loads(line)) for line in (self.tmp / "fsize.json").read_text().splitlines()}
         self.assertEqual(limits, {(16 << 20, 16 << 20)})
 
+    def assert_old_curl_stops_it(self, version: str, libcurl: str):
+        self.env["FAKE_CURL_VERSION"], self.env["FAKE_LIBCURL_VERSION"] = version, libcurl
+        out = self.run_block()
+        self.assertIn(f"curl {version} (x86_64-redhat-linux-gnu) libcurl/{libcurl} OpenSSL/3.5.4 zlib/1.3.1: "
+                      "the block needs curl 8.4.0 or later, on libcurl 8.4.0 or later", out.stderr)  # fmt: skip
+        self.assertEqual(self.curls(), [])
+        self.assert_stopped_before_any_copy(out)
+
+    def test_curl_before_8_4_stops_it_before_any_download(self):
+        # #777: before 8.4.0, --max-filesize does not bound a body sent without Content-Length (curl's man page), so
+        # the 1 MiB and 8 MiB bounds would rest on ulimit -f alone. Debian 12 ships 7.88.1.
+        # A version without its three parts is not read as one (OpenCodeReview, #923).
+        for version in ("8.3.0", "7.88.1", "8", "8.4", "08.4.0", "not-a-version"):
+            with self.subTest(version=version):
+                self.assert_old_curl_stops_it(version, version)
+
+    def test_a_curl_8_4_on_an_older_libcurl_stops_it_before_any_download(self):
+        # #923 (OpenCodeReview round 2): libcurl enforces --max-filesize, and a curl binary may load another libcurl.
+        for version, libcurl in (("8.4.0", "8.3.0"), ("8.18.0", "7.88.1"), ("8.18.0", "8.4"), ("8.3.0", "8.18.0")):
+            with self.subTest(curl=version, libcurl=libcurl):
+                self.assert_old_curl_stops_it(version, libcurl)
+
+    def test_a_version_line_without_the_libcurl_field_in_its_place_stops_it_before_any_download(self):
+        # #923 (OpenCodeReview round 3): libcurl/<version> is read only as the field after (<host>).
+        for line in ("curl 8.18.0 (x86_64-redhat-linux-gnu) notlibcurl/8.4.0 OpenSSL/3.5.4",
+                     "curl 8.18.0 (x86_64-redhat-linux-gnu) OpenSSL/3.5.4 libcurl/8.18.0",
+                     "curl 8.18.0 libcurl/8.18.0 OpenSSL/3.5.4"):  # fmt: skip
+            with self.subTest(line=line):
+                self.env["FAKE_CURL_VERSION_LINE"] = line
+                out = self.run_block()
+                self.assertIn(f"{line}: the block needs curl 8.4.0 or later, on libcurl 8.4.0 or later", out.stderr)
+                self.assertEqual(self.curls(), [])
+                self.assert_stopped_before_any_copy(out)
+
+    def test_a_curl_version_probe_that_fails_stops_it_before_any_download(self):
+        # #923: a curl that prints a good version and then fails (or one that is missing: 127) is not trusted.
+        for status in ("1", "127"):
+            with self.subTest(status=status):
+                self.env["FAKE_CURL_VERSION_STATUS"] = status
+                out = self.run_block()
+                self.assertIn("curl (no version): the block needs curl 8.4.0 or later, on libcurl", out.stderr)
+                self.assertEqual(self.curls(), [])
+                self.assert_stopped_before_any_copy(out)
+
+    def test_curl_8_4_and_later_pass_the_version_check_before_the_first_download(self):
+        for version in ("8.4.0", "8.5.0", "8.18.0-DEV", "10.0.1"):
+            with self.subTest(version=version):
+                self.env["FAKE_CURL_VERSION"] = version
+                self.curl_log.unlink(missing_ok=True)
+                out = self.run_block()
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertIn(f"restored: dnf is served {self.REVISION}'s pair", out.stdout)
+                self.assertEqual(self.curl_calls()[0], ["--version"])
+                self.assertEqual(self.curl_calls().count(["--version"]), 1)
+
+    def test_a_shell_whose_ifs_omits_the_space_still_reads_the_curl_version(self):
+        # #923 (OpenCodeReview round 2): the block is pasted into the maintainer's shell, whose IFS it inherits.
+        for ifs in ("\n\t", ""):
+            with self.subTest(ifs=ifs):
+                self.curl_log.unlink(missing_ok=True)
+                self.log.unlink(missing_ok=True)
+                (self.served / "repomd.xml").write_bytes(self.old)
+                out = self.run_block(ifs=ifs)
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertIn(f"restored: dnf is served {self.REVISION}'s pair", out.stdout)
+                self.assertEqual(len(self.writes()), 2)
+
     def test_a_download_past_its_size_limit_stops_it(self):
         big, big_sig, _, _ = repodata("x" * (1 << 20), self.REVISION)  # signed, and past 1 MiB
         (self.served / self.REVISION / "repomd.xml").write_bytes(big)
@@ -576,6 +662,51 @@ class FailedPublishRunbookTest(unittest.TestCase):
     def test_a_cdn_that_still_serves_the_old_index_fails_it_after_the_upload(self):
         self.cache("rpm/repodata/repomd.xml", self.old)
         self.assert_restored_in_r2_only(self.run_block())
+
+    def test_a_retry_after_the_cdn_catches_up_writes_nothing(self):
+        # #777: the first paste restores R2 and stops at the CDN's cached repomd.xml; the paste after the purge finds
+        # R2's served pair already the revision's, writes nothing, and checks HTTPS only.
+        self.cache("rpm/repodata/repomd.xml", self.old)
+        self.assert_restored_in_r2_only(self.run_block())
+        self.assertEqual(len(self.writes()), 2)
+        shutil.rmtree(self.cdn)
+        self.log.unlink()
+        self.curl_log.unlink()
+        out = self.run_block()
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn(f"R2 already serves {self.REVISION}'s pair: nothing to upload", out.stdout)
+        self.assertIn(f"restored: dnf is served {self.REVISION}'s pair", out.stdout)
+        self.assertEqual(self.writes(), [])
+        self.assertIn([f"{self.BUCKET}/repomd.xml", self.LOCAL],
+                      [[a if a.startswith("s3://") else self.LOCAL for a in c["args"][9:]] for c in self.calls()])  # fmt: skip
+        self.assertEqual((self.served / "repomd.xml").read_bytes(), self.new)
+        self.assertEqual(len(self.curls()), 6)  # the same HTTPS checks
+
+    def test_a_failed_compare_of_the_served_index_stops_it_before_any_write(self):
+        # #923: cmp's 2 (it could not read a file) is neither "the same" nor "different": nothing is written.
+        # The real cmp, reached through a path with a space in it (self.tmp has one), as a directory on PATH may.
+        cmp = self.tmp / "real cmp"
+        cmp.symlink_to(os.path.abspath(shutil.which("cmp")))  # a relative PATH entry would resolve from self.tmp
+        cmp = shlex.quote(str(cmp))
+        (self.tmp / "bin" / "cmp").write_text(
+            f'#!/bin/sh\ncase "$3" in */r2/served.xml) echo "cmp: read error" >&2; exit 2;; esac\nexec {cmp} "$@"\n'
+        )
+        (self.tmp / "bin" / "cmp").chmod(stat.S_IRWXU)
+        out = self.run_block()
+        self.assertIn("cmp failed (2) on R2's served repomd.xml: nothing written", out.stderr)
+        self.assert_stopped_before_any_write(out)
+
+    def test_a_bucket_with_no_served_index_stops_it_before_any_write(self):
+        # #923 (OpenCodeReview round 3): it reads R2's served repomd.xml before it writes; with none, that is not
+        # state 4 (the build job stops at its download), and the block writes nothing.
+        (self.served / "repomd.xml").unlink()
+        out = self.run_block()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertNotIn("restored", out.stdout)
+        self.assertNotEqual(self.calls(), [])  # it read R2
+        self.assertEqual(self.writes(), [])
+        self.assertFalse((self.served / "repomd.xml").exists())
+        self.assertEqual(list(self.scratch.iterdir()), [])
 
     def test_a_served_index_that_lists_another_revision_fails_it(self):
         other, other_sig, href, primary = repodata("the failed run's, listing another", "160.0.1-0.3")
