@@ -190,7 +190,7 @@ Reproducible means: the same script on the same build records the same scenes. T
 | Copy Link to Highlight | A link that opens on the passage | Planned |
 | AI Bridge | An agent's workspace and what it may do | Planned |
 
-The samples in [recordings/2026-11](recordings/2026-11/manifest.json) come from a development package of this tree on the published engine (160.0.1-0.2) and the brand before #175. Phase 2 records them again on the new brand; until then they show the pipeline, not the final site.
+The samples in [recordings/2026-11](recordings/2026-11/manifest.json) come from a development package of this tree on a Firefox 161.0 engine built from its pins (build 20261127145149), recorded again on 2026-11-28 for #894. Phase 2 records them again on the new brand; until then they show the pipeline, not the final site.
 
 ### For #176
 
