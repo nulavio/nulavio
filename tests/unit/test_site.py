@@ -1621,18 +1621,22 @@ class DownloadPagesTest(unittest.TestCase):
             served_copy = work / "body"
             served_copy.write_bytes(body)
             log = work / "sudo.log"
-            curl = f"cat {str(served_copy)!r} > nulavio.sources\n" if curl_ok else "exit 22\n"
+            # The paths reach the fakes through the environment, and the block finds them as functions, not on PATH:
+            # a TMPDIR with a colon, quotes or non-ASCII letters can neither break them nor let the real curl run
+            # (OCR on #914).
+            curl = 'cat "$FAKE_BODY" > nulavio.sources\n' if curl_ok else "exit 22\n"
             (fake / "curl").write_text("#!/bin/sh\n" + curl, encoding="ascii")
             fail = '[ "$4" = update ] && exit 100\n' if not update_ok else ""
             # The file installed is the one checked.
-            sudo = f'echo "$*" >> {str(log)!r}\n{fail}if [ "$1" = install ]; then cmp -s "$4" {str(served_copy)!r}; fi\n'
+            sudo = f'echo "$*" >> "$FAKE_LOG"\n{fail}if [ "$1" = install ]; then cmp -s "$4" "$FAKE_BODY"; fi\n'
             (fake / "sudo").write_text("#!/bin/sh\n" + sudo, encoding="ascii")
             for tool in ("curl", "sudo"):
                 (fake / tool).chmod(0o755)
             block = re.search(r'id="install-ubuntu-h".*?<code>(.*?)</code>', (out / page).read_text(encoding="utf-8"), re.S)
-            env = {"PATH": f"{fake}:{os.environ.get('PATH', os.defpath)}", "HOME": str(work), "TMPDIR": str(tmpdir),
-                   "LC_ALL": "C"}  # fmt: skip
-            subprocess.run(["bash"], input=html_module.unescape(block.group(1)) + "\n", cwd=work, env=env,
+            fakes = 'curl() { "$FAKE_BIN/curl" "$@"; }\nsudo() { "$FAKE_BIN/sudo" "$@"; }\n'
+            env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(work), "TMPDIR": str(tmpdir), "LC_ALL": "C",
+                   "FAKE_BIN": str(fake), "FAKE_BODY": str(served_copy), "FAKE_LOG": str(log)}  # fmt: skip
+            subprocess.run(["bash"], input=fakes + html_module.unescape(block.group(1)) + "\n", cwd=work, env=env,
                            capture_output=True, text=True, timeout=60)  # fmt: skip
             # The reader's folder is left alone: the file is fetched into a new one.
             self.assertEqual((work / "nulavio.sources").read_text(encoding="ascii"), "the reader's own file\n")
