@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import copy
 import datetime
+import email.message
+import http.client
 import io
 import json
 import sys
 import unittest
 import urllib.error
 import urllib.request
+import urllib.response
 from pathlib import Path
 from unittest import mock
 
@@ -355,7 +358,7 @@ class BudgetTest(unittest.TestCase):
             raise TimeoutError("timed out")
 
         net = watch.Net(sleep=lambda d: now.__setitem__(0, now[0] + d), clock=lambda: now[0])
-        with mock.patch("urllib.request.urlopen", side_effect=black_hole):
+        with mock.patch.object(watch, "urlopen", side_effect=black_hole):
             deps, rows = watch.run(net, datetime.datetime(2026, 11, 19, tzinfo=datetime.UTC))
         self.assertLessEqual(now[0], watch.WATCH_BUDGET)
         self.assertTrue(all(0 < t <= net.timeout for t in timeouts))
@@ -369,13 +372,13 @@ class BudgetTest(unittest.TestCase):
         reply = mock.MagicMock()
         reply.__enter__.return_value = io.BytesIO(b"{}")
         now[0] = 95
-        with mock.patch("urllib.request.urlopen", return_value=reply) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=reply) as opened:
             net.json("https://api.osv.dev/v1/x")
         self.assertEqual(opened.call_args.kwargs["timeout"], 5)
         now[0] = 100
-        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+        with mock.patch.object(watch, "urlopen") as opened, self.assertRaises(OSError):
             net.json("https://api.osv.dev/v1/x")
-        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+        with mock.patch.object(watch, "urlopen") as opened, self.assertRaises(OSError):
             net.head("https://registry.example/v2/x", {})
         opened.assert_not_called()
 
@@ -425,7 +428,7 @@ class FetchTest(unittest.TestCase):
 
     def test_the_token_is_sent_to_github_unredirected_and_never_by_json(self):
         net = watch.Net(token="t")
-        with mock.patch("urllib.request.urlopen", return_value=self.reply([])) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=self.reply([])) as opened:
             net.github_json(watch.GITHUB + "repos/o/r/security-advisories")
         request = opened.call_args.args[0]
         self.assertEqual(request.get_header("Authorization"), "Bearer t")  # in the unredirected headers
@@ -435,7 +438,7 @@ class FetchTest(unittest.TestCase):
             request, None, 302, "Found", request.headers, "https://elsewhere.example/x"
         )
         self.assertIsNone(redirected.get_header("Authorization"))
-        with mock.patch("urllib.request.urlopen", return_value=self.reply({})) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=self.reply({})) as opened:
             net.json("https://addons.mozilla.org/api/v5/x/")
         self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
 
@@ -483,6 +486,189 @@ class FetchTest(unittest.TestCase):
         with mock.patch.object(net, "_open", side_effect=long_wait) as opened, self.assertRaises(urllib.error.HTTPError):
             net.github_json(url)
         self.assertEqual((sleeps, opened.call_count), ([], 1))
+
+
+class CutShort:
+    """A reply whose body ends early: read() raises IncompleteRead, as http.client does for a short body."""
+
+    status, headers = 200, {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, amt=None):
+        raise http.client.IncompleteRead(b'{"results": [', 100)
+
+
+def http_response(raw: bytes) -> http.client.HTTPResponse:
+    """A real http.client response over these bytes, as a server that closed the connection after them sent it."""
+
+    class Socket:
+        def makefile(self, mode):
+            return io.BytesIO(raw)
+
+    response = http.client.HTTPResponse(Socket(), method="GET")
+    response.begin()
+    return response
+
+
+class ReplyTest(unittest.TestCase):
+    """What Net makes of a reply cut short, a redirect and a slow server (#829): unavailable data, never a crash."""
+
+    def reply(self, body):
+        response = mock.MagicMock()
+        response.__enter__.return_value = io.BytesIO(json.dumps(body).encode())
+        return response
+
+    def test_a_reply_cut_short_is_an_error_row_and_the_summary_prints(self):
+        def opened(url, data=None, **kwargs):  # OSV.dev answers; AMO, GitHub and the registries cut their replies short
+            if url == watch.OSV + "querybatch":
+                return self.reply({"results": [{} for _ in data["queries"]]})
+            if url.startswith(watch.OSV):
+                return self.reply({})
+            return CutShort()
+
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append)
+        with mock.patch.object(net, "_open", side_effect=opened):
+            deps, rows = watch.run(net, datetime.datetime(2026, 11, 27, tzinfo=datetime.UTC), exceptions=[])
+        self.assertFalse([r for r in rows if r.check == "osv"])  # OSV's (empty) result is kept
+        for check in ("extension", "advisory", "image"):
+            states = {r.state for r in rows if r.check == check and r.detail.get("source", 1) is not None}
+            self.assertEqual(states, {"error"}, check)
+        self.assertIn("cut short", next(r.text for r in rows if r.check == "extension"))
+        self.assertTrue(sleeps)  # GitHub's request was retried, as for a network failure
+        self.assertEqual(watch.exit_status(rows), 2)
+        self.assertTrue(watch.report(deps, rows).startswith(f"Checked {len(deps)} pinned packages against OSV.dev"))
+
+    def test_github_retries_a_reply_cut_short(self):
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append)
+        with mock.patch.object(net, "_open", side_effect=[CutShort(), self.reply([1])]):
+            self.assertEqual(net.github_json(watch.GITHUB + "repos/o/r/security-advisories"), [1])
+        self.assertEqual(sleeps, [2])
+
+    def test_a_real_response_closed_before_its_end_is_unavailable_data(self):
+        cases = {
+            "length": b'HTTP/1.1 200 OK\r\nContent-Length: 40\r\n\r\n{"a": 1}',  # read(n) alone ends quietly here
+            "chunked": b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n20\r\n{"a": 1}',
+        }
+        for name, raw in cases.items():
+            net = watch.Net()
+            with self.subTest(name), mock.patch.object(net, "_open", return_value=http_response(raw)):
+                with self.assertRaises(OSError) as caught:
+                    net.json(watch.OSV + "query")
+                self.assertIn("cut short", str(caught.exception))
+        whole = b'HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\n{"a": 1}'
+        net = watch.Net()
+        with mock.patch.object(net, "_open", return_value=http_response(whole)):
+            self.assertEqual(net.json(watch.OSV + "query"), {"a": 1})
+
+    def serve(self, routes, asked, clock=None, step=0.0):
+        """https_open and http_open for urllib's own handlers: url -> (status, headers, body), every URL asked kept."""
+
+        def handler(_self, request):
+            asked.append(request.full_url)
+            status, headers, body = routes[request.full_url]
+            if clock is not None:
+                clock[0] += step  # a slow connection: the headers come `step` seconds after the request
+            message = email.message.Message()
+            for key, value in headers.items():
+                message[key] = value
+            response = urllib.response.addinfourl(
+                body if hasattr(body, "read") else io.BytesIO(body), message, request.full_url, status
+            )
+            response.msg = "OK" if status == 200 else "Found"
+            return response
+
+        return (
+            mock.patch.object(urllib.request.HTTPSHandler, "https_open", handler),
+            mock.patch.object(urllib.request.HTTPHandler, "http_open", handler),
+        )
+
+    def fetch(self, routes, url, net=None, **kwargs):
+        asked = []
+        https, plain = self.serve(routes, asked, **kwargs)
+        with https, plain:
+            try:
+                return (net or watch.Net()).json(url), asked
+            except OSError as exc:
+                return exc, asked
+
+    def test_an_amo_request_follows_no_redirect_off_amo_or_to_http(self):
+        block = watch.AMO + "blocklist/block/x/"
+        not_blocked = b'{"is_all_versions": false, "blocked": [], "soft_blocked": []}'
+        for target in ("https://elsewhere.example/blocklist/block/x/", "http://addons.mozilla.org/api/v5/blocklist/block/x/"):
+            with self.subTest(target):
+                routes = {block: (302, {"Location": target}, b""), target: (200, {}, not_blocked)}
+                result, asked = self.fetch(routes, block)
+                self.assertIsInstance(result, urllib.error.HTTPError)  # unavailable data, not "not blocked"
+                self.assertIn("refusing a redirect", str(result))
+                self.assertEqual(asked, [block])  # the other address is never asked
+        moved = watch.AMO + "blocklist/block/y/"
+        result, asked = self.fetch({block: (301, {"Location": moved}, b""), moved: (200, {}, not_blocked)}, block)
+        self.assertEqual((result["blocked"], asked), ([], [block, moved]))  # a redirect inside AMO is followed
+
+    def test_no_request_follows_a_redirect_to_http(self):
+        url, plain = watch.OSV + "vulns/X", "http://api.osv.dev/v1/vulns/X"
+        result, asked = self.fetch({url: (301, {"Location": plain}, b""), plain: (200, {}, b'{"id": "X"}')}, url)
+        self.assertIsInstance(result, urllib.error.HTTPError)
+        self.assertEqual(asked, [url])
+        other = "https://osv-mirror.example/v1/vulns/X"  # another https host is followed, as before, outside AMO
+        result, asked = self.fetch({url: (302, {"Location": other}, b""), other: (200, {}, b'{"id": "X"}')}, url)
+        self.assertEqual(result, {"id": "X"})
+
+    def test_a_request_never_ends_after_its_budget_when_the_server_is_slow(self):
+        url = watch.OSV + "vulns/X"
+        body = b'{"id": "X", "summary": "' + b"x" * 300_000 + b'"}'
+        now = [0.0]
+
+        def started_at(when):  # a Net whose 100 s budget began at 0, asked at `when`
+            now[0] = 0.0
+            net = watch.Net(clock=lambda: now[0], budget=100)
+            now[0] = when
+            return net
+
+        # the connection and headers take 10 s, with 5 s of the watch left: the request ends there
+        result, _ = self.fetch({url: (200, {}, body)}, url, net=started_at(95), clock=now, step=10)
+        self.assertIsInstance(result, TimeoutError)
+        # the headers come at once and the body drips, 64 KiB every 2 s: it is cut off between two chunks
+        net = started_at(95)
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 2))}, url, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        self.assertLessEqual(now[0], 100 + 2)  # one chunk past the end at most, not the whole body
+        # AMO's own budget bounds an AMO request in the same way
+        now[0] = 0.0
+        net = watch.Net(clock=lambda: now[0])
+        net.amo_started = -(watch.AMO_BUDGET - 3)
+        amo = watch.AMO + "addons/addon/x/"
+        result, _ = self.fetch({amo: (200, {}, Drip(body, now, 2))}, amo, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        self.assertLessEqual(now[0], 3 + 2)
+        # a reply on time is read whole
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 2))}, url, net=started_at(0))
+        self.assertEqual(result["id"], "X")
+
+
+CHUNK = 64 * 1024  # what a server sends at a time
+
+
+class Drip(io.BytesIO):
+    """A body that arrives a chunk at a time, each chunk `step` seconds after the last (all of it for a bare read())."""
+
+    def __init__(self, data, clock, step):
+        super().__init__(data)
+        self.clock, self.step = clock, step
+
+    def read(self, amt=None):
+        if amt is None or amt < 0:
+            self.clock[0] += self.step * -(-len(self.getvalue()) // CHUNK)
+            return super().read()
+        self.clock[0] += self.step
+        return super().read(min(amt, CHUNK))
 
 
 if __name__ == "__main__":
