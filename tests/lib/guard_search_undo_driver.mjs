@@ -4,7 +4,7 @@
 // `now` and the engines in `installed`, then clicks undo `clicks` times. Prints, as JSON, for each case: the findings
 // of the check, what each click answered (the findings left, or the error's code) with the engine's defaults and the
 // finding after it, and the record's search defaults at the end. Used by tests/unit/test_shell.py
-// (GuardSearchUndoTest); the real engine is exercised by tests/integration/test_guard.py.
+// (GuardSearchUndoTest).
 //
 //     node tests/lib/guard_search_undo_driver.mjs <NulavioGuard module>
 
