@@ -17,6 +17,7 @@ import harness
 
 PROFILES = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioProfiles.sys.mjs").NulavioProfiles'
 ROUTING = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioRouting.sys.mjs").NulavioRouting'
+SEARCH = 'ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioSearch.sys.mjs").NulavioSearch'
 
 STATE = """
 const who = document.getElementById('here-who');
@@ -367,6 +368,50 @@ return { shown: !row.hidden && row.checkVisibility(), checked: input.checked, di
                     self.assertNotIn("firstrun-welcome", self.cards()["cards"])
                 finally:
                     self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [pref])
+
+    def test_09_the_search_box_names_an_engine_that_is_not_curated_with_its_host(self):
+        """#828: an engine names itself, so two engines can have names that read the same (here one holds a U+200B ZERO
+        WIDTH SPACE) while their searches go to different hosts. The search box names a curated provider alone and any
+        other engine with its host; tests/unit/test_engine_in_sentence.py fills the same sentence in both locales."""
+        placeholder = "return document.getElementById('search-input').placeholder;"
+        # The Shell's page first: its messages are read from it, in the session's language (review of #927).
+        self.open()
+        empty = self.message("searchPlaceholder")
+
+        def shown() -> str:
+            self.open()
+            harness.wait_until(lambda: self.m.execute(placeholder) != empty, 10)
+            return self.m.execute(placeholder)
+
+        engines = f"return {SEARCH}.list();"
+        before = self.m.chrome(engines)
+        normal = next(e for e in before if e["isDefault"])
+        private = next(e for e in before if e["isDefaultPrivate"])
+        # A new profile starts with a curated provider: its name alone.
+        self.assertTrue(normal["provider"], normal)
+        self.assertEqual(shown(), self.message("searchWith", f"\u2068{normal['name']}\u2069"))
+        add = f"return {SEARCH}.addCustom({{name: arguments[0], url: arguments[1]}});"
+        one = self.m.chrome(add, ["Busca Igual", "https://busca.example/?q=%s"])
+        self.addCleanup(self.m.chrome, f"return {SEARCH}.remove(arguments[0]);", [one])
+        two = self.m.chrome(add, ["Busca\u200b Igual", "https://other.example/?q=%s"])
+        self.addCleanup(self.m.chrome, f"return {SEARCH}.remove(arguments[0]);", [two])
+        self.addCleanup(
+            self.m.chrome,
+            f"return {SEARCH}.setDefault(arguments[0]).then(() => {SEARCH}.setDefault(arguments[1], {{private: true}}));",
+            [normal["id"], private["id"]],
+        )
+        choose = f"return {SEARCH}.choose({{id: arguments[0], privateToo: true}}).then(() => true);"
+        seen = {}
+        for engine, name, host in ((one, "Busca Igual", "busca.example"), (two, "Busca\u200b Igual", "other.example")):
+            with self.subTest(engine=engine):
+                self.assertTrue(self.m.chrome(choose, [engine]))
+                seen[engine] = shown()
+                words = self.message("engineNamedHost", f"\u2068{name}\u2069", host)
+                self.assertEqual(seen[engine], self.message("searchWith", words))
+                # Both locales put the host after the isolated name.
+                self.assertIn(f"\u2068{name}\u2069 ({host})", seen[engine])
+        self.assertNotEqual(seen[one].replace("\u200b", ""), seen[two].replace("\u200b", ""))
+        self.shoot("search-host")
 
 
 if __name__ == "__main__":

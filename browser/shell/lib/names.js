@@ -46,3 +46,14 @@ const PARAGRAPH_SEPARATORS = /[\n\r\u001c-\u001e\u0085\u2029]/g;
 export function inSentence(name) {
   return `\u2068${String(name ?? "").replace(BIDI_CONTROLS, "").replace(PARAGRAPH_SEPARATORS, " ")}\u2069`;
 }
+
+/** An engine in a sentence (#828): its name as `inSentence` gives it and, for an engine that is not one of Nulavio's
+    curated providers, the host its searches go to (`withHost(name, host)` fills the locale's "name (host)"). An engine
+    names itself, so two engines can have names that read the same while they send searches to different hosts; the
+    chooser rows say that host already (`chooseEngineHost`, #694), and a sentence that names the engine says it too.
+    `curated` holds the curated providers' keys; `quoted` puts the name, and only the name, in quotes (a name may hold
+    ", ": review of #772). */
+export function engineInSentence(engine, { curated, withHost, quoted = false }) {
+  const name = quoted ? `“${inSentence(engine?.name)}”` : inSentence(engine?.name);
+  return engine?.host && !curated.has(engine.provider) ? withHost(name, String(engine.host)) : name;
+}
