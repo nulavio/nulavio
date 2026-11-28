@@ -81,6 +81,10 @@ const PREF_IMMERSIVE = "nulavio.layout.immersive";
 // (browser-sitePermissionPanel.js, updateSharingIndicator): the keys of the browser's sharing state, and the icons.
 const DEVICE_STATES = Object.freeze(["geo", "serial", "xr"]);
 const DEVICE_ICONS = Object.freeze(["geo-sharing-icon", "serial-sharing-icon", "xr-sharing-icon"]);
+// #821: the engine's capture icon in the identity box. Besides a capture of the selected tab, the engine draws it,
+// marked paused, while a camera or microphone grace period of that tab lasts (hasMicCamGracePeriodsSolely): once a
+// capture ends, the site may start it again without a prompt for privacy.webrtc.deviceGracePeriodTimeoutMs.
+const CAPTURE_ICON = "webrtc-sharing-icon";
 // ADR 0009, decision 4: how long a tab opened in the background keeps its part of the chrome in view.
 const BACKGROUND_TAB_MS = 1500;
 // The first run owns the window (ADR 0010): the same pref the new tab's sequence writes.
@@ -592,9 +596,10 @@ class WindowUI {
     win.gBrowser.tabContainer.addEventListener("TabAttrModified", sharing);
     // ...and so is the engine's in-use icon for the location, a serial port or a VR device (#627). The engine marks
     // no tab for those: it sets the browser's sharing state and redraws these icons of the identity box, for the
-    // selected tab only (gPermissionPanel.updateSharingIndicator), also when another tab is selected.
+    // selected tab only (gPermissionPanel.updateSharingIndicator), also when another tab is selected. The capture
+    // icon too: the engine draws it for a grace period from the site's permissions, and marks no tab for it (#821).
     const deviceIcons = new win.MutationObserver(() => this.#applyImmersive(win));
-    for (const id of DEVICE_ICONS) {
+    for (const id of [CAPTURE_ICON, ...DEVICE_ICONS]) {
       const icon = doc.getElementById(id);
       if (icon) {
         deviceIcons.observe(icon, { attributes: true, attributeFilter: ["sharing"] });
@@ -920,6 +925,13 @@ class WindowUI {
     // revoked from the identity panel), as the engine's icon does.
     const devices = win.gBrowser.selectedBrowser?._sharingState;
     if (DEVICE_STATES.some(key => devices?.[key])) {
+      return "sharing";
+    }
+    // A camera or microphone grace period on the selected tab (#821): the capture has ended, so neither the
+    // sharing state nor the tab says it, but the site may start again without a prompt, and the engine draws its
+    // capture icon as paused in the identity box while that lasts. That permission's state is the engine's own
+    // (hasMicCamGracePeriodsSolely), so the icon it drew is what counts, for as long as it is drawn.
+    if (win.document.getElementById(CAPTURE_ICON)?.hasAttribute("sharing")) {
       return "sharing";
     }
     // A prompt on the selected tab (HTTP authentication, alert, confirm, before-unload). For a cross-site

@@ -1538,7 +1538,7 @@ class ImmersiveDevicesTest(unittest.TestCase):
     def test_a_change_of_icon_decides_again_and_the_observer_goes_with_the_window(self):
         attach = self.SOURCE[self.SOURCE.index("const deviceIcons = new win.MutationObserver") :]
         self.assertRegex(attach, r"^const deviceIcons = new win\.MutationObserver\(\(\) => this\.#applyImmersive\(win\)\);")
-        self.assertRegex(attach, r"for \(const id of DEVICE_ICONS\) \{")
+        self.assertRegex(attach, r"for \(const id of \[CAPTURE_ICON, \.\.\.DEVICE_ICONS\]\) \{")
         self.assertRegex(attach, r'deviceIcons\.observe\(icon, \{ attributes: true, attributeFilter: \["sharing"\] \}\);')
         self.assertIn("deviceIcons, opened,", self.SOURCE)
         self.assertIn("state.deviceIcons.disconnect();", self.method("#detach"))
@@ -1560,6 +1560,54 @@ class ImmersiveDevicesTest(unittest.TestCase):
         self.assertIn("[R64](residual-risks.md)", limitations)
         matrix = (ROOT / "docs/security/threat-matrix.md").read_text(encoding="utf-8")
         self.assertIn("R64", next(line for line in matrix.splitlines() if line.startswith("| S6 |")))
+
+
+class ImmersiveGracePeriodTest(unittest.TestCase):
+    """#821: after a capture ends, the engine keeps a camera or microphone grace period for the tab (a temporary
+    permission, `privacy.webrtc.deviceGracePeriodTimeoutMs`) and draws its capture icon `#webrtc-sharing-icon` with
+    `sharing` and `paused` while it lasts, for the selected tab only (browser-sitePermissionPanel.js,
+    updateSharingIndicator and hasMicCamGracePeriodsSolely). Neither the browser's sharing state nor the tab says
+    so, so Immersive reads the icon the engine drew. `test_immersive` 06e drives the real path."""
+
+    SOURCE = ImmersiveDevicesTest.SOURCE
+
+    def method(self, name: str) -> str:
+        start = self.SOURCE.index(f"  {name}(")
+        end = self.SOURCE.index("\n  }\n", start)
+        return self.SOURCE[start:end]
+
+    def test_the_capture_icon_is_the_engines(self):
+        self.assertRegex(self.SOURCE, r'(?m)^const CAPTURE_ICON = "webrtc-sharing-icon";$')
+
+    def test_the_icon_drawn_for_the_selected_tab_keeps_the_toolbar_as_sharing(self):
+        block = self.method("#immersiveBlock")
+        found = re.search(
+            r'if \(win\.document\.getElementById\(CAPTURE_ICON\)\?\.hasAttribute\("sharing"\)\) \{\s*return "sharing";',
+            block,
+        )
+        self.assertIsNotNone(found, "the grace-period icon does not keep the toolbar")
+        # It is decided with the other in-use icons, before the reasons that would name something else.
+        self.assertLess(block.index("DEVICE_STATES.some"), found.start())
+        self.assertLess(found.start(), block.index('return "prompt"'))
+
+    def test_a_redraw_of_the_icon_decides_again(self):
+        attach = self.SOURCE[self.SOURCE.index("const deviceIcons = new win.MutationObserver") :]
+        loop = attach[: attach.index("// ...and a tab opened in the background")]
+        self.assertIn("for (const id of [CAPTURE_ICON, ...DEVICE_ICONS]) {", loop)
+        self.assertIn('deviceIcons.observe(icon, { attributes: true, attributeFilter: ["sharing"] });', loop)
+
+    def test_the_docs_say_the_grace_period_keeps_the_toolbar(self):
+        adr = (ROOT / "docs/adr/0009-immersive-layout.md").read_text(encoding="utf-8")
+        self.assertIn("(#821): while the engine draws its capture icon for a camera or microphone grace period", adr)
+        risks = (ROOT / "docs/security/residual-risks.md").read_text(encoding="utf-8")
+        r64 = next(line for line in risks.splitlines() if line.startswith("| R64 |"))
+        principles = (ROOT / "docs/design/ux-principles.md").read_text(encoding="utf-8")
+        for name, text in (("R64", r64), ("ux-principles", principles)):
+            with self.subTest(doc=name):
+                self.assertIn("camera or microphone grace period", text)
+        self.assertIn("06e", r64)
+        changelog = (ROOT / "docs/security/changelog.md").read_text(encoding="utf-8")
+        self.assertIn("(#821)", changelog)
 
 
 if __name__ == "__main__":
