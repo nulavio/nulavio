@@ -36,8 +36,9 @@ captures, other hosts' fonts) is in docs/design/site-redesign.md.
 
 What a recording changes, all listed in the manifest: the window's ``remotecontrol`` attribute is
 removed (the striped address bar of automation); the cursor is drawn afterwards, because a headless
-window has no pointer, so hover states are not shown; the time a new instance takes to start is cut
-(a cut between windows says so); typing is shown at a fixed pace, one frame per key really typed.
+window has no pointer, so hover states are not shown; the time until the window a scene cuts to is up
+(a new instance starting, or one already running opening the link) is cut (a cut between windows says
+so); typing is shown at a fixed pace, one frame per key really typed.
 """
 
 from __future__ import annotations
@@ -88,7 +89,8 @@ DOM_CHANGES = ["removed the remotecontrol attribute from each browser window's r
 EDITS = [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while a new instance starts, nothing is recorded: the video cuts to its window once it is up",
+    "while the window the video cuts to is not up yet (a new instance starting, or one already running opening the"
+    " link), nothing is recorded: the video cuts to that window once it is up",
     f"the last frame is held for {TAIL} s at the end",
 ]
 
@@ -549,7 +551,7 @@ TEXT = {
                 "O link abre na janela do «{work}», e a faixa diz que foi a sua regra.",
             ],
             "protected-unlocks": [
-                "O perfil «{bank}» é protegido: os seus dados ficam cifrados no disco.",
+                "O perfil «{bank}» é protegido: os arquivos dele ficam cifrados enquanto está bloqueado.",
                 "Para abri-lo, a senha do perfil.",
                 "Desbloqueado, ele abre na sua própria janela.",
             ],
@@ -574,7 +576,7 @@ TEXT = {
                 "The link opens in the “{work}” window, and the band says the rule did it.",
             ],
             "protected-unlocks": [
-                "The “{bank}” profile is protected: its data is encrypted on disk.",
+                "The “{bank}” profile is protected: its files stay encrypted while it is locked.",
                 "To open it, the profile's password.",
                 "Once unlocked, it opens in a window of its own.",
             ],
@@ -1110,7 +1112,7 @@ class Scenes:
         button = prefs_point(m, row)  # scrolls the row into view before the first frame
         rec.caption(cap[0])
         rec.shot(m)
-        rec.hold(2.2)
+        rec.hold(2.8)  # the first caption says what stays encrypted (R89): long enough to read before the click
         rec.move(button)
         rec.shot(m)
         rec.click()
