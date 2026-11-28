@@ -146,6 +146,7 @@
   "chooseDone": {"message": "$NAME$ é a pesquisa deste perfil nas janelas normais.", "placeholders": {"name": {"content": "$1"}}},
   "chooseDoneBoth": {"message": "$NAME$ é a pesquisa deste perfil nas janelas normais e nas privadas.", "placeholders": {"name": {"content": "$1"}}},
   "chooseEngineHost": {"message": "As pesquisas vão para $HOST$.", "placeholders": {"host": {"content": "$1"}}},
+  "engineNamedHost": {"message": "$NAME$ ($HOST$)", "placeholders": {"name": {"content": "$1"}, "host": {"content": "$2"}}},
   "chooseSuggestTo": {"message": "Sugestões marcadas: o que você digita vai para $HOST$ enquanto você digita.", "placeholders": {"host": {"content": "$1"}}},
   "err_invalid_search_choice": {"message": "Essa escolha não pôde ser feita. A lista foi atualizada."},
   "err_invalid_profile_search": {"message": "A pesquisa escolhida para o novo perfil não pôde ser usada. Escolha de novo, ou crie o perfil com a pesquisa padrão do Nulavio."},

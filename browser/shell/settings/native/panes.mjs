@@ -486,7 +486,7 @@
     const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
     const msg = (key, ...subs) => extension?.localizeMessage(key, subs) ?? "";
     const pageOf = path => WebExtensionPolicy.getByID(SHELL)?.getURL(path);
-    const { freeName, inSentence, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
+    const { engineInSentence, freeName, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
       "resource://builtin-addons/nulavio-shell/lib/names.js",
       here
     );
@@ -1474,6 +1474,11 @@
     }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
+    // #828: an engine in a sentence, isolated (#796) and, when it is not one of Nulavio's curated providers, with the
+    // host its searches go to: an engine names itself, and two of them may have names that read the same.
+    const curatedKeys = () => new Set((search.state.value?.providers ?? []).map(provider => provider.key));
+    const named = (engine, quoted = false) =>
+      engineInSentence(engine, { curated: curatedKeys(), withHost: (name, host) => msg("engineNamedHost", name, host), quoted });
     const searchSetup = (emitChange, stops) => {
       stops.push(search.listen(emitChange));
       searchBench.watch(emitChange, stops);
@@ -1536,7 +1541,7 @@
                 control: "moz-toggle",
                 slot: "actions",
                 below: msg("engineSuggestLabel"),
-                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`, "data-engine": engine.id },
+                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`, "data-engine": engine.id },
               },
             ],
           })),
@@ -1601,6 +1606,24 @@
     // for private windows too unless the box says otherwise, and sends typed text to it only when that box is on.
     // A provider with accounts says whether this profile is signed in (the presence of its session cookie). --
     const chooseBench = workbench({ privateToo: true, suggest: false }, search);
+    // The last choice the success bar speaks of. The bar is shown only while the list Settings holds still has it so
+    // (review of #927): the engine chosen is the default for the windows the bar names, at the hosts it names. An engine
+    // removed or changed in another window is not reported as the search once the list is read again. Until that read
+    // lands, the list checked is the one read before the choice, and the suggestions sentence does not check the opt-in
+    // or the suggestions setting (#944).
+    let lastChoice = null;
+    const choiceHolds = () => {
+      if (!lastChoice) {
+        return true;
+      }
+      const engine = enginesNow().find(each => each.id === lastChoice.id);
+      return Boolean(
+        engine?.isDefault &&
+          (!lastChoice.privateToo || engine.isDefaultPrivate) &&
+          (engine.host ?? null) === lastChoice.host &&
+          (lastChoice.suggestHost === null || engine.suggestHost === lastChoice.suggestHost)
+      );
+    };
     const chooseSetup = (emitChange, stops) => {
       stops.push(search.listen(emitChange));
       chooseBench.watch(emitChange, stops);
@@ -1640,6 +1663,8 @@
       }
       return rows.sort((a, b) => a.name.localeCompare(b.name));
     };
+    // A row of a curated provider is named alone (its name is its own); any other row by its engine, with its host.
+    const rowInSentence = row => named(row.provider ? { name: row.name, provider: row.provider } : row.engine);
     const choiceWords = row => {
       const words = [];
       if (row.engine?.isDefault) {
@@ -1707,7 +1732,7 @@
                     disabled: chooseBench.state.busy,
                     controlAttrs: {
                       label: msg("chooseUse"),
-                      "aria-label": msg("chooseUseNamed", inSentence(row.name)),
+                      "aria-label": msg("chooseUseNamed", rowInSentence(row)),
                       "data-action": "choose",
                       "data-choice": row.key,
                     },
@@ -1736,16 +1761,24 @@
         const shown = suggest ? { suggestHost: row.suggestHost ?? "" } : {};
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
         // chosen engine's own, which the module checked against the one the row named.
-        // The name isolated (#796): an engine names itself, and its name may hold direction controls.
-        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", inSentence(row.name));
+        // The name isolated (#796) and, for an engine that is not a curated provider, its host (#828): an engine names
+        // itself, and its name may hold direction controls or read the same as another engine's. Said once the choice
+        // is made, from the engine chosen as the list has it then (review of #927): the row may be older than that.
+        const privateToo = Boolean(chooseBench.state.privateToo);
         const said = id => {
+          const chosen = shell.NulavioSearch.namedOf(id);
+          if (!chosen) {
+            // Gone already (removed in another window, review of #927): nothing is said of an engine the list no longer
+            // has; the list says which one is in use.
+            lastChoice = null;
+            return "";
+          }
+          const done = msg(privateToo ? "chooseDoneBoth" : "chooseDone", row.provider ? rowInSentence(row) : named(chosen));
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
+          lastChoice = { id, host: chosen.host ?? null, privateToo, suggestHost: host };
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
         };
-        chooseBench.act(
-          () => shell.NulavioSearch.choose({ ...target, privateToo: Boolean(chooseBench.state.privateToo), suggest, ...shown }),
-          said
-        );
+        chooseBench.act(() => shell.NulavioSearch.choose({ ...target, privateToo, suggest, ...shown }), said);
         // Consent is given for one provider at a time: the box is clear again for the next choice.
         chooseBench.show({ suggest: false });
       },
@@ -1771,7 +1804,7 @@
     }
     const chooseBars = [
       chooseBench.bar("nulavio-search-choose-error", "error", () => chooseBench.state.error, () => Boolean(chooseBench.state.error)),
-      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said)),
+      chooseBench.bar("nulavio-search-choose-said", "success", () => chooseBench.state.said, () => Boolean(chooseBench.state.said) && choiceHolds()),
     ];
     // An instance of the person's own, or a site's own description: an address typed here, added by the module's rules.
     const addByAddress = (name, add, words) => {
@@ -1821,12 +1854,13 @@
       }),
     ];
     // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
-    // Each name quoted: a name may hold ", " itself (review of #772); and isolated, as it may hold direction controls (#796).
+    // Each name quoted: a name may hold ", " itself (review of #772); isolated, as it may hold direction controls (#796);
+    // and followed by the engine's host when it is not a curated provider (#828).
     const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
     const searchAliasBar = searchBench.bar(
       "nulavio-search-alias-reserved",
       "warning",
-      () => msg("searchAliasReserved", releasedNow().map(name => `“${inSentence(name)}”`).join(", ")),
+      () => msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", ")),
       () => releasedNow().length > 0
     );
     const searchBars = [

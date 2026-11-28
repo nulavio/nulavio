@@ -30,6 +30,7 @@ import signal
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -43,6 +44,9 @@ LOCKED_MODE = 0o500
 RECORD_ERRORS = (OSError, ValueError, TypeError, AttributeError)
 STATE_DIR = ".nulavio-vault"
 TIMEOUT = 60
+# How long the end of an unmount waits for the state lock before it leaves the bare folder to the holder: longer than
+# a holder takes from its last look to letting the lock go (Container._lock_bare_unless_busy).
+UNMOUNT_LOCK_WAIT = 2.0
 
 
 class StorageError(VaultError):
@@ -72,18 +76,25 @@ def _unescape(field: str) -> str:
     return field.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\")
 
 
-def mounted_paths() -> set[str]:
+def _mountinfo_lines() -> list[str]:
+    """/proc/self/mountinfo, one line per mount, decoded as paths are (os.fsdecode): a mount point whose name is not
+    valid in that encoding (another disk's, a user's) neither raises nor hides the profile's (#926 review, round 2).
+    Its fields are split on " " only: the kernel escapes that one, not other white space a name may hold."""
     try:
-        lines = Path("/proc/self/mountinfo").read_text().splitlines()
+        return os.fsdecode(Path("/proc/self/mountinfo").read_bytes()).split("\n")
     except OSError:
-        return set()
-    return {_unescape(line.split()[4]) for line in lines if len(line.split()) > 4}
+        return []
+
+
+def mounted_paths() -> set[str]:
+    return {_unescape(fields[4]) for fields in (line.split(" ") for line in _mountinfo_lines()) if len(fields) > 4}
 
 
 class Container:
     def __init__(self, mountpoint: Path):
         self.mountpoint = Path(mountpoint)
         self.new_volume = False  # made by this object's init() and not mounted yet: it has no record
+        self._lock_owner: int | None = None  # the thread that holds the state lock through this object
 
     @property
     def root(self) -> Path:
@@ -119,10 +130,44 @@ class Container:
         """
         try:
             if self.exists() and self.mountpoint.is_dir() and not self.mounted():
-                self._lock_bare_mountpoint()
+                self._lock_bare_unless_busy()
         except OSError:
             pass
         self._clear_maintenance()
+
+    def _lock_bare_unless_busy(self, wait: float = 0) -> None:
+        """_lock_bare_mountpoint() under the state lock, waiting `wait` seconds at most for it. mount() holds that
+        lock while the folder is writable for fusermount (between its fchmod to 0700 and the mount): a launcher call
+        on the locked profile then (`status`, the chooser, another unlock) or the end of a lock just before would make
+        it 0500 again, and fusermount refuses to mount on it (#800). When the lock stays busy, nothing is changed:
+        whoever holds it makes the folder 0500 before letting it go (_state_lock, _lock_bare_if_locked), an unlock
+        also right after it mounts. When no lock can be had on this file system, no unlock can mount either: the
+        folder is locked without it.
+
+        An unmount waits (unmount()): a holder that looked while the volume was still mounted, just before this
+        unmount took it away, has nothing left to do but let the lock go, and its look found nothing to repair. A
+        holder still there after the wait looks after this unmount, and finds the folder bare (#926 review, round
+        2)."""
+        if self._lock_owner == threading.get_ident():  # this call runs under the lock already (a lock after exit)
+            self._lock_bare_mountpoint()
+            return
+        try:
+            with self._state_lock(wait=wait):
+                self._lock_bare_mountpoint()  # checks, through its handle, that nothing is mounted there now
+        except StorageError as exc:
+            if exc.code == "busy":
+                return
+            self._lock_bare_mountpoint()
+
+    def _lock_bare_if_locked(self) -> None:
+        """Under the state lock, just before it is let go: the folder 0500 when the profile is protected and nothing
+        is mounted there. A launcher call or the end of a lock that found the lock held left the folder alone; a
+        holder that is not an unlock (a change to the unlock methods, a new key, an agent's engine start) would
+        otherwise leave a folder made writable before (by a crash, or a version before U-T23's handle) writable
+        after a lock, until the next launcher call (#926 review). A repair: when it cannot be made, nothing fails."""
+        with contextlib.suppress(OSError, ValueError):  # never in place of the holder's own outcome (#926 review)
+            if self.exists() and self.mountpoint.is_dir() and not self.mounted():
+                self._lock_bare_mountpoint()
 
     def _lock_bare_mountpoint(self) -> None:
         """The profile's folder read-only (0500), through a handle on the folder itself and only when no volume is
@@ -376,7 +421,12 @@ class Container:
                     time.sleep(0.2)
                 except OSError as exc:  # a file system that does not lock
                     raise StorageError("storage-failed", f"state lock: {type(exc).__name__}") from None
-            yield
+            owner, self._lock_owner = self._lock_owner, threading.get_ident()
+            try:
+                yield
+            finally:
+                self._lock_owner = owner
+                self._lock_bare_if_locked()  # before the lock goes: a call that found it held left the folder to this
         finally:
             os.close(fd)  # releases the lock, also when the process dies
 
@@ -592,7 +642,7 @@ class Container:
                         break
                 raise StorageError("busy", result.stderr.decode(errors="replace").strip()[:200])
             time.sleep(0.3)  # engine helper processes still closing files
-        self._lock_bare_mountpoint()
+        self._lock_bare_unless_busy(wait=UNMOUNT_LOCK_WAIT)
 
     def destroy(self) -> None:
         """Delete the profile and its container (unmounted first)."""
@@ -906,20 +956,18 @@ def _volume_in_use(box: Container, wait: float = 0.0) -> bool:
     def now() -> bool:
         if box.mounted():
             return True
-        try:
-            lines = Path("/proc/self/mountinfo").read_text().splitlines()
-        except OSError:
-            lines = []
-        for line in lines:
+        for line in _mountinfo_lines():
             _, _, after = line.partition(" - ")
-            fields = after.split()
+            fields = after.split(" ")
             if len(fields) > 1 and fields[0].startswith("fuse") and _unescape(fields[1]) in sources:
                 return True
         for entry in Path("/proc").iterdir():
             if not entry.name.isdigit():
                 continue
             try:
-                args = (entry / "cmdline").read_bytes().decode(errors="replace").split("\0")
+                # Read as paths are, as the mount table is: a profile under a name that is not UTF-8 keeps its
+                # bytes in `sources`, so a replaced byte here would miss its volume (#926 review, round 3).
+                args = os.fsdecode((entry / "cmdline").read_bytes()).split("\0")
             except OSError:
                 continue  # gone meanwhile, or another user's
             if args and Path(args[0]).name == "gocryptfs" and sources.intersection(args[1:]):

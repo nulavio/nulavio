@@ -292,7 +292,10 @@ class SearchPrivacyTest(unittest.TestCase):
             )
             alias_now = "return (await S.list()).find(e => e.id === args[0]).alias;"
             self.assertTrue(harness.wait_until(lambda: self.search(alias_now, fixture) == "", 10), "the engine kept @ia")
-            self.assertEqual(self.search("return S.releasedAliases();"), ["Fixture"])
+            # Each by name, with its host and provider key, for Settings to name it with its host (#828).
+            released = self.search("return S.releasedAliases();")
+            self.assertEqual([(e["name"], e["provider"]) for e in released], [("Fixture", None)])
+            self.assertTrue(released[0]["host"], released)
             self.m.chrome(NET_START)
             try:
                 self.type_keys("@ia nvcollisionsecret")
