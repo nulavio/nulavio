@@ -32,6 +32,7 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 **Nulavio fixes**:
 
 - Assistant (#861): the browser checked that an included page or selection was still in the window at the address included, not that its tab was the selected one. A Send pressed in the moment between selecting another tab and the panel hearing of it (the tab event reaches the panel a moment later) carried the item of the tab just left, although another tab was selected. The browser now checks, when the start reaches it, that each item's tab is the tab selected in that window, and refuses otherwise before anything goes (`tab-changed`); the panel keeps the question and offers the page of the tab selected now. Nothing to do.
+- Guard (#896): "Restore previous engine" on a search-engines card, with the previous engine of only one of the two defaults (regular and private) still installed, put that one back, said "Undone." and took the other default, still changed, into the record, so that change was no longer reported. Each default that changed is now put back on its own; the one that cannot be stays on the card, and the page says which. A record without search defaults is no longer compared against (the card offered to put back an engine the record never had), and defaults that cannot be read at a start no longer replace the record's. Nothing to do: a change that was taken into the record this way is not reported again.
 
 ## Nulavio 161.0-0.1 (Firefox 161.0), published 2026-11-28
 
