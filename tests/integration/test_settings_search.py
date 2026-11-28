@@ -20,6 +20,7 @@ STATE = (
     + """return S.state().then(state => ({
   engines: state.engines.map(e => ({
     id: e.id, name: e.name, can: e.canSuggest, on: e.suggestOptIn, host: e.suggestHost, provider: e.provider,
+    searchHost: e.host,
   })),
   providers: state.providers.map(p => p.key), optIn: S.optInIds(),
   master: Services.prefs.getBoolPref("browser.search.suggest.enabled", false),
@@ -127,10 +128,14 @@ class SettingsSearchTest(unittest.TestCase):
         for row in now["engines"]:
             self.assertFalse(row["on"], row)
             self.assertEqual(row["says"], OFF.format(host=hosts[row["id"]]))
+        # The engine's name isolated (#796), as in every sentence that carries it; an engine that is not a curated
+        # provider (one of the engine's own, such as Google) with the host its searches go to (#828), as its row in the
+        # chooser says (chooseEngineHost).
+        for engine in can:
+            row = next(r for r in now["engines"] if r["id"] == engine["id"])
+            host = "" if engine["provider"] in before["providers"] else f" ({engine['searchHost']})"
+            self.assertEqual(row["named"], f"Sugestões enquanto você digita: \u2068{engine['name']}\u2069{host}")
         engine = can[0]
-        row = next(r for r in now["engines"] if r["id"] == engine["id"])
-        # The engine's name isolated (#796), as in every sentence that carries it.
-        self.assertEqual(row["named"], f"Sugestões enquanto você digita: \u2068{engine['name']}\u2069")
         # On: the module's list has it, the engine's own switch follows, and the row says where typed text goes.
         self.assertTrue(self.m.chrome(TOGGLE, [engine["id"]]))
         on = self.seen(lambda n: next(r for r in n["engines"] if r["id"] == engine["id"])["on"] and n["said"])
