@@ -78,7 +78,7 @@
 <li><h3><span class="num">2</span><a href="#defaults">Trackers blocked from the first launch</a></h3><p>Tracking protection comes set to Strict and uBlock Origin is installed on first launch (section 3.4). Some sites break because of it; section 2 says which default causes what.</p></li>
 <li><h3><span class="num">4</span><a href="#typing">What you type stays with you</a></h3><p>Nothing goes to a search engine while you type, unless you turn suggestions on.</p></li>
 <li><h3><span class="num">5</span><a href="#profiles">Work, banking and personal life kept apart</a></h3><p>Each profile has its own sign-ins and history, and your own rules decide which profile each link opens in.</p></li>
-<li><h3><span class="num">6</span><a href="#vault">Password-protected profiles, encrypted on disk</a></h3><p>A protected profile's files stay encrypted while it is locked. There is no master key: losing every way to unlock it means losing the data.</p></li>
+<li><h3><span class="num">6</span><a href="#vault">Password-protected profiles, their files encrypted on disk</a></h3><p>A protected profile's files stay encrypted while it is locked. There is no master key: losing every way to unlock it means losing the data.</p></li>
 <li><h3><span class="num">7</span><a href="#guard">Tells you what changed while the browser was closed</a></h3><p>If another program touches your profile while the browser is closed, Nulavio shows the change the next time it starts.</p></li>
 <li><h3><span class="num">8</span><a href="#ai">AI only when you ask</a></h3><p>The assistant does nothing until you set it up, and before sending it says where the message goes and how big it is. It does not work in private windows.</p></li>
 </ul>
@@ -784,7 +784,7 @@
 <p class="opening">A protected profile's files stay encrypted on disk while it is locked. Once open, it works like any other.</p>
 <div class="claim" id="s6-1">
 <div class="claim-text">
-<h3><span class="num">6.1</span> Encrypted while locked</h3>
+<h3><span class="num">6.1</span> Its files encrypted while locked</h3>
 <p>The profile's files live in a gocryptfs volume, with XChaCha20-Poly1305 and the file names encrypted too. While locked, the profile is an empty, read-only folder, and a copy of its files does not open without one of the unlock methods. Its name, picture and colour, and the sites your rules send to it, are kept outside the volume, in the browser's list of profiles and the prefs its profiles share, so they stay readable while it is locked: a protected profile can have a name that says nothing, and a site whose name alone says too much can stay out of the rules. It locks again when its last window closes. You create a protected profile from the browser itself, in three decisions.</p>
 <p class="cost"><strong>Cost:</strong> Protected profiles need gocryptfs and FUSE installed on the system; without them, the creation page says what is missing.</p>
 </div>

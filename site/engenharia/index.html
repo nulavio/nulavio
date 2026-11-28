@@ -78,7 +78,7 @@
 <li><h3><span class="num">2</span><a href="#defaults">Rastreadores bloqueados desde a primeira abertura</a></h3><p>A proteção contra rastreamento vem no modo Estrito e o uBlock Origin é instalado na primeira abertura (seção 3.4). Alguns sites quebram com isso; a seção 2 diz quais padrões causam o quê.</p></li>
 <li><h3><span class="num">4</span><a href="#typing">O que você digita fica com você</a></h3><p>Nada vai a um buscador enquanto você digita, a não ser que você ligue as sugestões.</p></li>
 <li><h3><span class="num">5</span><a href="#profiles">Trabalho, banco e vida pessoal sem se misturar</a></h3><p>Cada perfil tem seus próprios logins e histórico, e regras suas decidem em qual perfil cada link abre.</p></li>
-<li><h3><span class="num">6</span><a href="#vault">Perfis com senha, cifrados no disco</a></h3><p>Os arquivos de um perfil protegido ficam cifrados enquanto ele está bloqueado. Não há chave mestra: quem perde todas as formas de desbloquear perde os dados.</p></li>
+<li><h3><span class="num">6</span><a href="#vault">Perfis com senha, com os arquivos cifrados no disco</a></h3><p>Os arquivos de um perfil protegido ficam cifrados enquanto ele está bloqueado. Não há chave mestra: quem perde todas as formas de desbloquear perde os dados.</p></li>
 <li><h3><span class="num">7</span><a href="#guard">Avisa o que mudou com o navegador fechado</a></h3><p>Se outro programa mexer no seu perfil enquanto o navegador está fechado, o Nulavio mostra a mudança na próxima abertura.</p></li>
 <li><h3><span class="num">8</span><a href="#ai">IA só quando você pede</a></h3><p>O assistente fica parado até você configurar, e antes de enviar diz para onde vai a mensagem e qual o tamanho. Em janelas privativas, ele não funciona.</p></li>
 </ul>
@@ -784,7 +784,7 @@
 <p class="opening">Os arquivos de um perfil protegido ficam cifrados no disco enquanto ele está bloqueado. Aberto, ele funciona como qualquer outro.</p>
 <div class="claim" id="s6-1">
 <div class="claim-text">
-<h3><span class="num">6.1</span> Cifrado enquanto está bloqueado</h3>
+<h3><span class="num">6.1</span> Arquivos cifrados enquanto está bloqueado</h3>
 <p>Os arquivos do perfil ficam num volume gocryptfs, com XChaCha20-Poly1305 e os nomes dos arquivos também cifrados. Bloqueado, o perfil é uma pasta vazia e somente leitura, e uma cópia dos arquivos não abre sem uma das formas de desbloqueio. O nome, a imagem e a cor dele, e os sites que as suas regras mandam para ele, ficam fora do volume, na lista de perfis do navegador e nas preferências que os perfis dele compartilham, e por isso continuam legíveis com ele bloqueado: um perfil protegido pode ter um nome que não diz nada, e um site cujo nome já diz demais pode ficar fora das regras. Ele volta a bloquear quando a última janela dele fecha. Você cria um perfil protegido pelo próprio navegador, em três decisões.</p>
 <p class="cost"><strong>Custo:</strong> Perfis protegidos precisam do gocryptfs e do FUSE instalados no sistema; sem eles, a página de criação avisa o que falta.</p>
 </div>
