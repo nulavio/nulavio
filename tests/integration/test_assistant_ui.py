@@ -388,11 +388,18 @@ class AssistantUiTest(unittest.TestCase):
         # Consent is per message: the item went with that one and is gone from the browser.
         self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])
         self.assertEqual(chrome_async(self.m, ASK, ["De novo", [chip["chipId"]]]), {"error": "page-changed"})
-        # Bound to that tab: another selected tab is never read in its place.
+        # Bound to that tab: another selected tab is never read in its place, and while another tab is selected the
+        # item does not go either (#861): the browser refuses before anything is sent, and the item leaves.
         chip = chrome_async(self.m, INCLUDE, [binding])["ok"]
         other = self.server.url("/agent-task?word=QUARTZ")
         self.select_new_tab(other)
         before = self.provider.count
+        self.assertEqual(chrome_async(self.m, ASK, ["Qual é a palavra?", [chip["chipId"]]]), {"error": "tab-changed"})
+        self.assertEqual(self.provider.count, before)
+        self.assertEqual(chrome_async(self.m, f"return {AI}.assistantChips(window);")["ok"], [])
+        # With that tab selected again, its page goes, and only its page.
+        chip = chrome_async(self.m, INCLUDE, [binding])["ok"]
+        self.select_tab(url)
         self.assertGreater(chrome_async(self.m, ASK, ["Qual é a palavra?", [chip["chipId"]]])["ok"]["pageChars"], 0)
         self.assertIn("OBSIDIAN", self.sent_since(before))
         self.assertNotIn("QUARTZ", self.sent_since(before))

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Update published download metadata and CHANGELOG.md; never publish or approve a release."""
+"""Update published download metadata, CHANGELOG.md and the READMEs' status; never publish or approve a release."""
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -16,6 +19,11 @@ import release_manifest
 
 ROOT = Path(__file__).resolve().parents[2]
 TAG = re.compile(r"v([0-9]+(?:\.[0-9]+)+)-([0-9]+(?:\.[0-9]+)*)")
+# The READMEs' status names the latest release between these markers (#857).
+READMES = ("README.md", "README.pt-BR.md")
+# Matched as bytes, across line breaks: a README is never decoded, and a wrapped link is still one pair. A pair holds no
+# other opening marker, so a stray "<!--release-->" before the real pair (prose quoting it) never swallows the text between.
+README_RELEASE = re.compile(rb"<!--release-->(?:(?!<!--release-->).)*?<!--/release-->", re.S)
 
 
 def version_key(version: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
@@ -27,6 +35,19 @@ def version_key(version: str) -> tuple[tuple[int, ...], tuple[int, ...]]:
 
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def replace(path: Path, data: bytes) -> None:
+    """Write beside the file and rename over it: an interrupted write leaves the old file whole, with its mode."""
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as file:
+            file.write(data)
+        os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
 
 
 def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
@@ -96,11 +117,30 @@ def update(repo: Path, release: dict, repository: str, manifest: dict) -> bool:
     if companion:
         metadata["companion_apk"] = companion[-1]
     serialized = json.dumps(metadata, indent=2, ensure_ascii=False) + "\n"
-    changed = serialized != metadata_path.read_text(encoding="utf-8") or changelog != changelog_path.read_text(encoding="utf-8")
-    if changed:
-        metadata_path.write_text(serialized, encoding="utf-8")
-        changelog_path.write_text(changelog, encoding="utf-8")
-    return changed
+    # Built only from the checked tag and URL; a README without the markers is left as it is.
+    link = f"<!--release-->[{tag}]({url})<!--/release-->".encode()
+    outputs = {
+        metadata_path: (metadata_path.read_text(encoding="utf-8"), serialized),
+        changelog_path: (changelog_path.read_text(encoding="utf-8"), changelog),
+    }
+    for name in READMES:
+        path = repo / name
+        if path.is_symlink() or path.is_file():
+            # Bytes, so the README keeps its line endings outside the markers.
+            text = path.read_bytes()
+            # Markers quoted in prose on two lines would make a second pair, and its text would be replaced.
+            if len(README_RELEASE.findall(text)) > 1:
+                raise ValueError(f"{name} has more than one release marker pair")
+            outputs[path] = (text, README_RELEASE.sub(lambda _: link, text))
+    # A link would have its target rewritten, outside the paths the workflow stages: refused before any write.
+    for path in outputs:
+        if path.is_symlink():
+            raise ValueError(f"{path.relative_to(repo)} is a symbolic link")
+    # Only the files that differ are written: a README-only repair leaves the metadata and the changelog alone.
+    changed = [(path, new) for path, (old, new) in outputs.items() if old != new]
+    for path, new in changed:
+        replace(path, new if isinstance(new, bytes) else new.encode("utf-8"))
+    return bool(changed)
 
 
 def main() -> int:

@@ -73,6 +73,7 @@ const BEFORE_START = new Set([
   "private-window",
   "no-window",
   "page-changed",
+  "tab-changed",
   "recipient-changed",
   "size-changed",
   "thread-recipient",
@@ -739,7 +740,13 @@ async function showError(error, task) {
   announce(text, "error");
   if (STATE_CHANGED.has(reason)) {
     await render().catch(() => {});
-  } else if (reason === "page-changed") {
+  } else if (reason === "page-changed" || reason === "tab-changed") {
+    // The item went with the refusal, and the page offered may be the one left: "Incluir esta página" and "Resumir"
+    // come back with the page of the tab selected now, once it is read, never naming one and taking another (#861).
+    // Before any await: the run's end turned them on again.
+    current = null;
+    $("include-page").hidden = true;
+    $("summarize").hidden = true;
     await refreshPage();
   }
 }
@@ -1025,6 +1032,11 @@ async function send(question, { retry = false } = {}) {
   // Consent is per message: what was included goes with this one only, or with none for a Task or a retry.
   // The browser drops its copy too, whatever the start (#678).
   setChips([]);
+  if (tabCheck) {
+    // A Retry or a Task does not wait for a read of the selected tab on its way, and this Send made it void: it is made
+    // again, so the page offer that a refusal hid comes back once the tab is read (#861).
+    refreshPage();
+  }
   if (!dropNotice) {
     $("drift").hidden = true;
   }
@@ -1112,7 +1124,13 @@ $("prompt").addEventListener("keydown", event => {
 $("ask").addEventListener("change", event => {
   if (event.target.name === "mode") {
     cancelWait(); // a Send that waits was pressed for the mode before: nothing goes (#816)
-    newContext();
+    // An Include on its way is void either way. A read of the selected tab on its way is made again, not dropped: after
+    // a refusal (#861) it is the only one that brings the page offer back.
+    if (tabCheck) {
+      refreshPage();
+    } else {
+      newContext();
+    }
     syncMode();
   }
 });

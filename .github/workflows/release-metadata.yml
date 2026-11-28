@@ -50,7 +50,7 @@ jobs:
             "$RUNNER_TEMP/published-release.json" "$RUNNER_TEMP/release-event.json"
           python3 -I scripts/release/release_metadata.py --event "$RUNNER_TEMP/release-event.json" \
             --repository "$GITHUB_REPOSITORY" --manifest "$RUNNER_TEMP/release-manifest/manifest.json"
-          git diff --binary -- CHANGELOG.md packaging/release.json > "$RUNNER_TEMP/release-metadata.patch"
+          git diff --binary -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md > "$RUNNER_TEMP/release-metadata.patch"
           if [ -s "$RUNNER_TEMP/release-metadata.patch" ]; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
           fi
@@ -77,12 +77,18 @@ jobs:
           existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json url --jq '.[0].url // empty')
           if [ -n "$existing" ]; then
             printf 'Existing metadata PR: %s\n' "$existing" >> "$GITHUB_STEP_SUMMARY"
+            # A PR opened by an older run (before the READMEs were part of it, say) is not rewritten: say so instead.
+            if ! { git fetch -q origin "$branch" &&
+              git diff --quiet FETCH_HEAD -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md; }; then
+              echo '::warning::The open metadata PR differs from what this run generated; the release-metadata artifact holds the patch.'
+              printf '\nIt differs from what this run generated (or main moved since): compare it with release-metadata.patch in the release-metadata artifact. The whole patch does not apply on a branch that has part of it: merge main into the PR'"'"'s branch first, then apply only the files the PR lacks; for the READMEs, git apply --include=README.md --include=README.pt-BR.md release-metadata.patch.\n' >> "$GITHUB_STEP_SUMMARY"
+            fi
             exit 0
           fi
           git switch -c "$branch"
           git config user.name 'nulavio-release-bot'
           git config user.email 'nulavio-release-bot@users.noreply.github.com'
-          git add -- CHANGELOG.md packaging/release.json
+          git add -- CHANGELOG.md packaging/release.json README.md README.pt-BR.md
           git commit -s -m "chore(release): record $TAG"
           gh auth setup-git
           # A retry after a failed PR creation reuses only an identical remote tree; never force-push.
@@ -92,6 +98,6 @@ jobs:
           else
             git push origin "HEAD:refs/heads/$branch"
           fi
-          printf 'Record published release %s in CHANGELOG.md and the download metadata.\n\nGenerated from the published notes and verified build provenance. The site deploys after merge. Security impact and SLA reporting remain an editorial review in docs/security/changelog.md.\n\nRefs #192\n' "$TAG" > "$RUNNER_TEMP/pr-body.md"
+          printf 'Record published release %s in CHANGELOG.md, the download metadata and the status in the READMEs.\n\nGenerated from the published notes and verified build provenance. The site deploys after merge. Security impact and SLA reporting remain an editorial review in docs/security/changelog.md.\n\nRefs #192\n' "$TAG" > "$RUNNER_TEMP/pr-body.md"
           gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
             --title "chore(release): record $TAG" --body-file "$RUNNER_TEMP/pr-body.md" >> "$GITHUB_STEP_SUMMARY"
