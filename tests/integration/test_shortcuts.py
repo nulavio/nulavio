@@ -21,6 +21,9 @@ SHELL_POPUP = (
     "ChromeUtils.importESModule('resource:///modules/ExtensionPopups.sys.mjs')"
     ".ViewPopup.for(WebExtensionPolicy.getByID('shell@nulavio.net').extension, window)"
 )
+# Give the page the keyboard back: shut every panel that is open, focus the page, and say whether a panel still has the
+# keyboard or a Shell popup is left. Polled, it also shuts a menu an earlier test left loading, once its panel opens.
+SETTLED = f"{CLOSE_PANELS} gBrowser.selectedBrowser.focus(); return !document.activeElement?.closest('panel') && !{SHELL_POPUP};"
 KEYSET = "[...document.querySelectorAll('#ext-keyset-id-shell_nulavio_net key')]"
 NAMES = {"accel": "control", "control": "control", "shift": "shift", "alt": "alt", "meta": "meta"}
 
@@ -421,9 +424,7 @@ class ShortcutsTest(unittest.TestCase):
         # From the page, with no panel left open by an earlier test to take the keyboard back, and no profile menu
         # still loading: #695's failure (the bar in actions mode, its list empty) is what a menu that opens after the
         # key does, as it takes the keyboard and the bar closes its list.
-        self.m.chrome(CLOSE_PANELS + "gBrowser.selectedBrowser.focus();")
-        outside = f"return !document.activeElement?.closest('panel') && !{SHELL_POPUP};"
-        self.assertTrue(harness.wait_until(lambda: self.m.chrome(outside), 10))
+        self.assertTrue(harness.wait_until(lambda: self.m.chrome(SETTLED), 10), "a panel or a profile menu is left")
         self.m.chrome(f"{key_of('alt,control+P')}.doCommand();")
         mode = "return {source: gURLBar.searchMode?.source ?? null, focused: gURLBar.focused};"
         actions_source = self.m.chrome(
