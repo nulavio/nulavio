@@ -409,7 +409,8 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.record["welcome_ended_at"] = self.now()
         # The new tab the person sees before going to the page: its content-filter line (#898).
         line = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
-        self.record["newtab_line_at_first_page"] = {"at": self.now(), **line} if line else None
+        self.assertTrue(line, "the new tab's content-filter line did not show before the page was opened")
+        self.record["newtab_line_at_first_page"] = {"at": self.now(), **line}
         n = self.fresh("s")
         asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
