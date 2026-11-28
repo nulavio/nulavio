@@ -532,6 +532,61 @@ class OverlappingUnlockTest(StorageCase):
         box.unmount()
         self.assertEqual(mode(box.mountpoint), 0o500)
 
+    def call_while_mounting(self, box: storage.Container, call) -> list[int]:
+        """Runs `call` in the middle of box's next mount, after its fchmod to 0700 and before fusermount mounts there:
+        another launcher call on the profile at that moment. Returns the folder's mode as fusermount then finds it."""
+        real = storage.Container._gocryptfs
+        seen = []
+
+        def gocryptfs(container, args, password, *rest, **kwargs):
+            if container is box and args[-1:] == [str(box.mountpoint)]:  # the mount, not -init
+                call()
+                seen.append(mode(box.mountpoint))
+            return real(container, args, password, *rest, **kwargs)
+
+        patcher = mock.patch.object(storage.Container, "_gocryptfs", gocryptfs)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return seen
+
+    def test_a_launcher_call_while_an_unlock_mounts_leaves_the_folder_to_it(self):
+        # `status`, the chooser or another unlock reach secure_if_locked() (profiles.container) while this unlock has
+        # made the bare folder writable for fusermount: nothing is mounted yet, but the folder is the unlock's (#800).
+        box, vault = self.new_container()
+        seen = self.call_while_mounting(box, lambda: storage.Container(box.mountpoint).secure_if_locked())
+        box.mount(vault)
+        self.assertEqual(seen, [0o700])
+        self.assertTrue(box.mounted())
+        (box.mountpoint / "prefs.js").write_text("inside")
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_the_end_of_a_lock_while_an_unlock_mounts_leaves_the_folder_to_it(self):
+        # A lock that ends (its unmount is done; it makes the bare folder read-only) just as an unlock starts (#800).
+        box, vault = self.new_container()
+        seen = self.call_while_mounting(box, lambda: storage.Container(box.mountpoint).unmount())
+        box.mount(vault)
+        self.assertEqual(seen, [0o700])
+        self.assertTrue(box.mounted())
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_a_lock_under_the_state_lock_still_makes_the_folder_read_only(self):
+        # The lock after an engine exits holds the state lock itself (profiles._unmount_unless_taken), and so does an
+        # unlock that takes away a volume its check refused: their own lock never keeps the folder writable.
+        box, vault = self.new_container()
+        box.mount(vault)
+        with box._state_lock(wait=0):
+            box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+        os.chmod(box.mountpoint, 0o700)  # left writable, as by a crash between fchmod and fusermount
+        with box._state_lock(wait=0):
+            box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+        os.chmod(box.mountpoint, 0o700)
+        storage.Container(box.mountpoint).secure_if_locked()  # nothing holds the lock: made read-only, as before
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
     def test_a_second_unlock_waits_for_the_first_ones_generation_check(self):
         # The second request finds the volume mounted while the first is still checking its generation: it says
         # "unlocked" only after that check, and never of a volume the check then refuses and takes away (U-T21,

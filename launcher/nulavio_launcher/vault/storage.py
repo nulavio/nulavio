@@ -30,6 +30,7 @@ import signal
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -84,6 +85,7 @@ class Container:
     def __init__(self, mountpoint: Path):
         self.mountpoint = Path(mountpoint)
         self.new_volume = False  # made by this object's init() and not mounted yet: it has no record
+        self._lock_owner: int | None = None  # the thread that holds the state lock through this object
 
     @property
     def root(self) -> Path:
@@ -119,10 +121,28 @@ class Container:
         """
         try:
             if self.exists() and self.mountpoint.is_dir() and not self.mounted():
-                self._lock_bare_mountpoint()
+                self._lock_bare_unless_busy()
         except OSError:
             pass
         self._clear_maintenance()
+
+    def _lock_bare_unless_busy(self) -> None:
+        """_lock_bare_mountpoint() under the state lock, without waiting for it. mount() holds that lock while the
+        folder is writable for fusermount (between its fchmod to 0700 and the mount): a launcher call on the locked
+        profile then (`status`, the chooser, another unlock) or the end of a lock just before would make it 0500
+        again, and fusermount refuses to mount on it (#800). When the lock is busy, nothing is changed: an unlock
+        leaves the folder 0500 itself, right after it mounts; a change to the unlock methods does not touch it.
+        When no lock can be had on this file system, no unlock can mount either: the folder is locked without it."""
+        if self._lock_owner == threading.get_ident():  # this call runs under the lock already (a lock after exit)
+            self._lock_bare_mountpoint()
+            return
+        try:
+            with self._state_lock(wait=0):
+                self._lock_bare_mountpoint()  # checks, through its handle, that nothing is mounted there now
+        except StorageError as exc:
+            if exc.code == "busy":
+                return
+            self._lock_bare_mountpoint()
 
     def _lock_bare_mountpoint(self) -> None:
         """The profile's folder read-only (0500), through a handle on the folder itself and only when no volume is
@@ -376,7 +396,11 @@ class Container:
                     time.sleep(0.2)
                 except OSError as exc:  # a file system that does not lock
                     raise StorageError("storage-failed", f"state lock: {type(exc).__name__}") from None
-            yield
+            owner, self._lock_owner = self._lock_owner, threading.get_ident()
+            try:
+                yield
+            finally:
+                self._lock_owner = owner
         finally:
             os.close(fd)  # releases the lock, also when the process dies
 
@@ -592,7 +616,7 @@ class Container:
                         break
                 raise StorageError("busy", result.stderr.decode(errors="replace").strip()[:200])
             time.sleep(0.3)  # engine helper processes still closing files
-        self._lock_bare_mountpoint()
+        self._lock_bare_unless_busy()
 
     def destroy(self) -> None:
         """Delete the profile and its container (unmounted first)."""
