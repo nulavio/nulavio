@@ -18,8 +18,8 @@ before it): an image added to the page it shows, a new address in the same tab, 
 
 The new tab's content-filter line (#898): before each new tab's page the Shell's reading of uBlock Origin
 (`NulavioPrivacy.filter()`, the one the line shows) is recorded, and no page it let through may follow a reading that
-said it filters. In `test_02` the new tab the person sees before opening the page is read too, and a new tab left open
-from then on must turn to "active" by itself once the filter is ready.
+said it filters. A new tab opened after the early page and left open must turn to "active" by itself once the filter
+is ready, and in `test_02` the new tab the person sees before opening the page is read too.
 
 What is asserted holds however fast the network is: uBlock Origin is installed, a new tab is filtered within
 `READY_WITHIN` seconds of the start, and once it is, nothing the test asks for afterwards leaves, in new tabs or in
@@ -307,6 +307,29 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         if line is not None and r["first_page"]["leaked"]:
             self.assertNotEqual(line["level"], "ok", f"the new tab said 'active' before a page it let through: {name}")
 
+    # -- a new tab left open (#898) ---------------------------------------------------------------------------
+    def open_status_tab(self) -> None:
+        """A new tab of the Shell, opened once the early page is read and left open: its content-filter line is read
+        again by the page itself until uBlock Origin filters, without a reload."""
+        self.status_tab = self.m.new_tab()
+        self.m.switch_to(self.status_tab)
+        self.m.navigate(self.m.chrome(NEWTAB))
+        opened = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
+        self.record["status_tab_opened"] = {"at": self.now(), **opened} if opened else None
+        self.m.switch_to(self.early)
+
+    def read_status_tab(self) -> None:
+        self.m.switch_to(self.status_tab)
+        version = [self.record.get("ublock_version")]
+        self.active_words = self.m.execute("return browser.i18n.getMessage('filterActive', [arguments[0]]);", version)
+        turned = harness.wait_until(lambda: (lambda x: x if x and x["level"] == "ok" else None)(self.m.execute(LINE)), timeout=5)
+        self.record["status_tab_after_ready"] = {"at": self.now(), **(turned or self.m.execute(LINE) or {})}
+        self.m.switch_to(self.early)
+
+    def assert_status_tab_turned(self) -> None:
+        said = self.record["status_tab_after_ready"].get("text")
+        self.assertEqual(said, self.active_words, "the new tab left open did not turn to 'active' once it filtered")
+
     def find_tab(self, address: str) -> str:
         for handle in self.m.window_handles():
             self.m.switch_to(handle)
@@ -324,9 +347,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
             raise AssertionError(f"could not measure: the address given at the start never loaded; {self.server.hits[-6:]}")
         self.early = self.find_tab(f"/ads-fixture?n={n}")
         self.record["first_page"] = self.read(n, asked=0.0)
+        self.open_status_tab()
         self.wait_for_the_filter()
         self.check_the_early_tab(n)
+        self.read_status_tab()
         self.finish()
+        self.assert_status_tab_turned()
 
     def test_02_a_page_opened_as_soon_as_the_welcome_lets_the_person_through(self):
         self.record["case"] = "welcome"
@@ -353,24 +379,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
         self.record["first_page"] = self.read(n, asked)
-        # A new tab left open from now on: its line is read again until uBlock Origin filters, without a reload.
-        self.status_tab = self.m.new_tab()
-        self.m.switch_to(self.status_tab)
-        self.m.navigate(self.m.chrome(NEWTAB))
-        opened = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
-        self.record["status_tab_opened"] = {"at": self.now(), **opened} if opened else None
-        self.m.switch_to(self.early)
+        self.open_status_tab()
         self.wait_for_the_filter()
         self.check_the_early_tab(n)
-        self.m.switch_to(self.status_tab)
-        active = self.m.execute(
-            "return browser.i18n.getMessage('filterActive', [arguments[0]]);", [self.record.get("ublock_version")]
-        )
-        turned = harness.wait_until(lambda: (lambda x: x if x and x["level"] == "ok" else None)(self.m.execute(LINE)), timeout=5)
-        self.record["status_tab_after_ready"] = {"at": self.now(), **(turned or self.m.execute(LINE) or {})}
-        self.m.switch_to(self.early)
+        self.read_status_tab()
         self.finish()
-        self.assertEqual(self.record["status_tab_after_ready"].get("text"), active, "the open new tab did not turn to 'active'")
+        self.assert_status_tab_turned()
 
 
 if __name__ == "__main__":
