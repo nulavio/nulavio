@@ -22,7 +22,7 @@ STATE = (
 window.__state = { current: "builtin", engineLogins: 2, providers: [
   { key: "builtin", extension: null, native: null },
   { key: "proton-pass", native: null,
-    extension: { name: "Proton Pass", pinned: "1.41.1", installed: false, enabled: false, version: null } },
+    extension: { name: "Proton Pass", pinned: "1.44.0", installed: false, enabled: false, version: null } },
   { key: "keepassxc", native: { required: true, found: false },
     extension: { name: "KeePassXC-Browser", pinned: "1.10.4.1", installed: true, enabled: false, version: "1.10.4.1" } },
 ] };
@@ -111,7 +111,7 @@ class SettingsPasswordsTest(unittest.TestCase):
         self.assertEqual(rows["builtin"]["name"], "O gerenciador de senhas do navegador (em uso)")
         self.assertEqual(rows["builtin"]["buttons"], [])
         self.assertEqual(rows["proton-pass"]["buttons"], [["use", "Usar este", "Usar este: Proton Pass"]])
-        self.assertIn("Não instalada. Ao escolher, o Nulavio instala a extensão oficial (1.41.1", rows["proton-pass"]["status"])
+        self.assertIn("Não instalada. Ao escolher, o Nulavio instala a extensão oficial (1.44.0", rows["proton-pass"]["status"])
         self.assertIn("instalada, mas desligada", rows["keepassxc"]["status"])
         self.assertIn("O app KeePassXC não foi encontrado", rows["keepassxc"]["status"])
         self.assertEqual(now["logins"], "O navegador guarda 2 logins neste perfil. Eles são mantidos quando você troca.")
@@ -120,7 +120,7 @@ class SettingsPasswordsTest(unittest.TestCase):
         self.assertTrue(self.m.chrome(CLICK, ["nulavio-passwords-providers", "proton-pass", "use"]))
         body = harness.wait_until(self.alert_text, 10)
         self.assertIn(
-            "instala a extensão oficial Proton Pass, versão 1.41.1, do addons.mozilla.org", body or "no confirmation shown"
+            "instala a extensão oficial Proton Pass, versão 1.44.0, do addons.mozilla.org", body or "no confirmation shown"
         )
         self.m.send("WebDriver:DismissAlert")
         self.assertEqual(self.m.chrome("return window.__calls;"), [])
