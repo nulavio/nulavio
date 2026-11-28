@@ -501,12 +501,27 @@ class ImmersiveTest(unittest.TestCase):
         self.m.chrome(revoke, ["camera^nulavio-test"])
         self.assertTrue(harness.wait_until(lambda: self.window()["on"], 15), self.window())
         self.assertEqual(self.m.chrome(icon), [None, None])
-        # A microphone grace period that runs out by itself: the toolbar stays while it lasts and leaves with it.
-        self.m.chrome(grace, ["microphone^nulavio-test", 5000])
-        self.assertTrue(harness.wait_until(lambda: self.window()["off"] == "sharing", 4), self.window())
-        self.assertEqual(self.m.chrome(icon), ["microphone", "true"])
-        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 20), self.window())
+        # A microphone grace period that runs out by itself: the toolbar stays while it lasts and leaves with it. Its
+        # five seconds run in the browser, so the browser records the mode and the icon together at every change of
+        # either, from before the grant: a driver call that comes late cannot miss the period (OCR, #938).
+        record = (
+            "const root = document.documentElement, e = document.getElementById('webrtc-sharing-icon');"
+            "const seen = (window.nvGrace = []);"
+            "const note = () => seen.push([root.getAttribute('nulavio-immersive-off'), e.getAttribute('sharing'),"
+            " e.getAttribute('paused')]);"
+            "window.nvGraceObserver = new MutationObserver(note);"
+            "window.nvGraceObserver.observe(root, {attributes: true, attributeFilter: ['nulavio-immersive-off']});"
+            "window.nvGraceObserver.observe(e, {attributes: true, attributeFilter: ['sharing', 'paused']});"
+            "note();"
+        )
+        self.addCleanup(self.m.chrome, "window.nvGraceObserver?.disconnect(); delete window.nvGrace;")
+        self.m.chrome(record + grace, ["microphone^nulavio-test", 5000])
+        self.assertTrue(harness.wait_until(lambda: self.window()["on"], 30), self.window())
         self.assertEqual(self.m.chrome(icon), [None, None])
+        seen = self.m.chrome("window.nvGraceObserver.disconnect(); return window.nvGrace;")
+        self.assertEqual(seen[0], [None, None, None], seen)
+        self.assertIn(["sharing", "microphone", "true"], seen, seen)
+        self.assertEqual(seen[-1], [None, None, None], seen)
 
     def test_06b_a_prompt_on_the_tab_brings_the_full_window_back(self):
         """Independent review (2026-11-11): the engine's tab prompts are not panels. For a cross-site HTTP
