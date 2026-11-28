@@ -16,6 +16,11 @@ is left alone, a new tab is opened again and again with a new address until the 
 moment the filter is ready for a new page. Then the early tab is checked, in this order (each step hides the one
 before it): an image added to the page it shows, a new address in the same tab, a reload.
 
+The new tab's content-filter line (#898): before each new tab's page the Shell's reading of uBlock Origin
+(`NulavioPrivacy.filter()`, the one the line shows) is recorded, and no page it let through may follow a reading that
+said it filters. In `test_02` the new tab the person sees before opening the page is read too, and a new tab left open
+from then on must turn to "active" by itself once the filter is ready.
+
 What is asserted holds however fast the network is: uBlock Origin is installed, a new tab is filtered within
 `READY_WITHIN` seconds of the start, and once it is, nothing the test asks for afterwards leaves, in new tabs or in
 the early tab (R91 says so). Whether the first page's image left, and how long each part of the window lasted, is
@@ -60,6 +65,12 @@ Promise.all([AddonManager.getAddonByID(arguments[0]), AddonManager.getAllInstall
   installs: all.filter(install => /ublock/i.test(install.sourceURI?.spec ?? "")).map(install => install.state),
 }), e => done({error: String(e)}));
 """
+# What the new tab's content-filter line shows: uBlock Origin installed, active, and whether it filters yet (#898).
+FILTER = """return ChromeUtils.importESModule("resource://builtin-addons/nulavio-shell/modules/NulavioPrivacy.sys.mjs")
+  .NulavioPrivacy.filter();"""
+NEWTAB = "return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"
+LINE = """const dd = document.querySelector('#status [data-status=filter]');
+return dd?.dataset.level ? {level: dd.dataset.level, text: dd.textContent} : null;"""
 IMAGES_DONE = "return document.readyState === 'complete' && [...document.images].every(i => i.complete);"
 ADD_IMAGES = """
 for (const src of arguments) { const image = new Image(); image.src = src; document.body.append(image); }
@@ -157,9 +168,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         n = self.fresh("p")
         handle = self.m.new_tab()
         self.m.switch_to(handle)
+        ready = self.m.chrome(FILTER).get("ready")  # what the new tab's line says now
         asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
-        into.append(self.read(n, asked))
+        into.append({**self.read(n, asked), "shell_ready": ready})
+        if ready and self.record.get("shell_ready_at") is None:
+            self.record["shell_ready_at"] = asked
         self.m.send("WebDriver:CloseWindow")
         self.m.switch_to(self.early)
 
@@ -254,6 +268,13 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         # What R91 says of the time after the window: once a new tab is filtered, everything is, the early tab too.
         after = [*r["new_tabs_after_ready"], *r["early_page_after_ready"], r["early_tab_new_address"], r["early_tab_reload"]]
         self.assertEqual([e for e in after if e["leaked"]], [], f"a request left after the filter was ready: {name}")
+        # #898: the new tab's line says "active" only once uBlock Origin filters, and says it once it does.
+        said_ready = [p for p in [*r["probes"], *r["new_tabs_after_ready"]] if p["shell_ready"] and p["leaked"]]
+        self.assertEqual(said_ready, [], f"the Shell said uBlock Origin filtered before a page it let through: {name}")
+        self.assertTrue(all(p["shell_ready"] for p in r["new_tabs_after_ready"]), f"still 'loading' once it filters: {name}")
+        line = r.get("newtab_line_at_first_page")
+        if line is not None and r["first_page"]["leaked"]:
+            self.assertNotEqual(line["level"], "ok", f"the new tab said 'active' before a page it let through: {name}")
 
     def find_tab(self, address: str) -> str:
         for handle in self.m.window_handles():
@@ -294,13 +315,31 @@ class FirstStartFilterWindowTest(unittest.TestCase):
 
         self.assertTrue(harness.wait_until(ended, timeout=READING), "the welcome did not end")
         self.record["welcome_ended_at"] = self.now()
+        # The new tab the person sees before going to the page: its content-filter line (#898).
+        line = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
+        self.record["newtab_line_at_first_page"] = {"at": self.now(), **line} if line else None
         n = self.fresh("s")
         asked = self.now()
         self.m.navigate(self.server.url(f"/ads-fixture?n={n}"))
         self.record["first_page"] = self.read(n, asked)
+        # A new tab left open from now on: its line is read again until uBlock Origin filters, without a reload.
+        self.status_tab = self.m.new_tab()
+        self.m.switch_to(self.status_tab)
+        self.m.navigate(self.m.chrome(NEWTAB))
+        opened = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
+        self.record["status_tab_opened"] = {"at": self.now(), **opened} if opened else None
+        self.m.switch_to(self.early)
         self.wait_for_the_filter()
         self.check_the_early_tab(n)
+        self.m.switch_to(self.status_tab)
+        active = self.m.execute(
+            "return browser.i18n.getMessage('filterActive', [arguments[0]]);", [self.record.get("ublock_version")]
+        )
+        turned = harness.wait_until(lambda: (lambda x: x if x and x["level"] == "ok" else None)(self.m.execute(LINE)), timeout=5)
+        self.record["status_tab_after_ready"] = {"at": self.now(), **(turned or self.m.execute(LINE) or {})}
+        self.m.switch_to(self.early)
         self.finish()
+        self.assertEqual(self.record["status_tab_after_ready"].get("text"), active, "the open new tab did not turn to 'active'")
 
 
 if __name__ == "__main__":

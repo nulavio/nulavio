@@ -69,6 +69,7 @@ this.nulavioPrivacy = class extends ExtensionAPI {
         dismissDnsChoice: call(() => NulavioPrivacy.dismissDnsChoice()),
         firstRun: call(() => NulavioPrivacy.firstRun()),
         firstRunDone: call(steps => NulavioPrivacy.firstRunDone(steps)),
+        filter: call(() => NulavioPrivacy.filter()),
         onChanged: new ExtensionCommon.EventManager({
           context,
           name: "nulavioPrivacy.onChanged",

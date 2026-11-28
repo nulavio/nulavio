@@ -47,14 +47,48 @@ async function extension(id) {
   }
 }
 
+/* Whether uBlock Origin filters yet (NulavioPrivacy.filter, #898): false while it loads its lists, null when the
+   Shell cannot tell (then the add-on manager's word stands, as before). */
+async function filtering() {
+  try {
+    return (await browser.nulavioPrivacy?.filter())?.ready ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/* The content filter's line. On a new profile's first start uBlock Origin is active seconds before it filters:
+   until its lists are in memory the requests it holds are let through unfiltered (R91), so it is "loading its
+   lists", not "active", and the line is read again each second until it filters. */
+let filterAgain = 0;
+function showFilter(ublock, ready) {
+  if (!ublock) show("filter", t("filterMissing"), "warn");
+  else if (!ublock.enabled) show("filter", t("filterDisabled"), "warn");
+  else if (ready === false) show("filter", t("filterLoading", [ublock.version]), "warn");
+  else show("filter", t("filterActive", [ublock.version]), "ok");
+  const loading = Boolean(ublock?.enabled) && ready === false;
+  if (loading && !filterAgain) {
+    filterAgain = setTimeout(async () => {
+      filterAgain = 0;
+      const before = document.querySelector('[data-status="filter"]').textContent;
+      const [now, readyNow] = await Promise.all([extension(UBLOCK_ID), filtering()]);
+      showFilter(now, readyNow);
+      if (document.querySelector('[data-status="filter"]').textContent !== before) {
+        summarise();
+      }
+    }, 1000);
+  }
+}
+
 async function refresh() {
   // Every new tab reads these; they are independent, so they go out together
   // (one round trip of latency instead of eight). Display order is unchanged.
-  const [tracking, https, gpc, ublock, providers, engineSaving] = await Promise.all([
+  const [tracking, https, gpc, ublock, ready, providers, engineSaving] = await Promise.all([
     setting(browser.privacy.websites.trackingProtectionMode),
     setting(browser.privacy.network.httpsOnlyMode),
     setting(browser.privacy.network.globalPrivacyControl),
     extension(UBLOCK_ID),
+    filtering(),
     Promise.all(PROVIDERS.map(([id]) => extension(id))),
     setting(browser.privacy.services.passwordSavingEnabled),
   ]);
@@ -64,9 +98,7 @@ async function refresh() {
   show("gpc", gpc === undefined ? t("stateUnknown") : gpc ? t("gpcSent") : t("gpcNotSent"),
        gpc === undefined ? "unknown" : gpc ? "ok" : "warn");
 
-  if (!ublock) show("filter", t("filterMissing"), "warn");
-  else if (!ublock.enabled) show("filter", t("filterDisabled"), "warn");
-  else show("filter", t("filterActive", [ublock.version]), "ok");
+  showFilter(ublock, ready);
 
   const active = PROVIDERS.filter((_, i) => providers[i]?.enabled).map(([, name]) => name);
   if (active.length) show("passwords", active.map(name => t("passwordsProvider", [name])).join(", "), "ok");
