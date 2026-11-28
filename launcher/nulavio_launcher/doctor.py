@@ -257,14 +257,29 @@ def _check_manifest(path: Path) -> Check:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return Check("native-messaging", path.name, "warn", f"unreadable manifest: {exc}")
+    # The file may be another program's: one of another shape is reported like one that is not JSON (#675). Its text
+    # must also be printable: JSON allows a lone surrogate, which UTF-8 output does not.
+    if not isinstance(data, dict):
+        return Check("native-messaging", path.name, "warn", "unreadable manifest: not a JSON object")
+    name = data["name"] if paths.is_text(data.get("name")) else path.stem
+    if not paths.is_text(data.get("path", "")):
+        return Check("native-messaging", name, "warn", "unreadable manifest: 'path' is not a string")
     host = Path(data.get("path", ""))
-    allowed = ", ".join(data.get("allowed_extensions", [])) or "none"
-    if not host.is_absolute() or not host.exists():
-        return Check("native-messaging", data.get("name", path.stem), "warn", f"host binary missing: {host}")
-    st = os.stat(host)
+    try:
+        # One stat: a host removed after an exists() check is missing too, not an error for the whole report.
+        st = os.stat(host) if host.is_absolute() else None
+    except (OSError, ValueError):  # ValueError: a path the kernel cannot take (an embedded NUL)
+        st = None
+    if st is None:
+        return Check("native-messaging", name, "warn", f"host binary missing: {host}")
+    # The host is checked before the extension list, so a malformed list never hides a writable host.
     if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        return Check("native-messaging", data.get("name", path.stem), "fail", f"host {host} is group/world-writable")
-    return Check("native-messaging", data.get("name", path.stem), "ok", f"{host} (allowed: {allowed}) [{path.parent}]")
+        return Check("native-messaging", name, "fail", f"host {host} is group/world-writable")
+    listed = data.get("allowed_extensions", [])
+    if not isinstance(listed, list) or not all(paths.is_text(item) for item in listed):
+        return Check("native-messaging", name, "warn", "unreadable manifest: 'allowed_extensions' is not a list of strings")
+    allowed = ", ".join(listed) or "none"
+    return Check("native-messaging", name, "ok", f"{host} (allowed: {allowed}) [{path.parent}]")
 
 
 def check_native_messaging() -> list[Check]:

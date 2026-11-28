@@ -214,7 +214,10 @@ def require_nulavio(engine: Engine, environ: Mapping[str, str] | None = None, *,
 def validate_url(url: str) -> str:
     if url.startswith("-"):
         raise EngineError("URL must not start with '-'")
-    parsed = urllib.parse.urlparse(url)
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:  # an unclosed "[" in the host, characters NFKC turns into "/", "?", "#" or "@" (#675)
+        raise EngineError("URL is malformed") from None
     if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
         raise EngineError(f"only {', '.join(sorted(ALLOWED_URL_SCHEMES))} URLs can be opened from the launcher")
     if parsed.scheme.lower() in {"http", "https"} and not parsed.netloc:

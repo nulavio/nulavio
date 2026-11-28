@@ -124,6 +124,17 @@ def check_private(path: Path, mode: int, fix: bool = False) -> list[str]:
     return problems
 
 
+def is_text(value: object) -> bool:
+    """A string that can be printed or written as UTF-8. JSON allows a lone surrogate ("\\ud800"), which cannot (#675)."""
+    if not isinstance(value, str):
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def read_private_file(path: Path) -> bytes:
     """Read a file the launcher trusts, such as one in a profile the browser can write.
 
