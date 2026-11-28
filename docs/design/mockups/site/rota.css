@@ -1,0 +1,192 @@
+/* Direction «Rota» (route): the page is read along the symbol's route. One mint line runs
+   down the left from its three points, each scene is a numbered stop on it, and it turns
+   towards the waitlist at the end. The product is shown close: the corner of the window and
+   the band at their real size, not the whole window made small. A serif sets the headings.
+   The line is drawn, not animated. Colours from the tokens only. */
+
+:root {
+  --page: 76rem;
+  --gutter: var(--nv-space-5);
+  --lane: 2.25rem;                 /* from the content edge to the text */
+  --line-x: 0.375rem;              /* where the line runs inside the lane */
+  --line: var(--nv-route-vertical-width);
+  --node: 1.75rem;
+  --serif: "Noto Serif", "Source Serif 4", "DejaVu Serif", Georgia, serif;
+  --hairline: 1px solid var(--nv-color-border-subtle);
+}
+@media (min-width: 48rem) { :root { --gutter: var(--nv-space-7); } }
+@media (min-width: 64rem) { :root { --lane: 5rem; --line-x: 1.25rem; } }
+
+html, body { overflow-x: clip; }
+
+.top, .route, .foot {
+  width: 100%;
+  max-width: calc(var(--page) + 2 * var(--gutter));
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.btn, .field { border-radius: var(--nv-radius-pill); }
+.field { padding-inline: var(--nv-space-6); }
+
+/* -- header ---------------------------------------------------------------------------- */
+
+.top { display: flex; align-items: center; gap: var(--nv-space-6); min-height: 4.5rem; }
+.brand { display: inline-flex; align-items: center; min-height: 2.75rem; }
+.top-nav { display: none; margin-left: auto; }
+.top-nav ul { display: flex; gap: var(--nv-space-6); }
+.top-nav a, .lang { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; text-decoration: none; color: var(--nv-color-text-secondary); }
+.top-nav a:hover, .lang:hover { color: var(--nv-color-text-primary); }
+/* The language switch stays in view at every width; the section links fold away on a phone. */
+.lang { margin-left: auto; }
+.top-join { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.9375rem; font-weight: var(--nv-font-weight-semibold); }
+@media (min-width: 48rem) {
+  .top-nav { display: block; }
+  .top-nav + .lang { margin-left: 0; }
+}
+/* On the narrowest phones the switch is shortened to «EN», as on the landing (below 26rem there); its name stays «English». */
+.lang-short { display: none; }
+@media (max-width: 23rem) {
+  .top { gap: var(--nv-space-5); }
+  .lang-long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .lang-short { display: inline; }
+}
+
+/* -- the route ------------------------------------------------------------------------- */
+
+.hero, .feature, .exit { position: relative; padding-left: var(--lane); }
+.hero::before, .feature::before {
+  content: ""; position: absolute; left: var(--line-x); top: 0; bottom: 0;
+  width: var(--line); background: var(--nv-color-route-vertical);
+}
+/* The origin: the line starts under its three points, smallest first. */
+.hero::before { top: 4.25rem; border-radius: 2px 2px 0 0; }
+.origin { position: absolute; left: var(--line-x); top: 1.5rem; flex-direction: column; width: var(--line); gap: 7px; }
+.origin i { flex: none; margin-inline: -2.5px; }
+.origin i:nth-child(1) { margin-inline: -0.5px; }
+.origin i:nth-child(2) { margin-inline: -1.5px; }
+
+/* -- hero ------------------------------------------------------------------------------ */
+
+.hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); padding-block: var(--nv-space-8) var(--nv-space-9); }
+.kicker { margin-bottom: var(--nv-space-5); font-size: 0.9375rem; color: var(--nv-color-text-secondary); }
+h1, h2 { font-family: var(--serif); font-weight: var(--nv-font-weight-regular); }
+h1 {
+  font-size: clamp(2.5rem, 1.6rem + 4.2vw, 4rem);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+}
+h1 span { display: block; }
+h1 .mine { font-style: italic; }
+.lead { margin-top: var(--nv-space-6); max-width: 34rem; font-size: 1.1875rem; line-height: 1.55; color: var(--nv-color-text-secondary); }
+.lead strong { color: var(--nv-color-text-primary); }
+.hero .join { margin-top: var(--nv-space-7); max-width: 30rem; }
+.join-row { display: grid; gap: var(--nv-space-3); }
+@media (min-width: 30rem) { .join-row { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* The corner of the window at its real size (a 2x capture shown at half its pixels). */
+.closeup .shot { width: 37.5rem; max-width: none; border-radius: var(--nv-radius-md) 0 0 0; border-right: 0; border-bottom: 0; box-shadow: var(--nv-elevation-2); }
+/* The figure's box runs to the edge of the viewport and cuts the capture there: the window goes on. */
+.closeup { min-width: 0; overflow-x: clip; margin-right: calc(-1 * var(--gutter)); margin-left: calc(-1 * var(--nv-space-5)); padding-left: var(--nv-space-5); }
+.closeup figcaption { margin-top: var(--nv-space-4); max-width: 26rem; padding-right: var(--gutter); font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+
+@media (min-width: 64rem) {
+  .hero { grid-template-columns: minmax(0, 1fr) 27rem; gap: var(--nv-space-9); align-items: center; padding-block: var(--nv-space-9) 6rem; }
+  .closeup { margin-right: calc(-1 * var(--gutter) - max(0px, (100vw - var(--page) - 2 * var(--gutter)) / 2)); }
+}
+
+/* -- a feature: prose, then its stops --------------------------------------------------- */
+
+.feature { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nv-space-8); padding-block: var(--nv-space-8) var(--nv-space-9); }
+h2 { font-size: clamp(1.875rem, 1.35rem + 2.2vw, 2.75rem); line-height: 1.12; letter-spacing: -0.01em; }
+.prose > * { max-width: 38rem; }
+.prose > .bands { max-width: 46rem; }
+.prose h2 { position: relative; }
+/* A stop on the line, level with the heading's first line. */
+.prose h2::before {
+  content: ""; position: absolute;
+  left: calc(var(--line-x) - var(--lane) + var(--line) / 2 - 0.5rem); top: 0.56em; translate: 0 -50%;
+  width: 1rem; height: 1rem; border-radius: 50%;
+  background: var(--nv-color-bg-canvas); border: var(--line) solid var(--nv-color-route-vertical);
+}
+.prose > p { margin-top: var(--nv-space-5); font-size: 1.125rem; line-height: 1.6; color: var(--nv-color-text-secondary); }
+.points { margin-top: var(--nv-space-6); display: grid; gap: var(--nv-space-3); font-size: 1.125rem; }
+.points li { padding-left: var(--nv-space-6); text-indent: calc(-1 * var(--nv-space-6)); }
+.points li::before { content: "\2013"; display: inline-block; width: var(--nv-space-6); text-indent: 0; color: var(--nv-color-accent-default); }
+.prose > .fine { margin-top: var(--nv-space-7); font-family: var(--serif); font-style: italic; font-size: 1.125rem; color: var(--nv-color-text-primary); }
+.fine strong { font-family: var(--nv-font-family-brand); font-style: normal; font-size: 0.9375rem; }
+
+.bands { margin-top: var(--nv-space-7); }
+.bands ul { display: flex; flex-wrap: wrap; gap: var(--nv-space-4); align-items: center; }
+.bands img { width: 14rem; border: var(--hairline); border-radius: var(--nv-radius-xs); }
+.bands figcaption { margin-top: var(--nv-space-4); max-width: 34rem; font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+
+.steps { display: grid; gap: var(--nv-space-9); counter-reset: step; }
+.step { counter-increment: step; }
+.step h3 { position: relative; font-size: 1.25rem; font-weight: var(--nv-font-weight-semibold); line-height: 1.3; }
+.step h3::before {
+  content: counter(step); position: absolute;
+  left: calc(var(--line-x) - var(--lane) + var(--line) / 2 - var(--node) / 2); top: 0.65em; translate: 0 -50%;
+  width: var(--node); height: var(--node); border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--nv-color-accent-default); color: var(--nv-color-accent-on);
+  font-size: 0.875rem; font-weight: var(--nv-font-weight-semibold); font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 0.25rem var(--nv-color-bg-canvas);
+}
+.scene { margin-top: var(--nv-space-5); max-width: 46rem; }
+.scene .shot { width: 100%; border-radius: var(--nv-radius-md); }
+.scene figcaption { margin-top: var(--nv-space-5); display: grid; gap: var(--nv-space-3); max-width: 38rem; }
+.scene figcaption > p { font-size: 1.0625rem; }
+
+/* The detail: the same capture's top-left corner, uncropped in scale, where the band reads. */
+.detail { margin-top: var(--nv-space-4); max-width: 31rem; padding: var(--nv-space-3); background: var(--nv-color-bg-surface); border: var(--hairline); border-radius: var(--nv-radius-md); box-shadow: var(--nv-elevation-2); }
+.detail .shot { width: 100%; height: 4.25rem; object-fit: none; object-position: left top; border-radius: var(--nv-radius-xs); }
+.detail p { margin-top: var(--nv-space-3); font-size: 0.8125rem; color: var(--nv-color-text-secondary); }
+/* On a narrow page the cut starts at the words the scene is about, so that they fit whole. */
+@media (max-width: 47.9375rem) { .detail .shot { object-position: -171px 0; } }
+
+.whole summary { min-height: 2.75rem; padding-block: var(--nv-space-3); font-size: 0.9375rem; font-weight: var(--nv-font-weight-medium); }
+.whole .meta { margin-left: var(--nv-space-2); font-weight: var(--nv-font-weight-regular); color: var(--nv-color-text-secondary); }
+.whole .scene-video { margin-top: var(--nv-space-3); border: var(--hairline); border-radius: var(--nv-radius-md); }
+.whole .transcript { margin-top: var(--nv-space-4); }
+
+@media (min-width: 64rem) {
+  .feature { padding-block: var(--nv-space-9) 6rem; }
+  .steps { margin-top: var(--nv-space-5); }
+}
+@media (min-width: 75rem) {
+  .scene { position: relative; }
+  /* The detail overlaps the capture's empty lower corner and reaches past its edge. */
+  .detail { position: absolute; left: 27rem; top: 15rem; width: 31rem; margin: 0; }
+}
+
+/* -- the exit: the line turns towards the waitlist --------------------------------------- */
+
+.exit { padding-block: 0 var(--nv-space-9); }
+.exit::before {
+  content: ""; position: absolute; left: var(--line-x); top: 0;
+  width: calc(var(--lane) - var(--line-x) - 0.75rem); height: 3.25rem;
+  border-left: var(--line) solid var(--nv-color-route-vertical);
+  border-bottom: var(--line) solid var(--nv-color-route-vertical);
+  border-bottom-left-radius: 1.25rem;
+}
+.exit::after {
+  content: ""; position: absolute; left: calc(var(--lane) - 0.75rem - 4px); top: calc(3.25rem - var(--line) / 2 - 4px);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--nv-color-route-vertical);
+}
+.exit-text { padding-top: 2.1rem; }
+.exit-text p { margin-top: var(--nv-space-5); max-width: 34rem; font-size: 1.125rem; color: var(--nv-color-text-secondary); }
+.exit .join { margin-top: var(--nv-space-7); max-width: 46rem; }
+.join-fields { display: grid; gap: var(--nv-space-5); }
+/* One row only where the closed list can show its longest choice, «Outra distribuição Linux», whole. */
+@media (min-width: 56rem) { .join-fields { grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto; align-items: end; } }
+@media (max-width: 63.9375rem) {
+  .exit::before { width: calc(var(--lane) - var(--line-x) - 0.5rem); border-bottom-left-radius: 0.75rem; }
+  .exit::after { left: calc(var(--lane) - 0.5rem - 4px); }
+}
+
+/* -- footer ---------------------------------------------------------------------------- */
+
+.foot { display: grid; gap: var(--nv-space-5); align-items: start; padding-block: var(--nv-space-7) var(--nv-space-8); border-top: var(--hairline); font-size: 0.875rem; color: var(--nv-color-text-secondary); }
+.foot-text { display: grid; gap: var(--nv-space-3); max-width: 46rem; }
+@media (min-width: 64rem) { .foot { grid-template-columns: 12rem minmax(0, 1fr); } }
