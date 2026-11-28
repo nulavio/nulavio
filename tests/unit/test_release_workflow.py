@@ -264,7 +264,7 @@ RUNBOOK_CURL = """#!/bin/sh
 # Stand-in for curl ... --max-filesize <n>M -o <file> <url>: the URL's path from FAKE_CDN when it holds it (a cached
 # copy), else from FAKE_BUCKET; curl's 22 (a 404), or its 63 for a file past --max-filesize. curl --version prints
 # FAKE_CURL_VERSION (8.18.0, Fedora 44's, by default) on FAKE_LIBCURL_VERSION (the same by default) and exits with
-# FAKE_CURL_VERSION_STATUS (0 by default).
+# FAKE_CURL_VERSION_STATUS (0 by default); FAKE_CURL_VERSION_LINE, when set, replaces that first line.
 exec python3 -I -c '
 import json, os, shutil, sys
 LEAK
@@ -274,7 +274,8 @@ with open(os.environ["FAKE_CURL_LOG"], "a") as log:
 if args == ["--version"]:
     version = os.environ.get("FAKE_CURL_VERSION", "8.18.0")
     libcurl = os.environ.get("FAKE_LIBCURL_VERSION", version)
-    print(f"curl {version} (x86_64-redhat-linux-gnu) libcurl/{libcurl} OpenSSL/3.5.4 zlib/1.3.1")
+    line = f"curl {version} (x86_64-redhat-linux-gnu) libcurl/{libcurl} OpenSSL/3.5.4 zlib/1.3.1"
+    print(os.environ.get("FAKE_CURL_VERSION_LINE", line))
     print("Release-Date: 2026-01-07")
     print("Protocols: file ftp ftps http https")
     sys.exit(int(os.environ.get("FAKE_CURL_VERSION_STATUS", "0")))
@@ -560,6 +561,18 @@ class FailedPublishRunbookTest(unittest.TestCase):
             with self.subTest(curl=version, libcurl=libcurl):
                 self.assert_old_curl_stops_it(version, libcurl)
 
+    def test_a_version_line_without_the_libcurl_field_in_its_place_stops_it_before_any_download(self):
+        # #923 (OpenCodeReview round 3): libcurl/<version> is read only as the field after (<host>).
+        for line in ("curl 8.18.0 (x86_64-redhat-linux-gnu) notlibcurl/8.4.0 OpenSSL/3.5.4",
+                     "curl 8.18.0 (x86_64-redhat-linux-gnu) OpenSSL/3.5.4 libcurl/8.18.0",
+                     "curl 8.18.0 libcurl/8.18.0 OpenSSL/3.5.4"):  # fmt: skip
+            with self.subTest(line=line):
+                self.env["FAKE_CURL_VERSION_LINE"] = line
+                out = self.run_block()
+                self.assertIn(f"{line}: the block needs curl 8.4.0 or later, on libcurl 8.4.0 or later", out.stderr)
+                self.assertEqual(self.curls(), [])
+                self.assert_stopped_before_any_copy(out)
+
     def test_a_curl_version_probe_that_fails_stops_it_before_any_download(self):
         # #923: a curl that prints a good version and then fails (or one that is missing: 127) is not trusted.
         for status in ("1", "127"):
@@ -673,7 +686,7 @@ class FailedPublishRunbookTest(unittest.TestCase):
         # #923: cmp's 2 (it could not read a file) is neither "the same" nor "different": nothing is written.
         # The real cmp, reached through a path with a space in it (self.tmp has one), as a directory on PATH may.
         cmp = self.tmp / "real cmp"
-        cmp.symlink_to(shutil.which("cmp"))
+        cmp.symlink_to(os.path.abspath(shutil.which("cmp")))  # a relative PATH entry would resolve from self.tmp
         cmp = shlex.quote(str(cmp))
         (self.tmp / "bin" / "cmp").write_text(
             f'#!/bin/sh\ncase "$3" in */r2/served.xml) echo "cmp: read error" >&2; exit 2;; esac\nexec {cmp} "$@"\n'
@@ -682,6 +695,18 @@ class FailedPublishRunbookTest(unittest.TestCase):
         out = self.run_block()
         self.assertIn("cmp failed (2) on R2's served repomd.xml: nothing written", out.stderr)
         self.assert_stopped_before_any_write(out)
+
+    def test_a_bucket_with_no_served_index_stops_it_before_any_write(self):
+        # #923 (OpenCodeReview round 3): it reads R2's served repomd.xml before it writes; with none, that is not
+        # state 4 (the build job stops at its download), and the block writes nothing.
+        (self.served / "repomd.xml").unlink()
+        out = self.run_block()
+        self.assertNotEqual(out.returncode, 0)
+        self.assertNotIn("restored", out.stdout)
+        self.assertNotEqual(self.calls(), [])  # it read R2
+        self.assertEqual(self.writes(), [])
+        self.assertFalse((self.served / "repomd.xml").exists())
+        self.assertEqual(list(self.scratch.iterdir()), [])
 
     def test_a_served_index_that_lists_another_revision_fails_it(self):
         other, other_sig, href, primary = repodata("the failed run's, listing another", "160.0.1-0.3")
