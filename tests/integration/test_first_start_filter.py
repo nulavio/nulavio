@@ -71,6 +71,24 @@ FILTER = """return ChromeUtils.importESModule("resource://builtin-addons/nulavio
 NEWTAB = "return WebExtensionPolicy.getByID('shell@nulavio.net').getURL('newtab/newtab.html');"
 LINE = """const dd = document.querySelector('#status [data-status=filter]');
 return dd?.dataset.level ? {level: dd.dataset.level, text: dd.textContent} : null;"""
+# The same line in a tab left open, each change with its time (arguments[0]: the test's clock when this runs), and
+# what the page said in its polite status line (#filter-now) by then. Set up in one call that does not wait, so the
+# probes after it start at once; read with LINE_TRACE.
+LINE_WATCH = """
+const [since] = arguments, base = Date.now();
+const dd = document.querySelector('#status [data-status=filter]');
+const seen = (window.nulavioLineTrace = []);
+const note = () => {
+  const last = seen[seen.length - 1];
+  if (dd.dataset.level && (!last || last.level !== dd.dataset.level || last.text !== dd.textContent)) {
+    seen.push({at: Math.round((since + (Date.now() - base) / 1000) * 100) / 100, level: dd.dataset.level, text: dd.textContent});
+  }
+};
+note();
+new MutationObserver(note).observe(dd, {attributes: true, childList: true, characterData: true, subtree: true});
+"""
+LINE_TRACE = """return {trace: window.nulavioLineTrace ?? null,
+  announced: document.getElementById('filter-now')?.textContent ?? null};"""
 # uBlock Origin's toolbar button, every 100 ms from Marionette's first answer, each change with its time since the
 # engine started (#898): "loading" from the start of its background, "own" once its request listener took over, and
 # its badge "!" when a request went out while it had no listener (vAPI.Net in its js/vapi-background.js). A new
@@ -271,6 +289,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         if self.saved:
             return
         case = self.record.get("case", "unknown")
+        if "ublock_trace" not in self.record and getattr(self, "m", None) is not None:
+            # A case that stopped early keeps uBlock Origin's toolbar trace too, if Marionette can still read it.
+            try:
+                self.record["ublock_trace"] = self.m.chrome(TRACE_READ)
+            except Exception as e:  # the record is kept whatever the browser can still say
+                self.record["ublock_trace"] = {"unreadable": str(e)}
         self.saved = f"first-start-filter-{case}-{time.strftime('%Y%m%dT%H%M%S')}.json"
         (self.artifacts / self.saved).write_text(json.dumps(self.record, indent=2) + "\n")
         if not self.record["complete"]:
@@ -310,12 +334,12 @@ class FirstStartFilterWindowTest(unittest.TestCase):
     # -- a new tab left open (#898) ---------------------------------------------------------------------------
     def open_status_tab(self) -> None:
         """A new tab of the Shell, opened once the early page is read and left open: its content-filter line is read
-        again by the page itself until uBlock Origin filters, without a reload."""
+        again by the page itself until uBlock Origin filters, without a reload. Its line is traced from here, without
+        waiting for it, so the probes start at once."""
         self.status_tab = self.m.new_tab()
         self.m.switch_to(self.status_tab)
         self.m.navigate(self.m.chrome(NEWTAB))
-        opened = harness.wait_until(lambda: self.m.execute(LINE), timeout=READING)
-        self.record["status_tab_opened"] = {"at": self.now(), **opened} if opened else None
+        self.m.execute(LINE_WATCH, [self.now()])
         self.m.switch_to(self.early)
 
     def read_status_tab(self) -> None:
@@ -324,11 +348,22 @@ class FirstStartFilterWindowTest(unittest.TestCase):
         self.active_words = self.m.execute("return browser.i18n.getMessage('filterActive', [arguments[0]]);", version)
         turned = harness.wait_until(lambda: (lambda x: x if x and x["level"] == "ok" else None)(self.m.execute(LINE)), timeout=5)
         self.record["status_tab_after_ready"] = {"at": self.now(), **(turned or self.m.execute(LINE) or {})}
+        line = self.m.execute(LINE_TRACE)
+        self.record["status_tab_line"] = line["trace"]
+        self.record["status_tab_opened"] = (line["trace"] or [None])[0]
+        self.record["status_tab_announced"] = line["announced"]
         self.m.switch_to(self.early)
 
     def assert_status_tab_turned(self) -> None:
-        said = self.record["status_tab_after_ready"].get("text")
-        self.assertEqual(said, self.active_words, "the new tab left open did not turn to 'active' once it filtered")
+        r = self.record
+        self.assertEqual(r["status_tab_after_ready"].get("text"), self.active_words,
+                         "the new tab left open did not turn to 'active' once it filtered")  # fmt: skip
+        # It says so to a screen reader once, and only a real change: a tab that opened 'active' announces nothing.
+        if any(entry["level"] != "ok" for entry in r["status_tab_line"] or []):
+            announced = r["status_tab_announced"] or ""
+            self.assertTrue(announced.endswith(self.active_words), f"the change to 'active' was not announced: {announced!r}")
+        else:
+            self.assertEqual(r["status_tab_announced"], "", "the new tab announced its first reading")
 
     def find_tab(self, address: str) -> str:
         for handle in self.m.window_handles():
