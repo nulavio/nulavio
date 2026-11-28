@@ -532,6 +532,172 @@ class OverlappingUnlockTest(StorageCase):
         box.unmount()
         self.assertEqual(mode(box.mountpoint), 0o500)
 
+    def call_while_mounting(self, box: storage.Container, call) -> list[int]:
+        """Runs `call` in the middle of box's next mount, after its fchmod to 0700 and before fusermount mounts there:
+        another launcher call on the profile at that moment. Returns the folder's mode as fusermount then finds it."""
+        real = storage.Container._gocryptfs
+        seen = []
+
+        def gocryptfs(container, args, password, *rest, **kwargs):
+            if container is box and args[-1:] == [str(box.mountpoint)]:  # the mount, not -init
+                call()
+                seen.append(mode(box.mountpoint))
+            return real(container, args, password, *rest, **kwargs)
+
+        patcher = mock.patch.object(storage.Container, "_gocryptfs", gocryptfs)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return seen
+
+    def test_a_launcher_call_while_an_unlock_mounts_leaves_the_folder_to_it(self):
+        # `status`, the chooser or another unlock reach secure_if_locked() (profiles.container) while this unlock has
+        # made the bare folder writable for fusermount: nothing is mounted yet, but the folder is the unlock's (#800).
+        box, vault = self.new_container()
+        seen = self.call_while_mounting(box, lambda: storage.Container(box.mountpoint).secure_if_locked())
+        box.mount(vault)
+        self.assertEqual(seen, [0o700])
+        self.assertTrue(box.mounted())
+        (box.mountpoint / "prefs.js").write_text("inside")
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_the_end_of_a_lock_while_an_unlock_mounts_leaves_the_folder_to_it(self):
+        # A lock that ends (its unmount is done; it makes the bare folder read-only) just as an unlock starts (#800).
+        box, vault = self.new_container()
+        seen = self.call_while_mounting(box, lambda: storage.Container(box.mountpoint).unmount())
+        box.mount(vault)
+        self.assertEqual(seen, [0o700])
+        self.assertTrue(box.mounted())
+        box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_a_lock_under_the_state_lock_still_makes_the_folder_read_only(self):
+        # The lock after an engine exits holds the state lock itself (profiles._unmount_unless_taken), and so does an
+        # unlock that takes away a volume its check refused: their own lock never keeps the folder writable.
+        box, vault = self.new_container()
+        box.mount(vault)
+        with box._state_lock(wait=0):
+            box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+        os.chmod(box.mountpoint, 0o700)  # left writable, as by a crash between fchmod and fusermount
+        with box._state_lock(wait=0):
+            box.unmount()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+        os.chmod(box.mountpoint, 0o700)
+        storage.Container(box.mountpoint).secure_if_locked()  # nothing holds the lock: made read-only, as before
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_a_change_that_holds_the_lock_leaves_the_folder_read_only_when_it_ends(self):
+        # A launcher call or the end of a lock that finds the state lock held by a change to the unlock methods (not
+        # an unlock) leaves the folder alone; the change makes it read-only before it lets the lock go. Here the
+        # folder is writable, as a version before U-T23's handle left it underneath its volume (#926 review).
+        box, vault = self.new_container()
+        box.mount(vault)
+        box.unmount()
+        os.chmod(box.mountpoint, 0o700)
+        with box.recording(vault) as record:
+            storage.Container(box.mountpoint).secure_if_locked()
+            storage.Container(box.mountpoint).unmount()
+            self.assertEqual(mode(box.mountpoint), 0o700)  # left to the change, which holds the lock
+            record()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_a_lock_just_after_a_holder_looked_still_makes_the_folder_read_only(self):
+        # A change to the unlock methods ends: it looks at the folder while the volume is still mounted (nothing to
+        # repair), and `nulavio vault lock` unmounts before the change lets the lock go. The lock waits for it rather
+        # than leave a folder writable underneath, as a version before U-T23's handle mounted it (#926 review, 2).
+        box, vault = self.new_container()
+        bare = os.open(box.mountpoint, os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            box.mount(vault)
+            os.chmod(f"/proc/self/fd/{bare}", 0o700)  # the bare folder underneath the volume, writable
+        finally:
+            os.close(bare)
+        holder = storage.Container(box.mountpoint)
+        holder._lock_bare_if_locked = lambda: None  # its look came while the volume was still mounted
+        held, done = threading.Event(), threading.Event()
+
+        def change() -> None:
+            with holder._state_lock(wait=0):
+                held.set()
+                deadline = time.monotonic() + 20
+                while box.mounted() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                time.sleep(0.3)  # the unmount below is done and has found the lock held
+            done.set()
+
+        thread = threading.Thread(target=change, daemon=True)
+        thread.start()
+        self.assertTrue(held.wait(10))
+        storage.Container(box.mountpoint).unmount()
+        thread.join(30)
+        self.assertTrue(done.is_set())
+        self.assertFalse(box.mounted())
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
+    def test_the_repair_when_the_lock_goes_never_takes_the_holders_place(self):
+        # The look at the mount table when the lock goes is a repair: what it raises does not replace what the holder
+        # did, nor stop the AI Bridge closing its other engines (ProfileTarget.stop, #926 review, round 2).
+        box, _vault = self.new_container()
+        with mock.patch.object(storage, "mounted_paths", side_effect=UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "bad")):
+            with box._state_lock(wait=0):
+                pass
+            with self.assertRaises(KeyError), box._state_lock(wait=0):
+                raise KeyError("the holder's own error")
+
+    def test_a_mount_point_name_in_another_encoding_neither_raises_nor_hides_the_profile(self):
+        # Another disk mounted under a name that is not UTF-8, or with a non-breaking space: the mount table is read
+        # as paths are, and split on the spaces the kernel escapes only (#926 review, round 2).
+        odd = Path(os.fsdecode(os.fsencode(str(self.tmp)) + b"/caf\xe9"))
+        odd.mkdir()
+        spaced = self.tmp / "a\xa0b c"
+        spaced.mkdir()
+        table = (
+            b"36 35 98:0 / /mnt/disk\xe9 rw,noatime - ext4 /dev/sdb1 rw\n"
+            + b"37 35 98:0 / " + os.fsencode(str(odd)) + b" rw - fuse.gocryptfs /x\xff rw\n"
+            + b"38 35 98:0 / " + os.fsencode(str(spaced)).replace(b" ", b"\\040") + b" rw - fuse.gocryptfs /y rw\n"
+        )  # fmt: skip
+        real = Path.read_bytes
+
+        def read_bytes(path):
+            return table if str(path) == "/proc/self/mountinfo" else real(path)
+
+        with mock.patch.object(Path, "read_bytes", read_bytes):
+            paths = storage.mounted_paths()
+            self.assertIn(os.fsdecode(b"/mnt/disk\xe9"), paths)
+            self.assertTrue(storage.Container(odd).mounted())
+            self.assertTrue(storage.Container(spaced).mounted())
+            self.assertFalse(storage.Container(self.tmp / "work").mounted())
+
+    def test_a_detached_volume_under_a_name_in_another_encoding_is_still_in_use(self):
+        # A profile chosen by --path under a name that is not UTF-8, its volume detached with a file open (gone from
+        # the mount table, still served by gocryptfs), and another disk with such a name: a new key still waits for
+        # it. Before the mount table was read as paths are, that other disk stopped the new key with an error; the
+        # gocryptfs command line must be read the same way, or nothing would stop it now (#926 review, round 3).
+        box = storage.Container(Path(os.fsdecode(os.fsencode(str(self.tmp)) + b"/caf\xe9")))
+        table = b"36 35 98:0 / /mnt/disk\xe9 rw,noatime - ext4 /dev/sdb1 rw\n"
+        served = b"\0".join([b"/usr/bin/gocryptfs", b"-fg", os.fsencode(str(box.cipher)), os.fsencode(str(box.mountpoint))])
+        fake = {"/proc/self/mountinfo": table, "/proc/4242/cmdline": served + b"\0"}
+        real_bytes, real_text, real_iterdir = Path.read_bytes, Path.read_text, Path.iterdir
+
+        def read_bytes(path):
+            return fake[str(path)] if str(path) in fake else real_bytes(path)
+
+        def read_text(path, *args, **kwargs):  # as the kernel's file reads in UTF-8
+            return fake[str(path)].decode() if str(path) in fake else real_text(path, *args, **kwargs)
+
+        def iterdir(path):
+            return iter([Path("/proc/4242")]) if str(path) == "/proc" else real_iterdir(path)
+
+        with (
+            mock.patch.object(Path, "read_bytes", read_bytes),
+            mock.patch.object(Path, "read_text", read_text),
+            mock.patch.object(Path, "iterdir", iterdir),
+        ):
+            self.assertTrue(storage._volume_in_use(box))
+            fake["/proc/4242/cmdline"] = served.replace(b"gocryptfs", b"sshfs", 1) + b"\0"
+            self.assertFalse(storage._volume_in_use(box))
+
     def test_a_second_unlock_waits_for_the_first_ones_generation_check(self):
         # The second request finds the volume mounted while the first is still checking its generation: it says
         # "unlocked" only after that check, and never of a volume the check then refuses and takes away (U-T21,
