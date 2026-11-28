@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "comment": "Pinned, hash-verified first-install sources. Firefox additionally verifies the Mozilla (AMO) signature and keeps the extension updated afterwards. Refresh with scripts/upstream/refresh_extensions_lock.py and review the diff.",
-  "verified_on": "2026-11-16",
+  "verified_on": "2026-11-28",
   "extensions": [
     {
       "key": "ublock-origin",
@@ -48,10 +48,10 @@
       "name": "Proton Pass",
       "role": "credential-provider",
       "default_install": false,
-      "version": "1.41.1",
-      "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi",
-      "sha256": "f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936",
-      "size": 8452118,
+      "version": "1.44.0",
+      "url": "https://addons.mozilla.org/firefox/downloads/file/5271799/proton_pass-1.44.0.xpi",
+      "sha256": "f53440bff8e754c1be060e1a015a0f4df62a4669917564fe09c7e3709fe41c60",
+      "size": 13607193,
       "license": "GPL-3.0-only",
       "homepage": "https://proton.me/pass",
       "reviewed_permissions": [

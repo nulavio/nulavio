@@ -52,11 +52,11 @@ Added 2026-11-16 (#81), at the level of Bitwarden: **P1**, and manual certificat
 
 ## Extension shortcuts and Nulavio's keys
 
-Read on 2026-11-17 from the `commands` of the pinned XPIs in `browser/distribution/extensions.lock.json` (SHA-256 checked), for #469. A key with no default is left out.
+Read on 2026-11-17 from the `commands` of the pinned XPIs in `browser/distribution/extensions.lock.json` (SHA-256 checked), for #469; Proton Pass again on 2026-11-28, when its pin moved from 1.41.1 to 1.44.0 (#822): the same keys. A key with no default is left out.
 
 | Extension (pinned version) | Default keys on Linux |
 |---|---|
-| Proton Pass 1.41.1 | Ctrl+Shift+Y (open), Ctrl+Shift+L (open in a larger window) |
+| Proton Pass 1.44.0 | Ctrl+Shift+Y (open), Ctrl+Shift+L (open in a larger window) |
 | Bitwarden 2026.10.2 | Ctrl+Shift+U (open, Linux), Alt+Shift+U (sidebar, Linux), Ctrl+Shift+L (fill a login), Ctrl+Shift+9 (generate a password) |
 | KeePassXC-Browser 1.10.4.1 | Alt+Shift+U (fill username and password), Alt+Shift+I (fill password), Alt+Shift+O (fill TOTP), Alt+Shift+G (password generator) |
 | 1Password 8.12.44.33 | Ctrl+Period (open), Ctrl+Shift+L (lock) |
