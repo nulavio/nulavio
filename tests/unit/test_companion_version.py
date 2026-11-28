@@ -171,6 +171,28 @@ class CompanionVersionTest(unittest.TestCase):
                 self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
                 self.assertIn("is not a commit in this clone", run.stderr)
 
+    def test_a_base_with_no_common_history_is_refused_not_taken_as_a_change(self):
+        # OpenCodeReview on #915: `git diff A...B` fails (exit 128) with no merge base; that is no answer, and the
+        # check without the range (which passes here) must not stand in for it.
+        self.git("switch", "-q", "--orphan", "unrelated")
+        self.git("commit", "-q", "--allow-empty", "-m", "unrelated history")
+        base = self.git("rev-parse", "HEAD").strip()
+        self.git("switch", "-q", "-f", "main")
+        self.assertEqual(self.check().returncode, 0)
+        run = self.check("--changed-since", base)
+        self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+        self.assertIn("git diff failed", run.stderr)
+
+    def test_a_ref_that_is_empty_or_not_a_commit_is_refused_before_the_comparison(self):
+        # OpenCodeReview on #915: `--ref=` (an unset variable) made the range `BASE...`, which git reads as
+        # `BASE...HEAD`, and passed without checking the commit asked for.
+        base = self.git("rev-parse", "HEAD").strip()
+        for ref in ("", "b" * 40, "--output=/dev/null"):
+            with self.subTest(ref=ref):
+                run = self.check("--changed-since", base, f"--ref={ref}")
+                self.assertEqual(run.returncode, 1, run.stdout + run.stderr)
+                self.assertIn("is not a commit in this clone", run.stderr)
+
     def test_a_shallow_clone_is_refused_on_a_pull_request_too(self):
         base = self.git("rev-parse", "HEAD").strip()
         shallow = Path(tempfile.mkdtemp(prefix="nulavio-companion-shallow-"))
@@ -191,7 +213,9 @@ class WorkflowTest(unittest.TestCase):
 
     def test_the_companion_job_runs_the_check_with_the_base_and_the_tags(self):
         self.assertIn("name: Companion app (lint, release build)\n", self.job)  # the required check's name
-        self.assertIn("fetch-depth: 0 #", self.job)  # every tag and the base; the script refuses a shallow clone
+        # Every tag and the base on a pull request (the script refuses a shallow clone); a push or the weekly run skips
+        # the step, so it keeps the one-commit checkout (OpenCodeReview on #915).
+        self.assertIn("fetch-depth: ${{ github.event_name != 'pull_request' && 1 || 0 }}", self.job)
         step = re.search(r"(?m)^      - name: .*companion_version\.py.*\n((?:        .*\n)+)", self.job)
         self.assertIsNotNone(step)
         self.assertIn("if: ${{ !cancelled() && github.event_name == 'pull_request' }}", step[1])

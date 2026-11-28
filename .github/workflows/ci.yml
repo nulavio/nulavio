@@ -139,7 +139,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0 # the version check compares the app with the last release's tag and refuses a shallow clone
+          # The version check (pull requests only) compares the app with the last release's tag and refuses a shallow
+          # clone; a push or the weekly run skips it and keeps the one-commit checkout. 0 is false here, hence the order.
+          fetch-depth: ${{ github.event_name != 'pull_request' && 1 || 0 }}
       - name: Gradle wrapper JAR is an official Gradle release (Dependabot replaces it on wrapper updates)
         uses: gradle/actions/wrapper-validation@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Lint and release build (Gradle and dependencies checksum-verified, run again if Maven refuses; no signing key in CI)

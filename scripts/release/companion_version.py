@@ -27,7 +27,11 @@ their merge base, as a pull request's diff), and passes otherwise: ci.yml's
 Companion job runs it on every pull request with the base branch's commit, so a
 change to android/ that needs a new version fails before it merges, not in the
 release run (#906), and a pull request that leaves the app alone is never held
-up by one.
+up by one. A base, or a `--ref`, that is not a commit, or a range git cannot
+compare (no merge base), is refused, never taken as a change or as none. CI
+does not run again when a pull request only changes its base (no `edited`
+trigger, so a body edit does not restart it): the release run's refusal stays
+the backstop.
 """
 
 from __future__ import annotations
@@ -75,30 +79,42 @@ def previous_release(repo: Path, ref: str) -> str | None:
     return max(tags)[2] if tags else None
 
 
+def commit(repo: Path, rev: str, what: str) -> str:
+    """`rev`'s commit id, or a VersionError: an empty or unknown one, or one that git would read as an option."""
+    refused = VersionError(f"the {what} {rev!r} is not a commit in this clone")
+    if not rev or rev.startswith("-"):
+        raise refused
+    found = git(repo, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", check=False)
+    if found.returncode != 0:
+        raise refused
+    return found.stdout.strip()
+
+
 def apk_changed(repo: Path, *revs: str) -> bool:
     """Whether what goes into the APK differs between `revs` (two commits, or `A...B`: from their merge base to B)."""
-    return git(repo, "diff", "--quiet", *revs, "--", "android", *IGNORED, check=False).returncode != 0
+    diff = git(repo, "diff", "--quiet", *revs, "--", "android", *IGNORED, check=False)
+    if diff.returncode not in (0, 1):
+        # An error (no merge base, a missing object) is no answer either way, not a change.
+        raise VersionError(f"git diff failed for {' '.join(revs)}: {diff.stderr.strip()}")
+    return diff.returncode == 1
 
 
 def check(repo: Path, ref: str = "HEAD", since: str | None = None) -> str:
     if git(repo, "rev-parse", "--is-shallow-repository").stdout.strip() == "true":
         # A shallow clone has no tags to compare with, and passing then would be passing blind.
         raise VersionError("this is a shallow clone: fetch the whole history and the tags (fetch-depth: 0) first")
-    if since is not None:
-        # A base that is not in the clone would make `git diff` fail, and that is no answer either way.
-        found = git(repo, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}", check=False).returncode == 0
-        if since.startswith("-") or not found:
-            raise VersionError(f"the base {since} is not a commit in this clone")
-        if not apk_changed(repo, f"{since}...{ref}"):
-            return f"android/ did not change since {since}: no new Companion version needed"
-    now = version(git(repo, "show", f"{ref}:{GRADLE}").stdout, ref)
-    tag = previous_release(repo, ref)
+    # Both resolved first: `--ref=` would make the range `BASE...`, which git reads as `BASE...HEAD`.
+    head = commit(repo, ref, "ref")
+    if since is not None and not apk_changed(repo, f"{commit(repo, since, 'base')}...{head}"):
+        return f"android/ did not change since {since}: no new Companion version needed"
+    now = version(git(repo, "show", f"{head}:{GRADLE}").stdout, ref)
+    tag = previous_release(repo, head)
     if tag is None:
         return f"no earlier release shipped the Companion: it is {now[1]} ({now[0]})"
     before = version(git(repo, "show", f"{tag}:{GRADLE}").stdout, tag)
     if now[0] < before[0]:
         raise VersionError(f"versionCode went down from {before[0]} ({tag}) to {now[0]}")
-    if apk_changed(repo, tag, ref) and (now[0] == before[0] or now[1] == before[1]):
+    if apk_changed(repo, tag, head) and (now[0] == before[0] or now[1] == before[1]):
         raise VersionError(
             f"android/ changed since {tag}, which shipped the Companion {before[1]} ({before[0]}), and the version "
             f"did not: raise versionCode and change versionName in {GRADLE}"
