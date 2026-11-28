@@ -95,9 +95,9 @@ def fetch(entry):
 
 
 def signed_versions():
-    """Proton Pass as the product lock pins it and the later signed version that only the tests' lock pins
-    (#245), each with its package: from a local cache, or downloaded and checked against the locks where
-    the run requires the network. None where neither is the case."""
+    """Proton Pass as the product lock pins it and the other signed version that only the tests' lock pins
+    (#245; older or later, whichever AMO has), each with its package: from a local cache, or downloaded and
+    checked against the locks where the run requires the network. None where neither is the case."""
     pair = (extensions.load_lock()["proton-pass"], extensions.load_lock(TEST_LOCK)["proton-pass-next"])
     found = [in_cache(entry) for entry in pair]
     if not all(found):
@@ -639,58 +639,59 @@ class GuardTest(unittest.TestCase):
         """#245: the case #76 measured by hand. A signed package of the extension is replaced, while the browser is
         closed, by another signed version of it (Proton Pass 1.41.1 by 1.43.1, both from AMO). The Guard reports it at the
         next start by the file. Measured on 160.0-0.4: at that moment the engine still reports 1.41.1; it takes 1.43.1
-        a moment later, and the record follows it."""
+        a moment later, and the record follows it. Since #822 the product pins 1.44.0, AMO's newest, so the other
+        version is the older 1.43.1: the file is what counts, not which way the version moves."""
         versions = signed_versions()
         if not versions:  # only where the network is not required (NULAVIO_REQUIRE_NETWORK=1 downloads them)
             self.skipTest(
                 "no two signed versions of Proton Pass in a local cache (NULAVIO_TEST_XPI_CACHE, or NULAVIO_REQUIRE_NETWORK=1 "
                 "to download them): a version replaced while closed was not tried"
             )
-        (older, older_xpi), (newer, newer_xpi) = versions
+        (pinned, pinned_xpi), (another, another_xpi) = versions
         # Whatever the two locks pin, as long as it is one extension in two versions (the test lock moves with the product's).
-        self.assertEqual(older.id, newer.id)
-        self.assertNotEqual(older.version, newer.version)
+        self.assertEqual(pinned.id, another.id)
+        self.assertNotEqual(pinned.version, another.version)
         record = self.profile / "nulavio-guard.json"
-        placed = self.profile / "extensions" / older.xpi_name
-        changed = f"extension-changed:{older.id}"
-        in_record = lambda: json.loads(record.read_text())["snapshot"]["extensions"].get(older.id) or {}  # noqa: E731
+        placed = self.profile / "extensions" / pinned.xpi_name
+        changed = f"extension-changed:{pinned.id}"
+        in_record = lambda: json.loads(record.read_text())["snapshot"]["extensions"].get(pinned.id) or {}  # noqa: E731
         self.guard(
             """
             const file = Cc["@mozilla.org/file/local;1"].createInstance(Ci.nsIFile);
             file.initWithPath(args[0]);
             await (await AddonManager.getInstallForFile(file)).install();
             """,
-            str(older_xpi),
+            str(pinned_xpi),
         )
-        self.assertTrue(harness.wait_until(lambda: in_record().get("digest") == older.sha256, timeout=20), in_record())
-        self.assertEqual(in_record()["version"], older.version)
+        self.assertTrue(harness.wait_until(lambda: in_record().get("digest") == pinned.sha256, timeout=20), in_record())
+        self.assertEqual(in_record()["version"], pinned.version)
 
         # As a program does it: the other version written next to the package, then renamed into its place.
         self.session.stop()
         other = placed.with_name(placed.name + ".new")
-        shutil.copyfile(newer_xpi, other)
+        shutil.copyfile(another_xpi, other)
         os.replace(other, placed)
         self.m = type(self).m = self.session.restart()
         findings = {f["id"]: f for f in self.guard("return (await G.check()).findings;")}
         self.assertIn(changed, findings, findings)
         before, after = findings[changed]["before"], findings[changed]["after"]
         # The file is what the Guard goes by (#136): another digest, whatever version the engine reports yet.
-        self.assertEqual((before["digest"], after["digest"]), (older.sha256, newer.sha256))
-        self.assertEqual(before["version"], older.version)
-        engine = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", older.id)  # noqa: E731
+        self.assertEqual((before["digest"], after["digest"]), (pinned.sha256, another.sha256))
+        self.assertEqual(before["version"], pinned.version)
+        engine = lambda: self.guard("return (await AddonManager.getAddonByID(args[0]))?.version ?? null;", pinned.id)  # noqa: E731
         print(f"at the start: the engine reports {engine()}, the Guard's finding says {after['version']}", file=sys.stderr)
-        self.assertIn(after["version"], (older.version, newer.version))
+        self.assertIn(after["version"], (pinned.version, another.version))
         # #337: once the engine has taken the file in, the waiting finding says its version too, and so does the card.
         # #351: the review page, opened at once, before that, shows it without being reopened.
         self.open_review()
-        arrow = f"{older.version} → {newer.version}"
+        arrow = f"{pinned.version} → {another.version}"
         first, engine_then = self.cards()[changed]["detail"], engine()
         print(f"the page opened with {first!r}, the engine reporting {engine_then}", file=sys.stderr)
-        if after["version"] == older.version and engine_then == older.version:
+        if after["version"] == pinned.version and engine_then == pinned.version:
             self.assertNotIn(arrow, first)  # the case #351 is about: the card can only change while the page is open
         waiting = lambda: {f["id"]: f for f in self.guard("return G.findings();")}.get(changed, {})  # noqa: E731
-        self.assertTrue(harness.wait_until(lambda: engine() == newer.version, timeout=20), engine())
-        self.assertTrue(harness.wait_until(lambda: waiting().get("after", {}).get("version") == newer.version, 20), waiting())
+        self.assertTrue(harness.wait_until(lambda: engine() == another.version, timeout=20), engine())
+        self.assertTrue(harness.wait_until(lambda: waiting().get("after", {}).get("version") == another.version, 20), waiting())
         self.assertTrue(harness.wait_until(lambda: arrow in self.cards()[changed]["detail"], 10), self.cards()[changed])
         detail = self.cards()[changed]["detail"]
         self.assertNotIn("arquivo substituído", detail)
@@ -701,9 +702,9 @@ class GuardTest(unittest.TestCase):
         self.guard("await G.resolve(args[0], 'keep');", changed)
         self.assertTrue(harness.wait_until(lambda: changed not in self.cards(), 10), "the open page kept a resolved finding")
         self.assertTrue(self.m.execute("return window.nvNotReloaded === true;"), "the page was reloaded")
-        self.assertEqual(in_record()["digest"], newer.sha256)
-        self.assertTrue(harness.wait_until(lambda: in_record().get("version") == newer.version, timeout=20), in_record())
-        self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", older.id)
+        self.assertEqual(in_record()["digest"], another.sha256)
+        self.assertTrue(harness.wait_until(lambda: in_record().get("version") == another.version, timeout=20), in_record())
+        self.guard("await (await AddonManager.getAddonByID(args[0])).uninstall();", pinned.id)
         self.assertTrue(harness.wait_until(lambda: not in_record(), timeout=20), in_record())
 
     def test_07_the_shells_own_start_up_update_of_the_fingerprinting_set_is_not_reported(self):
