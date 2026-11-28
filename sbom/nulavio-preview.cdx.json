@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:b1e1c43d-0fcb-519e-bd3d-0e3ee21f8e97",
+  "serialNumber": "urn:uuid:0fac366d-2a34-53df-884d-c88c4a5d9e9a",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "7050c25d866d2cc1c11c8c48d74f9ec6ad177fb3"
+          "value": "396e8c3a3d4b5654a34b4897f46c590a394f5066"
         }
       ]
     }
@@ -78,18 +78,18 @@
       "type": "library",
       "bom-ref": "xpi:uBlock0@raymondhill.net",
       "name": "uBlock Origin",
-      "version": "1.76.4",
+      "version": "1.77.4",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "66d0e3f21ce3b32b1bc0a9399b93cb2c9aa598ef18805d92118c76f66e266c1e"
+          "content": "5ffd52b863d5a02a639423e90252f7a7f8866c5599e360970f4d1f69dfc4b74a"
         }
       ],
       "scope": "required",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5257481/ublock_origin-1.76.4.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5316374/ublock_origin-1.77.4.xpi"
         },
         {
           "type": "website",
@@ -106,8 +106,8 @@
           "value": "assets/assets.json (sha256 e994253fe9987f987149bec99bf366e1e3636f166e6acf444bfe0702fc15cfcc) in distribution/policies.json"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/ublock-origin@1.76.4",
-      "cpe": "cpe:2.3:a:ublockorigin:ublock_origin:1.76.4:*:*:*:*:*:*:*",
+      "purl": "pkg:generic/addons.mozilla.org/ublock-origin@1.77.4",
+      "cpe": "cpe:2.3:a:ublockorigin:ublock_origin:1.77.4:*:*:*:*:*:*:*",
       "licenses": [
         {
           "license": {
@@ -120,18 +120,18 @@
       "type": "library",
       "bom-ref": "xpi:78272b6fa58f4a1abaac99321d503a20@proton.me",
       "name": "Proton Pass",
-      "version": "1.41.1",
+      "version": "1.44.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f67c5836e5eff3f82ac38e03a7b27d30b84dbb5246f74bb21b8b5bb15d3cd936"
+          "content": "f53440bff8e754c1be060e1a015a0f4df62a4669917564fe09c7e3709fe41c60"
         }
       ],
       "scope": "optional",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5055526/proton_pass-1.41.1.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5271799/proton_pass-1.44.0.xpi"
         },
         {
           "type": "website",
@@ -144,7 +144,7 @@
           "value": "credential-provider"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/proton-pass@1.41.1",
+      "purl": "pkg:generic/addons.mozilla.org/proton-pass@1.44.0",
       "licenses": [
         {
           "license": {
@@ -195,18 +195,18 @@
       "type": "library",
       "bom-ref": "xpi:{446900e4-71c2-419f-a6a7-df9c091e268b}",
       "name": "Bitwarden Password Manager",
-      "version": "2026.10.2",
+      "version": "2026.11.0",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "abf9d7273dd55ac0583ecc6997f7f7ae3d29de11e2ad0a4838b80e2b941daa73"
+          "content": "607d6433d9de151a4c51135ad9e70882460d0e0493a9b585f15a9848d5f10b97"
         }
       ],
       "scope": "optional",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5198653/bitwarden_password_manager-2026.10.2.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5278513/bitwarden_password_manager-2026.11.0.xpi"
         },
         {
           "type": "website",
@@ -219,8 +219,8 @@
           "value": "credential-provider"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.10.2",
-      "cpe": "cpe:2.3:a:bitwarden:bitwarden:2026.10.2:*:*:*:browser:*:*:*",
+      "purl": "pkg:generic/addons.mozilla.org/bitwarden@2026.11.0",
+      "cpe": "cpe:2.3:a:bitwarden:bitwarden:2026.11.0:*:*:*:browser:*:*:*",
       "licenses": [
         {
           "license": {
@@ -233,18 +233,18 @@
       "type": "library",
       "bom-ref": "xpi:{d634138d-c276-4fc8-924b-40a0ea21d284}",
       "name": "1Password \u2013 Password Manager",
-      "version": "8.12.44.33",
+      "version": "8.12.46.29",
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dd896610a3e6776582b76f180ea0d3180b03413a244314f9d3c6b08ec6c59819"
+          "content": "c10426d7f091a518ec6c93152409c99a2d44544e487a7884c00c2b36df42c134"
         }
       ],
       "scope": "optional",
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://addons.mozilla.org/firefox/downloads/file/5203941/1password_x_password_manager-8.12.44.33.xpi"
+          "url": "https://addons.mozilla.org/firefox/downloads/file/5266358/1password_x_password_manager-8.12.46.29.xpi"
         },
         {
           "type": "website",
@@ -257,7 +257,7 @@
           "value": "credential-provider"
         }
       ],
-      "purl": "pkg:generic/addons.mozilla.org/1password@8.12.44.33",
+      "purl": "pkg:generic/addons.mozilla.org/1password@8.12.46.29",
       "licenses": [
         {
           "license": {

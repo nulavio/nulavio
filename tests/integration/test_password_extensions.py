@@ -52,7 +52,7 @@ return {
 
 PROVIDERS = ("proton-pass", "keepassxc-browser", "bitwarden", "1password")
 # Extensions that declare no popup in their manifest and set it when they run: the page they set, read from the
-# pinned package (1Password 8.12.44.33: `browser_action` with no `default_popup`, its page `popup/index.html`).
+# pinned package (1Password 8.12.46.29: `browser_action` with no `default_popup`, its page `popup/index.html`).
 RUNTIME_POPUP = {"1password": "popup/index.html"}
 
 

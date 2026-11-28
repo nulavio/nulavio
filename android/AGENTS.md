@@ -14,6 +14,7 @@ Read the root [AGENTS.md](../AGENTS.md) first; its rules apply here and are not 
 - An explicit `Locale` in every format or case conversion; no cleartext traffic, `debuggable`, `allowBackup` or world-readable file.
 - Every new entry in `gradle/verification-metadata.xml` has a reason, and nothing in CI writes that file (I5). No Google services, trackers or AndroidX (`tests/unit/test_companion_build.py` says why).
 - The release APK is reproducible from the `companion-v*` tag; F-Droid builds from those tags, so a tag is never moved.
+- The first change to what goes into the APK after a release raises `versionCode` and changes `versionName` in `app/build.gradle.kts` (`*.md`, `src/test/` and `fdroid/` do not count); CI's Companion job refuses a pull request that does not, as the release run does (`scripts/release/companion_version.py`, #286, #906).
 
 Documents: [ADR 0005](../docs/adr/0005-phone-profile-unlock.md) (the protocol, key storage and release order), [vault and unlock](../docs/architecture/vault-and-unlock.md), the [unlock threat model](../docs/security/threat-model-unlock.md). A suspected vulnerability: [nulavio-private-security-fix](../.agents/skills/nulavio-private-security-fix/SKILL.md).
 
