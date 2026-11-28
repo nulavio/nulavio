@@ -1606,9 +1606,11 @@
     // for private windows too unless the box says otherwise, and sends typed text to it only when that box is on.
     // A provider with accounts says whether this profile is signed in (the presence of its session cookie). --
     const chooseBench = workbench({ privateToo: true, suggest: false }, search);
-    // The last choice the success bar speaks of. The bar is shown only while the list, as read after the choice, still
-    // has it so (review of #927): the engine chosen is the default for the windows the bar names, at the hosts it names.
-    // An engine removed or changed in another window while the list was read again is not reported as the search.
+    // The last choice the success bar speaks of. The bar is shown only while the list Settings holds still has it so
+    // (review of #927): the engine chosen is the default for the windows the bar names, at the hosts it names. An engine
+    // removed or changed in another window is not reported as the search once the list is read again. Until that read
+    // lands, the list checked is the one read before the choice, and the suggestions sentence does not check the opt-in
+    // or the suggestions setting (#944).
     let lastChoice = null;
     const choiceHolds = () => {
       if (!lastChoice) {

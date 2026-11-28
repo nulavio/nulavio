@@ -474,8 +474,9 @@ class NulavioSearchClass {
   }
 
   /** An engine as a sentence names it (#828), from the engine's list now: its name, the host its searches go to and its
-      provider key, as `list()` gives them, or null when it is gone. Settings says what was chosen with it once the
-      choice is made (review of #927), so the words follow the engine chosen even when the row read before was older. */
+      provider key, as `list()` gives them, or null when it is unknown. An engine of the engine's own configuration that
+      was removed is only hidden and is still given (#944). Settings says what was chosen with it once the choice is
+      made (review of #927), so the words follow the engine chosen even when the row read before was older. */
   namedOf(id) {
     const engine = lazy.SearchService.getEngineById(String(id));
     return engine ? { id: engine.id, name: engine.name, host: engine.searchUrlDomain, provider: this.#providerKey(engine) } : null;
