@@ -21,6 +21,7 @@
   "gpcNotSent": { "message": "Não enviado" },
   "stateUnknown": { "message": "Não foi possível ler" },
   "filterActive": { "message": "uBlock Origin $VERSION$ ativo", "placeholders": { "version": { "content": "$1" } } },
+  "filterLoading": { "message": "uBlock Origin $VERSION$ carregando as listas: ainda não filtra", "placeholders": { "version": { "content": "$1" } } },
   "filterDisabled": { "message": "uBlock Origin desligado. Para ligar: menu ☰ → Extensões e temas" },
   "filterMissing": { "message": "Nenhum filtro instalado (a proteção contra rastreamento continua)" },
   "passwordsProvider": { "message": "$NAME$ (extensão oficial)", "placeholders": { "name": { "content": "$1" } } },

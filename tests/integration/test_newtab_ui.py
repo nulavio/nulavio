@@ -35,7 +35,9 @@ return {
   warn: facts.filter(d => d.dataset.level === 'warn').map(d => d.previousElementSibling.textContent),
   detailsOpen: document.getElementById('here-details').open,
   helpOpen: document.getElementById('help').open,
-  live: [...document.querySelectorAll('#here [aria-live], #here [role=status], #here [role=alert]')].map(e => e.id),
+  live: [...document.querySelectorAll('#here [aria-live], #here [role=status], #here [role=alert]')]
+    .map(e => ({id: e.id, text: e.textContent})),
+  filterLine: document.querySelector('#status [data-status=filter]').textContent,
   routes: document.getElementById('here-routes').hidden ? null : document.getElementById('here-routes').textContent,
   sites: [...document.querySelectorAll('#here-sites li')].map(li => li.textContent),
   settings: !document.getElementById('open-settings').hidden && document.getElementById('open-settings').getAttribute('href'),
@@ -118,7 +120,12 @@ class NewTabHereTest(unittest.TestCase):
         )
         self.assertEqual(marks, {"warn": '""', "unknown": '""'})
         self.assertFalse(state["helpOpen"])
-        self.assertEqual(state["live"], [], "a live region at load would read the whole status aloud")
+        # A live region at load would read the whole status aloud. The one there is the content filter's (#898): empty
+        # at load, it says only a change of that one line after the first reading (uBlock Origin may finish loading
+        # its lists meanwhile).
+        self.assertEqual([e["id"] for e in state["live"]], ["filter-now"], "a live region at load would read the status")
+        said = state["live"][0]["text"]
+        self.assertTrue(said == "" or said.endswith(f": {state['filterLine']}"), f"more than the filter's change: {said!r}")
         self.shoot("here")
 
     def test_02_rules_that_open_sites_here(self):

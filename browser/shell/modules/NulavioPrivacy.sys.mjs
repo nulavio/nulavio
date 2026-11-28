@@ -54,8 +54,30 @@ export function cookieNotices(selected, { cookies, others }) {
 /** Set once a profile has received Nulavio's privacy defaults that only work as user values. */
 export const PREF_SEEDED = "nulavio.privacy.seeded";
 
+/**
+ * Whether uBlock Origin filters the requests it sees, from the global state of its toolbar button (`globals`, the
+ * engine's ExtensionActions data for every tab): true once it does, false while it does not yet (#898, R91).
+ *
+ * Its background sets the button's icon to its loading one (`img/icon_*-loading.png`) as soon as it starts, and
+ * back to its own icon only when its request listener takes over (vAPI.Net's constructor and setSuspendableListener
+ * in js/vapi-background.js of the pinned 1.77.4, called from webRequest.start() in js/traffic.js once its lists are
+ * in memory). Before its background has set any icon, the button shows the manifest's: nothing filters yet either.
+ * On a new profile's first start the requests it holds meanwhile are released unfiltered (R91), so "active" waits
+ * for this.
+ */
+export function filterReady(globals) {
+  if (!globals || !Object.hasOwn(globals, "icon")) {
+    return false;
+  }
+  const { icon } = globals;
+  const urls = Object.values(icon && typeof icon === "object" ? icon : {}).flatMap(entry =>
+    typeof entry === "string" ? [entry] : Object.values(entry && typeof entry === "object" ? entry : {}));
+  return !urls.some(url => /-loading\.png$/.test(String(url)));
+}
+
 const lazy = {};
 ChromeUtils.defineESModuleGetters(lazy, {
+  ExtensionParent: "resource://gre/modules/ExtensionParent.sys.mjs",
   ExtensionStorageIDB: "resource://gre/modules/ExtensionStorageIDB.sys.mjs",
   NetUtil: "resource://gre/modules/NetUtil.sys.mjs",
   NulavioGuard: "resource://builtin-addons/nulavio-shell/modules/NulavioGuard.sys.mjs",
@@ -85,6 +107,22 @@ function readDefaults() {
       resolve(keys);
     });
   });
+}
+
+/** filterReady() for the running uBlock Origin; null when the engine's browserAction API cannot be read. */
+function ublockReady(policy) {
+  try {
+    const browserActionFor = lazy.ExtensionParent.apiManager.global.browserActionFor;
+    if (typeof browserActionFor !== "function") {
+      return null;
+    }
+    // No button yet: its manifest entries are still being read, so its background has not started.
+    const action = browserActionFor(policy.extension)?.action;
+    return action ? filterReady(action.getContextData(null)) : false;
+  } catch (e) {
+    console.error("Nulavio Privacy: uBlock Origin's toolbar button could not be read", e);
+    return null;
+  }
 }
 
 export class PrivacyError extends Error {
@@ -324,10 +362,14 @@ class Privacy {
     }
   }
 
-  /** uBlock Origin's own state, as the add-on manager reports it. */
+  /**
+   * uBlock Origin's own state, as the add-on manager reports it, and `ready`: whether it filters yet (filterReady),
+   * or null when its toolbar button cannot be read (the engine's browserAction API is not there).
+   */
   filter() {
     const policy = WebExtensionPolicy.getByID(UBLOCK);
-    return { installed: Boolean(policy), active: Boolean(policy?.active) };
+    const active = Boolean(policy?.active);
+    return { installed: Boolean(policy), active, ready: active ? ublockReady(policy) : false };
   }
 
   /**

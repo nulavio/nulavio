@@ -17,6 +17,7 @@
       },
       { "name": "dismissDnsChoice", "type": "function", "async": true, "parameters": [] },
       { "name": "firstRun", "type": "function", "async": true, "parameters": [] },
+      { "name": "filter", "type": "function", "async": true, "parameters": [], "description": "uBlock Origin installed, active, and ready (filtering yet: #898)." },
       {
         "name": "firstRunDone", "type": "function", "async": true,
         "parameters": [{

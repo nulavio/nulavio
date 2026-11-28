@@ -22,6 +22,10 @@ function show(key, text, level = "ok") {
   const el = document.querySelector(`[data-status="${key}"]`);
   el.textContent = text;
   el.dataset.level = level; // "ok" | "warn" | "unknown": styled with icon + words, never colour alone
+  // A copy of the line elsewhere on the page (the first run's "Tudo pronto") says the same (#898).
+  for (const copy of document.querySelectorAll(`[data-copy="${key}"]`)) {
+    copy.textContent = text;
+  }
 }
 
 async function setting(api) {
@@ -47,14 +51,73 @@ async function extension(id) {
   }
 }
 
+/* Whether uBlock Origin filters yet (NulavioPrivacy.filter, #898): false while it loads its lists, null when the
+   Shell cannot tell (then the add-on manager's word stands, as before). */
+async function filtering() {
+  try {
+    return (await browser.nulavioPrivacy?.filter())?.ready ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/* The content filter's line. On a new profile's first start uBlock Origin is active seconds before it filters:
+   until its lists are in memory the requests it holds are let through unfiltered (R91), so it is "loading its
+   lists", not "active", and the line is read again each second until it filters. */
+let filterAgain = 0;
+function showFilter(ublock, ready) {
+  if (!ublock) show("filter", t("filterMissing"), "warn");
+  else if (!ublock.enabled) show("filter", t("filterDisabled"), "warn");
+  else if (ready === false) show("filter", t("filterLoading", [ublock.version]), "warn");
+  else show("filter", t("filterActive", [ublock.version]), "ok");
+  const loading = Boolean(ublock?.enabled) && ready === false;
+  if (loading && !filterAgain) {
+    filterAgain = setTimeout(() => {
+      filterAgain = 0;
+      readFilter();
+    }, 1000);
+  }
+}
+
+/* One reading of the line, the only way it is read: a reading that ends after a newer one was shown is dropped, so
+   a slow page read cannot put "loading" back over "active". A change after the first reading (the poll, an
+   install, the first run reading again) is said once in the polite status line beside the details, and the summary
+   follows it; the first reading is not said (SPA-23). */
+let filterReads = 0;
+let filterShown = 0;
+async function readFilter() {
+  const read = ++filterReads;
+  const [ublock, ready] = await Promise.all([extension(UBLOCK_ID), filtering()]);
+  if (read < filterShown) {
+    return;
+  }
+  filterShown = read;
+  const line = document.querySelector('[data-status="filter"]');
+  const before = line.dataset.level ? line.textContent : null;
+  showFilter(ublock, ready);
+  if (before !== null && line.textContent !== before) {
+    document.getElementById("filter-now").textContent = `${line.previousElementSibling.textContent}: ${line.textContent}`;
+    summarise();
+  }
+}
+
+// A tab opened before the policy installed uBlock Origin (or while it is off) reads the line again when that changes.
+for (const event of ["onInstalled", "onEnabled", "onDisabled", "onUninstalled"]) {
+  browser.management[event]?.addListener(info => {
+    if (info?.id === UBLOCK_ID) {
+      readFilter();
+    }
+  });
+}
+
 async function refresh() {
   // Every new tab reads these; they are independent, so they go out together
   // (one round trip of latency instead of eight). Display order is unchanged.
-  const [tracking, https, gpc, ublock, providers, engineSaving] = await Promise.all([
+  const [tracking, https, gpc, , providers, engineSaving] = await Promise.all([
     setting(browser.privacy.websites.trackingProtectionMode),
     setting(browser.privacy.network.httpsOnlyMode),
     setting(browser.privacy.network.globalPrivacyControl),
-    extension(UBLOCK_ID),
+    readFilter(), // shows the content filter's line itself
     Promise.all(PROVIDERS.map(([id]) => extension(id))),
     setting(browser.privacy.services.passwordSavingEnabled),
   ]);
@@ -63,10 +126,6 @@ async function refresh() {
 
   show("gpc", gpc === undefined ? t("stateUnknown") : gpc ? t("gpcSent") : t("gpcNotSent"),
        gpc === undefined ? "unknown" : gpc ? "ok" : "warn");
-
-  if (!ublock) show("filter", t("filterMissing"), "warn");
-  else if (!ublock.enabled) show("filter", t("filterDisabled"), "warn");
-  else show("filter", t("filterActive", [ublock.version]), "ok");
 
   const active = PROVIDERS.filter((_, i) => providers[i]?.enabled).map(([, name]) => name);
   if (active.length) show("passwords", active.map(name => t("passwordsProvider", [name])).join(", "), "ok");
@@ -77,15 +136,22 @@ async function refresh() {
 /* One line of facts (UX4): what needs attention, by name, or that the protections are on. No
    "tudo certo": a fact that could not be read says so. Details open by themselves when
    something needs attention. */
+let warned = [];
 function summarise() {
   const facts = [...document.querySelectorAll("#status [data-status]")].filter(dd => !dd.closest("[hidden]"));
   const named = level => facts.filter(dd => dd.dataset.level === level).map(dd => dd.previousElementSibling.textContent);
   const [warn, unknown] = [named("warn"), named("unknown")];
   const summary = document.getElementById("here-summary");
+  // Only a fact that comes to need attention opens them: one already named does not reopen details the person
+  // closed (the filter that finishes loading while another fact still warns, #898).
+  const newWarning = warn.some(name => !warned.includes(name));
+  warned = warn;
   if (warn.length) {
     summary.dataset.level = "warn";
     summary.textContent = t("protectionsAttention", [warn.join(", ")]);
-    document.getElementById("here-details").open = true;
+    if (newWarning) {
+      document.getElementById("here-details").open = true;
+    }
   } else if (unknown.length) {
     summary.dataset.level = "unknown";
     summary.textContent = t("protectionsUnknown", [unknown.join(", ")]);
@@ -811,12 +877,12 @@ async function firstRun() {
       tabsValue ? [t("firstrunSummaryTabs"), tabsValue] : null,
       dnsKey ? [t("dnsHeading"), t(dnsKey)] : null,
       [t("statusPasswords"), fact("passwords").textContent],
-      [t("statusFilter"), fact("filter").textContent],
+      [t("statusFilter"), fact("filter").textContent, "filter"], // kept current by show(): it may still be loading
       defaultNow ? [t("firstrunSummaryDefault"), t(defaultNow.state === "enabled" ? "firstrunDefaultIsNulavio" : "firstrunDefaultIsOther")] : null,
       updatesNow?.available ? [t("firstrunUpdatesTitle"), t(updatesNow.on ? "updatesOn" : "updatesOff")] : null,
     ].filter(Boolean);
     document.getElementById("firstrun-summary").replaceChildren(
-      ...rows.map(([name, value]) => h("div", {}, h("dt", { text: name }), h("dd", { text: value })))
+      ...rows.map(([name, value, copy]) => h("div", {}, h("dt", { text: name }), h("dd", { text: value, "data-copy": copy })))
     );
   }
 

@@ -21,6 +21,7 @@
   "gpcNotSent": { "message": "Not sent" },
   "stateUnknown": { "message": "Could not be read" },
   "filterActive": { "message": "uBlock Origin $VERSION$ active", "placeholders": { "version": { "content": "$1" } } },
+  "filterLoading": { "message": "uBlock Origin $VERSION$ is loading its lists: it does not filter yet", "placeholders": { "version": { "content": "$1" } } },
   "filterDisabled": { "message": "uBlock Origin is off. To turn it on: ☰ menu → Add-ons and themes" },
   "filterMissing": { "message": "No filter installed (tracking protection still applies)" },
   "passwordsProvider": { "message": "$NAME$ (official extension)", "placeholders": { "name": { "content": "$1" } } },
