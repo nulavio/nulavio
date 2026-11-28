@@ -80,14 +80,28 @@ const [id, done] = [arguments[0], arguments[arguments.length - 1]];
 
 OPEN_WINDOW = """
 const done = arguments[arguments.length - 1];
+const topic = "browser-delayed-startup-finished";
 const w = OpenBrowserWindow();
+let observing = true, settled = false;
+const unobserve = () => { if (observing) { observing = false; Services.obs.removeObserver(ready, topic); } };
+// A failure closes the window and drops the observer here, before the script timeout: the caller gets no id to
+// close the window by, and the other tests run in the same browser.
+const finish = (value, ok) => {
+  if (settled) return;
+  settled = true;
+  clearTimeout(timer);
+  unobserve();
+  if (!ok) w.close();
+  done(value);
+};
 const ready = subject => {
   if (subject !== w) return;
-  Services.obs.removeObserver(ready, "browser-delayed-startup-finished");
+  unobserve();
   w.SidebarController.promiseInitialized.then(() => w.SidebarController.waitUntilStable())
-    .then(() => done(String(w.browsingContext.id)), e => done({ error: String(e) }));
+    .then(() => finish(String(w.browsingContext.id), true), e => finish({ error: String(e) }, false));
 };
-Services.obs.addObserver(ready, "browser-delayed-startup-finished");
+const timer = setTimeout(() => finish({ error: "the new window was not ready within 20 s" }, false), 20000);
+Services.obs.addObserver(ready, topic);
 """
 
 
@@ -178,6 +192,12 @@ class MozillaFeaturesTest(unittest.TestCase):
                 {"vertical": True, "expanded": True, "pinned": 0, "shown": False, "cards": 0, "images": [], "dismissed": closed},
             )
             self.save_window_shot(opened, "new-window-tab-list.png")
+            # An engine before 161 (a development package: a published 160 build with this tree's Shell) hides the card
+            # itself while Nova is on, so the control cannot show it there. This tree pins 161: on its builds the
+            # control always runs.
+            major = int(self.m.chrome("return Services.appinfo.version;").split(".")[0])
+            if major < 161 and not harness.built_from_this_tree():
+                self.skipTest(f"engine {major}: the card is hidden by the engine itself, the control needs 161")
             # Control: with the engine's default the same window shows the card, Mozilla's artwork in it.
             self.m.chrome("Services.prefs.setBoolPref(arguments[0], false);", [name])
             try:
@@ -198,19 +218,26 @@ class MozillaFeaturesTest(unittest.TestCase):
 
     def save_window_shot(self, window_id: str, name: str) -> None:
         """The tab list as a person sees it, in that window (an artifact for the reviewer, not a comparison)."""
+        out = harness.artifacts_dir() / "mozilla-features"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / name).unlink(missing_ok=True)  # a run that cannot take the shot leaves no older one behind
         main = self.m.send("WebDriver:GetWindowHandle")["value"]
-        try:
+
+        def find() -> str | None:
+            # Ends switched to the handle it returns.
             for handle in self.m.window_handles():
                 self.m.switch_to(handle)
                 if self.m.chrome("return String(window.browsingContext.id) === arguments[0];", [window_id]):
-                    out = harness.artifacts_dir() / "mozilla-features"
-                    out.mkdir(parents=True, exist_ok=True)
-                    self.m.set_context("chrome")
-                    try:
-                        (out / name).write_bytes(self.m.screenshot_png())
-                    finally:
-                        self.m.set_context("content")
-                    return
+                    return handle
+            return None
+
+        try:
+            self.assertTrue(harness.wait_until(find, 5), f"no Marionette window handle for window {window_id}")
+            self.m.set_context("chrome")
+            try:
+                (out / name).write_bytes(self.m.screenshot_png())
+            finally:
+                self.m.set_context("content")
         finally:
             self.m.switch_to(main)
 
