@@ -5,7 +5,10 @@ that covers the pinned version (#415). No network: GitHub's replies are recorded
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime
+import http
+import http.client
 import io
 import json
 import sys
@@ -355,7 +358,7 @@ class BudgetTest(unittest.TestCase):
             raise TimeoutError("timed out")
 
         net = watch.Net(sleep=lambda d: now.__setitem__(0, now[0] + d), clock=lambda: now[0])
-        with mock.patch("urllib.request.urlopen", side_effect=black_hole):
+        with mock.patch.object(watch, "urlopen", side_effect=black_hole):
             deps, rows = watch.run(net, datetime.datetime(2026, 11, 19, tzinfo=datetime.UTC))
         self.assertLessEqual(now[0], watch.WATCH_BUDGET)
         self.assertTrue(all(0 < t <= net.timeout for t in timeouts))
@@ -369,13 +372,13 @@ class BudgetTest(unittest.TestCase):
         reply = mock.MagicMock()
         reply.__enter__.return_value = io.BytesIO(b"{}")
         now[0] = 95
-        with mock.patch("urllib.request.urlopen", return_value=reply) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=reply) as opened:
             net.json("https://api.osv.dev/v1/x")
         self.assertEqual(opened.call_args.kwargs["timeout"], 5)
         now[0] = 100
-        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+        with mock.patch.object(watch, "urlopen") as opened, self.assertRaises(OSError):
             net.json("https://api.osv.dev/v1/x")
-        with mock.patch("urllib.request.urlopen") as opened, self.assertRaises(OSError):
+        with mock.patch.object(watch, "urlopen") as opened, self.assertRaises(OSError):
             net.head("https://registry.example/v2/x", {})
         opened.assert_not_called()
 
@@ -425,7 +428,7 @@ class FetchTest(unittest.TestCase):
 
     def test_the_token_is_sent_to_github_unredirected_and_never_by_json(self):
         net = watch.Net(token="t")
-        with mock.patch("urllib.request.urlopen", return_value=self.reply([])) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=self.reply([])) as opened:
             net.github_json(watch.GITHUB + "repos/o/r/security-advisories")
         request = opened.call_args.args[0]
         self.assertEqual(request.get_header("Authorization"), "Bearer t")  # in the unredirected headers
@@ -435,7 +438,7 @@ class FetchTest(unittest.TestCase):
             request, None, 302, "Found", request.headers, "https://elsewhere.example/x"
         )
         self.assertIsNone(redirected.get_header("Authorization"))
-        with mock.patch("urllib.request.urlopen", return_value=self.reply({})) as opened:
+        with mock.patch.object(watch, "urlopen", return_value=self.reply({})) as opened:
             net.json("https://addons.mozilla.org/api/v5/x/")
         self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
 
@@ -483,6 +486,377 @@ class FetchTest(unittest.TestCase):
         with mock.patch.object(net, "_open", side_effect=long_wait) as opened, self.assertRaises(urllib.error.HTTPError):
             net.github_json(url)
         self.assertEqual((sleeps, opened.call_count), ([], 1))
+
+
+class CutShort:
+    """A reply whose body ends early: read() raises IncompleteRead, as http.client does for a short body."""
+
+    status, headers = 200, {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read1(self, amt=-1):
+        raise http.client.IncompleteRead(b'{"results": [', 100)
+
+
+def http_response(raw: bytes) -> http.client.HTTPResponse:
+    """A real http.client response over these bytes, as a server that closed the connection after them sent it."""
+
+    class Socket:
+        def makefile(self, mode):
+            return io.BytesIO(raw)
+
+    response = http.client.HTTPResponse(Socket(), method="GET")
+    response.begin()
+    return response
+
+
+class ReplyTest(unittest.TestCase):
+    """What Net makes of a reply cut short, a redirect and a slow server (#829): unavailable data, never a crash."""
+
+    def reply(self, body):
+        response = mock.MagicMock()
+        response.__enter__.return_value = io.BytesIO(json.dumps(body).encode())
+        return response
+
+    def test_a_reply_cut_short_is_an_error_row_and_the_summary_prints(self):
+        def opened(url, data=None, **kwargs):  # OSV.dev answers; AMO, GitHub and the registries cut their replies short
+            if url == watch.OSV + "querybatch":
+                return self.reply({"results": [{} for _ in data["queries"]]})
+            if url.startswith(watch.OSV):
+                return self.reply({})
+            return CutShort()
+
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append)
+        with mock.patch.object(net, "_open", side_effect=opened):
+            deps, rows = watch.run(net, datetime.datetime(2026, 11, 27, tzinfo=datetime.UTC), exceptions=[])
+        self.assertFalse([r for r in rows if r.check == "osv"])  # OSV's (empty) result is kept
+        for check in ("extension", "advisory", "image"):
+            states = {r.state for r in rows if r.check == check and r.detail.get("source", 1) is not None}
+            self.assertEqual(states, {"error"}, check)
+        self.assertIn("cut short", next(r.text for r in rows if r.check == "extension"))
+        self.assertTrue(sleeps)  # GitHub's request was retried, as for a network failure
+        self.assertEqual(watch.exit_status(rows), 2)
+        self.assertTrue(watch.report(deps, rows).startswith(f"Checked {len(deps)} pinned packages against OSV.dev"))
+
+    def test_github_retries_a_reply_cut_short(self):
+        sleeps = []
+        net = watch.Net(sleep=sleeps.append)
+        with mock.patch.object(net, "_open", side_effect=[CutShort(), self.reply([1])]):
+            self.assertEqual(net.github_json(watch.GITHUB + "repos/o/r/security-advisories"), [1])
+        self.assertEqual(sleeps, [2])
+
+    def test_a_real_response_closed_before_its_end_is_unavailable_data(self):
+        cases = {
+            "length": b'HTTP/1.1 200 OK\r\nContent-Length: 40\r\n\r\n{"a": 1}',  # read(n) alone ends quietly here
+            "chunked": b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n20\r\n{"a": 1}',
+        }
+        for name, raw in cases.items():
+            net = watch.Net()
+            with self.subTest(name), mock.patch.object(net, "_open", return_value=http_response(raw)):
+                with self.assertRaises(OSError) as caught:
+                    net.json(watch.OSV + "query")
+                self.assertIn("cut short", str(caught.exception))
+        whole = b'HTTP/1.1 200 OK\r\nContent-Length: 8\r\n\r\n{"a": 1}'
+        net = watch.Net()
+        with mock.patch.object(net, "_open", return_value=http_response(whole)):
+            self.assertEqual(net.json(watch.OSV + "query"), {"a": 1})
+
+    def serve(self, routes, asked, clock=None, step=0.0, timeouts=None, wires=None):
+        """https_open and http_open for urllib's own handlers: url -> (status, headers, body), every URL asked kept.
+
+        Each reply is a real http.client response over a Wire, so urllib's handlers and http.client read it as a
+        server's; `timeouts` and `wires` keep each request's timeout and each reply's socket, by URL.
+        """
+
+        def handler(_self, request):
+            asked.append(request.full_url)
+            if timeouts is not None:
+                timeouts.append(request.timeout)
+            status, headers, body = routes[request.full_url]
+            status, phrase = status if isinstance(status, tuple) else (status, http.HTTPStatus(status).phrase)
+            if clock is not None:
+                clock[0] += step  # a slow connection: the headers come `step` seconds after the request
+            head = f"HTTP/1.1 {status} {phrase}\r\n"
+            head += "".join(f"{key}: {value}\r\n" for key, value in headers.items()) + "\r\n"
+            drip = body if isinstance(body, Drip) else Drip(body)
+            wire = Wire(head.encode(), drip)
+            if wires is not None:
+                wires[request.full_url] = wire
+            response = http.client.HTTPResponse(Socket(wire), method=request.get_method())
+            response.begin()
+            response.url, response.msg = request.full_url, response.reason  # as urllib's do_open sets them
+            return response
+
+        return (
+            mock.patch.object(urllib.request.HTTPSHandler, "https_open", handler),
+            mock.patch.object(urllib.request.HTTPHandler, "http_open", handler),
+        )
+
+    def fetch(self, routes, url, net=None, missing_ok=False, **kwargs):
+        asked = []
+        https, plain = self.serve(routes, asked, **kwargs)
+        with https, plain:
+            try:
+                return (net or watch.Net()).json(url, missing_ok=missing_ok), asked
+            except OSError as exc:
+                return exc, asked
+
+    def test_an_amo_request_follows_no_redirect_off_amo_or_to_http(self):
+        block = watch.AMO + "blocklist/block/x/"
+        not_blocked = b'{"is_all_versions": false, "blocked": [], "soft_blocked": []}'
+        for target in ("https://elsewhere.example/blocklist/block/x/", "http://addons.mozilla.org/api/v5/blocklist/block/x/"):
+            with self.subTest(target):
+                routes = {block: (302, {"Location": target}, b""), target: (200, {}, not_blocked)}
+                result, asked = self.fetch(routes, block)
+                self.assertIsInstance(result, urllib.error.HTTPError)  # unavailable data, not "not blocked"
+                self.assertIn("refusing a redirect", str(result))
+                self.assertEqual(asked, [block])  # the other address is never asked
+        moved = watch.AMO + "blocklist/block/y/"
+        result, asked = self.fetch({block: (301, {"Location": moved}, b""), moved: (200, {}, not_blocked)}, block)
+        self.assertEqual((result["blocked"], asked), ([], [block, moved]))  # a redirect inside AMO is followed
+
+    def test_no_request_follows_a_redirect_to_http(self):
+        url, plain = watch.OSV + "vulns/X", "http://api.osv.dev/v1/vulns/X"
+        result, asked = self.fetch({url: (301, {"Location": plain}, b""), plain: (200, {}, b'{"id": "X"}')}, url)
+        self.assertIsInstance(result, urllib.error.HTTPError)
+        self.assertEqual(asked, [url])
+        other = "https://osv-mirror.example/v1/vulns/X"  # another https host is followed, as before, outside AMO
+        result, asked = self.fetch({url: (302, {"Location": other}, b""), other: (200, {}, b'{"id": "X"}')}, url)
+        self.assertEqual(result, {"id": "X"})
+
+    def test_a_request_never_ends_after_its_budget_when_the_server_is_slow(self):
+        url = watch.OSV + "vulns/X"
+        body = b'{"id": "X", "summary": "' + b"x" * 300_000 + b'"}'
+        now = [0.0]
+
+        def started_at(when):  # a Net whose 100 s budget began at 0, asked at `when`
+            now[0] = 0.0
+            net = watch.Net(clock=lambda: now[0], budget=100)
+            now[0] = when
+            return net
+
+        # the connection and headers take 10 s, with 5 s of the watch left: the request ends there
+        result, _ = self.fetch({url: (200, {}, body)}, url, net=started_at(95), clock=now, step=10)
+        self.assertIsInstance(result, TimeoutError)
+        # the headers come at once and the body drips, 64 KiB every 2 s: it is cut off between two chunks
+        net = started_at(95)
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 2))}, url, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        self.assertLessEqual(now[0], 100 + 2)  # one chunk past the end at most, not the whole body
+        # AMO's own budget bounds an AMO request in the same way
+        now[0] = 0.0
+        net = watch.Net(clock=lambda: now[0])
+        net.amo_started = -(watch.AMO_BUDGET - 3)
+        amo = watch.AMO + "addons/addon/x/"
+        result, _ = self.fetch({amo: (200, {}, Drip(body, now, 2))}, amo, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        self.assertLessEqual(now[0], 3 + 2)
+        # a reply on time is read whole
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 2))}, url, net=started_at(0))
+        self.assertEqual(result["id"], "X")
+
+    def clocked(self, left: float):
+        """A Net with `left` seconds of the watch's budget, on a clock the test moves, and that clock."""
+        now = [0.0]
+        return watch.Net(clock=lambda: now[0], budget=left), now
+
+    def test_a_body_sent_a_little_at_a_time_is_cut_off_at_its_end(self):
+        # OpenCodeReview on #916: read(64 KiB) waits on the socket until it has 64 KiB, here 64 reads of 1 KiB, 1 s each
+        url = watch.OSV + "vulns/X"
+        body = b'{"id": "X", "summary": "' + b"x" * 300_000 + b'"}'
+        net, now = self.clocked(5)
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 1, piece=1024))}, url, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        self.assertLessEqual(now[0], 5 + 1)  # one socket read past the end at most
+
+    def test_a_body_whose_end_comes_after_the_budget_is_not_a_reply(self):
+        # OpenCodeReview on #916: the body fills one read before the end, and the read that finds its end comes after it
+        url = watch.OSV + "vulns/X"
+        head = b'{"id": "X", "summary": "'
+        body = head + b"x" * (watch.READ_CHUNK - len(head) - 2) + b'"}'
+        self.assertEqual(len(body), watch.READ_CHUNK)
+        net, now = self.clocked(5)
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 0, eof=10))}, url, net=net)
+        self.assertIsInstance(result, TimeoutError)
+        net, now = self.clocked(5)  # the same reply, over in time
+        result, _ = self.fetch({url: (200, {}, Drip(body, now, 0, eof=1))}, url, net=net)
+        self.assertEqual(result["id"], "X")
+
+    def test_a_404_after_the_budget_is_not_read_as_not_there(self):
+        # OpenCodeReview on #916: a late 404 for the pinned version read as "AMO no longer serves it" (exit 1)
+        url = watch.AMO + "addons/addon/x/versions/1.0/"
+        gone = {url: (404, {"Content-Length": "2"}, b"{}")}
+        net, now = self.clocked(500)
+        net.amo_started = -(watch.AMO_BUDGET - 3)  # 3 s of AMO's budget left, and the reply takes 10
+        result, _ = self.fetch(gone, url, net=net, missing_ok=True, clock=now, step=10)
+        self.assertIsInstance(result, TimeoutError)
+        net, now = self.clocked(500)
+        net.amo_started = -(watch.AMO_BUDGET - 30)  # in time, a 404 still means not there
+        result, _ = self.fetch(gone, url, net=net, missing_ok=True, clock=now, step=10)
+        self.assertIsNone(result)
+
+    def test_a_redirect_after_the_budget_is_not_followed_and_its_body_not_read(self):
+        # OpenCodeReview on #916: urllib read the redirect's whole body, then asked the next address with the first
+        # request's timeout, before _open looked at the clock
+        url, moved = watch.AMO + "addons/addon/x/", watch.AMO + "addons/addon/y/"
+        routes = {url: (302, {"Location": moved}, b""), moved: (200, {}, b"{}")}
+        net, now = self.clocked(5)
+        result, asked = self.fetch(routes, url, net=net, clock=now, step=10)  # the redirect comes 10 s later
+        self.assertIsInstance(result, TimeoutError)
+        self.assertEqual(asked, [url])  # the other address is never asked
+        # in time, the redirect is followed with what is left (25 - 10 s), and its body is never read
+        long_body = Drip(b"x" * 300_000, now, 2)
+        routes = {url: (302, {"Location": moved}, long_body), moved: (200, {}, b"{}")}
+        net, now = self.clocked(25)
+        long_body.clock = now
+        timeouts = []
+        result, asked = self.fetch(routes, url, net=net, clock=now, step=1, timeouts=timeouts)
+        self.assertEqual((result, asked), ({}, [url, moved]))
+        self.assertEqual(now[0], 2)  # the two requests' headers, nothing of the redirect's body
+        self.assertEqual(timeouts, [25, 24])
+
+    def test_a_refused_redirect_names_only_its_host_and_closes_its_reply(self):
+        # OpenCodeReview on #916: the summary would carry a signed URL's token, and the reply's socket stayed open
+        block = watch.AMO + "blocklist/block/x/"
+        target = "https://someone:hunter2@cdn.example/x.json?Signature=SECRET&Expires=1"
+        wires = {}
+        result, asked = self.fetch({block: (302, {"Location": target}, b"moved")}, block, wires=wires)
+        self.assertIsInstance(result, urllib.error.HTTPError)
+        self.assertIn("refusing a redirect to https://cdn.example (only https://addons.mozilla.org/)", str(result))
+        for secret in ("hunter2", "someone", "SECRET", "x.json"):
+            self.assertNotIn(secret, str(result))
+        self.assertTrue(wires[block].closed)
+        self.assertEqual(asked, [block])
+
+    def test_an_amo_redirect_is_judged_by_its_origin_not_its_spelling(self):
+        # OpenCodeReview on #916: AMO's own origin with its default port, or its host in capitals, was refused
+        block = watch.AMO + "blocklist/block/x/"
+        not_blocked = b'{"is_all_versions": false, "blocked": [], "soft_blocked": []}'
+        for target in (
+            "https://addons.mozilla.org:443/api/v5/blocklist/block/y/",
+            "https://ADDONS.mozilla.org/api/v5/blocklist/block/y/",
+        ):
+            with self.subTest(target):
+                result, asked = self.fetch({block: (301, {"Location": target}, b""), target: (200, {}, not_blocked)}, block)
+                self.assertEqual((result["blocked"], asked), ([], [block, target]))
+        for target in (
+            "https://addons.mozilla.org:8443/api/v5/blocklist/block/y/",
+            "https://addons.mozilla.org.example/api/v5/blocklist/block/y/",
+            "https://addons.mozilla.org@elsewhere.example/api/v5/blocklist/block/y/",
+            "https://addons.mozilla.org:x/api/v5/blocklist/block/y/",
+            "https://addons.mozilla.org:0/api/v5/blocklist/block/y/",  # OpenCodeReview round 2: 0 was read as 443
+        ):
+            with self.subTest(target):
+                result, asked = self.fetch({block: (301, {"Location": target}, b""), target: (200, {}, not_blocked)}, block)
+                self.assertIsInstance(result, urllib.error.HTTPError)
+                self.assertEqual(asked, [block])
+
+    def test_a_refused_redirect_names_neither_the_address_nor_the_reason_phrase(self):
+        # OpenCodeReview round 2 on #916: urllib's own refusal of a data: or file: address names all of it, and the
+        # watch's carried the server's reason phrase
+        block = watch.AMO + "blocklist/block/x/"
+        for target, where in (
+            ("data:application/json,SECRET", "a data: address"),
+            ("file:///home/SECRET", "a file: address"),
+            ("ftp://someone:SECRET@cdn.example/x", "ftp://cdn.example"),
+            ("https://cdn.example/x?Signature=SECRET", "https://cdn.example"),
+            ("https://cdn<SECRET>.example/x", "a https: address"),
+        ):
+            with self.subTest(target):
+                status = (302, "Found https://cdn.example/x?Signature=SECRET")
+                result, asked = self.fetch({block: (status, {"Location": target}, b"")}, block)
+                self.assertIsInstance(result, urllib.error.HTTPError)
+                self.assertIn(f"refusing a redirect to {where} (only", str(result))
+                self.assertNotIn("SECRET", str(result))
+                self.assertEqual(asked, [block])
+
+    def test_a_chunked_reply_dripping_its_size_line_or_trailers_is_cut_off_at_its_end(self):
+        # OpenCodeReview round 2 on #916: http.client reads a size line and the trailers inside one read1
+        url = watch.OSV + "vulns/X"
+        chunked = {"Transfer-Encoding": "chunked"}
+        cases = {
+            "trailers": b'8\r\n{"a": 1}\r\n0\r\n' + b"X-Pad: y\r\n" * 50 + b"\r\n",  # http.client takes 100 at most
+            "size line": b"8;" + b"x" * 10_000 + b'\r\n{"a": 1}\r\n0\r\n\r\n',  # a chunk extension
+        }
+        for name, data in cases.items():
+            with self.subTest(name):
+                net, now = self.clocked(5)
+                result, _ = self.fetch({url: (200, chunked, Drip(data, now, 1, piece=10))}, url, net=net)
+                self.assertIsInstance(result, TimeoutError)
+                self.assertLessEqual(now[0], 5 + 1)  # one socket read past the end at most
+                net, now = self.clocked(5000)  # the same reply, over in time
+                result, _ = self.fetch({url: (200, chunked, Drip(data, now, 1, piece=10))}, url, net=net)
+                self.assertEqual(result, {"a": 1})
+
+    def test_a_null_reply_names_its_host_and_not_its_query(self):
+        # OpenCodeReview round 2 on #916: a registry's token realm may carry a signature in its query
+        url = "https://auth.example/token?service=registry&scope=SECRET"
+        asked = []
+        https, plain = self.serve({url: (200, {}, b"null")}, asked)
+        with https, plain, self.assertRaises(ValueError) as caught:
+            watch.Net().json(url)
+        self.assertIn("auth.example", str(caught.exception))
+        self.assertNotIn("SECRET", str(caught.exception))
+
+    def test_a_malformed_status_line_is_not_copied_into_the_report(self):
+        # OpenCodeReview round 2 on #916: BadStatusLine keeps the server's line
+        bad = http.client.BadStatusLine("HTTP/1.1 https://cdn.example/x?Signature=SECRET")
+        with mock.patch.object(watch, "urlopen", side_effect=bad), self.assertRaises(ConnectionError) as caught:
+            watch.Net().json(watch.OSV + "vulns/X")
+        self.assertIn("BadStatusLine", str(caught.exception))
+        self.assertNotIn("SECRET", str(caught.exception))
+
+
+CHUNK = 64 * 1024  # what a server sends at a time
+
+
+@dataclasses.dataclass
+class Drip:
+    """A body as a server sends it: `piece` bytes a socket read, each read (the one that finds its end too) `step`
+    seconds after the last on `clock`, and the read that finds the end `eof` seconds after it when that is given."""
+
+    data: bytes
+    clock: list | None = None
+    step: float = 0.0
+    piece: int = CHUNK
+    eof: float | None = None
+
+
+class Wire(io.RawIOBase):
+    """A connection's bytes, read by http.client through a BufferedReader as from a socket: the status line and
+    headers in one read, then the body as `drip` sends it."""
+
+    def __init__(self, head: bytes, drip: Drip):
+        self.head, self.drip, self.left = head, drip, drip.data
+
+    def readable(self):
+        return True
+
+    def readinto(self, buffer):
+        if self.head:
+            data, self.head = self.head[: len(buffer)], self.head[len(buffer) :]
+        else:
+            size = min(len(buffer), self.drip.piece)
+            data, self.left = self.left[:size], self.left[size:]
+            if self.drip.clock is not None:
+                last = not data and self.drip.eof is not None
+                self.drip.clock[0] += self.drip.eof if last else self.drip.step
+        buffer[: len(data)] = data
+        return len(data)
+
+
+class Socket:
+    def __init__(self, wire):
+        self.wire = wire
+
+    def makefile(self, mode):
+        return io.BufferedReader(self.wire)
 
 
 if __name__ == "__main__":
