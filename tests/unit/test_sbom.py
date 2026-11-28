@@ -3,16 +3,20 @@ the Companion app's libraries as Gradle resolved them."""
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from types import MappingProxyType
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "release" / "sbom.py"
@@ -286,6 +290,91 @@ class CompanionTest(unittest.TestCase):
         self.assertTrue(all(c["purl"] and c["hashes"] for c in bom["components"] if c["bom-ref"].startswith("pkg:maven/")))
 
 
+def preview_from(lock: dict, *args: str) -> dict:
+    """The preview SBOM sbom.py writes for this extension lock (beside the repository's content-filter.json)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "extensions.lock.json"
+        path.write_text(json.dumps(lock))
+        (path.parent / "content-filter.json").write_bytes((sbom.LOCK.parent / "content-filter.json").read_bytes())
+        out = io.StringIO()
+        argv = ["sbom.py", *args]
+        with mock.patch.object(sbom, "LOCK", path), mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+            sbom.main()
+    return json.loads(out.getvalue())
+
+
+def revisions(bom: dict) -> list[str]:
+    return [p["value"] for p in bom["metadata"]["component"].get("properties", []) if p["name"] == "nulavio:git-revision"]
+
+
+class SerialTest(unittest.TestCase):
+    """The committed preview names no branch commit, and its serial is its content's (#920). The SBOMs CI and
+    a release make name the revision they were made from, with the serial derived from it, as before."""
+
+    def test_two_inventories_never_share_a_serial(self):
+        lock = json.loads(sbom.LOCK.read_text())
+        bumped = json.loads(json.dumps(lock))
+        bumped["extensions"][0]["version"] += ".1"
+        rehashed = json.loads(json.dumps(lock))
+        rehashed["extensions"][-1]["sha256"] = "0" * 64
+        serials = [preview_from(each, "--committed")["serialNumber"] for each in (lock, bumped, rehashed)]
+        self.assertEqual(len(set(serials)), 3, serials)  # at one HEAD, so a serial from the revision would be one
+        for serial in serials:
+            self.assertEqual(serial, f"urn:uuid:{uuid.UUID(serial.removeprefix('urn:uuid:'))}")
+        # The same inventory, made again, is the same document under the same serial.
+        self.assertEqual(preview_from(lock, "--committed"), preview_from(lock, "--committed"))
+
+    def test_the_committed_copy_names_no_revision(self):
+        bom = run("--committed")
+        self.assertEqual(revisions(bom), [])
+        self.assertNotIn(sbom.git_revision() or "uncommitted", json.dumps(bom))
+        self.assertEqual(bom["serialNumber"], sbom.content_serial(bom))
+
+    def test_the_committed_sbom_is_the_generated_one(self):
+        committed = json.loads((ROOT / "sbom" / "nulavio-preview.cdx.json").read_text())
+        self.assertEqual(
+            committed,
+            run("--committed"),
+            "regenerate it: python3 -I scripts/release/sbom.py --committed > sbom/nulavio-preview.cdx.json",
+        )
+
+    def test_ci_and_release_sboms_still_name_their_revision(self):
+        """Unchanged by #920: what CI attaches and a release publishes say where they come from."""
+        revision = sbom.git_revision()
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "nulavio-158.0.1-0.1.fc44.x86_64.rpm"
+            package.write_bytes(b"package")
+            boms = {
+                "preview": (run(), "nulavio:" + (revision or sbom.__version__)),
+                "package": (
+                    run("--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-0.1"),
+                    "nulavio:" + (revision or sbom.__version__),
+                ),
+                "companion": (run("--companion"), revision and "nulavio-companion:" + revision),  # else from the app's version
+            }
+        for mode, (bom, seed) in boms.items():
+            with self.subTest(mode=mode):
+                self.assertEqual(revisions(bom), [revision or "uncommitted"])
+                if seed:
+                    self.assertEqual(bom["serialNumber"], f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, seed)}")
+
+    def test_committed_is_only_for_the_preview(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package = Path(tmp) / "nulavio-158.0.1-0.1.fc44.x86_64.rpm"
+            package.write_bytes(b"package")
+            for mode in (
+                ["--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-0.1"],
+                ["--companion"],
+            ):
+                with self.subTest(mode=mode[0]):
+                    result = subprocess.run(
+                        [sys.executable, "-I", str(SCRIPT), *mode, "--committed"], capture_output=True, text=True
+                    )
+                    self.assertEqual(result.returncode, 2, result.stderr)
+                    self.assertIn("--committed is only for the preview", result.stderr)
+                    self.assertEqual(result.stdout, "")
+
+
 class ExtensionLockTest(unittest.TestCase):
     """The committed copies of what the lock pins (the SBOM and LICENSES.md) follow the lock (#497)."""
 
@@ -307,7 +396,9 @@ class ExtensionLockTest(unittest.TestCase):
         committed = json.loads((ROOT / "sbom" / "nulavio-preview.cdx.json").read_text())
         found = {c["bom-ref"]: c["version"] for c in committed["components"] if c["bom-ref"].startswith("xpi:")}
         expected = {f"xpi:{e['id']}": e["version"] for e in self.lock}
-        self.assertEqual(found, expected, "regenerate it: python3 -I scripts/release/sbom.py > sbom/nulavio-preview.cdx.json")
+        self.assertEqual(
+            found, expected, "regenerate it: python3 -I scripts/release/sbom.py --committed > sbom/nulavio-preview.cdx.json"
+        )
 
     def test_licenses_md_names_the_locked_extensions(self):
         rows = {}
