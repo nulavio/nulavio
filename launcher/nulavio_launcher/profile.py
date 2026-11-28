@@ -82,6 +82,32 @@ class ProfileError(RuntimeError):
     pass
 
 
+# The type of each field of settings.json the launcher reads, when it is there (#675). A field of another type ended a
+# command with a traceback where it was read (start page, seed states, pending prefs).
+SETTINGS_FIELDS: dict[str, tuple[type, str]] = {
+    "provider": (str, "a string"),
+    "locale": (str, "a string"),
+    "baseline_version": (str, "a string"),
+    "seeded": (dict, "an object"),
+    "seeded_values": (dict, "an object"),
+    "pending_prefs": (dict, "an object"),
+}
+
+
+def _settings_problem(data: dict[str, Any]) -> str | None:
+    """What makes a settings object unreadable by the launcher, or None."""
+    for field, (kind, described) in SETTINGS_FIELDS.items():
+        if field in data and not isinstance(data[field], kind):
+            return f"'{field}' is not {described}"
+    for name, value in data.get("seeded_values", {}).items():
+        if not isinstance(value, str):
+            return f"'seeded_values' has a value for {name!r} that is not a string"
+    for name, value in data.get("pending_prefs", {}).items():
+        if not isinstance(value, (bool, int, str)):
+            return f"'pending_prefs' has a value for {name!r} that is not true, false, a whole number or a string"
+    return None
+
+
 class ProfileInUse(ProfileError):
     pass
 
@@ -121,6 +147,9 @@ class Profile:
             raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}")
         if data.get("schema") != SETTINGS_SCHEMA:
             raise ProfileError(f"unsupported settings schema in {self.settings_path}")
+        problem = _settings_problem(data)
+        if problem:
+            raise ProfileError(f"unreadable Nulavio settings in {self.settings_path}: {problem}")
         return data
 
     def save_settings(self, data: dict[str, Any]) -> None:

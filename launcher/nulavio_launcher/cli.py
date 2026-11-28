@@ -265,13 +265,19 @@ def _run(args: argparse.Namespace, eng, prof, supervise: bool = False) -> int:
 
 def cmd_profile(args: argparse.Namespace) -> int:
     if args.profile_cmd == "list":
+        damaged = False
         for prof in profile.list_profiles():
-            settings = prof.load_settings() if prof.exists() else {}
+            try:
+                settings = prof.load_settings() if prof.exists() else {}
+            except (profile.ProfileError, paths.UnsafePathError, OSError) as exc:
+                # One damaged profile is reported, and the others are still listed (#675).
+                _err(str(exc))
+                settings, damaged = {}, True
             running = prof.running_pid()
             _out(
                 f"{prof.name:16} provider={settings.get('provider', '?'):12} {'running' if running else 'stopped':8} {prof.path}"
             )
-        return 0
+        return 1 if damaged else 0
     prof = profile.get(args.name)
     if args.profile_cmd == "path":
         _out(str(prof.path))

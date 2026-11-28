@@ -190,10 +190,13 @@ def installed_in_profile(profile_dir: Path) -> list[dict]:
             if addon.get("type") != "extension" or addon.get("location") != "app-profile":
                 continue
             locale = addon.get("defaultLocale")
+            name = locale.get("name") if isinstance(locale, dict) else None
+            version = addon.get("version")
             found[addon["id"]] = {
                 "id": addon["id"],
-                "name": locale.get("name", addon["id"]) if isinstance(locale, dict) else addon["id"],
-                "version": addon.get("version"),
+                "name": name if isinstance(name, str) else addon["id"],
+                # A version of another type is unknown, as for an extension not registered yet (#675).
+                "version": version if isinstance(version, str) else None,
                 "active": bool(addon.get("active")),
                 "registered": True,
                 # Engines with autoDisableScopes covering the profile (Mozilla's own builds)

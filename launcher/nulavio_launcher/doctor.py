@@ -257,14 +257,23 @@ def _check_manifest(path: Path) -> Check:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return Check("native-messaging", path.name, "warn", f"unreadable manifest: {exc}")
+    # The file may be another program's: one of another shape is reported like one that is not JSON (#675).
+    if not isinstance(data, dict):
+        return Check("native-messaging", path.name, "warn", "unreadable manifest: not a JSON object")
+    name = data["name"] if isinstance(data.get("name"), str) else path.stem
+    if not isinstance(data.get("path", ""), str):
+        return Check("native-messaging", name, "warn", "unreadable manifest: 'path' is not a string")
+    listed = data.get("allowed_extensions", [])
+    if not isinstance(listed, list) or not all(isinstance(item, str) for item in listed):
+        return Check("native-messaging", name, "warn", "unreadable manifest: 'allowed_extensions' is not a list of strings")
     host = Path(data.get("path", ""))
-    allowed = ", ".join(data.get("allowed_extensions", [])) or "none"
+    allowed = ", ".join(listed) or "none"
     if not host.is_absolute() or not host.exists():
-        return Check("native-messaging", data.get("name", path.stem), "warn", f"host binary missing: {host}")
+        return Check("native-messaging", name, "warn", f"host binary missing: {host}")
     st = os.stat(host)
     if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-        return Check("native-messaging", data.get("name", path.stem), "fail", f"host {host} is group/world-writable")
-    return Check("native-messaging", data.get("name", path.stem), "ok", f"{host} (allowed: {allowed}) [{path.parent}]")
+        return Check("native-messaging", name, "fail", f"host {host} is group/world-writable")
+    return Check("native-messaging", name, "ok", f"{host} (allowed: {allowed}) [{path.parent}]")
 
 
 def check_native_messaging() -> list[Check]:
