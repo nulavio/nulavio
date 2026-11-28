@@ -704,8 +704,9 @@ class AI {
     return items;
   }
 
-  /** The tools' request for an Ask: the included items (each page only while its tab still shows that
-      address) and what the panel showed. `items`: what #takeIncluded took; consent is per message. */
+  /** The tools' request for an Ask: the included items (each only while its tab still shows that address
+      and is the tab selected in this window) and what the panel showed. `items`: what #takeIncluded took;
+      consent is per message. */
   #askRequest(question, options, items, win) {
     const { chips = [], expected = null } = options ?? {};
     if (!expected || typeof expected.recipient !== "string" || !Number.isInteger(expected.chars)) {
@@ -713,7 +714,12 @@ class AI {
     }
     const used = (chips ?? []).map(id => items.get(String(id)) ?? fail("page-changed"));
     for (const item of used) {
-      this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
+      const browser = this.#includedBrowser(item, win); // that tab went elsewhere or closed: nothing is sent
+      if (browser !== win.gBrowser.selectedTab?.linkedBrowser) {
+        // Another tab was selected before the start reached the browser, and the panel had not heard of it yet: the
+        // item was shown for the tab left, so nothing is sent (#861, AI-02). The panel reads the selected tab again.
+        fail("tab-changed");
+      }
     }
     const page = used.find(item => item.kind === "page");
     const selected = used.find(item => item.kind === "selection");
@@ -787,7 +793,8 @@ class AI {
 
   /** Ask, answered in one piece. `chips`: the items the user included in this message. `expected`: where
       the panel said it goes and its size; the tools refuse the request if either is no longer true. The
-      selected tab at Send is never read. The panel streams instead (assistantStart). */
+      selected tab is never read in an item's place: an item goes only while its own tab is the selected one
+      (#861). The panel streams instead (assistantStart). */
   async assistantAsk(question, options, win) {
     this.#userWindow(win);
     // Before the first await: a list the panel reads meanwhile no longer has them (#739). Refused or

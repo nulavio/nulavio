@@ -931,6 +931,10 @@ const fakes = {
     ends.push(end);
     return { result, cancel() {}, holdIdle() {} };
   },
+  async callTool(_argv, request) { // assistantAsk: answered in one piece
+    requests.push(JSON.parse(JSON.stringify(request)));
+    return { answer: "Diz." };
+  },
   setTimeout: () => 0,
   stateDir: () => "/state",
 };
@@ -1073,6 +1077,56 @@ const out = {};
   stop();
   out.offerItems = offers;
 }
+{  // #861: an item goes only while its tab is the one selected in that window. Another tab selected before the start
+   // reaches the browser (the panel had not heard of it yet) refuses the Ask, page or selection, through either entry
+   // point, before anything goes; the items leave all the same (#678). The tab selected again carries it.
+  const [win, page] = newWindow("https://h.example/primeira", "Primeira texto");
+  win.SidebarController = { show: async () => {} };
+  const first = win.gBrowser.selectedTab;
+  const second = { id: tabs.size + 1, ownerGlobal: win };
+  tabs.set(second.id, second);
+  win.gBrowser.selectedTab = second;
+  show(win, "https://h.example/segunda", "Segunda texto");
+  const leave = () => { win.gBrowser.selectedTab = second; };
+  const back = () => { win.gBrowser.selectedTab = first; };
+  const attempt = promise => promise.then(() => "started", e => e.code);
+  const include = {
+    page: async () => (await ai.assistantInclude(page, win)).chipId,
+    selection: async () => {
+      await ai.assistantOffer({ kind: "selection", pageUrl: page.url, text: "Trecho primeiro" }, page.tabId);
+      return ai.assistantChips(win).find(chip => chip.kind === "selection").chipId;
+    },
+  };
+  const entries = {
+    start: chip => ai.assistantStart("ask", { question: "E?", chips: [chip], expected }, win),
+    ask: chip => ai.assistantAsk("E?", { chips: [chip], expected }, win),
+  };
+  out.leftTab = {};
+  for (const [kind, add] of Object.entries(include)) {
+    for (const [entry, call] of Object.entries(entries)) {
+      back();
+      const chip = await add();
+      leave(); // the person selects the second tab before the start reaches the browser
+      const before = requests.length;
+      const result = await attempt(call(chip));
+      out.leftTab[`${kind}_${entry}`] = { result, sent: requests.length - before, after: left(win) };
+    }
+  }
+  // The trip back: the first tab selected again before the start, so its item is the selected tab's and goes.
+  back();
+  let chip = await include.page();
+  leave();
+  back();
+  const before = requests.length;
+  out.tripBack = await attempt(entries.start(chip));
+  out.tripBackPage = requests.length > before ? last().page.title : null;
+  ends.at(-1)({ type: "done", answer: "Diz.", chars: 1, recipient: "Provedor", model: "modelo" });
+  await settle();
+  // An address change is still what it was: `page-changed`, even with the tab selected.
+  chip = await include.page();
+  show(win, "https://h.example/outra", "Outra texto");
+  out.movedSelected = await attempt(entries.start(chip));
+}
 console.log(JSON.stringify(out));
 """
 
@@ -1134,6 +1188,17 @@ class ShellContextTest(unittest.TestCase):
     def test_an_entry_point_says_whether_it_changed_the_items(self):
         # The shortcut and "@ia" change none; a selection and the address bar's page add one (#813).
         self.assertEqual(self._run()["offerItems"], [False, False, True, True])
+
+    def test_an_item_of_a_tab_no_longer_selected_is_refused_before_anything_goes(self):
+        out = self._run()  # #861: the browser checks the selected tab, not only the item's own tab and address
+        refused = {"result": "tab-changed", "sent": 0, "after": []}
+        self.assertEqual(
+            out["leftTab"],
+            {"page_start": refused, "page_ask": refused, "selection_start": refused, "selection_ask": refused},
+        )
+        self.assertEqual(out["tripBack"], "started")  # the tab selected again: its item is the selected tab's
+        self.assertEqual(out["tripBackPage"], "Primeira")
+        self.assertEqual(out["movedSelected"], "page-changed")
 
 
 # The panel itself (browser/shell/assistant/panel.js) on a fake DOM, with a fake browser whose item-list replies the
@@ -1222,9 +1287,11 @@ let lateRead = false; // and the browser reads its list only when a held reply i
 let reads = 0;
 const held = [];
 let holdThread = false; // the same for the conversation's reply (assistantThread)
+let threadReply = null; // the conversation the browser has (assistantThread): one with an answer to retry shows Retry
 const threadHeld = [];
 let holdPage = false; // and for the selected tab's (assistantPage)
 const pageHeld = [];
+let pageReads = 0;
 let holdOffer = false; // and for an entry point's delivery (assistantTakeOffer)
 const offerHeld = [];
 let holdStart = false; // and for a start's answer (assistantStart), which refuses with `refuse` when set
@@ -1250,9 +1317,11 @@ globalThis.browser = {
       const list = [...kept]; // as the browser has it now
       return hold ? new Promise(resolve => held.push(() => resolve(lateRead ? [...kept] : list))) : Promise.resolve(list);
     },
-    assistantThread: () => (holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(null)),
+    assistantThread: () =>
+      holdThread ? new Promise(resolve => threadHeld.push(() => resolve(null))) : Promise.resolve(threadReply),
     // The selected tab: the panel keeps the items that came from it.
     assistantPage() {
+      ++pageReads;
       const page = { ...selected };
       return holdPage ? new Promise(resolve => pageHeld.push(() => resolve(page))) : Promise.resolve(page);
     },
@@ -2230,6 +2299,122 @@ kept = [];
 $("allow-profile").fire("click");
 await idle();
 selected = tab;
+
+// #861: the browser refuses a Send whose item's tab is no longer the selected one (another tab selected before the
+// start reached it). The panel says so in its own words, keeps the question, and reads the selected tab again.
+kept = [item("c46", "Deixada")];
+$("allow-profile").fire("click");
+await idle();
+out.tabChangedShown = shown();
+refuse = "tab-changed";
+let readsBefore = pageReads;
+await send("Pergunta 41");
+refuse = null;
+out.tabChangedSent = starts.at(-1).chips;
+out.tabChangedStatus = announced.at(-1);
+out.tabChangedPrompt = $("prompt").value;
+out.tabChangedReadAgain = pageReads > readsBefore;
+out.tabChangedAfter = shown();
+// The same refusal while the panel still offers the page of the tab left (OpenCodeReview, round 2): from the moment
+// the refusal arrives until the selected tab is read again, neither "Incluir esta página" nor "Resumir" is offered,
+// so no click acts on a page other than the one the button names. Then the page of the tab selected now is offered.
+await finish();
+selected = tab;
+$("allow-profile").fire("click");
+await idle();
+kept = [item("c47", "Antiga")];
+$("allow-profile").fire("click");
+await idle();
+holdStart = true;
+refuse = "tab-changed";
+await send("Pergunta 42");
+selected = otherTab; // another tab selected; the panel has not heard of it yet
+holdPage = true;
+holdStart = false;
+startHeld.splice(0).forEach(answer => answer());
+await idle(); // refused; the selected tab's read is on its way
+refuse = null;
+out.tabChangedOfferWhileReading = [$("include-page").hidden ? null : $("include-page").textContent, !$("summarize").hidden];
+holdPage = false;
+pageHeld.splice(0).forEach(answer => answer());
+await idle();
+out.tabChangedOfferAfter = $("include-page").hidden ? null : $("include-page").textContent;
+out.tabChangedSummarizeAfter = !$("summarize").hidden;
+// The same refusals, and Task then Ask chosen while the selected tab is read again (OpenCodeReview, round 3): the
+// mode change voids that read, so it is made again, and back in Ask the page of the tab selected now is offered.
+out.modeAfterRefusal = {};
+for (const [n, reason] of [[48, "tab-changed"], [49, "page-changed"]]) {
+  selected = tab;
+  $("allow-profile").fire("click");
+  await idle();
+  kept = [item(`c${n}`, "Antiga")];
+  $("allow-profile").fire("click");
+  await idle();
+  holdStart = true;
+  refuse = reason;
+  await send(`Pergunta ${n - 5}`);
+  selected = otherTab;
+  holdPage = true;
+  holdStart = false;
+  startHeld.splice(0).forEach(answer => answer());
+  await idle();
+  refuse = null;
+  $("ask").elements.mode.value = "task";
+  $("ask").fire("change", { target: { name: "mode" } });
+  $("ask").elements.mode.value = "ask";
+  $("ask").fire("change", { target: { name: "mode" } });
+  holdPage = false;
+  pageHeld.splice(0).forEach(answer => answer());
+  await idle();
+  out.modeAfterRefusal[reason] = [
+    $("include-page").hidden ? null : $("include-page").textContent,
+    !$("summarize").hidden,
+    !$("no-page").hidden,
+  ];
+}
+// The same refusals, and Retry pressed while the selected tab is read again (CodeRabbit on #881): Task then Ask chosen
+// meanwhile show Retry again, and the retry sends no item and voids that read, so it is made again, and the page of the
+// tab selected now is offered once it is read.
+out.retryAfterRefusal = {};
+threadReply = { turns: [], historyTurns: 1, historyChars: 10, retryChars: 5, recipient };
+for (const [n, reason] of [[50, "tab-changed"], [51, "page-changed"]]) {
+  selected = tab;
+  $("allow-profile").fire("click");
+  await idle();
+  kept = [item(`c${n}`, "Antiga")];
+  $("allow-profile").fire("click");
+  await idle();
+  holdStart = true;
+  refuse = reason;
+  await send(`Pergunta ${n - 5}`);
+  selected = otherTab;
+  holdPage = true;
+  holdStart = false;
+  startHeld.splice(0).forEach(answer => answer());
+  await idle();
+  refuse = null;
+  $("ask").elements.mode.value = "task";
+  $("ask").fire("change", { target: { name: "mode" } });
+  $("ask").elements.mode.value = "ask";
+  $("ask").fire("change", { target: { name: "mode" } });
+  await idle();
+  const retryShown = !$("retry-actions").hidden;
+  $("retry").fire("click");
+  await idle();
+  const retried = started.at(-1)?.retry === true;
+  holdPage = false;
+  pageHeld.splice(0).forEach(answer => answer());
+  await idle();
+  await finish();
+  out.retryAfterRefusal[reason] = [
+    retryShown,
+    retried,
+    $("include-page").hidden ? null : $("include-page").textContent,
+    !$("summarize").hidden,
+  ];
+}
+threadReply = null;
+selected = tab;
 console.log(JSON.stringify(out));
 """
 
@@ -2532,6 +2717,38 @@ class PanelChipsTest(unittest.TestCase):
         out = self._run()
         self.assertEqual(out["pauseEndStarts"], 0)
         self.assertEqual(out["pauseEndPrompt"], "Pergunta 40")
+
+    def test_a_send_the_browser_refuses_for_another_selected_tab_keeps_the_question(self):
+        out = self._run()  # #861
+        self.assertEqual(out["tabChangedShown"], ["c46"])
+        self.assertEqual(out["tabChangedSent"], ["c46"])
+        self.assertEqual(out["tabChangedStatus"], ["error", "err_tab_changed"])  # its own words, not page-changed's
+        self.assertEqual(out["tabChangedPrompt"], "Pergunta 41")
+        self.assertTrue(out["tabChangedReadAgain"])  # the page of the tab selected now is offered
+        self.assertEqual(out["tabChangedAfter"], [])
+
+    def test_a_tab_changed_refusal_offers_no_page_until_the_selected_tab_is_read(self):
+        out = self._run()  # #861, OpenCodeReview round 2
+        self.assertEqual(out["tabChangedOfferWhileReading"], [None, False])  # not the left tab's page, nor Resumir
+        self.assertIn("assistantIncludePage|Outra", out["tabChangedOfferAfter"])  # the tab selected now
+        self.assertTrue(out["tabChangedSummarizeAfter"])
+
+    def test_a_mode_change_after_a_refusal_still_brings_the_page_offer_back(self):
+        out = self._run()  # #861, OpenCodeReview round 3
+        for reason in ("tab-changed", "page-changed"):
+            offer, summarize, no_page = out["modeAfterRefusal"][reason]
+            self.assertIn("assistantIncludePage|Outra", offer or "", reason)  # the tab selected now
+            self.assertTrue(summarize, reason)
+            self.assertFalse(no_page, reason)  # a web page is selected: no "no page" hint
+
+    def test_a_retry_after_a_refusal_still_brings_the_page_offer_back(self):
+        out = self._run()  # #861, CodeRabbit on #881
+        for reason in ("tab-changed", "page-changed"):
+            shown, retried, offer, summarize = out["retryAfterRefusal"][reason]
+            self.assertTrue(shown, reason)  # Retry is offered while the selected tab is read again
+            self.assertTrue(retried, reason)
+            self.assertIn("assistantIncludePage|Outra", offer or "", reason)  # the tab selected now
+            self.assertTrue(summarize, reason)
 
     def test_a_send_that_waits_keeps_its_question_and_send_off(self):
         out = self._run()
