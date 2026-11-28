@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:d1f8b46e-9348-54ff-b65a-c00a7f3e6c72",
+  "serialNumber": "urn:uuid:b66d1bca-d1d9-5fb6-b8e9-e6249dbe3a56",
   "version": 1,
   "metadata": {
     "component": {
@@ -19,7 +19,7 @@
       "properties": [
         {
           "name": "nulavio:git-revision",
-          "value": "ca3f160acb0a207bbf36fac861c0244bb29bee88"
+          "value": "fd280af27894c5a52afbb68ad503980f9d9e7d6a"
         }
       ]
     }
