@@ -130,9 +130,10 @@ class Container:
         """_lock_bare_mountpoint() under the state lock, without waiting for it. mount() holds that lock while the
         folder is writable for fusermount (between its fchmod to 0700 and the mount): a launcher call on the locked
         profile then (`status`, the chooser, another unlock) or the end of a lock just before would make it 0500
-        again, and fusermount refuses to mount on it (#800). When the lock is busy, nothing is changed: an unlock
-        leaves the folder 0500 itself, right after it mounts; a change to the unlock methods does not touch it.
-        When no lock can be had on this file system, no unlock can mount either: the folder is locked without it."""
+        again, and fusermount refuses to mount on it (#800). When the lock is busy, nothing is changed: whoever
+        holds it makes the folder 0500 before letting it go (_state_lock, _lock_bare_if_locked), an unlock also
+        right after it mounts. When no lock can be had on this file system, no unlock can mount either: the folder
+        is locked without it."""
         if self._lock_owner == threading.get_ident():  # this call runs under the lock already (a lock after exit)
             self._lock_bare_mountpoint()
             return
@@ -143,6 +144,16 @@ class Container:
             if exc.code == "busy":
                 return
             self._lock_bare_mountpoint()
+
+    def _lock_bare_if_locked(self) -> None:
+        """Under the state lock, just before it is let go: the folder 0500 when the profile is protected and nothing
+        is mounted there. A launcher call or the end of a lock that found the lock held left the folder alone; a
+        holder that is not an unlock (a change to the unlock methods, a new key, an agent's engine start) would
+        otherwise leave a folder made writable before (by a crash, or a version before U-T23's handle) writable
+        after a lock, until the next launcher call (#926 review). A repair: when it cannot be made, nothing fails."""
+        with contextlib.suppress(OSError):
+            if self.exists() and self.mountpoint.is_dir() and not self.mounted():
+                self._lock_bare_mountpoint()
 
     def _lock_bare_mountpoint(self) -> None:
         """The profile's folder read-only (0500), through a handle on the folder itself and only when no volume is
@@ -401,6 +412,7 @@ class Container:
                 yield
             finally:
                 self._lock_owner = owner
+                self._lock_bare_if_locked()  # before the lock goes: a call that found it held left the folder to this
         finally:
             os.close(fd)  # releases the lock, also when the process dies
 

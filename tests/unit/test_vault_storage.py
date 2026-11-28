@@ -587,6 +587,21 @@ class OverlappingUnlockTest(StorageCase):
         storage.Container(box.mountpoint).secure_if_locked()  # nothing holds the lock: made read-only, as before
         self.assertEqual(mode(box.mountpoint), 0o500)
 
+    def test_a_change_that_holds_the_lock_leaves_the_folder_read_only_when_it_ends(self):
+        # A launcher call or the end of a lock that finds the state lock held by a change to the unlock methods (not
+        # an unlock) leaves the folder alone; the change makes it read-only before it lets the lock go. Here the
+        # folder is writable, as a version before U-T23's handle left it underneath its volume (#926 review).
+        box, vault = self.new_container()
+        box.mount(vault)
+        box.unmount()
+        os.chmod(box.mountpoint, 0o700)
+        with box.recording(vault) as record:
+            storage.Container(box.mountpoint).secure_if_locked()
+            storage.Container(box.mountpoint).unmount()
+            self.assertEqual(mode(box.mountpoint), 0o700)  # left to the change, which holds the lock
+            record()
+        self.assertEqual(mode(box.mountpoint), 0o500)
+
     def test_a_second_unlock_waits_for_the_first_ones_generation_check(self):
         # The second request finds the volume mounted while the first is still checking its generation: it says
         # "unlocked" only after that check, and never of a volume the check then refuses and takes away (U-T21,
