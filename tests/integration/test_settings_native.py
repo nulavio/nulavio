@@ -310,6 +310,28 @@ class NativeSettingsTest(unittest.TestCase):
         selected = "return gBrowser.selectedBrowser.currentURI.spec;"
         self.assertTrue(harness.wait_until(lambda: self.m.chrome(selected).endswith("/whatsnew/whatsnew.html"), 10))
 
+    def test_02d_feature_tips_show_off_and_locked_by_the_studies_policy(self):
+        # #929: the engine's "Recommend features as you browse" (the messaging system's feature tips, which since the
+        # 161 engine bring Mozilla's artwork from its CDN with the first tab group) is off in the Nulavio build. The
+        # DisableFirefoxStudies policy the build ships sets it off and locks it, so the page shows the switch off and
+        # greyed; firefox-branding.js makes off its default too. That no tip comes is test_feature_callouts.
+        name = "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features"
+        pref = (
+            "return [Services.prefs.getBoolPref(arguments[0]), Services.prefs.prefHasUserValue(arguments[0]),"
+            " Services.prefs.prefIsLocked(arguments[0])];"
+        )
+        box = (
+            DOC
+            + 'const el = d.querySelector("#cfrRecommendations-features");'
+            + "return el && { checked: el.checked, disabled: Boolean(el.disabled), label: Boolean(el.label),"
+            + " shown: el.getBoundingClientRect().height > 0 };"
+        )
+        self.assertEqual(self.m.chrome(pref, [name]), [False, False, True])
+        self.open()
+        self.assertIn("recommendations", self.groups("paneTabsBrowsing"))
+        state = harness.wait_until(lambda: (s := self.m.chrome(box)) and s["shown"] and s, 15)
+        self.assertEqual(state, {"checked": False, "disabled": True, "label": True, "shown": True})
+
     def test_03_words_come_in_english_too(self):
         self.m.chrome('Services.locale.requestedLocales = ["en-US"];')
         self.m = self.session.restart()
