@@ -350,7 +350,11 @@ class SerialTest(unittest.TestCase):
                     run("--package", str(package), "--engine-version", "158.0.1", "--release-version", "158.0.1-0.1"),
                     "nulavio:" + (revision or sbom.__version__),
                 ),
-                "companion": (run("--companion"), revision and "nulavio-companion:" + revision),  # else from the app's version
+                # From the fixture lock: a checkout may lack android/app/gradle.lockfile (see the real-lock test).
+                "companion": (
+                    sbom.companion_bom(VERIFICATION, sbom.APP_GRADLE, lock=APP_LOCK.read_text()),
+                    revision and "nulavio-companion:" + revision,  # else from the app's version
+                ),
             }
         for mode, (bom, seed) in boms.items():
             with self.subTest(mode=mode):
