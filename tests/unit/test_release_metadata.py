@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/release/release_metadata.py"
@@ -27,6 +28,12 @@ class ReleaseMetadataTest(unittest.TestCase):
         (self.repo / "browser/build").mkdir(parents=True)
         (self.repo / "browser/build/engine.json").write_text(json.dumps({"firefox": "160.0"}))
         (self.repo / "CHANGELOG.md").write_text("# Changelog\n\nRelease history.\n\n<!-- releases -->\n")
+        self.readmes = {
+            "README.md": "Now <!--release-->[v160.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.1)<!--/release-->.\n",
+            "README.pt-BR.md": "Agora na <!--release-->[v160.0-0.0](old)<!--/release-->, [v160.0-0.1](keep).\n",
+        }
+        for name, text in self.readmes.items():
+            (self.repo / name).write_text(text)
         self.git("add", ".")
         self.git("commit", "-qm", "base")
         self.sha = self.git("rev-parse", "HEAD").strip()
@@ -80,6 +87,132 @@ class ReleaseMetadataTest(unittest.TestCase):
         result = self.run_metadata()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_text()), before)
+
+    def test_the_readmes_status_names_the_published_release_between_its_markers(self):
+        # #857: the release step keeps the READMEs' status on the latest release, even one that drifted.
+        link = "<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "README.md").read_text(), f"Now {link}.\n")
+        self.assertEqual((self.repo / "README.pt-BR.md").read_text(), f"Agora na {link}, [v160.0-0.1](keep).\n")
+        # An older release leaves them as they are.
+        (self.repo / "README.md").write_text(self.readmes["README.md"])
+        self.metadata.write_text(json.dumps({"version": "160.0-0.10", "channel": "alpha"}))
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.repo / "README.md").read_text(), self.readmes["README.md"])
+
+    def test_a_readme_only_repair_writes_only_the_readme_and_keeps_its_line_endings(self):
+        # OCR on #878: a drifted README link for the current release rewrites neither the metadata nor the changelog,
+        # and the README keeps its bytes outside the markers.
+        link = "<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        readme = self.repo / "README.md"
+        readme.write_bytes(b"# Nulavio\r\n\r\nNow <!--release-->[v160.0-0.1](drifted)<!--/release-->.\r\n")
+        for path in (self.metadata, self.repo / "CHANGELOG.md"):
+            path.chmod(0o444)
+            self.addCleanup(path.chmod, 0o644)
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), f"# Nulavio\r\n\r\nNow {link}.\r\n".encode())
+
+    def test_a_wrapped_link_is_replaced_and_a_readme_without_markers_is_never_decoded(self):
+        # OCR round 2 on #878: a link wrapped across lines is still one marker pair, and a README without the markers
+        # is left byte for byte, even one that is not UTF-8.
+        link = b"<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        readme, other = self.repo / "README.md", self.repo / "README.pt-BR.md"
+        readme.write_bytes(b"Now <!--release-->[v160.0-0.1]\r\n(https://example.invalid)<!--/release-->.\r\n")
+        other.write_bytes(b"Latin-1 \xe9, no markers.\n")
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), b"Now " + link + b".\r\n")
+        self.assertEqual(other.read_bytes(), b"Latin-1 \xe9, no markers.\n")
+
+    def test_a_stray_opening_marker_before_the_pair_keeps_the_text_between(self):
+        # Independent review of OCR round 2 on #878: with re.S, a lone "<!--release-->" quoted before the real pair
+        # made the match run from it to the pair's end and drop everything between.
+        link = b"<!--release-->[v160.0-0.2](https://github.com/nulavio/nulavio/releases/tag/v160.0-0.2)<!--/release-->"
+        readme = self.repo / "README.md"
+        readme.write_bytes(b"Intro `<!--release-->`.\n\nline A\nline B\n\nNow <!--release-->[v1](x)<!--/release-->.\n")
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(readme.read_bytes(), b"Intro `<!--release-->`.\n\nline A\nline B\n\nNow " + link + b".\n")
+
+    def test_a_second_marker_pair_is_refused_before_anything_is_written(self):
+        # OCR round 3 on #878: markers quoted in prose on two lines made a second pair, and the text between them was
+        # replaced by the link. A README with more than one pair is refused, and nothing is written.
+        readme = self.repo / "README.md"
+        text = self.readmes["README.md"] + "\nQuote `<!--release-->` here,\nprose to keep,\nand `<!--/release-->` there.\n"
+        readme.write_text(text)
+        before = self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("more than one release marker pair", result.stderr)
+        self.assertEqual(readme.read_text(), text)
+        self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()), before)
+
+    def import_script(self):
+        sys.path.insert(0, str(SCRIPT.parent))
+        self.addCleanup(sys.path.remove, str(SCRIPT.parent))
+        import release_metadata
+
+        return release_metadata
+
+    def test_only_the_files_that_differ_are_written(self):
+        # Independent review of OCR round 2 on #878: a rename replaces a read-only file, so read-only files cannot
+        # prove that the metadata and the changelog are left alone; the writes themselves are recorded instead.
+        release_metadata = self.import_script()
+        manifest = {**self.manifest, "nulavio_base_commit": self.sha}
+        self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        (self.repo / "README.md").write_bytes(b"Now <!--release-->[v160.0-0.1](drifted)<!--/release-->.\n")
+        with mock.patch.object(release_metadata, "replace", wraps=release_metadata.replace) as written:
+            self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertEqual([call.args[0].name for call in written.call_args_list], ["README.md"])
+        with mock.patch.object(release_metadata, "replace", wraps=release_metadata.replace) as written:
+            self.assertFalse(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertEqual(written.call_args_list, [])
+
+    def test_a_symlinked_output_is_refused_before_anything_is_written(self):
+        # OCR round 2 on #878: a README that is a link would have its target rewritten, outside the paths the
+        # workflow stages.
+        target = self.repo / "elsewhere.md"
+        target.write_text(self.readmes["README.md"])
+        (self.repo / "README.md").unlink()
+        (self.repo / "README.md").symlink_to(target)
+        before = self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()
+        result = self.run_metadata()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("symbolic link", result.stderr)
+        self.assertEqual(target.read_text(), self.readmes["README.md"])
+        self.assertEqual((self.metadata.read_bytes(), (self.repo / "CHANGELOG.md").read_bytes()), before)
+
+    def test_an_interrupted_write_leaves_the_readme_whole_and_keeps_its_mode(self):
+        # OCR round 2 on #878: each file is written beside itself and renamed over, so a failed write leaves the old
+        # file whole (and a retry finds its markers) and no stray file behind.
+        sys.path.insert(0, str(SCRIPT.parent))
+        self.addCleanup(sys.path.remove, str(SCRIPT.parent))
+        import release_metadata
+
+        readme = self.repo / "README.md"
+        readme.chmod(0o640)
+        manifest = {**self.manifest, "nulavio_base_commit": self.sha}
+        listing = sorted(p.name for p in self.repo.iterdir())
+        real_replace = release_metadata.os.replace
+
+        def fail_on_the_readme(src, dst):
+            # The README's own rename fails, after the files before it were written.
+            if Path(dst).name == "README.md":
+                raise OSError("disk full")
+            real_replace(src, dst)
+
+        with mock.patch.object(release_metadata.os, "replace", side_effect=fail_on_the_readme), self.assertRaises(OSError):
+            release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest)
+        self.assertEqual(readme.read_text(), self.readmes["README.md"])
+        self.assertEqual(sorted(p.name for p in self.repo.iterdir()), listing)
+        self.assertTrue(release_metadata.update(self.repo, self.release, "nulavio/nulavio", manifest))
+        self.assertIn("releases/tag/v160.0-0.2)<!--/release-->", readme.read_text())
+        self.assertEqual(readme.stat().st_mode & 0o777, 0o640)
 
     def test_the_first_release_with_the_companion_apk_names_it_for_the_download_pages(self):
         # ADR 0014: the pages offer the Companion once a published release carries its APK.

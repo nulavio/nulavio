@@ -847,6 +847,7 @@
   "err_assistant_paused": {"message": "The assistant's agent is paused: nothing goes to the model."},
   "err_private_window": {"message": "The assistant is off in private windows."},
   "err_page_changed": {"message": "The tab moved to another page after you included it, so nothing was sent. Include the page again if you want."},
+  "err_tab_changed": {"message": "Another tab was selected before the message left, and what you included is not from it, so nothing was sent. Go back to the tab you included it from to include it again if you want."},
   "err_task_unfinished": {"message": "The task stopped without an answer. Actions may have happened in the AI Workspace: see Activity."},
   "connectTitle_kde_connect": {"message": "KDE Connect"},
   "connectTitle_screen_cast": {"message": "Screen sharing"},

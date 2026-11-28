@@ -11,6 +11,147 @@ Update an installed Nulavio with `sudo dnf upgrade nulavio`. Only the latest rel
 
 <!-- releases -->
 
+<!-- release:v161.0-0.1 -->
+## [161.0-0.1](https://github.com/nulavio/nulavio/releases/tag/v161.0-0.1) — 2026-11-28
+
+Nulavio 161.0-0.1, built from Firefox 161.0 (commit 1c64e2b455cc).
+
+### What's new
+
+An urgent security update of the alpha, with the engine on Firefox 161.0 and Mozilla's security fixes. Also, the look-alike login warning now covers frames, with fixes in AI agents, the assistant, phone unlock and confined mode.
+
+#### Changes that need your attention
+
+- The assistant's keyword in the address bar can no longer be a search engine's alias. An engine given that alias in Settings loses it.
+- Confined mode (--confined): a Downloads or data folder that is a link now works (not yet when the home folder itself is a link: downloads are then lost, so download without --confined). Some layouts are refused with a message that says what to do, such as an engine unpacked in Downloads.
+
+#### What is new
+
+- The look-alike login warning also checks password fields inside a page's frames, with the site of the frame and of each page around it.
+
+#### Fixes
+
+- The engine moves to Firefox 161.0, with the security fixes of Mozilla's advisory mfsa2026-131, of high severity.
+- The assistant sends the provider only the origin and path of an included page's address, without its query or fragment, and shows that address.
+- A page or selection included in the assistant no longer goes with a message after you switch tabs, and does not come back after a Task or a retry.
+- The look-alike login warning no longer asks for the Primary Password when you use a password field on any site.
+- In a private window, Continue on the look-alike login warning no longer saves the pair in the profile: it is kept in memory until the last private window closes.
+- A new phone unlock request cancels the earlier request for the same profile.
+- A profile an AI agent used starts normally again: the agent's temporary preferences are removed when its session ends. A profile the Guard already stops is cleared by its next agent session; or, with it closed, remove the remote.prefs.recommended and nulavio.ai.\* lines from its prefs.js.
+- Settings no longer offer five agent permissions that no tool checked, and the level hints say only what a tool checks.
+- An AI agent no longer asks questions that could only end in a refusal: the call is refused before the question.
+- In Immersive, the toolbar stays in view while a site uses the location or a serial port, as it already did for the camera, the microphone and the screen.
+- The Encrypted DNS only option says which names the computer's resolver still answers.
+- On Ubuntu and Debian, the automatic update fails and says so in the log when Nulavio's index cannot be fetched, instead of reporting success.
+
+In Portuguese and English: https://nulavio.net/novidades/161.0-0.1/ and https://nulavio.net/en/whats-new/161.0-0.1/
+
+### Features
+
+- passwords: the look-alike check covers password fields in frames (#757) ([593697f2fb36](https://github.com/nulavio/nulavio/commit/593697f2fb3671b322888ca46b348b963289944b))
+- brand: the route is the name's initial, a larger icon mark, neutral secure shield and social art (#858) ([0842c2954edb](https://github.com/nulavio/nulavio/commit/0842c2954edbbd174f4e414b42e8ecf104707c15))
+- site: scripted recording pipeline and the site redesign specification (#859) ([a5f401fc1cf7](https://github.com/nulavio/nulavio/commit/a5f401fc1cf71bf730021a768fed4ebf4bea97e2))
+- engine: Firefox 161.0 (#893) ([a991d02557b2](https://github.com/nulavio/nulavio/commit/a991d02557b276a63ea52805d57d05e615f57a66))
+
+### Fixes
+
+- shell: Close and Cancel in a window's only tab open a new tab there (#721) ([a19fcf3e404e](https://github.com/nulavio/nulavio/commit/a19fcf3e404ec2c123a1b24e7f2e078fb97405c4))
+- passwords: the look-alike check never asks for the Primary Password (#718) ([72071e0b9cdf](https://github.com/nulavio/nulavio/commit/72071e0b9cdf034eb8c74c3a859b7188704aea27))
+- ai: stop offering agent permissions that no tool checks (#726) ([53ce7ce09885](https://github.com/nulavio/nulavio/commit/53ce7ce0988510c9386bf6d7cd094e887b5e91c7))
+- release: never reuse an uploaded revision with other bytes (#724) ([d7c7baa09453](https://github.com/nulavio/nulavio/commit/d7c7baa094532a482a42be0039b008525186249c))
+- assistant: send an included page's address as origin and path, and show it (#727) ([9ec274ad3f82](https://github.com/nulavio/nulavio/commit/9ec274ad3f8264e3abe9c5e09cd6390d6493ccb3))
+- launcher: confined mode puts a linked Downloads or data folder back where the browser looks (#719) ([f3fb4a465ca2](https://github.com/nulavio/nulavio/commit/f3fb4a465ca2af04153e84b59267d5c8f5a7ca8f))
+- ai: refuse a script before asking while cookies and storage are blocked (#728) ([4dbba3fcbb56](https://github.com/nulavio/nulavio/commit/4dbba3fcbb5670e735113b9c21901c328c5fe892))
+- assistant: a Task or a retry leaves no included page in the browser (#731) ([1202a861fed7](https://github.com/nulavio/nulavio/commit/1202a861fed75e85f12f72509e7090d91fbe6d7a))
+- shell: the held-link pages leave a window's only tab on a new tab (#735) ([96de41c10192](https://github.com/nulavio/nulavio/commit/96de41c101924483a129de2de2f73e2c07c6299c))
+- release: count the revision the dnf index serves too (#729) ([ed06790e48b3](https://github.com/nulavio/nulavio/commit/ed06790e48b3cc546c332e774f4d796ec4d9566a))
+- site: the manual download check stops on a failed or foreign signature (#733) ([605b4617f816](https://github.com/nulavio/nulavio/commit/605b4617f81648adaab0de81656c2df864d076cf))
+- ai: refuse a call before asking while a permission it needs is blocked (#737) ([19a04c29a3fc](https://github.com/nulavio/nulavio/commit/19a04c29a3fcdd2b4c841f5a5e5038736993c9b5))
+- assistant: a chip-list reply that spans a Send is read again (#747) ([da8d783da47f](https://github.com/nulavio/nulavio/commit/da8d783da47f9e12dc9d63858ae23fee299be22b))
+- ai: refuse what a click or typing's element needs before interact is asked (#748) ([9cd9af5c6740](https://github.com/nulavio/nulavio/commit/9cd9af5c6740ebd61fd15bc788e9772358721ae6))
+- vault: hold every phone-link line to its cap and skip what the parser raises on (#755) ([0b792a689bfd](https://github.com/nulavio/nulavio/commit/0b792a689bfd24c0291db093a77129e5b40dc019))
+- packaging: a failed APT index refresh fails the automatic update (#751) ([e457cb7431f8](https://github.com/nulavio/nulavio/commit/e457cb7431f8ef2a3967686c5488a9f4278c2cb1))
+- shell: the background closes Shell pages' tabs, one at a time per window (#753) ([cf8b27d5d687](https://github.com/nulavio/nulavio/commit/cf8b27d5d6878931b96552eb8de98ad33b783313))
+- site: the manual download check matches the key file before importing it (#752) ([cb6eb08805a8](https://github.com/nulavio/nulavio/commit/cb6eb08805a829eefd0fc95afdfb9b10f11b26fa))
+- release: keep package SBOMs valid CycloneDX 1.6 (#767) ([e3ac6558168d](https://github.com/nulavio/nulavio/commit/e3ac6558168d3317b1360cdf0a8313b8e532c28b))
+- assistant: check the items the panel opens with against the selected tab before drawing them (#773) ([c38755b43c52](https://github.com/nulavio/nulavio/commit/c38755b43c5289b910d70dbdd1e2d9c09f0c8e2f))
+- search: keep the assistant's &#64;ia keyword from every search engine (#772) ([5edc45eb991d](https://github.com/nulavio/nulavio/commit/5edc45eb991d4adf2d9d8f56e8f171ebab50a3ec))
+- companion: show 'not a Nulavio code' for a malformed QR code instead of crashing (#769) ([19fdc36f510b](https://github.com/nulavio/nulavio/commit/19fdc36f510b041824c9712d7bc3807c45a05c85))
+- ai: a page\_read or page\_snapshot result of another shape is a tool error (#771) ([37449b9aaae9](https://github.com/nulavio/nulavio/commit/37449b9aaae9c49ee11dd8d182f8cdb2d1f16340))
+- profiles: a tab moved with the engine's own profile menus keeps the profile chosen (#785) ([b64a4c293695](https://github.com/nulavio/nulavio/commit/b64a4c293695058bab9ccb60732d169d018bd6df))
+- launcher: confined mode refuses an engine folder that is the home folder or above it (#779) ([3a4571e16359](https://github.com/nulavio/nulavio/commit/3a4571e1635952cee98a73616842546e9b5d52a4))
+- launcher: the Guard audits the prefs the engine loads, after user.js is written (#781) ([cdf1a76e9acd](https://github.com/nulavio/nulavio/commit/cdf1a76e9acd5b86d90ef67bd8081932084a5ddd))
+- site: deploy the site when browser/config/prefs/ changes (#780) ([299e6a9cea82](https://github.com/nulavio/nulavio/commit/299e6a9cea82330ab67301274e5e4ffe0707d9a8))
+- vault: a second unlock of a profile at once finds it open and leaves its folder writable (#783) ([067a0074c4ac](https://github.com/nulavio/nulavio/commit/067a0074c4ac70b978010c115dc1f401218bfec4))
+- routing: Open link in profile marks the choice explicit, so no rule is credited (#808) ([114aed17b46c](https://github.com/nulavio/nulavio/commit/114aed17b46cc988c04f7bda1a7d8f046f74b3d9))
+- shell: Immersive keeps the toolbar while the location or a serial port is in use (#824) ([0a4cc86123a6](https://github.com/nulavio/nulavio/commit/0a4cc86123a648399da588f4b192c330b8c5b241))
+- shell: isolate a search engine's name in the sentences that carry it (#809) ([ccf3afd37b84](https://github.com/nulavio/nulavio/commit/ccf3afd37b84de821696c003094d6c9726e384dd))
+- assistant: an item-list reply never puts back an item that left while it was on its way (#813) ([0270a252cb35](https://github.com/nulavio/nulavio/commit/0270a252cb35be1e460285c4aaf7d252f23d1b41))
+- passwords: the look-alike warning's Continue saves exactly the pair it showed (#814) ([1d4efab43c00](https://github.com/nulavio/nulavio/commit/1d4efab43c00aa89cdc84fb42c51342a34f2f3e9))
+- release: name the package SBOM's root component by the Nulavio release (#818) ([ec2cabe61974](https://github.com/nulavio/nulavio/commit/ec2cabe61974d54b146386fe1ee0f661fadae3b7))
+- release: count an extension pin's lag from the first newer version and check its file on every run (#820) ([2427c076000c](https://github.com/nulavio/nulavio/commit/2427c076000c1869ae4ff871af70c4d28c78d539))
+- ai: check again what changed while a call read the page or looked a host up (#812) ([edce526a2738](https://github.com/nulavio/nulavio/commit/edce526a2738378f7474bcf592fbaf03dee7c6c7))
+- guard: the Shell's start-up rewrite of the fingerprinting set is not reported as made outside (#825) ([8ae2083a2bf9](https://github.com/nulavio/nulavio/commit/8ae2083a2bf946390c12173849391b8d772365c3))
+- vault: a new phone unlock request ends the earlier helper's request for that profile (#823) ([f57f78a6417f](https://github.com/nulavio/nulavio/commit/f57f78a6417fed8536f8032a830d877b48404ecb))
+- ai: a session in a user's profile removes the prefs the engine saved from its temporary lines (#826) ([532ef2d0dc0b](https://github.com/nulavio/nulavio/commit/532ef2d0dc0b7098f469f07d5ad7205b44e3abc3))
+- routing: open held and asked links from other apps in a normal window (#855) ([db9394f4fcb0](https://github.com/nulavio/nulavio/commit/db9394f4fcb0d477d430f89907305e52dfced157))
+- ai: name the fields with page text in every tool result as untrusted (#854) ([b6ad3dbae1ae](https://github.com/nulavio/nulavio/commit/b6ad3dbae1ae2a4cdeb248c19bf12e615df66b4e))
+- passwords: Continue on the look-alike warning in a private window is not saved to the profile (#851) ([681839b768ed](https://github.com/nulavio/nulavio/commit/681839b768ed6c6d9c910d35c9e95f3efedaa2aa))
+- assistant: Send waits for the panel's check of a tab selected meanwhile (#852) ([aa1ceca46a38](https://github.com/nulavio/nulavio/commit/aa1ceca46a38266234f62e51d3510012b4dc22e3))
+- ai: cancel every call when the agent's client closes stdin (#853) ([ab06f0450e84](https://github.com/nulavio/nulavio/commit/ab06f0450e84babd8a2897534882ae6eb3ae34e0))
+- dns: say which names the computer's resolver still answers under encrypted DNS only (#849) ([0c575a104552](https://github.com/nulavio/nulavio/commit/0c575a1045521b7d1aa1f71e2d5256e1a2f11b5d))
+- assistant: a redraw of the panel's items keeps focus on an item's Remove button (#883) ([0c02fbc18c7d](https://github.com/nulavio/nulavio/commit/0c02fbc18c7da735b0ef6511ebbb444b6241edec))
+- passwords: keep every look-alike pair confirmed in the profile (#880) ([1e9018d0643a](https://github.com/nulavio/nulavio/commit/1e9018d0643a709afc2258dcc8c0cfb8493adffe))
+- companion: version 0.2.1, so the 161.0 release can ship the app (#905) ([1c64e2b455cc](https://github.com/nulavio/nulavio/commit/1c64e2b455ccf41284db6cd75a3c2a4c675dd115))
+
+### Documentation
+
+- security: 160.0.1-0.3 published, with the fixes of the full review (#698) ([ceea4fd7c957](https://github.com/nulavio/nulavio/commit/ceea4fd7c9573f35b4d79a057a0b8de43c0ad81c))
+- security: a public summary of the full review (#454) (#716) ([8b7099ad27c5](https://github.com/nulavio/nulavio/commit/8b7099ad27c5854cbd982fe412ad513b92dd7cf3))
+- security: look-alike warning, Immersive, window actors and what a locked profile still shows (#745) ([ef33667103bf](https://github.com/nulavio/nulavio/commit/ef33667103bf383f532b3f100530fa0b3f936e92))
+- security: S19 says administrators cannot bypass the release approval (#750) ([3464b2c4f25a](https://github.com/nulavio/nulavio/commit/3464b2c4f25a18408630e0654ab64bbbae798c29))
+- release: harden the dnf recovery block of the failed-publish runbook (#756) ([196003a436ec](https://github.com/nulavio/nulavio/commit/196003a436eca7af0e1f7963c4440841f5c54d97))
+- assistant: an item not drawn yet is checked when the panel draws it (#807) ([93f0436679d5](https://github.com/nulavio/nulavio/commit/93f0436679d591cf7253bcca3bab17ae97129554))
+- ai: say where the agent's key is kept and what log rotation drops (#845) ([b4f061e13c2b](https://github.com/nulavio/nulavio/commit/b4f061e13c2b902639761f3aad4efca021cf2bf6))
+- security: say what AI-T35 and AI-T36 hold across instances and keyword case (#847) ([026b94eb45e3](https://github.com/nulavio/nulavio/commit/026b94eb45e3e92059c223242ce611128763c5b4))
+- review: I7 says where an agent's token is kept in clear (#846) ([b6eecec0213f](https://github.com/nulavio/nulavio/commit/b6eecec0213f661a328928d003e27405e626d1ec))
+- marketing: message house, trailer and shorts scripts, tools and budget (drafts) (#856) ([3b6585e5ef3a](https://github.com/nulavio/nulavio/commit/3b6585e5ef3a3dedf1df54f7acc06e0850df7db8))
+- site: say the browser contacts no Nulavio server, not that there is none (#879) ([00eb96827a99](https://github.com/nulavio/nulavio/commit/00eb96827a9954883cbb4c947af2dff793e1453a))
+- design: moodboard, three directions and the chosen one for nulavio.net (#865) ([e91fab3c3e10](https://github.com/nulavio/nulavio/commit/e91fab3c3e101cb1d42b2b37a972583729118040))
+
+### Tests
+
+- assistant: test\_16 opens its tab with no address, so navigate is asked first (#778) ([a4bddb373295](https://github.com/nulavio/nulavio/commit/a4bddb373295d5fa3b332b8864d93892434c167f))
+- passwords: Back from the look-alike warning warns again on the next use of the field (#787) ([f0afb7f5f0fb](https://github.com/nulavio/nulavio/commit/f0afb7f5f0fb286fe939f040c39d0b52be2d19a8))
+- ci: the Node-driven unit tests fail, not skip, under NULAVIO\_REQUIRE\_NODE=1 (#811) ([96a3463a88fd](https://github.com/nulavio/nulavio/commit/96a3463a88fd73bece5e58a282a14fbb22b05d4c))
+- keep the loader path when a unit test starts Python with an environment of its own (#882) ([0eac08710eaa](https://github.com/nulavio/nulavio/commit/0eac08710eaaa2723b74156bd55b08944808fcce))
+
+### Maintenance
+
+- release: record v160.0.1-0.3 (#697) ([b94a4db95f95](https://github.com/nulavio/nulavio/commit/b94a4db95f95c0d2d85d66c6eaeb3d391f57fc77))
+
+[Full changelog](https://github.com/nulavio/nulavio/compare/v160.0.1-0.3...1c64e2b455ccf41284db6cd75a3c2a4c675dd115)
+
+### Install and verify
+
+Install or upgrade on Fedora or Ubuntu: https://nulavio.net/en/download/
+
+On Ubuntu, `nulavio.sources` from the download page has the SHA-256 `f77857a1515bcf9cb07a5e213f0525e36784e1d47bafb700f9d3e158fc537745`.
+
+Nulavio Companion, the Android app for phone unlock: `nulavio-companion-0.2.1.apk`. Its signing certificate's SHA-256 is `d78d255ac7d83cc3e70d946921a5921c76dd92d9b865fcd12893b36d2ae9d3be` (`apksigner verify --print-certs nulavio-companion-0.2.1.apk` prints it).
+
+Every release asset is listed in `SHA256SUMS`, signed in `SHA256SUMS.asc` (key `298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1`): check that first, as the download page shows. Each also has a GitHub build-provenance attestation from the release workflow on `main`; check it with both of these options:
+
+```sh
+gh attestation verify <file> --repo nulavio/nulavio \
+  --signer-workflow nulavio/nulavio/.github/workflows/release.yml --source-ref refs/heads/main
+```
+
+[Build and test run](https://github.com/nulavio/nulavio/actions/runs/46084021139).
+
+[Security changelog](https://github.com/nulavio/nulavio/blob/main/docs/security/changelog.md) and [published advisories](https://github.com/nulavio/nulavio/security/advisories). Commit categories are not a vulnerability assessment.
+
+
 <!-- release:v160.0.1-0.3 -->
 ## [160.0.1-0.3](https://github.com/nulavio/nulavio/releases/tag/v160.0.1-0.3) — 2026-11-25
 
