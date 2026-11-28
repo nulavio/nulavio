@@ -31,7 +31,6 @@ Urgency: <urgent | standard> (<reasons>). Source SHA-256 <digest> (Mozilla's sig
 
 **Nulavio fixes**:
 
-- Feature tips (#929): in 161.0-0.1 the first tab group a person made, and a start after a session with saved tab groups, opened a tip from Mozilla's messaging system that loaded Mozilla's artwork from its CDN (`firefox-settings-attachments.cdn.mozilla.net`). Firefox 161 removed the pref that had kept these tips off. Settings' "Recommend features as you browse" now starts off in the Nulavio build, also in a profile that already ran 161.0-0.1 unless the person changed that switch, and the launcher seeds it off for its profiles. The request carried nothing beyond what [every request shows](new-profile-connections.md#what-every-request-shows). `test_feature_callouts` checks it.
 - Assistant (#861): the browser checked that an included page or selection was still in the window at the address included, not that its tab was the selected one. A Send pressed in the moment between selecting another tab and the panel hearing of it (the tab event reaches the panel a moment later) carried the item of the tab just left, although another tab was selected. The browser now checks, when the start reaches it, that each item's tab is the tab selected in that window, and refuses otherwise before anything goes (`tab-changed`); the panel keeps the question and offers the page of the tab selected now. Nothing to do.
 
 ## Nulavio 161.0-0.1 (Firefox 161.0), published 2026-11-28

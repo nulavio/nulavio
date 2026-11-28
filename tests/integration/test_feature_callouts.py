@@ -3,10 +3,12 @@
 Firefox 161 dropped the pref that kept the tab group tips off (browser.tabs.groups.onboardingCallouts.enabled): their
 targeting is now only `userPrefs.cfrFeatures`, Settings' "Recommend features as you browse", and the tip loads
 Mozilla's artwork from its CDN (firefox-settings-attachments.cdn.mozilla.net/main-workspace/ms-images/,
-FeatureCalloutMessages.sys.mjs). The Nulavio build starts that switch off (firefox-branding.js). This creates a tab
-group on a new profile the way the tab menu does, with the engine's own network log on from the first moment of the
-process (as test_new_profile_connections does), and sees no tip and no request for the artwork. The control turns the
-switch on in the same window and sees both, so the check cannot pass on an engine where the tip never comes.
+FeatureCalloutMessages.sys.mjs). In the Nulavio build that switch is off twice: the DisableFirefoxStudies policy the
+build ships (distribution/policies.json) sets it off and locks it, and firefox-branding.js makes off its default, which
+is what is left if the policy ever goes. test_00 reads the switch; test_01 creates a tab group on a new profile the way
+the tab menu does, with the engine's own network log on from the first moment of the process (as
+test_new_profile_connections does), and sees no tip and no request for the artwork. Its control turns the switch on in
+the same window and sees both, so the check cannot pass on an engine where the tip never comes.
 """
 
 from __future__ import annotations
@@ -116,12 +118,21 @@ class FeatureCalloutsTest(unittest.TestCase):
         addresses, _ = connections.read_log(self.session.tmp)
         return sorted({connections.without_query(a) for a in addresses if a.startswith(ARTWORK)})
 
+    def ready(self) -> dict:
+        """The engine is ready to answer: it listens for new tab groups and holds the tip (a wait for that state, so a
+        group made before the messaging system starts cannot pass for one it saw)."""
+        state = harness.wait_until(lambda: (s := self.state())["listening"] and TIP in s["tips"] and s, 60)
+        self.assertTrue(state, self.state())
+        return state
+
+    def test_00_the_switch_is_off_and_the_studies_policy_locks_it(self):
+        state = self.ready()
+        self.assertEqual(state["switch"], {"value": False, "user": False, "locked": True})
+        policies = self.m.chrome("return Services.policies.getActivePolicies()?.DisableFirefoxStudies ?? null;")
+        self.assertIs(policies, True, "the policy that locks the switch (scripts/build/make_distribution.py)")
+
     def test_01_a_new_tab_group_brings_no_tip_and_no_request_for_mozillas_artwork(self):
-        # The engine is ready to answer: it listens for new tab groups and holds the tip (a wait for that state, so a
-        # group made before the messaging system starts cannot pass for one it saw).
-        ready = harness.wait_until(lambda: (s := self.state())["listening"] and TIP in s["tips"] and s, 60)
-        self.assertTrue(ready, self.state())
-        self.assertEqual(ready["switch"], {"value": False, "user": False, "locked": False}, "a default, not locked")
+        self.ready()  # the switch itself is test_00's
         self.m.chrome(WATCH)
         first = self.create_group("Trabalho")
         self.assertIsNone(first["routed"], "the messaging system showed a tip for the first tab group")
@@ -129,9 +140,11 @@ class FeatureCalloutsTest(unittest.TestCase):
         self.assertIsNone(state["callout"], state)
         self.assertNotIn(TIP, state["shown"])
         self.assertEqual(self.artwork_asked(), [], "Mozilla's CDN was asked for the tip's artwork")
-        # Control: the switch on, as Settings writes it, and the next group brings the tip with Mozilla's artwork
-        # and its request. That is what a new profile of the 161 engine did with the engine's default.
-        self.m.chrome("Services.prefs.setBoolPref(arguments[0], true);", [SWITCH])
+        # Control: the switch on (unlocked first where the policy locks it, test-only), and the next group brings the
+        # tip with Mozilla's artwork and its request: what a new profile of the 161 engine does with the engine's
+        # default and no policy.
+        locked = state["switch"]["locked"]
+        self.m.chrome("Services.prefs.unlockPref(arguments[0]); Services.prefs.setBoolPref(arguments[0], true);", [SWITCH])
         try:
             second = self.create_group("Estudos")
             self.assertEqual(second["routed"], TIP, second)
@@ -141,7 +154,10 @@ class FeatureCalloutsTest(unittest.TestCase):
             asked = harness.wait_until(self.artwork_asked, 15)
             self.assertTrue(asked, "the engine's network log did not show the artwork the tip loads")
         finally:
-            self.m.chrome("Services.prefs.clearUserPref(arguments[0]);", [SWITCH])
+            self.m.chrome(
+                "Services.prefs.clearUserPref(arguments[0]); if (arguments[1]) Services.prefs.lockPref(arguments[0]);",
+                [SWITCH, locked],
+            )
 
 
 if __name__ == "__main__":
