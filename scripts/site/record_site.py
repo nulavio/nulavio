@@ -36,10 +36,11 @@ captures, other hosts' fonts) is in docs/design/site-redesign.md.
 
 What a recording changes, all listed in the manifest: the window's ``remotecontrol`` attribute is
 removed (the striped address bar of automation); the cursor is drawn afterwards, because a headless
-window has no pointer, so hover states are not shown; the time until the window a scene cuts to is ready
-to film is cut (a cut between windows says so, with the real seconds): a new instance starting and the
-script preparing its window, or one already running opening the link and a fixed pause after the page
-loads (``link-routed``); typing is shown at a fixed pace, one frame per key really typed.
+window has no pointer, so hover states are not shown; from the last frame of the window a scene cuts from
+until the window it cuts to is ready to film, nothing is recorded (a cut between windows says so, with the
+real seconds counted from that last frame): the rest of a new instance starting and the script preparing
+its window, or of one already running opening the link, and a fixed pause after the page loads
+(``link-routed``); typing is shown at a fixed pace, one frame per key really typed.
 """
 
 from __future__ import annotations
@@ -91,11 +92,13 @@ DOM_CHANGES = ["removed the remotecontrol attribute from each browser window's r
 EDITS = [
     "cursor and click ripples drawn on the frames afterwards (a headless window has no pointer; hover states are not shown)",
     "typing shown at a fixed pace of one frame per key, each key really typed into the field",
-    "while the window the video cuts to is not ready to film, nothing is recorded: either a new instance starting and"
-    " the script preparing its window (its size, layout and fixture pages, then a check of at least 2 s that the"
-    " content blocker was ready), or one already running opening the link, the script selecting that tab and a fixed"
-    f" {ROUTED_SETTLE} s pause after the page loads, so the tab's loading animation is over; the video cuts to that"
-    " window once it is ready, and the real seconds cut include all of this",
+    "after the last frame of the window the video cuts from, nothing is recorded until the window it cuts to is ready"
+    " to film; the real seconds cut count from that last frame and hold what comes after it: either the rest of a new"
+    " instance starting and the script preparing its window (its size, layout and fixture pages, then at least 2 s in"
+    " which the content blocker's button did not mark a tab as loaded before the blocker was ready, which does not"
+    " show that the blocker is installed), or the rest of one already running opening the link, the script selecting"
+    f" that tab and a fixed {ROUTED_SETTLE} s pause after the page loads, so the tab's loading animation is over; what"
+    " the browser did while the window the video cuts from was still filmed is not in them",
     f"the last frame is held for {TAIL} s at the end",
 ]
 
