@@ -74,6 +74,9 @@ export const WATCHED_PREFS = Object.freeze([
   "media.peerconnection.enabled",
 ]);
 
+/* The two default search engines the Guard follows: the regular one and the one for private windows. */
+const SEARCH_DEFAULTS = Object.freeze(["default", "private"]);
+
 /* Kinds of findings and whether the browser can undo them. */
 export const UNDOABLE = Object.freeze(new Set(["extension-added", "extension-changed", "pref-changed", "root-added", "module-added", "search-changed"]));
 
@@ -498,12 +501,18 @@ class Guard {
     if (before.userJs !== after.userJs && after.userJs !== null) {
       add(before.userJs === null ? "userjs-added" : "userjs-changed", "user.js", {});
     }
-    const searchThen = before.search ?? {};
-    const searchNow = after.search ?? {};
-    if (after.search && (searchThen.default !== searchNow.default || searchThen.private !== searchNow.private)) {
-      add("search-changed", "search", { before: before.search ?? null, after: after.search });
+    // A record without the search defaults (a record from before this check, or one whose first start could not
+    // read them) is not compared against: there is no previous engine to name or put back (#896). The record takes
+    // them at this start.
+    if (before.search && after.search && Guard.searchChanges(before.search, after.search).length) {
+      add("search-changed", "search", { before: before.search, after: after.search });
     }
     return findings;
+  }
+
+  /** Which of the two search defaults differ between two readings: "default" (the regular one), "private". */
+  static searchChanges(before, after) {
+    return SEARCH_DEFAULTS.filter(part => (before?.[part] ?? null) !== (after?.[part] ?? null));
   }
 
   /**
@@ -654,7 +663,9 @@ class Guard {
     const seen = new Set(fresh.map(f => f.id));
     const at = new Date().toISOString();
     const pending = [...saved.pending.filter(f => !seen.has(f.id)), ...fresh.map(f => ({ ...f, at }))];
-    this.#state = { snapshot: now, pending, expected, owned: ownedNow };
+    // Search defaults that could not be read now leave the record's as they were: a change is then reported against
+    // them at the next start that reads them, with the previous engines to put back (#896).
+    this.#state = { snapshot: { ...now, search: now.search ?? saved.snapshot.search ?? null }, pending, expected, owned: ownedNow };
     await this.#save();
     this.#lookAgainIfAsked();
     return { state: pending.length ? "changed" : "clean", findings: this.findings() };
@@ -867,7 +878,7 @@ class Guard {
       }
     }
     // The prefs, and what Nulavio holds as its own among them, in one step (as #taken).
-    this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search };
+    this.#state.snapshot = { ...this.#state.snapshot, extensions, prefs: this.#prefs(), search: search ?? this.#state.snapshot.search ?? null };
     this.#state.owned = { ...this.#owned };
     this.#state.expected = expected;
     await this.#save();
@@ -961,17 +972,37 @@ class Guard {
         return;
       }
       case "search-changed": {
+        // Each of the two defaults that changed is put back on its own (#896). One whose previous engine is no longer
+        // installed (or that had none) stays as it is: the finding stays, saying only that change, and the page says
+        // which default could not be put back. Undone only when every default that changed is back.
         const before = finding.before ?? {};
-        const engine = before.default ? Services.search.getEngineByName(before.default) : null;
-        const privateEngine = before.private ? Services.search.getEngineByName(before.private) : null;
-        if (!engine && !privateEngine) {
+        const back = [];
+        const left = [];
+        for (const part of Guard.searchChanges(before, finding.after)) {
+          const engine = before[part] ? Services.search.getEngineByName(before[part]) : null;
+          if (engine) {
+            back.push([part, engine]);
+          } else {
+            left.push(part);
+          }
+        }
+        if (left.length && !back.length) {
           throw new GuardError("engine-gone");
         }
-        if (engine) {
-          await Services.search.setDefault(engine, Ci.nsISearchService.CHANGE_REASON_USER);
+        for (const [part, engine] of back) {
+          if (part === "default") {
+            await Services.search.setDefault(engine, Ci.nsISearchService.CHANGE_REASON_USER);
+          } else {
+            await Services.search.setDefaultPrivate(engine, Ci.nsISearchService.CHANGE_REASON_USER);
+          }
         }
-        if (privateEngine) {
-          await Services.search.setDefaultPrivate(privateEngine, Ci.nsISearchService.CHANGE_REASON_USER);
+        if (left.length) {
+          const after = { ...finding.after, ...Object.fromEntries(back.map(([part]) => [part, before[part]])) };
+          this.#state.pending = this.#state.pending.map(f => (f.id === finding.id ? { ...f, after } : f));
+          // The record takes the defaults as they are now, as after a full undo: at the next start this finding
+          // stays the one reported, not a new one from the default just put back.
+          await this.#refresh();
+          throw new GuardError(left[0] === "default" ? "engine-gone-default" : "engine-gone-private");
         }
         return;
       }

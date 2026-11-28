@@ -810,6 +810,90 @@ class GuardTest(unittest.TestCase):
         self.assertIsNotNone(found, self.guard("return G.findings();"))
         self.assertEqual((found["before"], found["after"]), (earlier, current))
 
+    def test_08_an_engine_that_cannot_be_put_back_stays_reported(self):
+        """#896: "Restore previous engine" with one of the two previous engines gone said "Undone." and took the change
+        that stayed into the record. The other one is put back, the card stays with the change that is left, and the
+        page says which default could not be put back. A record without search defaults is not compared against."""
+        words = json.loads((harness.ROOT / "browser" / "shell" / "_locales" / "pt_BR" / "messages.json").read_text("utf-8"))
+        say = lambda key: words[key]["message"]  # noqa: E731
+        gone = "Nulavio Guard Test Gone"
+        card_id = "search-changed:search"
+        record = self.profile / "nulavio-guard.json"
+        defaults = (
+            "await Services.search.init(); return {default: (await Services.search.getDefault()).name,"
+            " private: (await Services.search.getDefaultPrivate()).name};"
+        )
+        engines = self.guard("await Services.search.init(); return (await Services.search.getVisibleEngines()).map(e => e.name);")
+        now = self.guard(defaults)
+        self.assertGreaterEqual(len(engines), 2, engines)
+        first = dict(now)  # put back at the end
+        private = next(name for name in engines if name != now["private"])
+
+        def start_with(search) -> None:
+            """The record's search defaults set to `search` in the closed profile, as Guard's record of the last run."""
+            self.session.stop()
+            data = json.loads(record.read_text())
+            data["snapshot"]["search"] = search
+            data["pending"] = [f for f in data["pending"] if f["kind"] != "search-changed"]
+            record.write_text(json.dumps(data))
+            self.m = type(self).m = self.session.restart()
+
+        def card() -> dict | None:
+            return self.cards().get(card_id)
+
+        def undo(expected: str) -> None:
+            self.m.execute(
+                "const b = document.querySelector(`#findings > li[data-finding-id='${arguments[0]}'] [data-action='undo']`);"
+                "document.getElementById('status').textContent = ''; b.focus(); b.click();",
+                [card_id],
+            )
+            status = lambda: self.m.execute("return document.getElementById('status').textContent;")  # noqa: E731
+            self.assertTrue(harness.wait_until(lambda: status() == expected, timeout=20), status())
+
+        def focused_on_undo() -> bool:
+            return self.m.execute(
+                "const a = document.activeElement;"
+                "return a?.dataset?.action === 'undo' && a.closest('#findings > li')?.dataset.findingId === arguments[0];",
+                [card_id],
+            )
+
+        # -- the previous regular engine is gone, the private one is installed --
+        start_with({"default": gone, "private": private})
+        self.open_review()
+        self.assertEqual(card()["detail"], f"{gone} → {now['default']}\nJanelas privativas: {private} → {now['private']}")
+        undo(say("err_engine_gone_default"))
+        self.assertEqual(self.guard(defaults), {"default": now["default"], "private": private})
+        # The card stays, with the change that is left, and the keyboard where it was.
+        self.assertTrue(harness.wait_until(lambda: (card() or {}).get("detail") == f"{gone} → {now['default']}", 10), card())
+        self.assertTrue(focused_on_undo())
+        found = next(f for f in self.guard("return G.findings();") if f["kind"] == "search-changed")
+        self.assertEqual(found["after"], {"default": now["default"], "private": private})
+        undo(say("err_engine_gone"))
+        self.assertIsNotNone(card())
+        self.click(card_id, "keep")
+
+        # -- the previous private engine is gone, the regular one is installed --
+        now = self.guard(defaults)
+        regular = next(name for name in engines if name != now["default"])
+        start_with({"default": regular, "private": gone})
+        self.open_review()
+        undo(say("err_engine_gone_private"))
+        self.assertEqual(self.guard(defaults), {"default": regular, "private": now["private"]})
+        want = f"Janelas privativas: {gone} → {now['private']}"
+        self.assertTrue(harness.wait_until(lambda: (card() or {}).get("detail") == want, 10), card())
+        self.click(card_id, "keep")
+
+        # -- a record whose search defaults could not be read at its start: nothing to compare against --
+        start_with(None)
+        self.assertNotIn("search-changed", [f["kind"] for f in self.guard("return (await G.check()).findings;")])
+        self.assertTrue(harness.wait_until(lambda: json.loads(record.read_text())["snapshot"]["search"] is not None, 20))
+        self.guard(
+            "const S = Services.search, why = Ci.nsISearchService.CHANGE_REASON_USER;"
+            "await S.setDefault(S.getEngineByName(args[0]), why); await S.setDefaultPrivate(S.getEngineByName(args[1]), why);",
+            first["default"],
+            first["private"],
+        )
+
 
 def tearDownModule():
     shutil.rmtree(FETCHED, ignore_errors=True)

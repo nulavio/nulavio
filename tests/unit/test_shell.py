@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "build"))
@@ -930,6 +931,104 @@ class GuardModuleTest(unittest.TestCase):
         self.assertIn("browser.runtime.onStartup.addListener", background)  # the event page starts with the browser
         self.assertIn('addEventListener("click"', review)
         self.assertEqual(review.count("guard.resolve("), 1)
+
+
+@requires_node
+class GuardSearchUndoTest(unittest.TestCase):
+    """#896: "Restore previous engine" put back each of the two previous engines (regular and private) still
+    installed and failed only when neither was, so with one gone the page said "Undone." and the change that stayed
+    was no longer reported. Each default that changed is now put back on its own; one that cannot be stays reported
+    and the page says which. A record without search defaults is not compared against (OpenCodeReview round 2 on
+    #876). tests/lib/guard_search_undo_driver.mjs runs the module against a stand-in search service."""
+
+    WAS: ClassVar[dict] = {"default": "A", "private": "B"}
+    NOW: ClassVar[dict] = {"default": "C", "private": "D"}
+
+    @classmethod
+    def setUpClass(cls):
+        done = subprocess.run(
+            [
+                "node",
+                str(ROOT / "tests" / "lib" / "guard_search_undo_driver.mjs"),
+                str(SHELL / "modules" / "NulavioGuard.sys.mjs"),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=True,
+        )
+        cls.out = json.loads(done.stdout)
+
+    def test_both_previous_engines_are_put_back(self):
+        case = self.out["both"]
+        self.assertEqual(case["found"], {"before": self.WAS, "after": self.NOW})
+        self.assertEqual(case["clicks"][0]["left"], 0)
+        self.assertEqual(case["clicks"][0]["engine"], self.WAS)
+        self.assertIsNone(case["clicks"][0]["finding"])
+
+    def test_the_regular_engine_gone_is_still_reported(self):
+        case = self.out["regularGone"]
+        self.assertEqual(case["found"], {"before": self.WAS, "after": self.NOW}, "the case was not set up")
+        first, second = case["clicks"]
+        # The private one is put back; the regular one stays as it was changed, and the page says so.
+        self.assertEqual(first["error"], "engine-gone-default")
+        self.assertEqual(first["engine"], {"default": "C", "private": "B"})
+        self.assertEqual(first["set"], [["private", "B", 1]])
+        # The finding stays, saying only the change that is left, in the record as on the page.
+        left = {"before": self.WAS, "after": {"default": "C", "private": "B"}}
+        self.assertEqual(first["finding"], left)
+        self.assertEqual(first["saved"], left)
+        # Asked again: nothing more can be put back, and nothing is changed.
+        self.assertEqual(second["error"], "engine-gone")
+        self.assertEqual(second["set"], [])
+        self.assertEqual(second["finding"], left)
+
+    def test_the_private_engine_gone_is_still_reported(self):
+        case = self.out["privateGone"]
+        self.assertEqual(case["found"], {"before": self.WAS, "after": self.NOW}, "the case was not set up")
+        first, second = case["clicks"]
+        self.assertEqual(first["error"], "engine-gone-private")
+        self.assertEqual(first["engine"], {"default": "A", "private": "D"})
+        self.assertEqual(first["set"], [["default", "A", 1]])
+        left = {"before": self.WAS, "after": {"default": "A", "private": "D"}}
+        self.assertEqual(first["finding"], left)
+        self.assertEqual(first["saved"], left)
+        self.assertEqual(second["error"], "engine-gone")
+        self.assertEqual(second["finding"], left)
+
+    def test_neither_engine_installed_changes_nothing(self):
+        click = self.out["neither"]["clicks"][0]
+        self.assertEqual((click["error"], click["set"], click["engine"]), ("engine-gone", [], self.NOW))
+        self.assertEqual(click["finding"], {"before": self.WAS, "after": self.NOW})
+
+    def test_only_the_default_that_changed_is_touched(self):
+        gone = self.out["privateOnlyGone"]["clicks"][0]
+        self.assertEqual((gone["error"], gone["set"]), ("engine-gone", []))
+        there = self.out["privateOnly"]["clicks"][0]
+        self.assertEqual((there["left"], there["set"]), (0, [["private", "B", 1]]))
+
+    def test_a_record_without_search_defaults_is_not_compared_against(self):
+        for name in ("recordNull", "recordWithout"):
+            with self.subTest(name):
+                case = self.out[name]
+                self.assertIsNone(case["found"])
+                self.assertEqual(case["record"], self.NOW, "the record takes the defaults it can read now")
+
+    def test_defaults_that_cannot_be_read_leave_the_record_as_it_was(self):
+        case = self.out["unreadableNow"]
+        self.assertIsNone(case["found"])
+        self.assertEqual(case["record"], self.WAS)
+
+    def test_the_card_names_the_private_default_and_the_page_shows_what_is_left(self):
+        review = (SHELL / "guard" / "review.js").read_text(encoding="utf-8")
+        self.assertIn('t("guardSearchPrivate", [change("private")])', review)
+        catch = review[review.index('  } catch (e) {\n    announce(errorText(e), "error");') :]
+        self.assertIn("await redraw();", catch[: catch.index("\n}\n")])
+        for name in ("en", "pt_BR"):
+            words = locale(name)
+            for key in ("err_engine_gone_default", "err_engine_gone_private", "guardSearchPrivate"):
+                with self.subTest(locale=name, key=key):
+                    self.assertTrue(words[key]["message"].strip())
 
 
 class LocaleKeysTest(unittest.TestCase):

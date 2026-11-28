@@ -79,12 +79,19 @@ function describe(f) {
     case "userjs-added":
     case "userjs-changed":
       return { title: t(f.kind === "userjs-added" ? "guardUserJsAdded" : "guardUserJsChanged"), detail: "user.js", why: t("guardUserJsWhy") };
-    case "search-changed":
-      return {
-        title: t("guardSearchChanged"),
-        detail: `${value(f.before?.default)} → ${value(f.after?.default)}`,
-        why: t("guardSearchWhy"),
-      };
+    case "search-changed": {
+      // Each default that changed, the one for private windows named as such (#896): a change of that one alone
+      // read as the regular engine going to itself.
+      const change = part => `${value(f.before?.[part])} → ${value(f.after?.[part])}`;
+      const lines = [];
+      if (f.before?.default !== f.after?.default) {
+        lines.push(change("default"));
+      }
+      if (f.before?.private !== f.after?.private) {
+        lines.push(t("guardSearchPrivate", [change("private")]));
+      }
+      return { title: t("guardSearchChanged"), detail: lines.join("\n") || change("default"), why: t("guardSearchWhy") };
+    }
     default:
       return { title: f.kind, detail: f.key, why: "" };
   }
@@ -118,6 +125,9 @@ async function act(action, finding) {
     announce(left.length ? said : `${said} ${t("guardAllReviewed")}`); // the last one: the review is over
   } catch (e) {
     announce(errorText(e), "error");
+    // An undo that could do only part of it (one of the two search engines, #896) leaves its finding saying what is
+    // still changed: the card says that now, not what it said before the click.
+    await redraw();
   }
 }
 
@@ -190,7 +200,9 @@ document.getElementById("close").addEventListener("click", () => closeOwnTab());
 // #351: a finding added or updated while the page is open (the engine takes a replaced extension in a moment after
 // the start-up check, and the finding then says its version) is shown without reopening the page. The keyboard
 // stays where it was: on the same control of the same finding when it is still there.
-guard.onChanged.addListener(async () => {
+guard.onChanged.addListener(() => redraw());
+
+async function redraw() {
   if (acting) {
     return;
   }
@@ -222,7 +234,7 @@ guard.onChanged.addListener(async () => {
       target.focus();
     }
   }
-});
+}
 
 localize();
 guard
