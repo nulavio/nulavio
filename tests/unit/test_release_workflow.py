@@ -262,7 +262,7 @@ if {"r2-key-id", "r2-secret"} & set(os.environ.values()):
 RUNBOOK_CURL = """#!/bin/sh
 # Stand-in for curl ... --max-filesize <n>M -o <file> <url>: the URL's path from FAKE_CDN when it holds it (a cached
 # copy), else from FAKE_BUCKET; curl's 22 (a 404), or its 63 for a file past --max-filesize. curl --version prints
-# FAKE_CURL_VERSION (8.18.0, Fedora 44's, by default).
+# FAKE_CURL_VERSION (8.18.0, Fedora 44's, by default) and exits with FAKE_CURL_VERSION_STATUS (0 by default).
 exec python3 -I -c '
 import json, os, shutil, sys
 LEAK
@@ -274,7 +274,7 @@ if args == ["--version"]:
     print(f"curl {version} (x86_64-redhat-linux-gnu) libcurl/{version} OpenSSL/3.5.4 zlib/1.3.1")
     print("Release-Date: 2026-01-07")
     print("Protocols: file ftp ftps http https")
-    sys.exit(0)
+    sys.exit(int(os.environ.get("FAKE_CURL_VERSION_STATUS", "0")))
 if os.environ.get("FAKE_FSIZE_LOG"):
     import resource
     with open(os.environ["FAKE_FSIZE_LOG"], "a") as log:
@@ -535,11 +535,22 @@ class FailedPublishRunbookTest(unittest.TestCase):
     def test_curl_before_8_4_stops_it_before_any_download(self):
         # #777: before 8.4.0, --max-filesize does not bound a body sent without Content-Length (curl's man page), so
         # the 1 MiB and 8 MiB bounds would rest on ulimit -f alone. Debian 12 ships 7.88.1.
-        for version in ("8.3.0", "7.88.1", "8", "not-a-version"):
+        # A version without its three parts is not read as one (OpenCodeReview, #923).
+        for version in ("8.3.0", "7.88.1", "8", "8.4", "08.4.0", "not-a-version"):
             with self.subTest(version=version):
                 self.env["FAKE_CURL_VERSION"] = version
                 out = self.run_block()
                 self.assertIn(f"curl {version}: the block needs curl 8.4.0 or later", out.stderr)
+                self.assertEqual(self.curls(), [])
+                self.assert_stopped_before_any_copy(out)
+
+    def test_a_curl_version_probe_that_fails_stops_it_before_any_download(self):
+        # #923: a curl that prints a good version and then fails (or one that is missing: 127) is not trusted.
+        for status in ("1", "127"):
+            with self.subTest(status=status):
+                self.env["FAKE_CURL_VERSION_STATUS"] = status
+                out = self.run_block()
+                self.assertIn("curl (no version): the block needs curl 8.4.0 or later", out.stderr)
                 self.assertEqual(self.curls(), [])
                 self.assert_stopped_before_any_copy(out)
 
@@ -629,6 +640,17 @@ class FailedPublishRunbookTest(unittest.TestCase):
                       [[a if a.startswith("s3://") else self.LOCAL for a in c["args"][9:]] for c in self.calls()])  # fmt: skip
         self.assertEqual((self.served / "repomd.xml").read_bytes(), self.new)
         self.assertEqual(len(self.curls()), 6)  # the same HTTPS checks
+
+    def test_a_failed_compare_of_the_served_index_stops_it_before_any_write(self):
+        # #923: cmp's 2 (it could not read a file) is neither "the same" nor "different": nothing is written.
+        cmp = shutil.which("cmp")
+        (self.tmp / "bin" / "cmp").write_text(
+            f'#!/bin/sh\ncase "$3" in */r2/served.xml) echo "cmp: read error" >&2; exit 2;; esac\nexec {cmp} "$@"\n'
+        )
+        (self.tmp / "bin" / "cmp").chmod(stat.S_IRWXU)
+        out = self.run_block()
+        self.assertIn("cmp failed (2) on R2's served repomd.xml: nothing written", out.stderr)
+        self.assert_stopped_before_any_write(out)
 
     def test_a_served_index_that_lists_another_revision_fails_it(self):
         other, other_sig, href, primary = repodata("the failed run's, listing another", "160.0.1-0.3")

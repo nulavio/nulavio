@@ -316,7 +316,7 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    - Unless R2 already serves that pair (an earlier paste wrote it, then stopped at the CDN), it uploads it onto the served keys, in the upload's order (the signature, then `repomd.xml`). Either way it reads the served pair back from R2.
    - What `https://packages.nulavio.net` now serves, as dnf and the build job read it: the same pair, which verifies, naming a primary file that lists that revision.
    - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file over HTTPS (`curl --max-filesize`, which bounds a body sent without `Content-Length` only from curl 8.4.0 on, so the block requires that version before its first download; Fedora 44 and Ubuntu 24.04 ship later ones), and 32 MiB for any file the block writes, what `aws` reads from R2 and the decompressed primary file included (`ulimit -f`; a lower limit the shell already has stays).
-   - Nothing in the bucket serialises the block with a publish. It compares R2's served signature with the revision's before it writes, so a newer publish stops it there, but a newer pair uploaded between that read and the block's upload would be rolled back. What keeps them apart is the `release` environment's approval, which a new run's upload waits for: do not approve a run while the block runs. A re-run of a `publish` job asks for no approval (#334): do not start one meanwhile either.
+   - Nothing in the bucket serialises the block with a publish. It compares R2's served signature with the revision's before it writes, so a newer publish stops it there, but a newer pair uploaded between that read and the block's upload would be rolled back. What keeps them apart is the `release` environment's approval, which a new run's upload waits for, so before pasting check that no run of `release.yml` is in progress or queued (Actions → Release): a run whose `sign` job was approved earlier still uploads, since its `publish` job asks for no approval (#334). Until the block ends, do not approve a run, re-run a `publish` job or run `upload_repo.sh` by hand.
 
    ```sh
    (
@@ -330,10 +330,11 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    soft=$(ulimit -S -f)  # a lower limit the shell already has stays: it may not be raised
    if [[ $soft == unlimited ]] || (( soft > 32768 )); then ulimit -f 32768; fi
    # Before curl 8.4.0, --max-filesize does not bound a body sent without Content-Length (curl's man page).
-   read -r _ curl_version _ < <(curl --version)
-   IFS=. read -r major minor _ <<< "$curl_version"
-   if ! [[ $major =~ ^[0-9]+$ && $minor =~ ^[0-9]+$ ]] || (( major < 8 || (major == 8 && minor < 4) )); then
-       echo "curl $curl_version: the block needs curl 8.4.0 or later, whose --max-filesize bounds every download" >&2
+   probe=$(curl --version) || probe=  # a curl that fails here, or is missing, gets no download
+   read -r _ curl_version _ <<< "$probe"
+   v='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.[0-9]+'  # major.minor.patch, as curl prints it
+   if ! [[ $curl_version =~ $v ]] || (( BASH_REMATCH[1] < 8 || (BASH_REMATCH[1] == 8 && BASH_REMATCH[2] < 4) )); then
+       echo "curl ${curl_version:-(no version)}: the block needs curl 8.4.0 or later, whose --max-filesize bounds every download" >&2
        exit 1
    fi
    tmp=$(mktemp -d)
@@ -391,11 +392,16 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    lists "$tmp/r2"
    # Those verified bytes onto the served keys, in the upload's order: the signature, then repomd.xml. The served
    # signature already is the revision's (cmp above): when the served repomd.xml is too, an earlier paste wrote them.
-   if cmp -s "$tmp/r2/repomd.xml" "$tmp/r2/served.xml"; then
+   differ=0
+   cmp -s "$tmp/r2/repomd.xml" "$tmp/r2/served.xml" || differ=$?
+   if (( differ == 0 )); then
        echo "R2 already serves $rev's pair: nothing to upload"
-   else
+   elif (( differ == 1 )); then
        r2 "$tmp/r2/repomd.xml.asc" "$bucket/repodata/repomd.xml.asc"
        r2 "$tmp/r2/repomd.xml" "$bucket/repodata/repomd.xml"
+   else  # cmp could not read them: neither "the same" nor "different"
+       echo "cmp failed ($differ) on R2's served repomd.xml: nothing written" >&2
+       exit 1
    fi
    r2 "$bucket/repodata/repomd.xml.asc" "$tmp/after/repomd.xml.asc"
    r2 "$bucket/repodata/repomd.xml" "$tmp/after/repomd.xml"
