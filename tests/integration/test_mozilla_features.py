@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "lib"))
 import harness
+from marionette import MarionetteError
 
 GENAI = 'ChromeUtils.importESModule("moz-src:///browser/components/genai/GenAI.sys.mjs").GenAI'
 
@@ -179,6 +180,9 @@ class MozillaFeaturesTest(unittest.TestCase):
         its artwork in the same window, so the check cannot pass on a tab list where the card never renders."""
         name = "sidebar.verticalTabs.dragToPinPromo.dismissed"
         closed = {"value": True, "user": False}
+        shot = "new-window-tab-list.png"
+        # A run that fails before the shot leaves no older one behind to be read as its evidence.
+        (harness.artifacts_dir() / "mozilla-features" / shot).unlink(missing_ok=True)
         first = self.m.chrome("return String(window.browsingContext.id);")
         # D-UX2: a new profile starts in Lateral, the vertical tab list with the launcher expanded, where the engine
         # shows the card.
@@ -191,7 +195,7 @@ class MozillaFeaturesTest(unittest.TestCase):
                 self.pin_promo(opened),
                 {"vertical": True, "expanded": True, "pinned": 0, "shown": False, "cards": 0, "images": [], "dismissed": closed},
             )
-            self.save_window_shot(opened, "new-window-tab-list.png")
+            self.save_window_shot(opened, shot)
             # An engine before 161 (a development package: a published 160 build with this tree's Shell) hides the card
             # itself while Nova is on, so the control cannot show it there. This tree pins 161: on its builds the
             # control always runs.
@@ -226,9 +230,15 @@ class MozillaFeaturesTest(unittest.TestCase):
         def find() -> str | None:
             # Ends switched to the handle it returns.
             for handle in self.m.window_handles():
-                self.m.switch_to(handle)
-                if self.m.chrome("return String(window.browsingContext.id) === arguments[0];", [window_id]):
-                    return handle
+                try:
+                    self.m.switch_to(handle)
+                    if self.m.chrome("return String(window.browsingContext.id) === arguments[0];", [window_id]):
+                        return handle
+                except MarionetteError as error:
+                    # A tab that closed after the handles were listed: keep looking; the assertion below names a
+                    # target that is gone.
+                    if "no such window" not in str(error):
+                        raise
             return None
 
         try:
