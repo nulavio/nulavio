@@ -309,13 +309,14 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
 1. **Both repositories serve that revision** (the upload finished; a later step failed). A new run builds the next revision by itself. `whats_new.py require` then asks for `packaging/whats-new/<firefox>-<next release>.json`: rename the record (and its `version`) in a pull request before starting the run.
 2. **dnf serves it, APT does not** (the APT upload failed). As in 1: a new run reads the dnf index too and builds the next revision by itself (#723); rename the whats-new record the same way. The RPM of the failed run stays in the bucket, unlisted once the new run's dnf metadata is up: people may have installed it, so it is never deleted or replaced.
 3. **Neither serves it** (the upload stopped before the dnf metadata). A new run picks the same revision and stops at the upload. Those packages are in no served metadata: the maintainer deletes them from the bucket (`nulavio-packages`, `rpm/x86_64/` and `apt/pool/main/n/nulavio/`, after checking that neither the primary file `rpm/repodata/repomd.xml` names nor `apt/dists/stable/main/binary-amd64/Packages` lists them; the failed run may have uploaded a newer primary file that does list them but is not the one `repomd.xml` names), then re-runs the new run's `publish` job.
-4. **The build job stops at the signature of `repomd.xml`** (`repomd.xml.asc is not a good signature`): the upload stopped between `repomd.xml.asc` and `repomd.xml`, so the bucket serves a new signature beside the old file. dnf refuses the repository too (`repo_gpgcheck=1`), so it is urgent. The route of state 3 does not work here: a new run stops at that signature before it can upload a pair of its own, and the build job does not fall back to another pair (it stays fail-closed). Re-run the failed `publish` job while it can; otherwise copy the signed pair `upload_repo.sh` left under the failed run's revision onto the served keys (#740). From the repository's root, paste the block below with `<firefox>-<release>` set to the failed run's revision (the `v<firefox>-<release>` its `publish` log names) and `<account id>` to the Cloudflare account id. It needs `curl`, `python3`, `zstd` and the AWS CLI. It runs in a subshell that stops at the first failure, so nothing is written unless every check before it passed:
+4. **The build job stops at the signature of `repomd.xml`** (`repomd.xml.asc is not a good signature`): the upload stopped between `repomd.xml.asc` and `repomd.xml`, so the bucket serves a new signature beside the old file. dnf refuses the repository too (`repo_gpgcheck=1`), so it is urgent. The route of state 3 does not work here: a new run stops at that signature before it can upload a pair of its own, and the build job does not fall back to another pair (it stays fail-closed). Re-run the failed `publish` job while it can; otherwise copy the signed pair `upload_repo.sh` left under the failed run's revision onto the served keys (#740). From the repository's root, paste the block below with `<firefox>-<release>` set to the failed run's revision (the `v<firefox>-<release>` its `publish` log names) and `<account id>` to the Cloudflare account id. It needs `curl` 8.4.0 or later, `python3`, `zstd` and the AWS CLI. It runs in a subshell that stops at the first failure, so nothing is written unless every check before it passed:
    - Over HTTPS, before it asks for anything: the revision's pair verifies with the release key, and the served signature is that run's.
    - It then asks for the R2 upload token (`nulavio-packages-upload`, the key pair the `release-upload` environment holds as `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`; GitHub does not show a secret again, so use the maintainer's own copy of that token), with `read -rs`, into shell variables that are never exported (it turns `set -a` off first: left on, it would export them). Each `aws` call gets it from `r2()`, a subshell that exports it and becomes `aws`: it is never on a command line, in the shell history, or in the environment of `curl`, `python3` or `zstd`.
    - The live objects in R2, read with that token, pass the same checks: a CDN cache can serve other bytes than the bucket holds. The primary file that pair names, read from R2 too and checked against its checksum, lists that revision: a pair that lists another one, or names a primary file R2 does not hold, is never written.
-   - It uploads that verified pair onto the served keys, in the upload's order (the signature, then `repomd.xml`), and reads the served pair back from R2.
+   - Unless R2 already serves that pair (an earlier paste wrote it, then stopped at the CDN), it uploads it onto the served keys, in the upload's order (the signature, then `repomd.xml`). Either way it reads the served pair back from R2.
    - What `https://packages.nulavio.net` now serves, as dnf and the build job read it: the same pair, which verifies, naming a primary file that lists that revision.
-   - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file over HTTPS (`curl --max-filesize`), and 32 MiB for any file the block writes, what `aws` reads from R2 and the decompressed primary file included (`ulimit -f`; a lower limit the shell already has stays).
+   - Every download is bounded as in the build job: 60 s a transfer and 180 s with retries for `curl`, 30 s to connect and 60 s a read for `aws`, 1 MiB for the pair and 8 MiB for the primary file over HTTPS (`curl --max-filesize`, which bounds a body sent without `Content-Length` only from curl 8.4.0 on, so the block requires that version before its first download; Fedora 44 and Ubuntu 24.04 ship later ones), and 32 MiB for any file the block writes, what `aws` reads from R2 and the decompressed primary file included (`ulimit -f`; a lower limit the shell already has stays).
+   - Nothing in the bucket serialises the block with a publish. It compares R2's served signature with the revision's before it writes, so a newer publish stops it there, but a newer pair uploaded between that read and the block's upload would be rolled back. What keeps them apart is the `release` environment's approval, which a new run's upload waits for: do not approve a run while the block runs. A re-run of a `publish` job asks for no approval (#334): do not start one meanwhile either.
 
    ```sh
    (
@@ -328,6 +329,13 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    fpr=298A9093BAABB26F79BB29F4BF47E5FA9EDB8DB1  # site/keys/nulavio-packages.asc
    soft=$(ulimit -S -f)  # a lower limit the shell already has stays: it may not be raised
    if [[ $soft == unlimited ]] || (( soft > 32768 )); then ulimit -f 32768; fi
+   # Before curl 8.4.0, --max-filesize does not bound a body sent without Content-Length (curl's man page).
+   read -r _ curl_version _ < <(curl --version)
+   IFS=. read -r major minor _ <<< "$curl_version"
+   if ! [[ $major =~ ^[0-9]+$ && $minor =~ ^[0-9]+$ ]] || (( major < 8 || (major == 8 && minor < 4) )); then
+       echo "curl $curl_version: the block needs curl 8.4.0 or later, whose --max-filesize bounds every download" >&2
+       exit 1
+   fi
    tmp=$(mktemp -d)
    trap 'rm -rf "$tmp"' EXIT
    mkdir "$tmp/https" "$tmp/r2" "$tmp/after" "$tmp/public"
@@ -375,14 +383,20 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    r2 "$bucket/repodata/$rev/repomd.xml" "$tmp/r2/repomd.xml"
    r2 "$bucket/repodata/$rev/repomd.xml.asc" "$tmp/r2/repomd.xml.asc"
    r2 "$bucket/repodata/repomd.xml.asc" "$tmp/r2/served.asc"
+   r2 "$bucket/repodata/repomd.xml" "$tmp/r2/served.xml"
    verify "$tmp/r2"
    cmp "$tmp/r2/repomd.xml.asc" "$tmp/r2/served.asc"
    href=$(primary "$tmp/r2")
    r2 "$bucket/$href" "$tmp/r2/primary.xml.zst"
    lists "$tmp/r2"
-   # Those verified bytes onto the served keys, in the upload's order: the signature, then repomd.xml.
-   r2 "$tmp/r2/repomd.xml.asc" "$bucket/repodata/repomd.xml.asc"
-   r2 "$tmp/r2/repomd.xml" "$bucket/repodata/repomd.xml"
+   # Those verified bytes onto the served keys, in the upload's order: the signature, then repomd.xml. The served
+   # signature already is the revision's (cmp above): when the served repomd.xml is too, an earlier paste wrote them.
+   if cmp -s "$tmp/r2/repomd.xml" "$tmp/r2/served.xml"; then
+       echo "R2 already serves $rev's pair: nothing to upload"
+   else
+       r2 "$tmp/r2/repomd.xml.asc" "$bucket/repodata/repomd.xml.asc"
+       r2 "$tmp/r2/repomd.xml" "$bucket/repodata/repomd.xml"
+   fi
    r2 "$bucket/repodata/repomd.xml.asc" "$tmp/after/repomd.xml.asc"
    r2 "$bucket/repodata/repomd.xml" "$tmp/after/repomd.xml"
    same "$tmp/r2" "$tmp/after"
@@ -399,7 +413,7 @@ Otherwise, before starting a new run, find out how far that run got (`https://pa
    )
    ```
 
-   It ends with `restored: …`; anything else stopped it, and nothing after the failed step ran. If a `cmp` before the upload reports a difference, the served signature is not that run's: find the revision whose `repomd.xml.asc` it is before copying anything. If it stops after `the bucket serves …`, the bucket holds the restored pair and the site does not serve it yet: a CDN cache still holds the old `repomd.xml`. Wait for it to expire, or purge those two URLs in Cloudflare, and paste the block again: every check then passes and the upload writes the same bytes. A purge does not help when it stops at the public primary file because that file is over 8 MiB, the bound the build job reads it with: the file is named by its digest, so the CDN and R2 hold the same bytes, and the block fails the same way each time. The bucket then holds the restored pair; find out why the primary file grew before pasting the block again. If it stops at `the dnf index lists nulavio …` with another version before the upload, the pair under that revision does not list it and nothing was written: find out why before going on. The packages and the primary file that pair names went up before it, so dnf then serves the failed run's revision and APT does not: go on as in state 2. A run made from a commit before #740 left no such pair; for it, only the re-run of its `publish` job restores one. The APT side has no such state: the build reads `InRelease`, one object, uploaded last, and the `Packages` file it names by hash.
+   It ends with `restored: …`; anything else stopped it, and nothing after the failed step ran. If a `cmp` before the upload reports a difference, the served signature is not that run's: find the revision whose `repomd.xml.asc` it is before copying anything. If it stops after `the bucket serves …`, the bucket holds the restored pair and the site does not serve it yet: a CDN cache still holds the old `repomd.xml`. Wait for it to expire, or purge those two URLs in Cloudflare, and paste the block again: every check then passes, and since R2 already serves that pair it writes nothing. A purge does not help when it stops at the public primary file because that file is over 8 MiB, the bound the build job reads it with: the file is named by its digest, so the CDN and R2 hold the same bytes, and the block fails the same way each time. The bucket then holds the restored pair; find out why the primary file grew before pasting the block again. If it stops at `the dnf index lists nulavio …` with another version before the upload, the pair under that revision does not list it and nothing was written: find out why before going on. The packages and the primary file that pair names went up before it, so dnf then serves the failed run's revision and APT does not: go on as in state 2. A run made from a commit before #740 left no such pair; for it, only the re-run of its `publish` job restores one. The APT side has no such state: the build reads `InRelease`, one object, uploaded last, and the `Packages` file it names by hash.
 
 The maintainer then publishes the draft (which creates the tag), sets `version` in `packaging/release.json` by pull request (the site workflow rebuilds the download pages), and adds the changelog entry; the job summary lists these steps. `publish: false` stops after the build: a rehearsal in CI. The build machine never holds the signing role or the upload token.
 
