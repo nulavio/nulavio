@@ -131,6 +131,7 @@ NEVER_BY_DEFAULT = {
 TRACK_B_ONLY = {  # Mozilla account, promos and artwork in the Nulavio build (D-UX8, WCS-10)
     "identity.fxaccounts.enabled": False,
     "browser.aboutaddons.novaThemesPickerEnabled": False,
+    "sidebar.verticalTabs.dragToPinPromo.dismissed": True,  # #925: no drag-to-pin card with Mozilla artwork
     "browser.topsites.useRemoteSetting": False,
     "browser.newtabpage.activity-stream.default.sites": "",
     "nulavio.vault.phone.pairing": True,  # D10 revised 2026-11-10: connecting a phone is offered

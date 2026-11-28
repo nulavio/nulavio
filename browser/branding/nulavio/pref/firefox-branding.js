@@ -139,6 +139,14 @@ pref("sidebar.main.tools", "opentabs,bookmarks,history,passwords");
 // No Mozilla theme picker in the add-ons manager (Mozilla artwork).
 pref("browser.aboutaddons.novaThemesPickerEnabled", false);
 
+// No drag-to-pin card at the top of the vertical tab list (#925). Since the
+// 161 engine it shows in every window of a new profile, until the person
+// closes it or pins a tab, with Mozilla's fox artwork and sample icons of
+// third-party sites (browser/components/sidebar/sidebar-pins-promo.mjs). True
+// is the value the engine writes when the card is closed; pinning tabs, by
+// dragging them or from the tab menu, works as before.
+pref("sidebar.verticalTabs.dragToPinPromo.dismissed", true);
+
 // No default shortcuts on the engine's home page (about:home): the list comes
 // from Remote Settings and starts with "Add-ons for Firefox". Sites the person
 // visits still appear there.
