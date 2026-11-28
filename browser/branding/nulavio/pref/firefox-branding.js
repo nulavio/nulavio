@@ -171,6 +171,16 @@ pref("browser.preferences.experimental.hidden", true);
 pref("extensions.getAddons.showPane", false);
 pref("extensions.htmlaboutaddons.recommendations.enabled", false);
 pref("browser.preferences.moreFromMozilla", false);
+// No feature tips from Mozilla's messaging system (#929): Settings' "Recommend
+// features as you browse" starts off. Firefox 161 removed the pref that kept
+// the tab group tips off (browser.tabs.groups.onboardingCallouts.enabled), so
+// the first tab group a person makes, and a start after a session with saved
+// groups, opened a callout with Mozilla's artwork loaded from its CDN
+// (firefox-settings-attachments.cdn.mozilla.net/main-workspace/ms-images/,
+// browser/components/asrouter/modules/FeatureCalloutMessages.sys.mjs). This is
+// the one switch left for them, and for every other feature callout. A default,
+// not locked: the switch in Settings turns them on. Tab groups work as before.
+pref("browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features", false);
 
 // UX3H M-1: no Mozilla privacy-notice tab (mozilla.org) on the first launch.
 // The engine opens it to tell people that data is sent to Mozilla; Nulavio
