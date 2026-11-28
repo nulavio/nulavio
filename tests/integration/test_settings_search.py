@@ -172,6 +172,8 @@ class SettingsSearchTest(unittest.TestCase):
         row = next(r for r in row if r["id"] == own)
         self.assertEqual((row["name"], row["on"]), ("Ecosia", False))
         self.assertEqual(row["says"], OFF.format(host="other.example"))
+        # Its switch is named with its host too (#828): the name alone would read as the provider's.
+        self.assertEqual(row["named"], "Sugestões enquanto você digita: \u2068Ecosia\u2069 (other.example)")
         self.assertNotIn("ac.ecosia.org", " ".join(r["says"] for r in now["engines"]))
         provider = self.m.chrome(PROVIDER_ROWS)
         added = next(r for r in provider["add"] if r["key"] == "ecosia")
@@ -359,7 +361,9 @@ class SettingsSearchTest(unittest.TestCase):
         said = self.seen(lambda n: n["aliasReserved"])
         self.assertEqual(
             said["aliasReserved"],
-            "“@ia” deixou de ser o atalho de pesquisa de “\u2068Arquivo, Biblioteca\u2069”: ele é a palavra-chave do assistente"
+            # With the engine's host after its quoted name (#828).
+            "“@ia” deixou de ser o atalho de pesquisa de “\u2068Arquivo, Biblioteca\u2069” (arquivo.example): ele é a"
+            " palavra-chave do assistente"
             " na barra de endereços. Escolha outro atalho em Atalhos de pesquisa.",
         )
         self.assertEqual(self.m.chrome(engine + "return e.alias;", [own]), "")
@@ -389,10 +393,75 @@ class SettingsSearchTest(unittest.TestCase):
         self.seen(lambda n: any(row["key"] == key for row in n["choices"]))
         named = DOC + "return d.querySelector(arguments[0])?.shadowRoot?.querySelector('button')?.getAttribute('aria-label');"
         harness.wait_until(lambda: self.m.chrome(named, [button]), 10)
-        self.assertEqual(self.m.chrome(named, [button]), "Usar \u2068Arquivo Mal\u2069 como pesquisa deste perfil")
+        # The engine is not a curated provider: its host follows the name (#828).
+        self.assertEqual(
+            self.m.chrome(named, [button]), "Usar \u2068Arquivo Mal\u2069 (arquivo.example) como pesquisa deste perfil"
+        )
         self.assertTrue(self.m.chrome(CLICK, [button]))
         done = self.seen(lambda n: n["chose"])
-        self.assertEqual(done["chose"], "\u2068Arquivo Mal\u2069 é a pesquisa deste perfil nas janelas normais e nas privadas.")
+        self.assertEqual(
+            done["chose"],
+            "\u2068Arquivo Mal\u2069 (arquivo.example) é a pesquisa deste perfil nas janelas normais e nas privadas.",
+        )
+
+    def test_07_engines_whose_names_read_the_same_are_told_apart_by_their_host(self):
+        """#828: an engine names itself, so two engines can have names that read the same while their stored names
+        differ (here a U+200B ZERO WIDTH SPACE). Each sentence that names one says where its searches go: the "Usar"
+        button, the suggestions switch, the message after a choice and the "@ia" warning. A curated provider is named
+        alone. The choice goes to the engine the row named, by its id; tests/unit/test_engine_in_sentence.py fills
+        the same sentences in both locales."""
+        add = S + "return S.addCustom({name: arguments[0], url: arguments[1], suggestUrl: arguments[2]});"
+        one = self.m.chrome(add, ["Busca Igual", "https://busca.example/?q=%s", "https://busca.example/s?q=%s"])
+        self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [one])
+        two = self.m.chrome(add, ["Busca\u200b Igual", "https://other.example/?q=%s", "https://other.example/s?q=%s"])
+        self.addCleanup(self.m.chrome, S + "return S.remove(arguments[0]);", [two])
+        self.assertIsInstance(one, str, one)
+        self.assertIsInstance(two, str, two)
+        self.open()
+        now = self.seen(lambda n: {f"engine-{one}", f"engine-{two}"} <= {row["key"] for row in n["choices"]})
+        labels = {row["key"]: row["name"] for row in now["choices"]}
+        self.assertEqual(labels[f"engine-{one}"].replace("\u200b", ""), labels[f"engine-{two}"].replace("\u200b", ""))
+        # The "Usar" buttons.
+        named = DOC + "return d.querySelector(arguments[0])?.shadowRoot?.querySelector('button')?.getAttribute('aria-label');"
+        use = 'button[data-action="choose"][data-choice="{}"]'
+        buttons = {key: f"#nulavio-search-choose moz-{use.format(key)}" for key in (f"engine-{one}", f"engine-{two}")}
+        harness.wait_until(lambda: all(self.m.chrome(named, [b]) for b in buttons.values()), 10)
+        self.assertEqual(
+            self.m.chrome(named, [buttons[f"engine-{one}"]]),
+            "Usar \u2068Busca Igual\u2069 (busca.example) como pesquisa deste perfil",
+        )
+        self.assertEqual(
+            self.m.chrome(named, [buttons[f"engine-{two}"]]),
+            "Usar \u2068Busca\u200b Igual\u2069 (other.example) como pesquisa deste perfil",
+        )
+        # The suggestions switches; a curated provider's is named alone.
+        switches = {row["id"]: row["named"] for row in now["engines"]}
+        self.assertEqual(switches[one], "Sugestões enquanto você digita: \u2068Busca Igual\u2069 (busca.example)")
+        self.assertEqual(switches[two], "Sugestões enquanto você digita: \u2068Busca\u200b Igual\u2069 (other.example)")
+        curated = next(e for e in self.state()["engines"] if e["provider"] == "duckduckgo")
+        self.assertEqual(switches[curated["id"]], "Sugestões enquanto você digita: \u2068DuckDuckGo\u2069")
+        # The message after a choice, for normal windows only; the engine chosen is the one the row named.
+        self.m.chrome(CLICK, ["#nulavio-search-choose-privateToo"])
+        self.seen(lambda n: n["privateToo"] is False)
+        self.assertTrue(self.m.chrome(CLICK, [buttons[f"engine-{two}"]]))
+        done = self.seen(lambda n: n["chose"])
+        self.assertEqual(
+            done["chose"], "\u2068Busca\u200b Igual\u2069 (other.example) é a pesquisa deste perfil nas janelas normais."
+        )
+        default = self.m.chrome(S + "return S.list().then(list => list.find(e => e.isDefault).id);")
+        self.assertEqual(default, two)
+        # The "@ia" warning, for the first one.
+        engine = (
+            'const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");'
+            "SearchService.getEngineById(arguments[0]).alias = arguments[1];"
+        )
+        self.m.chrome(engine, [one, "@IA"])
+        said = self.seen(lambda n: n["aliasReserved"])
+        self.assertEqual(
+            said["aliasReserved"],
+            "“@ia” deixou de ser o atalho de pesquisa de “\u2068Busca Igual\u2069” (busca.example): ele é a palavra-chave do"
+            " assistente na barra de endereços. Escolha outro atalho em Atalhos de pesquisa.",
+        )
 
 
 if __name__ == "__main__":

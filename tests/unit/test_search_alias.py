@@ -53,7 +53,9 @@ class ReservedAliasListTest(unittest.TestCase):
         panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
         call = re.search(r'msg\("searchAliasReserved", ([^\n]*)', panes).group(1)
         # Isolated too (#796, tests/unit/test_name_isolation.py): a name may hold direction controls.
-        self.assertIn(".map(name => `“${inSentence(name)}”`)", call)
+        # And followed by the engine's host when it is not a curated provider (#828): `named(engine, true)` quotes the
+        # name only (tests/unit/test_engine_in_sentence.py).
+        self.assertIn(".map(engine => named(engine, true))", call)
         self.assertIn('.join(", ")', call)
 
     def test_settings_says_it_under_the_search_shortcuts(self):
@@ -103,6 +105,9 @@ class ReservedAliasTest(unittest.TestCase):
         self.assertEqual(startup["archive"], "")
         self.assertEqual(startup["ddg"], "@ddg", "another engine's alias was touched")
         self.assertEqual(startup["released"], ["Archive"])
+        # Each engine with the host its searches go to and its provider key: Settings names an engine that is not a
+        # curated provider with its host (#828, tests/unit/test_engine_in_sentence.py).
+        self.assertEqual(startup["entries"], [{"id": "user-1", "name": "Archive", "host": "archive.example", "provider": None}])
         self.assertEqual(len(startup["logged"]), 1, startup["logged"])
 
     def test_the_engines_own_dialogs_cannot_keep_it(self):

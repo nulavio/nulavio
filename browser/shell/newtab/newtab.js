@@ -3,7 +3,7 @@
 
 import { localize, t } from "../lib/i18n.js";
 import { keyElements, nulavioKeys } from "../lib/keys.js";
-import { inSentence } from "../lib/names.js";
+import { engineInSentence } from "../lib/names.js";
 import { providerName, providerStatus } from "../lib/providers.js";
 import { wireSettingsLinks } from "../lib/settings.js";
 import { chip, confirmDialog, errorText, h, settleRadioChanges, stateBadge } from "../lib/ui.js";
@@ -133,24 +133,33 @@ async function showHere() {
 // search made before then waits for it instead of guessing.
 let shownEngine = null;
 
-async function defaultEngineName() {
+// The engine the search goes to, and the keys of the curated providers: an engine that is not one of them is named
+// with the host its searches go to (#828).
+async function defaultEngine() {
   const managed = browser.nulavioSearch;
   if (managed) {
     // state() waits for the first-run migration, so the default is final.
-    const { engines } = await managed.state();
+    const { engines, providers } = await managed.state();
     const key = browser.extension.inIncognitoContext ? "isDefaultPrivate" : "isDefault";
-    return (engines.find(engine => engine[key]) ?? engines.find(engine => engine.isDefault))?.name ?? null;
+    const engine = engines.find(each => each[key]) ?? engines.find(each => each.isDefault) ?? null;
+    return { engine, curated: new Set((providers ?? []).map(provider => provider.key)) };
   }
+  // Without Nulavio Search the engine's own list has no host: the name alone.
   const engines = await browser.search.get();
-  return engines.find(engine => engine.isDefault)?.name ?? null;
+  const engine = engines.find(each => each.isDefault);
+  return { engine: engine ? { name: engine.name } : null, curated: new Set() };
 }
 
 async function showEngine() {
-  const name = await defaultEngineName();
-  shownEngine = name;
+  const { engine, curated } = await defaultEngine();
+  // The search goes to the engine by the name the engine stores, never by the text shown.
+  shownEngine = engine?.name ?? null;
   const input = document.getElementById("search-input");
-  // The engine names itself: isolated, so direction controls in its name do not reorder the words (#796).
-  input.placeholder = name ? t("searchWith", [inSentence(name)]) : t("searchPlaceholder");
+  // The engine names itself: isolated, so direction controls in its name do not reorder the words (#796), and with its
+  // host when it is not a curated provider, so two engines whose names read the same are told apart (#828).
+  input.placeholder = shownEngine
+    ? t("searchWith", [engineInSentence(engine, { curated, withHost: (name, host) => t("engineNamedHost", [name, host]) })])
+    : t("searchPlaceholder");
 }
 const engineShown = showEngine().catch(() => {});
 

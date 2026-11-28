@@ -486,7 +486,7 @@
     const extension = WebExtensionPolicy.getByID(SHELL)?.extension;
     const msg = (key, ...subs) => extension?.localizeMessage(key, subs) ?? "";
     const pageOf = path => WebExtensionPolicy.getByID(SHELL)?.getURL(path);
-    const { freeName, inSentence, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
+    const { engineInSentence, freeName, TEMPLATE_NAMES, templateHintKey } = ChromeUtils.importESModule(
       "resource://builtin-addons/nulavio-shell/lib/names.js",
       here
     );
@@ -1474,6 +1474,11 @@
     }));
     const searchBench = workbench({ fresh: { searxng: "", opensearch: "" } }, search);
     const enginesNow = () => (search.state.ready ? (search.state.value?.engines ?? []) : []);
+    // #828: an engine in a sentence, isolated (#796) and, when it is not one of Nulavio's curated providers, with the
+    // host its searches go to: an engine names itself, and two of them may have names that read the same.
+    const curatedKeys = () => new Set((search.state.value?.providers ?? []).map(provider => provider.key));
+    const named = (engine, quoted = false) =>
+      engineInSentence(engine, { curated: curatedKeys(), withHost: (name, host) => msg("engineNamedHost", name, host), quoted });
     const searchSetup = (emitChange, stops) => {
       stops.push(search.listen(emitChange));
       searchBench.watch(emitChange, stops);
@@ -1536,7 +1541,7 @@
                 control: "moz-toggle",
                 slot: "actions",
                 below: msg("engineSuggestLabel"),
-                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`, "data-engine": engine.id },
+                controlAttrs: { "aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`, "data-engine": engine.id },
               },
             ],
           })),
@@ -1640,6 +1645,8 @@
       }
       return rows.sort((a, b) => a.name.localeCompare(b.name));
     };
+    // A row of a curated provider is named alone (its name is its own); any other row by its engine, with its host.
+    const rowInSentence = row => named(row.provider ? { name: row.name, provider: row.provider } : row.engine);
     const choiceWords = row => {
       const words = [];
       if (row.engine?.isDefault) {
@@ -1707,7 +1714,7 @@
                     disabled: chooseBench.state.busy,
                     controlAttrs: {
                       label: msg("chooseUse"),
-                      "aria-label": msg("chooseUseNamed", inSentence(row.name)),
+                      "aria-label": msg("chooseUseNamed", rowInSentence(row)),
                       "data-action": "choose",
                       "data-choice": row.key,
                     },
@@ -1736,8 +1743,9 @@
         const shown = suggest ? { suggestHost: row.suggestHost ?? "" } : {};
         // What was chosen, in words, and, when the box was ticked, the host that now receives what is typed: the
         // chosen engine's own, which the module checked against the one the row named.
-        // The name isolated (#796): an engine names itself, and its name may hold direction controls.
-        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", inSentence(row.name));
+        // The name isolated (#796) and, for an engine that is not a curated provider, its host (#828): an engine names
+        // itself, and its name may hold direction controls or read the same as another engine's.
+        const done = msg(chooseBench.state.privateToo ? "chooseDoneBoth" : "chooseDone", rowInSentence(row));
         const said = id => {
           const host = suggest ? shell.NulavioSearch.suggestHostOf(id) : null;
           return host ? `${done} ${msg("engineSuggestOn", host)}` : done;
@@ -1821,12 +1829,13 @@
       }),
     ];
     // #663: an engine given "@ia" in the engine's own dialogs (or before) lost it; said under the engine's Search Shortcuts.
-    // Each name quoted: a name may hold ", " itself (review of #772); and isolated, as it may hold direction controls (#796).
+    // Each name quoted: a name may hold ", " itself (review of #772); isolated, as it may hold direction controls (#796);
+    // and followed by the engine's host when it is not a curated provider (#828).
     const releasedNow = () => (search.state.ready ? (search.state.value?.releasedAliases ?? []) : []);
     const searchAliasBar = searchBench.bar(
       "nulavio-search-alias-reserved",
       "warning",
-      () => msg("searchAliasReserved", releasedNow().map(name => `“${inSentence(name)}”`).join(", ")),
+      () => msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", ")),
       () => releasedNow().length > 0
     );
     const searchBars = [

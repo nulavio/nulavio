@@ -62,6 +62,10 @@ class UserSearchEngine {
   get aliases() {
     return this.#alias ? [this.#alias] : [];
   }
+  // The engine's host for its search address, as the engine's SearchEngine gives it.
+  get searchUrlDomain() {
+    return new URL(this.url).host;
+  }
   supportsResponseType() {
     return false;
   }
@@ -134,6 +138,8 @@ const code = async action => {
     return e?.code ?? String(e);
   }
 };
+// Settings names each engine by name, host and provider key (#828); the cases here compare the names.
+const released = async () => (await NulavioSearch.releasedAliases()).map(engine => engine.name);
 const add = (name, alias) => SearchService.addUserEngine({ name, url: `https://${name.toLowerCase()}.example/?q={searchTerms}`, alias });
 
 // Engines a profile had before this change: one with "@IA" as the engine stores what its edit dialog was given.
@@ -154,7 +160,8 @@ await flush();
 out.startup = {
   archive: archive.alias,
   ddg: ddg.alias,
-  released: await NulavioSearch.releasedAliases(),
+  released: await released(),
+  entries: await NulavioSearch.releasedAliases(),
   logged: [...logged],
 };
 
@@ -177,7 +184,7 @@ await flush();
 out.afterChange = {
   ddg: ddg.alias,
   fresh: fresh.alias,
-  released: (await NulavioSearch.releasedAliases()).sort(),
+  released: (await released()).sort(),
   passesBounded: enginesRead > 0 && enginesRead <= 4,
   logged: logged.length,
 };
@@ -185,18 +192,18 @@ out.afterChange = {
 // Another alias given afterwards: Settings no longer names that engine.
 archive.alias = "@archive";
 await flush();
-out.afterNewAlias = { archive: archive.alias, released: (await NulavioSearch.releasedAliases()).sort() };
+out.afterNewAlias = { archive: archive.alias, released: (await released()).sort() };
 
 // A hidden engine (taken off the engine's list of shortcuts) is not named, and is named again once it is back.
 ddg.hidden = true;
-const whileHidden = (await NulavioSearch.releasedAliases()).sort();
+const whileHidden = (await released()).sort();
 ddg.hidden = false;
-out.hidden = { whileHidden, back: (await NulavioSearch.releasedAliases()).sort() };
+out.hidden = { whileHidden, back: (await released()).sort() };
 
 // Another alias, then none, with no read of the list in between: that engine was given one and is not named.
 fresh.alias = "@fresh";
 fresh.alias = "";
 await flush();
-out.replacedThenCleared = { fresh: fresh.alias, released: (await NulavioSearch.releasedAliases()).sort() };
+out.replacedThenCleared = { fresh: fresh.alias, released: (await released()).sort() };
 
 process.stdout.write(JSON.stringify(out));

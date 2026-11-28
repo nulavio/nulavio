@@ -395,7 +395,9 @@ class NulavioSearchClass {
     return this.#releasing;
   }
 
-  /** #663: the engines that lost a reserved alias in this session and have no other alias yet, for Settings to say so. */
+  /** #663: the engines that lost a reserved alias in this session and have no other alias yet, for Settings to say so:
+      each by its name, the host its searches go to and its provider key, as `list()` gives them, so Settings names an
+      engine that is not a curated provider with its host (#828). */
   async releasedAliases() {
     if (!this.#released.size) {
       return [];
@@ -407,7 +409,8 @@ class NulavioSearchClass {
       if (!engine || engine.alias) {
         this.#released.delete(id);
       } else if (!engine.hidden) {
-        names.push(engine.name); // a hidden one is kept: it is named again once it is back in the list
+        // A hidden one is kept: it is named again once it is back in the list.
+        names.push({ id: engine.id, name: engine.name, host: engine.searchUrlDomain, provider: this.#providerKey(engine) });
       }
     }
     return names;

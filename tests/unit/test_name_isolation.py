@@ -5,7 +5,8 @@ a name. A name that holds U+202E RIGHT-TO-LEFT OVERRIDE, put into "$NAME$ is thi
 the words after it show in reverse. `inSentence` (browser/shell/lib/names.js) removes the direction controls and wraps
 the name in U+2068 FIRST STRONG ISOLATE ... U+2069 POP DIRECTIONAL ISOLATE. Here it runs under Node and fills the
 Settings and new-tab sentences that carry an engine's name, in both locales; tests/integration/test_settings_search.py
-(06) reads the same sentences on the real page.
+(06) reads the same sentences on the real page. The callers put the name in through `engineInSentence`, which also adds
+the host of an engine that is not a curated provider (#828, tests/unit/test_engine_in_sentence.py).
 """
 
 from __future__ import annotations
@@ -127,26 +128,37 @@ class InSentenceTest(unittest.TestCase):
 
 
 class CallersIsolateTest(unittest.TestCase):
-    """Every place that puts an engine's name into one of these sentences goes through the helper."""
+    """Every place that puts an engine's name into one of these sentences goes through the helper: `engineInSentence`
+    (the same file), which isolates the name with `inSentence` and adds the host of an engine that is not a curated
+    provider (#828, tests/unit/test_engine_in_sentence.py)."""
+
+    def test_the_engine_helper_isolates_the_name(self):
+        names = NAMES.read_text(encoding="utf-8")
+        body = re.search(r"export function engineInSentence\(.*?\n\}", names, re.S).group(0)
+        self.assertIn("`“${inSentence(engine?.name)}”` : inSentence(engine?.name);", body)
 
     def test_settings_isolates_each_engine_name(self):
         panes = (SHELL / "settings" / "native" / "panes.mjs").read_text(encoding="utf-8")
-        self.assertRegex(panes, r"\binSentence\b[^}]*\} = ChromeUtils\.importESModule\(\s*\"resource://[^\"]+/lib/names\.js\"")
-        self.assertIn('msg("chooseUseNamed", inSentence(row.name))', panes)
-        self.assertIn('"chooseDoneBoth" : "chooseDone", inSentence(row.name))', panes)
-        self.assertIn('msg("searchAliasReserved", releasedNow().map(name => `“${inSentence(name)}”`).join(", "))', panes)
+        self.assertRegex(
+            panes, r"\bengineInSentence\b[^}]*\} = ChromeUtils\.importESModule\(\s*\"resource://[^\"]+/lib/names\.js\""
+        )
+        self.assertRegex(panes, r"const named = \(engine, quoted = false\) =>\s+engineInSentence\(engine, ")
+        self.assertIn('msg("chooseUseNamed", rowInSentence(row))', panes)
+        self.assertIn('"chooseDoneBoth" : "chooseDone", rowInSentence(row))', panes)
+        self.assertIn('msg("searchAliasReserved", releasedNow().map(engine => named(engine, true)).join(", "))', panes)
         # The suggestions switch's accessible name carries the engine's name too, after its label.
-        self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${inSentence(engine.name)}`', panes)
+        self.assertIn('"aria-label": `${msg("engineSuggestLabel")}: ${named(engine)}`', panes)
         self.assertNotRegex(panes, r"\$\{(engine|row)\.name\}")
         for key in [key for key, where in SENTENCES.items() if where == "panes"]:
             with self.subTest(key=key):
                 for call in re.findall(rf'"{key}"[^\n]*', panes):
-                    self.assertIn("inSentence(", call)
+                    self.assertRegex(call, r"\b(rowInSentence|named)\(")
 
     def test_the_new_tab_isolates_the_engine_name(self):
         newtab = (SHELL / "newtab" / "newtab.js").read_text(encoding="utf-8")
-        self.assertIn('import { inSentence } from "../lib/names.js";', newtab)
-        self.assertEqual(re.findall(r't\("searchWith", [^)]*\)\]?\)', newtab), ['t("searchWith", [inSentence(name)])'])
+        self.assertIn('import { engineInSentence } from "../lib/names.js";', newtab)
+        self.assertEqual(len(re.findall(r't\("searchWith", \[engineInSentence\(engine, ', newtab)), 1)
+        self.assertEqual(len(re.findall(r't\("searchWith"', newtab)), 1)
 
 
 if __name__ == "__main__":
